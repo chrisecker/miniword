@@ -1,0 +1,1061 @@
+# -*- coding: utf-8 -*-
+
+
+import wx
+from .textmodel.textmodel import TextModel
+from .textmodel.viewbase import ViewBase
+from .textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
+    NewLine, dump
+from .textmodel.styles import create_style, updated_style
+from .wxtextview.wxdevice import defaultstyle
+
+from .unit_entry import UnitInput, EVT_UNIT_CHANGED
+from .threestatespin import SpinCtrl3, EVT_SPIN_VALUE
+from .styles import defaultbullets
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+ICONS_DIR = BASE_DIR / "icons"
+
+
+def icon(name, size=(20, 20)):
+    p = str(ICONS_DIR / name)
+    return wx.BitmapBundle.FromSVGFile(p, size)
+    
+
+
+wxEVT_BUTTONBAR = wx.NewEventType()
+EVT_BUTTONBAR = wx.PyEventBinder(wxEVT_BUTTONBAR, 1)
+
+
+class ButtonBarEvent(wx.CommandEvent):
+    def __init__(self, id=0, name=None):
+        super().__init__(wxEVT_BUTTONBAR, id)
+        self.name = name
+
+        
+class ButtonBar(wx.Panel):
+    def __init__(self, parent, *, exclusive=False, button_size=36):
+        super().__init__(parent)
+
+        self.exclusive = exclusive
+        self.buttons = {}
+
+        self.sizer = wx.GridSizer(1, 0, 0, 0)
+        self.SetSizer(self.sizer)
+
+        self.btn_size = self.FromDIP(wx.Size(button_size, button_size))
+
+    def add(self, name, bitmap):
+        if self.exclusive:
+            btn = wx.ToggleButton(self, label="")
+            btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_toggle)
+        else:
+            btn = wx.Button(self, label="")
+            #btn.Bind(wx.EVT_BUTTON, self._on_click)
+
+        btn.SetBitmap(bitmap)
+        btn.SetMinSize(self.btn_size)
+
+        self.buttons[name] = btn
+        self.sizer.Add(btn, 1, wx.EXPAND)
+
+        self.Layout()
+
+    def select(self, name):
+        if not self.exclusive:
+            return
+        for n, btn in self.buttons.items():
+            btn.SetValue(n == name)
+
+    def _fire(self, name):
+        evt = ButtonBarEvent(self.GetId(), name=name)
+        evt.SetEventObject(self)
+        self.ProcessWindowEvent(evt)
+
+    def _on_click(self, event):
+        for name, btn in self.buttons.items():
+            if btn is event.GetEventObject():
+                self._fire(name)
+                break
+
+    def _on_toggle(self, event):
+        clicked = event.GetEventObject()
+
+        for name, btn in self.buttons.items():
+            btn.SetValue(btn is clicked)
+            if btn is clicked:
+                self._fire(name)
+
+
+class AlignBar(ButtonBar):
+    def __init__(self, parent):
+        ButtonBar.__init__(self, parent, exclusive=True)
+        icon_left = icon("format_align_left_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
+        icon_center = icon("format_align_center_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
+        icon_right = icon("format_align_right_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
+        icon_justify = icon("format_align_justify_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
+
+        for icon_, name in [
+            (icon_left, "left"),
+            (icon_center, "center"),
+            (icon_right, "right"),
+            (icon_justify, "justify")]:
+            self.add(name, icon_)
+
+
+class IndentBar(ButtonBar):
+    def __init__(self, parent):
+        ButtonBar.__init__(self, parent, exclusive=False)
+        icon_indent = icon("format_indent_increase_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
+        icon_dedent = icon("format_indent_decrease_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
+
+        for icon_, name in [
+            (icon_dedent, "dedent"),
+            (icon_indent, "indent")]:
+            self.add(name, icon_)
+
+
+    
+class PromptingComboBox(wx.ComboBox) :
+    def __init__(self, parent, choices=[], style=0, **par):
+        wx.ComboBox.__init__(self, parent, wx.ID_ANY, style=style|wx.CB_DROPDOWN, choices=choices, **par)
+        self.all_choices = choices
+        self.choices = choices
+        self.Bind(wx.EVT_TEXT, self.OnText)
+        self.Bind(wx.EVT_KEY_DOWN, self.OnPress)
+        self.ignoreEvtText = False
+        self.deleteKey = False
+
+    def OnPress(self, event):
+        if event.GetKeyCode() == 8:
+            self.deleteKey = True
+        event.Skip()
+
+    def OnText(self, event):
+        currentText = event.GetString()
+        if self.ignoreEvtText:
+            self.ignoreEvtText = False
+            return
+        if self.deleteKey:
+            self.deleteKey = False
+            if self.preFound:
+                currentText =  currentText[:-1]
+
+        self.preFound = False
+        l = []
+        for choice in self.all_choices :
+            if choice.startswith(currentText):
+                l.append(choice)
+        l = tuple(l)
+        if l != self.choices:
+            self.choices = l
+            self.Freeze()
+            self.Set(l)
+            self.Thaw()
+            
+        for choice in self.all_choices :
+            if choice.startswith(currentText):
+                self.ignoreEvtText = True
+                self.SetValue(choice)
+                self.SetInsertionPoint(len(currentText))
+                self.SetTextSelection(len(currentText), len(choice))
+                self.preFound = True
+                break
+
+            
+class ColourButton(wx.Button):
+    """3 state color button"""
+    callback = None
+    def __init__(self, parent, size=(100,30)):
+        super().__init__(parent, label="", size=size)
+        self._colour = None # initial color
+        self.Bind(wx.EVT_BUTTON, self.on_click)
+        self.update_bitmap()
+
+    def on_click(self, event):
+        cd = wx.ColourData()
+        cd.SetColour(self._colour)
+        dlg = wx.ColourDialog(self, cd)
+        if dlg.ShowModal() == wx.ID_OK:
+            self.set_colour(dlg.GetColourData().GetColour())
+            if self.callback:
+                self.callback()
+        dlg.Destroy()
+
+    def set_colour(self, colour):
+        self._colour = colour
+        self.update_bitmap()
+
+    def get_colour(self):
+        return wx.Colour(self._colour).GetAsString()
+        
+    def update_bitmap(self):
+        w, h = self.GetSize()
+        bmp = wx.Bitmap(w, h)
+        dc = wx.MemoryDC(bmp)
+
+        if self._colour is None:
+            # Mixed-State: diagonalen Streifen auf weiße Hintergrund
+            dc.SetBackground(wx.WHITE_BRUSH)
+            dc.Clear()
+            brush = wx.Brush(wx.BLACK, wx.BRUSHSTYLE_BDIAGONAL_HATCH)            
+        else:
+            brush = wx.Brush(self._colour)
+
+        dc.SetPen(wx.Pen("black", 5))
+        dc.SetBrush(brush)
+        dc.DrawRectangle(0, 0, w, h)
+
+        dc.SelectObject(wx.NullBitmap)
+        self.SetBitmap(bmp)
+
+
+        
+class ResetButton(wx.Button):
+    callback = None
+    def __init__(self, parent, properties):
+        super().__init__(parent, label="", size=(24, 24), style=wx.BORDER_NONE)
+        self.properties = properties
+        self.SetForegroundColour(wx.Colour(200, 0, 0))
+        self.SetToolTip("Remove local change")
+        self.Disable()
+        self.Bind(wx.EVT_BUTTON, self.on_button)
+
+    def on_button(self, event):
+        if self.callback:
+            self.callback(*self.properties)
+
+    def set_x(self, visible: bool):
+        if visible == self.Enabled:
+            return
+        if visible:
+            self.SetLabel("\u2715")
+            self.Enable()
+        else:
+            self.SetLabel("")   # no X
+            self.Disable()      # not clickable
+
+            
+
+def add_section(label, panel, sizer):
+    # Helper: add a heading
+    text = wx.StaticText(panel, label=label)
+    font = text.GetFont()
+    font.SetWeight(wx.FONTWEIGHT_BOLD)
+    text.SetFont(font)        
+    sizer.Add(text, 0, wx.EXPAND|wx.TOP, 10)
+
+def add_row(sizer, *widgets):
+    # Helper: add a row of widgets    
+    rowsizer = wx.BoxSizer(wx.HORIZONTAL)
+    ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
+
+    for i, widget in enumerate(widgets):
+        if i==0:
+            rowsizer.Add(widget, 1, ALL_CENTER, 5)
+        else:            
+            rowsizer.Add(widget, 0, ALL_CENTER, 5)
+    sizer.Add(rowsizer, 0, wx.EXPAND)
+    
+        
+
+
+class Inspector(wx.Frame, ViewBase):
+    sizes = (8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30)
+    def __init__(self, view, parent, *args, **kwds):
+        ViewBase.__init__(self)
+        wx.Frame.__init__(self, parent, *args, title='Format',
+                          style=wx.DEFAULT_FRAME_STYLE|wx.FRAME_FLOAT_ON_PARENT
+                          |wx.FRAME_TOOL_WINDOW, **kwds)
+        self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
+        
+        framesizer = wx.BoxSizer( wx.VERTICAL )
+
+        self.basestyle = wx.Choice(self)
+        self.basestyle.Bind(wx.EVT_CHOICE, self.on_basestyle)
+        framesizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
+        
+        notebook = wx.Notebook(self)
+
+        panel = self.panel = wx.Panel(notebook)
+        panelsizer = wx.BoxSizer(wx.VERTICAL)        
+        notebook.AddPage(panel, 'Style')
+        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        
+
+        #line = wx.StaticLine(panel, style=wx.LI_HORIZONTAL)
+        #panelsizer.Add(line, 0, wx.ALL, 5)
+
+        
+        contentsizer = wx.BoxSizer(wx.VERTICAL)
+        choices = list(map(str, self.sizes))
+        ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
+
+        add_section("Fontstyle", panel, contentsizer)
+
+        from .fontctrl import FontCombo
+        self.family = FontCombo(panel)
+        self.reset_family = ResetButton(panel, ['font_family'])
+        #self.size.SetMinSize((100, -1))
+        add_row(contentsizer, self.family, self.reset_family)
+        self.family.Bind(wx.EVT_COMBOBOX, self.on_family)
+        
+        self.size = wx.ComboBox(
+            panel, value = "12", choices=choices,
+            style = wx.CB_DROPDOWN| wx.TE_PROCESS_ENTER
+        )
+        self.reset_size = ResetButton(panel, ['font_size'])
+        self.size.SetMinSize((100, -1))
+        add_row(contentsizer, self.size, self.reset_size)
+        for binder in wx.EVT_TEXT_ENTER, wx.EVT_KILL_FOCUS, wx.EVT_COMBOBOX:
+            self.size.Bind(binder, self.on_size)
+
+        self.color = ColourButton(panel)
+        self.bgcolor = ColourButton(panel)
+        self.reset_colors = ResetButton(panel, ['color', 'bgcolor'])
+        add_row(contentsizer, self.color, self.bgcolor, self.reset_colors)
+        
+        self.color.callback = lambda: self.set_properties(
+                color=self.color.get_colour())
+
+        self.bgcolor.callback = lambda: self.set_properties(
+                bgcolor=self.bgcolor.get_colour())
+
+        self.underline = wx.CheckBox(panel, -1, "Underline",
+                                     style=wx.CHK_3STATE)
+        self.reset_underline = ResetButton(panel, ['underline'])
+        add_row(contentsizer, self.underline, self.reset_underline)        
+        self.underline.Bind(
+            wx.EVT_CHECKBOX,
+            lambda e:self.set_properties(underline=self.underline.GetValue()))
+
+        self.bold = wx.CheckBox(panel, -1, "Bold", style=wx.CHK_3STATE)
+        self.reset_bold = ResetButton(panel, ['bold'])
+        add_row(contentsizer, self.bold, self.reset_bold)        
+        self.bold.Bind(
+            wx.EVT_CHECKBOX,
+            lambda e:self.set_properties(bold=self.bold.GetValue()))
+
+        self.italic = wx.CheckBox(panel, -1, "Italic", style=wx.CHK_3STATE)
+        self.reset_italic = ResetButton(panel, ['italic'])
+        add_row(contentsizer, self.italic, self.reset_italic)
+        self.italic.Bind(
+            wx.EVT_CHECKBOX,
+            lambda e:self.set_properties(italic=self.italic.GetValue()))
+
+        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
+        panel.SetSizer(panelsizer)
+        panel.Layout()
+        panelsizer.Fit(panel )
+
+        ### layout tab ###
+        panel = self.panel = wx.Panel(notebook)
+        panelsizer = wx.BoxSizer(wx.VERTICAL)        
+        notebook.AddPage(panel, 'Layout')
+        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        contentsizer = wx.BoxSizer(wx.VERTICAL)
+
+        add_section("Alignment", panel, contentsizer)
+
+        self.align = AlignBar(panel)
+        self.align.Bind(EVT_BUTTONBAR, self.on_align)
+        self.reset_align = ResetButton(panel, ['alignment'])
+        add_row(contentsizer, self.align, self.reset_align)
+
+        add_section("Space", panel, contentsizer)
+        
+        # - Abstand vor Absatz        
+        label = wx.StaticText(panel, label='Space before')
+        self.space_before = UnitInput(panel, 'mm')
+        self.reset_space_before = ResetButton(panel, ['space_before'])
+        add_row(contentsizer, label, self.space_before, self.reset_space_before)
+        self.space_before.Bind(EVT_UNIT_CHANGED, self.on_space_before)
+        
+        # - Abstand nach Absatz
+        label = wx.StaticText(panel, label='Space after')
+        self.space_after = UnitInput(panel, 'mm')
+        self.reset_space_after = ResetButton(panel, ['space_after'])
+        add_row(contentsizer, label, self.space_after, self.reset_space_after)
+        self.space_after.Bind(EVT_UNIT_CHANGED, self.on_space_after)
+        
+        # - Zeilenabstand einfach, mehrfach, exakt, Mindestzeilenhöhe (optional)
+        label = wx.StaticText(panel, label='Line spacing')
+        self.line_spacing = SpinCtrl3(
+            panel, min=1.0, max=10.0, inc=0.1, initial=1.0, digits=1)
+        self.line_spacing.Bind(EVT_SPIN_VALUE, self.on_line_spacing)
+        self.reset_line_spacing = ResetButton(panel, ['line_spacing'])
+        add_row(contentsizer, label, self.line_spacing, self.reset_line_spacing)
+
+        add_section("Other", panel, contentsizer)
+        
+        label = wx.StaticText(panel, label='First line offset')
+        self.indent_first = UnitInput(panel, 'mm')
+        self.reset_first = ResetButton(panel, ['first_line_indent'])
+        add_row(contentsizer, label, self.indent_first, self.reset_first)
+        self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
+
+        # - Absatz nicht umbrechen (Keep together / Keep with next - optional)
+        # XXX TODO
+
+        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
+        panel.SetSizer(panelsizer)
+        panel.Layout()
+        panelsizer.Fit(panel )
+
+        ### Paragraph structure tab ###
+        panel = self.panel = wx.Panel(notebook)
+        panelsizer = wx.BoxSizer(wx.VERTICAL)        
+        notebook.AddPage(panel, 'Structure')
+        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        contentsizer = wx.BoxSizer(wx.VERTICAL)
+        # ...
+        add_section("Indentation", panel, contentsizer)
+
+        label = wx.StaticText(panel, label='Level') # XXX Identation level
+        self.level = wx.TextCtrl(panel, value='1', size=(50,-1))
+        self.level.SetEditable(False)
+        self.indent = IndentBar(panel)
+        self.indent.buttons['indent'].Bind(wx.EVT_BUTTON, self.on_indent)
+        self.indent.buttons['dedent'].Bind(wx.EVT_BUTTON, self.on_dedent)
+        _ = ResetButton(panel, ['indent'])
+        add_row(contentsizer, label, self.level, self.indent, _)
+
+        label = wx.StaticText(panel, label='Level policy')
+        self.policy = wx.Choice(panel, choices=["free", "fixed"])
+        self.reset_policy = ResetButton(panel, ['level_policy'])
+        self.policy.Bind(wx.EVT_CHOICE, self.on_policy)
+        add_row(contentsizer, label, self.policy, self.reset_policy)
+        
+        label = wx.StaticText(panel, label='Indentation')
+        self.indent_position = UnitInput(panel, 'mm')
+        self.reset_indent = ResetButton(panel, ['indent_levels'])
+        self.indent_position.Bind(EVT_UNIT_CHANGED, self.on_indent_position)
+        add_row(contentsizer, label, self.indent_position, self.reset_indent)
+
+        add_section("Bullets and numbers", panel, contentsizer)
+        self.paragraph_type = wx.Choice(panel, choices=["Normal", "List", "Numbered"])
+        self.reset_paragraph_type = ResetButton(panel, ['paragraph_type'])
+        self.paragraph_type.Bind(wx.EVT_CHOICE, self.on_paragraph_type)
+        add_row(contentsizer, self.paragraph_type, self.reset_paragraph_type)
+        
+        ### Marker properties
+        spanel = self.marker_panel = wx.Panel(panel)
+        spanelsizer = wx.BoxSizer(wx.VERTICAL)
+        spanel.SetSizer(spanelsizer)
+        
+        add_section("Marker options", spanel, spanelsizer)
+        
+        label = wx.StaticText(spanel, label="Offset")
+        self.marker_pos = UnitInput(spanel, 'mm')
+        self.reset_marker_pos = ResetButton(spanel, ['marker_pos'])
+        self.marker_pos.Bind(EVT_UNIT_CHANGED, self.on_marker_pos)        
+        add_row(spanelsizer, label, self.marker_pos, self.reset_marker_pos)
+
+        label = wx.StaticText(spanel, label="Color")
+        self.marker_color = ColourButton(spanel)
+        self.reset_marker_color = ResetButton(spanel, ['marker_color'])
+        add_row(spanelsizer, label, self.marker_color, self.reset_marker_color)
+        self.marker_color.callback = lambda: self.set_list_value(
+            "marker_color", self.marker_color.get_colour())
+
+        label = wx.StaticText(spanel, label="Marker size")
+        self.marker_size = SpinCtrl3(
+            spanel, min=1.0, max=10.0, inc=0.1, initial=1.0, digits=1)
+        self.marker_size.Bind(EVT_SPIN_VALUE, self.on_marker_size)
+        self.reset_marker_size = ResetButton(spanel, ['marker_size'])
+        add_row(spanelsizer, label, self.marker_size, self.reset_marker_size)
+        contentsizer.Add(spanel, 0, wx.EXPAND, 5)
+
+        ### list options
+        spanel = self.list_panel = wx.Panel(panel)
+        spanelsizer = wx.BoxSizer(wx.VERTICAL)
+        spanel.SetSizer(spanelsizer)
+        add_section("List options", spanel, spanelsizer)
+
+        label = wx.StaticText(spanel, label="Symbol")
+        self.bullet = wx.Choice(spanel, choices=defaultbullets)
+        self.reset_bullet = ResetButton(spanel, ['marker'])
+        self.bullet.Bind(wx.EVT_CHOICE, self.on_bullet)
+        add_row(spanelsizer, label, self.bullet, self.reset_bullet)        
+        contentsizer.Add(spanel, 0, wx.EXPAND, 5)
+
+        ### Enumeration options
+        spanel = self.enum_panel = wx.Panel(panel)
+        spanelsizer = wx.BoxSizer(wx.VERTICAL)
+        spanel.SetSizer(spanelsizer)        
+        add_section("Enumeration options", spanel, spanelsizer)
+
+        label = wx.StaticText(spanel, label="Number format")        
+        self.numbering = wx.Choice(
+            spanel, choices=["1,2,3", "a,b,c", "A,B,C", "i,ii,iii"])
+        self.numbering.SetSelection(0) # XXX
+        self.reset_numbering = ResetButton(spanel, ['numbering_style'])
+        add_row(spanelsizer, label, self.numbering, self.reset_numbering)
+
+        self.start_check = wx.CheckBox(spanel, label="Start value")
+        self.start_value = wx.TextCtrl(spanel)
+        self.reset_start = ResetButton(spanel, ['--']) # as a placeholder
+        self.start_value.Enable(False) # XXX
+        add_row(spanelsizer, self.start_check, self.start_value, self.reset_start)
+
+        contentsizer.Add(spanel, 0, wx.EXPAND, 5)
+
+
+        # ....
+        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
+        panel.SetSizer(panelsizer)
+        panel.Layout()
+        panelsizer.Fit(panel )
+
+
+        # Other tab
+        panel = self.panel = wx.Panel(notebook)
+        panelsizer = wx.BoxSizer(wx.VERTICAL)        
+        notebook.AddPage(panel, 'Other')
+        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        contentsizer = wx.BoxSizer(wx.VERTICAL)
+        # ...
+        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
+        panel.SetSizer(panelsizer)
+        panel.Layout()
+        panelsizer.Fit(panel )
+        
+        ###
+        framesizer.Add(notebook, 1, wx.EXPAND |wx.ALL, 5)
+
+        
+        
+        ###
+        self.SetBackgroundColour(panel.BackgroundColour)
+        self.SetSizer(framesizer)
+        self.Layout()
+        framesizer.Fit(self)
+
+        for resetter in [
+                self.reset_colors,
+                self.reset_family,
+                self.reset_size,
+                self.reset_underline,
+                self.reset_bold,
+                self.reset_italic]:
+            resetter.callback = self.clear_properties
+
+        for resetter in [
+                self.reset_align,
+                self.reset_first,
+                self.reset_line_spacing,
+                self.reset_space_before,
+                self.reset_space_after,
+                self.reset_policy,
+                self.reset_indent,
+                self.reset_paragraph_type,
+                self.reset_marker_pos,
+                self.reset_marker_color,
+                self.reset_marker_size,
+                self.reset_bullet,
+        ]:
+            resetter.callback = self.clear_parproperties            
+
+        self.add_model(view)
+        model = view.model
+        assert model is not None
+        self.add_model(view.model)
+        self.queue_update()
+
+    def on_align(self, event):
+        variant = event.name
+        self.set_parproperties(alignment=variant)
+        
+    def on_indent(self, event):
+        s1, s2 = self.get_parrange()
+        self.model.model.increase_indent(s1, s2)
+
+    def on_dedent(self, event):
+        s1, s2 = self.get_parrange()
+        self.model.model.decrease_indent(s1, s2)
+
+    def on_policy(self, event):
+        i = self.policy.Selection
+        value = ['free', 'fixed'][i]
+        self.set_parproperties(level_policy=value)
+
+    def on_paragraph_type(self, event):
+        i = self.paragraph_type.Selection
+        value = ['normal', 'list', 'numbered'][i]
+        self.set_parproperties(paragraph_type=value)
+        
+    def set_list_value(self, name, value):
+        # Helper
+        view = self.model
+        model = view.model
+        indent = model.get_indent(view.index)
+        parstyle = model.get_parstyle(view.index)
+        properties = self.mk_style(parstyle, {})
+        l = list(properties[name])
+        l[indent] = value
+        self.set_parproperties(**{name:tuple(l)})
+
+    def on_bullet(self, event):
+        i = self.bullet.Selection
+        self.set_list_value('marker', defaultbullets[i])
+
+    def on_marker_size(self, event):
+        value = event.Value
+        self.set_list_value('marker_size', value)
+                                
+    def on_marker_pos(self, event):
+        self.set_list_value('marker_pos', event.value_pt)
+        
+    def on_indent_position(self, event):
+        self.set_list_value('indent_levels', event.value_pt)
+
+    def on_indent_first(self, event):
+        value = event.value_pt
+        self.set_parproperties(first_line_indent=value)
+
+    def on_space_before(self, event):
+        value = event.value_pt
+        self.set_parproperties(space_before=value)
+
+    def on_space_after(self, event):
+        value = event.value_pt
+        self.set_parproperties(space_after=value)
+
+    def on_line_spacing(self, event):
+        value = event.Value
+        self.set_parproperties(line_spacing=value)
+
+    def on_destroy(self, event):
+        self.destroy()
+
+    def model_changed(self, *args):
+        self.queue_update()
+
+    _update_queued = False
+    def queue_update(self):
+        if self._update_queued:
+            return
+        self._update_queued = True
+        self.Bind(wx.EVT_IDLE, self.on_update)
+
+    def on_update(self, event):
+        self._update_queued = False
+        self.Unbind(wx.EVT_IDLE, handler=self.on_update)
+        self.update()
+        
+    def set_properties(self, **properties):        
+        i1, i2  = self.get_range()
+        self.model.set_properties(i1, i2, **properties)
+
+    def clear_properties(self, *keys):
+        i1, i2 = self.get_range()
+        self.model.clear_properties(i1, i2, *keys)
+    
+    def set_parproperties(self, **properties):
+        i1, i2 = self.get_parrange()
+        self.model.set_parproperties(i1, i2, **properties)
+
+    def clear_parproperties(self, *keys):
+        i1, i2 = self.get_parrange()
+        self.model.clear_parproperties(i1, i2, *keys)
+
+    def on_size(self, event=None):
+        try:
+            font_size=self.size.GetValue()
+        except ValueError:
+            return self.update()
+        self.set_properties(font_size=font_size)
+
+    def on_family(self, event=None):
+        name = self.family.GetFontName()
+        self.set_properties(font_family = name)
+
+    def on_basestyle(self, event=None):
+        i = self.basestyle.Selection
+        key = self._stylekeys[i]
+        self.set_parproperties(base=key)
+        
+    def mk_style(self, parstyle, style):
+        # Computes the style of a single run of text. Unlike the code
+        # in nbview, we aggregate parstyle and textstyles. This way,
+        # we can use the same code for paragraph and text
+        # styles. Further we include defaultstyles which is not done
+        # in nbviews (but in wxdevice).
+        stylesheet = self.model.builder.stylesheet
+        basestyle = stylesheet[parstyle.get('base', 'normal')]
+        r = updated(defaultstyle, basestyle, parstyle, style)
+        if not 'base' in r:
+            r['base'] = 'normal'
+        return r
+
+    def get_range(self):
+        textview = self.model
+        textmodel = textview.model
+        if not textview.has_selection():
+            i1 = i2 = textview.index
+        else:
+            i1, i2  = sorted(textview.selection)
+        return i1, i2
+
+    def get_parrange(self):
+        # get range / selection and extend it to the right such that a
+        # NL is the last included position.
+        view = self.model
+        model = view.model
+        if view.has_selection():
+            s1, s2 = sorted(view.selection)
+            row, col = model.index2position(s2)
+            if col == 0:
+                return s1, s2
+            j = model.lineend(row)
+            return s1, j+1
+        index = view.index
+        row, col = model.index2position(index)
+        j = model.lineend(row)
+        return index, j+1
+
+    _stylenames = ()
+    def update(self, event=None):
+        textview = self.model
+        textmodel = textview.model
+        
+        # Update list of basestyles:
+        stylesheet = textview.builder.stylesheet
+        stylekeys = sorted(stylesheet.keys())
+        stylenames = [stylesheet[key]['name'] for key in stylekeys]
+        if stylenames != self._stylenames:            
+            self.basestyle.SetItems(stylenames)
+            self._stylenames = stylenames
+            self._stylekeys = stylekeys
+        
+        index = textview.index
+        index_style = textmodel.get_style(max(0, index-1)) # XXX warum -1 ???
+        index_parstyle = textmodel.get_parstyle(index)
+        index_properties = self.mk_style(index_parstyle, index_style)
+        index_overrides = set(index_style.keys()).union(index_parstyle.keys())
+        index_indent = textmodel.get_indent(index)
+
+
+        if textview.has_selection():
+            s1, s2 = sorted(textview.selection)
+            properties, overrides = collect_properties(
+                textmodel, s1, s2, self.mk_style)
+            indent = min(textmodel.get_indents(s1, s2)+[index_indent])
+        else:
+            properties = self.mk_style(index_parstyle, index_style)
+            overrides = index_overrides
+            indent = index_indent
+
+        #print("overrides", overrides)
+        #print("properties", properties)
+
+        base = properties.get('base', 'normal')
+        if base is not None:
+            i = self._stylekeys.index(base)
+            self.basestyle.SetSelection(i)
+        else:
+            self.basestyle.SetSelection(-1)
+                                  
+        self.color.set_colour(properties['color'])
+        self.bgcolor.set_colour(properties['bgcolor'])
+        x = 'color' in overrides or 'bgcolor' in overrides
+        self.reset_colors.set_x(x)
+            
+        checkboxes_names = "underline italic bold".split()
+        for name in checkboxes_names:
+            widget = getattr(self, name)
+            reset = getattr(self, 'reset_'+name)
+            reset.set_x(name in overrides)
+            value = properties[name]
+            if value is None:
+                widget.Set3StateValue(wx.CHK_UNDETERMINED)
+            else:
+                widget.SetValue(value)
+
+        family = properties['font_family']
+        self.family.SetFontName(family)
+        x = 'font_family' in overrides
+        self.reset_family.set_x(x)
+        
+        size = properties['font_size']
+        if size is None:
+            self.size.SetValue('')
+        else:
+            self.size.SetValue(str(size))
+        x = 'font_size' in overrides
+        self.reset_size.set_x(x)
+
+        value = properties['alignment']
+        if value is None:
+            for name, widget in self.align.buttons.items():
+                widget.Value = False
+        else:
+            for name, widget in self.align.buttons.items():
+                state = name == value
+                widget.SetValue(state)
+        x = 'alignment' in overrides
+        self.reset_align.set_x(x)
+
+        value = properties['space_before']
+        self.space_before.SetValue(value)
+        x = 'space_before' in overrides
+        self.reset_space_before.set_x(x)
+
+        value = properties['space_after']
+        self.space_after.SetValue(value)
+        x = 'space_after' in overrides
+        self.reset_space_after.set_x(x)
+
+        value = properties['line_spacing']
+        self.line_spacing.SetValue(value)
+        x = 'line_spacing' in overrides
+        self.reset_line_spacing.set_x(x)
+        
+        first = properties['first_line_indent']
+        self.indent_first.SetValue(first)
+        x = 'first_line_indent' in overrides
+        self.reset_first.set_x(x)
+
+        self.level.SetValue(str(indent+1))
+        policy = properties['level_policy']
+        i = {None:-1, 'free':0, 'fixed':1}[policy]
+        self.policy.SetSelection(i)
+        x = 'level_policy' in overrides
+        self.reset_policy.set_x(x)
+        state = i==0
+        if self.level.IsEnabled != state:
+            self.level.Enable(state)
+            self.indent.Enable(state)
+
+        positions = properties['indent_levels']
+        if positions is None:
+            self.indent_position.SetValue(None)
+        else:
+            pos = positions[indent]
+            self.indent_position.SetValue(pos)
+        x = 'indent_levels' in overrides
+        self.reset_indent.set_x(x)
+
+        markers = properties['marker']
+        if markers is None:
+            self.bullet.SetSelection(-1)
+        else:
+            marker = markers[indent]
+            self.bullet.SetSelection(defaultbullets.index(marker))
+        x = 'marker' in overrides
+        self.reset_bullet.set_x(x)
+            
+        positions = properties['marker_pos']
+        if positions is None:
+            self.marker_pos.SetValue(None)
+        else:
+            pos = positions[indent]
+            self.marker_pos.SetValue(pos)
+        x = 'marker_pos' in overrides
+        self.reset_marker_pos.set_x(x)
+
+        colors = properties['marker_color']
+        if colors is None:
+            self.marker_color.set_colour(None)
+        else:
+            color = colors[indent]
+            self.marker_color.set_colour(color)
+        x = 'marker_color' in overrides
+        self.reset_marker_color.set_x(x)
+
+        sizes = properties['marker_size']
+        if sizes is None:
+            self.marker_size.SetValue(None)
+        else:
+            size = sizes[indent]
+            self.marker_size.SetValue(size)
+        x = 'marker_size' in overrides
+        self.reset_marker_size.set_x(x)
+        
+        ### update paragraph_type & visibility
+        try:
+            i = ["normal", "list", "numbered"].index(properties['paragraph_type'])
+        except ValueError:
+            i = -1
+        self.paragraph_type.Selection = i
+        x = 'paragraph_type' in overrides
+        self.reset_paragraph_type.set_x(x)
+
+        ptype = properties['paragraph_type']
+        self.marker_panel.Show(ptype in ("list", "numbered"))
+        self.list_panel.Show(ptype == "list")
+        self.enum_panel.Show(ptype == "numbered")
+        self.Layout()
+        
+            
+
+        
+
+        
+def _collect_properties(texel, i1, i2, parstyle, indent, mk_style):
+    """Gibt ein Dict mit Properties zurück (values sind None wenn
+    uneindeutig) und ein Set mit override den überschriebenen
+    Properties.
+
+    Indent wird hier als Property behandelt und ist auch enthalten. 
+
+    """
+    if provides_childs(texel):
+        properties = dict()
+        overrides = set()
+        
+        for j1, j2, child in reversed(list(iter_childs(texel))):
+            if i1 < j2 and j1 < i2: # overlapp
+                s, o, parstyle = _collect_properties(
+                    child, i1-j1, i2-j1, parstyle, indent, mk_style)
+                overrides.update(o)
+                for key, value in s.items():
+                    if not key in properties:
+                        properties[key] = value
+                    elif properties[key] != value:
+                        properties[key] = None
+    else:
+        if isinstance(texel, NewLine):
+            parstyle = texel.parstyle
+            indent = texel.indent
+        s = texel.style
+        overrides = set(s.keys()).union(parstyle.keys())
+        properties = mk_style(parstyle, s)
+        properties['indent'] = indent
+    return properties, overrides, parstyle
+
+
+def updated(default, *styles):
+    """Merges dicts by updating from left to right."""    
+    r = default.copy()
+    for s in styles:
+        r.update(s)
+    return r
+
+
+def _mk_style(parstyle, style):
+    # Simplified style-model. For testing only.
+    return updated(parstyle, style)
+
+
+def collect_properties(model, i1, i2, mk_style=_mk_style):
+    parstyle = model.get_parstyle(i2)
+    indent = model.get_indent(i2)
+    return _collect_properties(model.get_xtexel(), i1, i2, parstyle,
+                               indent, mk_style)[:2]
+                        
+
+def mk_demo(redirect=False):
+    from pynotebook.nbview import NBView    
+    from pynotebook.nbtexels import TextCell, NULL_TEXEL, mk_textmodel, TextModel
+    from pynotebook.textmodel.texeltree import T
+    
+    app = wx.App(redirect=redirect)
+    frame = wx.Frame(None)
+    win = wx.Panel(frame)
+    view = NBView(win)
+    model = TextModel(u"Some\ntext\n...")
+    model.set_properties(1, 5, color='red')
+    text = model.texel
+    cell = TextCell(text)
+    view.model.insert(0, mk_textmodel(cell))
+    box = wx.BoxSizer(wx.VERTICAL)
+    box.Add(view, 1, wx.ALL|wx.GROW, 1)
+    win.SetSizer(box)
+    win.SetAutoLayout(True)
+    win.Show()
+    frame.Show()    
+    return app, view, model
+    
+def demo_00():
+    app, view, model = mk_demo(redirect=True)
+    inspector = TextCellInspector(view, None)
+    inspector.Show()
+    if 1:
+        from pynotebook.wxtextview import testing
+        l = locals()
+        l.update(globals())
+        testing.pyshell(l)
+
+    app.MainLoop()
+
+
+
+def test_00():
+    "get_parstyle" # just to be sure
+    m = TextModel("Eins\nZwei\ndrei")
+    m.set_parstyle(0, dict(x=1)) # -> Parstyle für "Eins\n"
+    m.set_parstyle(5, dict(x=2)) # -> Parstyle für "Zwei\n"
+    assert m.get_parstyle(0)['x'] == 1 # E
+    assert m.get_parstyle(1)['x'] == 1 # i
+    assert m.get_parstyle(2)['x'] == 1 # n
+    assert m.get_parstyle(3)['x'] == 1 # s
+    assert m.get_parstyle(4)['x'] == 1 # \n
+    assert m.get_parstyle(5)['x'] == 2 # Z
+    assert m.get_parstyle(6)['x'] == 2 # w
+    
+def _test_01():
+    "collect styles"
+    # XXX Update this
+    
+    m = TextModel("Eins\nZwei\ndrei")
+    m.set_parstyle(0, dict(x=1)) # -> Parstyle für "Eins\n"
+    #m.set_parstyle(5, dict(x=2)) # -> Parstyle für "Zwei\n"
+    m.set_parstyle(11, dict(x=3)) # -> Parstyle für "Drei\n"
+    #dump(m.get_xtexel())
+
+    assert collect_properties(m, 1, 3) == \
+        ({'x': 1, 'indent': 0}, {'x'})
+    # base style is overriden, single value
+
+    m.set_properties(1, 2, x=99)
+    assert collect_properties(m, 1, 3) == \
+        ({'x': None, 'indent': 0}, {'x'})
+    # base style is overriden, multiple values for 'x'
+
+    m.set_properties(1, 4, x=99)
+    
+    assert collect_properties(m, 1, 3) == \
+        ({'x': 99, 'indent': 0}, set('x'))
+    # base style is overriden, single value
+
+    assert collect_properties(m, 1, 4) == \
+        ({'x': 99, 'indent': 0}, set('x'))
+    # base style is overriden, single value
+
+    assert collect_properties(m, 1, 5) == \
+        ({'x': None, 'indent': 0}, set('x'))
+    # base style is overriden, multiple values
+
+    print(collect_properties(m, 5, 7))
+    assert collect_properties(m, 5, 7) == \
+        ({'indent': 0}, set())
+    # base style is not overriden, single values
+
+    assert collect_properties(m, 4, 7) == \
+        ({'x': None, 'indent': 0}, set())
+    # base style is not overriden, multiple values
+
+    
+       
+def demo_01():
+    "alignment"
+    app = wx.App(redirect=False)
+    f = wx.Frame(None)
+    b = AlignBar(f)
+    f.Show()
+    app.MainLoop()
+
+
+def demo_02():
+    "indent"
+    app = wx.App(redirect=False)
+    f = wx.Frame(None)
+    b = IndentBar(f)
+    f.Show()
+    app.MainLoop()
+
+
+    
+    
