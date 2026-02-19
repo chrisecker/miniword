@@ -115,17 +115,19 @@ standard = updated(normal, dict(name="Standard"))
 h0 = updated(normal, dict(name="Heading 1", font_size=18, bold=True,
                           page_break_before=True))
 h1 = updated(normal, dict(name="Heading 2", font_size=16, bold=True,
-                          bgcolor="red"))
+                          color="red"))
 h2 = updated(normal, dict(name="Heading 3", font_size=14, bold=True))
 h3 = updated(normal, dict(name="Heading 4", font_size=12, bold=True))
 
-stylesheet = OrderedDict()
-stylesheet['normal'] = normal
-stylesheet['standard'] = standard
-stylesheet['h0'] = h0
-stylesheet['h1'] = h1
-stylesheet['h2'] = h2
-stylesheet['h3'] = h3
+from .stylesheet import StyleSheet
+
+stylesheet = StyleSheet()
+stylesheet.set('normal', normal)
+stylesheet.set('standard', standard)
+stylesheet.set('h0', h0)
+stylesheet.set('h1', h1)
+stylesheet.set('h2', h2)
+stylesheet.set('h3', h3)
 
 
 def mk_style(stylesheet, parstyle, style):
@@ -141,3 +143,5 @@ def mk_parstyle(stylesheet, parstyle):
 def test_00():
     assert (21*cm - 595.27) < 0.1
     
+def test_01():
+    stylesheet.get('normal')['font_size'] == 12

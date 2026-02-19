@@ -23,6 +23,8 @@ import queue
 import time
 
 
+
+
 class PageGeometry:
     width  = 210 * mm
     height = 297 * mm
@@ -82,6 +84,10 @@ class Builder(BuilderBase):
         self._layout = Layout([], factory.device)
         self.factory = factory
 
+    def clear_caches(self):
+        self.device.clear_caches()
+        self.factory.clear_caches()
+        
     def get_device(self):
         return self.device
 
@@ -135,6 +141,13 @@ class Builder(BuilderBase):
             page = next(self.generator)
             self._layout.append_page(page)
             layout = self._layout
+            rest_i, rest = self.rest_memo
+            k2 = len(layout)
+            while rest_i < k2 and rest:
+                _ = rest.pop(0)
+                rest_i += len(_)
+            self.rest_memo = rest_i, rest
+            
             state  = page.restartmemo
             if state is not None:
                 if self.can_finish(state):
@@ -173,13 +186,20 @@ class Builder(BuilderBase):
         self.nrest = len(rest)
         if rest:
             for page in rest:
+                print("finish: appending_rest page")
                 self._layout.append_page(page)
-
+            self.rest_memo = 0, ()
+        
         # Clean up
         self.generator = None
 
         # Update counters
         self.adjust_pages()
+        try:
+            assert len(self._layout) == len(self.model)+1
+        except:
+            print("layout:", len(self._layout))
+            print("model:", len(self.model))
         self._layout.is_finished = True
         self.dump_updatestats()
 
@@ -245,11 +265,6 @@ class Builder(BuilderBase):
         rest_i, rest = self.rest_memo
 
         k2 = len(layout)
-        while rest_i < k2 and rest:
-            _ = rest.pop(0)
-            rest_i += len(_)
-        self.rest_memo = rest_i, rest
-
         if k2 >= len(self.model):
             return True
 

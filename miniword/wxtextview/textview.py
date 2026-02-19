@@ -76,6 +76,7 @@ class TextView(ViewBase, Model):
                                                   # be smaller than
                                                   # i1!
     _selection = None
+    layout = overridable_property('layout')
     maxw = overridable_property('maxw')
     _maxw = 0
     _scrollrate = 10, 10
@@ -84,19 +85,25 @@ class TextView(ViewBase, Model):
         ViewBase.__init__(self)
         self.clear_undo()
         self.set_model(self._TextModel(''))
+        assert self.builder is not None
         assert self.layout is not None
 
     def create_builder(self):
-        pass
+        raise NotImplementedError
+
+    def clear_caches(self):
+        self.builder.clear_caches()
 
     def set_model(self, model):
         ViewBase.set_model(self, model)
         self.builder = self.create_builder()
         self.rebuild()
 
+    def get_layout(self):
+        return self.builder.get_layout()
+    
     def rebuild(self):
         self.builder.rebuild()
-        self.layout = self.builder.get_layout()
         self.refresh()
         assert self.layout is not None
 
@@ -249,7 +256,6 @@ class TextView(ViewBase, Model):
             return
         self._maxw = maxw
         self.builder.set_maxw(maxw)
-        self.layout = self.builder.get_layout()
         self.Refresh()
         self.notify_views('maxw_changed')
 
@@ -569,12 +575,10 @@ class TextView(ViewBase, Model):
     ### Signals issued by model
     def properties_changed(self, model, i1, i2):
         self.builder.properties_changed(i1, i2)
-        self.layout = self.builder.get_layout()
         self.refresh()
 
     def inserted(self, model, i, n):
         self.builder.inserted(i, n)
-        self.layout = self.builder.get_layout()
         if debug:
             self.check()
         if i>= self.index:
@@ -590,7 +594,6 @@ class TextView(ViewBase, Model):
 
     def removed(self, model, i, text):
         self.builder.removed(i, len(text))
-        self.layout = self.builder.get_layout()
         n = len(text)
         i1 = i
         i2 = i+n

@@ -7,6 +7,8 @@
 
 import wx
 import time
+from .cache import LRUCache
+
 
 defaultstyle = dict(
     fontsize=10, bgcolor='white', textcolor='black', 
@@ -44,16 +46,17 @@ class WxDevice:
     zoom = 1.0
     buffering = True
     def __init__(self):
-        self._cache = {}
-        self._cache_keys = []
-        self._cache_max = 1000
+        self._cache = LRUCache(1000)
         # Temporary GC for measuring
         self._temp_bmp = wx.Bitmap(1, 1)
         self._temp_dc = wx.MemoryDC(self._temp_bmp)
         self._temp_gc = wx.GraphicsContext.Create(self._temp_dc)
         self.reset_blink()
 
-    def create_gc(self, dc):
+    def clear_caches(self):
+        self._cache.clear()
+        
+    def create_painter(self, dc):
         gc = wx.GraphicsContext.Create(dc)
         gc.Scale(self.zoom, self.zoom)
         return gc

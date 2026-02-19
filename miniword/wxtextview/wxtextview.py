@@ -163,21 +163,22 @@ class WXTextView(wx.ScrolledWindow, TextView):
         region = self.GetUpdateRegion()
         x, y, w, h = region.Box
         dc.SetClippingRegion(x-1, y-1, w+2, h+2)
-        gc = device.create_gc(dc)
+        painter = device.create_painter(dc)
 
         zoom = self.zoom
         x, y = self.CalcScrolledPosition((0,0))
         x /= zoom
         y /= zoom
         layout = self.layout
-        layout.draw(x, y, gc)
+        layout.draw(x, y, painter)
         
         if wx.Window.FindFocus() is self:
-            layout.draw_cursor(self.index, x, y, gc, self.model.defaultstyle)            
+            layout.draw_cursor(self.index, x, y, painter,
+                               self.model.defaultstyle)
         for j1, j2 in self.get_selected():
-            layout.draw_selection(j1, j2, x, y, gc)
+            layout.draw_selection(j1, j2, x, y, painter)
         dc = None
-        gc = None
+        painter = None
 
     def on_size(self, event):
         self.keep_cursor_on_screen()

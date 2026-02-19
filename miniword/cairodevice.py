@@ -5,6 +5,7 @@ import time
 
 
 from .styles import mm, cm, pt, inch
+from .wxtextview.cache import LRUCache
 
 
 # Minimal set of properties required for the device to function
@@ -47,10 +48,7 @@ class CairoDevice:
     t0 = 0  # time since last movement
 
     def __init__(self):
-        self._cache = {}
-        self._cache_keys = []
-        self._cache_max = 1000
-        # Dummy surface for measurements
+        self._cache = LRUCache(1000)
         self._temp_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)
         self._temp_ctx = cairo.Context(self._temp_surface)
         fo = cairo.FontOptions()
@@ -58,6 +56,9 @@ class CairoDevice:
         fo.set_hint_metrics(cairo.HINT_METRICS_OFF)
         self._temp_ctx.set_font_options(fo)
         self.reset_blink()
+
+    def clear_caches(self):
+        self._cache.clear()
 
     def reset_blink(self):
         self._blink_reference_time = time.time()
@@ -89,8 +90,10 @@ class CairoDevice:
 
     def measure(self, text, style):
         key = (text, tuple(sorted(style.items())))
-        if key in self._cache:
-            return self._cache[key]
+        try:
+            return self._cache.get(key)
+        except KeyError:
+            pass
 
         ctx = self._temp_ctx
         _style = filled(style)
@@ -105,8 +108,7 @@ class CairoDevice:
                          # + internal leading)
         result = (xa, line_h, descent)
 
-        # Cache handling
-        self._cache[key] = result
+        self._cache.set(key, result)
         return result
 
     def measure_parts(self, text, style):

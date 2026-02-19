@@ -12,6 +12,7 @@ from .wxtextview.wxdevice import defaultstyle
 from .unit_entry import UnitInput, EVT_UNIT_CHANGED
 from .threestatespin import SpinCtrl3, EVT_SPIN_VALUE
 from .styles import defaultbullets
+from .stylemenu import BasestyleDropdown
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -272,8 +273,10 @@ class Inspector(wx.Frame, ViewBase):
         
         framesizer = wx.BoxSizer( wx.VERTICAL )
 
-        self.basestyle = wx.Choice(self)
+        self.basestyle = BasestyleDropdown(self, size=(-1, 40))
         self.basestyle.Bind(wx.EVT_CHOICE, self.on_basestyle)
+        stylesheet = view.builder.stylesheet
+        self.basestyle.set_stylesheet(stylesheet)
         framesizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
         
         notebook = wx.Notebook(self)
@@ -662,7 +665,7 @@ class Inspector(wx.Frame, ViewBase):
 
     def on_size(self, event=None):
         try:
-            font_size=self.size.GetValue()
+            font_size=float(self.size.GetValue())
         except ValueError:
             return self.update()
         self.set_properties(font_size=font_size)
@@ -672,8 +675,7 @@ class Inspector(wx.Frame, ViewBase):
         self.set_properties(font_family = name)
 
     def on_basestyle(self, event=None):
-        i = self.basestyle.Selection
-        key = self._stylekeys[i]
+        key = self.basestyle.GetSelectedKey()
         self.set_parproperties(base=key)
         
     def mk_style(self, parstyle, style):
@@ -683,7 +685,7 @@ class Inspector(wx.Frame, ViewBase):
         # styles. Further we include defaultstyles which is not done
         # in nbviews (but in wxdevice).
         stylesheet = self.model.builder.stylesheet
-        basestyle = stylesheet[parstyle.get('base', 'normal')]
+        basestyle = stylesheet.get(parstyle.get('base', 'normal'))
         r = updated(defaultstyle, basestyle, parstyle, style)
         if not 'base' in r:
             r['base'] = 'normal'
@@ -716,18 +718,10 @@ class Inspector(wx.Frame, ViewBase):
         return index, j+1
 
     _stylenames = ()
+    _state = None
     def update(self, event=None):
         textview = self.model
         textmodel = textview.model
-        
-        # Update list of basestyles:
-        stylesheet = textview.builder.stylesheet
-        stylekeys = sorted(stylesheet.keys())
-        stylenames = [stylesheet[key]['name'] for key in stylekeys]
-        if stylenames != self._stylenames:            
-            self.basestyle.SetItems(stylenames)
-            self._stylenames = stylenames
-            self._stylekeys = stylekeys
         
         index = textview.index
         index_style = textmodel.get_style(max(0, index-1)) # XXX warum -1 ???
@@ -750,12 +744,13 @@ class Inspector(wx.Frame, ViewBase):
         #print("overrides", overrides)
         #print("properties", properties)
 
+        state = properties, overrides, indent
+        if state == self._state:
+            return
+        self._state = state
+
         base = properties.get('base', 'normal')
-        if base is not None:
-            i = self._stylekeys.index(base)
-            self.basestyle.SetSelection(i)
-        else:
-            self.basestyle.SetSelection(-1)
+        self.basestyle.set_properties(base, properties, overrides)
                                   
         self.color.set_colour(properties['color'])
         self.bgcolor.set_colour(properties['bgcolor'])
