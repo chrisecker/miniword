@@ -7,7 +7,62 @@ from .cairodevice import CairoDevice
 import wx
 
 class DocumentView(WXTextView):
-    """Simple view for testing."""
+    
+    min_zoom = 0.2
+    max_zoom = 5.0
+    zoom_step = 0.1
+    
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
+
+    def on_mousewheel(self, evt: wx.MouseEvent):
+        if not evt.ControlDown():
+            return evt.Skip()  # normal scroll
+        
+        rotation = evt.GetWheelRotation()
+        delta = evt.GetWheelDelta()  # meist 120
+
+        if rotation > 0:
+            self.zoom += self.zoom_step
+        else:
+            self.zoom -= self.zoom_step
+
+        # Begrenzen
+        self.zoom = max(self.min_zoom, min(self.max_zoom, self.zoom))
+
+        print("Zoom:", self.zoom)
+
+    def on_mousewheel(self, evt: wx.MouseEvent):
+        if not evt.ControlDown():
+            return evt.Skip()  # normales Scrollen
+
+        # Fenstergröße
+        client_w, client_h = self.GetClientSize()
+        scroll_x, scroll_y = self.GetViewStart()
+        unit_x, unit_y = self.GetScrollPixelsPerUnit()
+
+        # Mittelpunkt vor Zoom in Pixel
+        mid_x = scroll_x * unit_x + client_w // 2
+        mid_y = scroll_y * unit_y + client_h // 2
+
+        # Zoom-Faktor
+        factor = 1.1 if evt.GetWheelRotation() > 0 else 0.9
+        old_zoom = self.zoom
+        self.zoom *= factor
+        self.zoom = max(self.min_zoom, min(self.max_zoom, self.zoom))
+
+        # Update Virtual Size
+        #self.update_virtual_size()
+
+        # Neue Scrollposition berechnen, sodass Mittelpunkt gleich bleibt
+        new_scroll_x = mid_x * self.zoom / old_zoom - client_w // 2
+        new_scroll_y = mid_y * self.zoom / old_zoom - client_h // 2
+
+        self.Scroll(int(new_scroll_x / unit_x), int(new_scroll_y / unit_y))
+
+        self.Refresh()
+
 
     def style_changed(self, stylesheet, key):
         j1 = j2 = None
