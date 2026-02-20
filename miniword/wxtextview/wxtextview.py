@@ -116,25 +116,32 @@ class WXTextView(wx.ScrolledWindow, TextView):
         self.handle_action(action, shift)
 
     def to_clipboard(self, textmodel):
-        text = textmodel.get_text()
-        plain = wx.TextDataObject()
-        plain.SetText(text)
-        pickled = wx.CustomDataObject("pytextmodel")
-        pickled.SetData(pickle.dumps(textmodel))
-        data = wx.DataObjectComposite()
-        data.Add(plain)
-        data.Add(pickled)
-        wx.TheClipboard.Open()
-        wx.TheClipboard.SetData(data)
-        wx.TheClipboard.Close()
+        for i in range(2):
+            # loop is a hack to make clipboard work reliable under linux
+            text = textmodel.get_text()
+            plain = wx.TextDataObject()
+            plain.SetText(text)
+            pickled = wx.CustomDataObject("pytextmodel")
+            pickled.SetData(pickle.dumps(textmodel))
+            data = wx.DataObjectComposite()
+            data.Add(pickled, preferred=True)
+            data.Add(plain)
+            
+            if wx.TheClipboard.Open():
+                wx.TheClipboard.SetData(data)
+                wx.TheClipboard.Flush()
+                wx.TheClipboard.Close()
+                self._clipboard_data = data  # prevent gc of collecting data
 
     def read_clipboard(self):
-        if wx.TheClipboard.IsOpened():  # may crash, otherwise
+        if wx.TheClipboard.IsOpened(): # may crash, otherwise
             return
+            
+        if not wx.TheClipboard.Open():
+            return None
         pickled = wx.CustomDataObject("pytextmodel")
         plain = wx.TextDataObject()
         textmodel = None
-        wx.TheClipboard.Open()
         if wx.TheClipboard.GetData(pickled):            
             textmodel = pickle.loads(pickled.GetData())
 
