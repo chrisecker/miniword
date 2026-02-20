@@ -12,57 +12,45 @@ class DocumentView(WXTextView):
     max_zoom = 5.0
     zoom_step = 0.1
     
-    def __init__(self, parent):
+    def __init__(self, parent, document):
         super().__init__(parent)
+        self.document = document
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
-
-    def on_mousewheel(self, evt: wx.MouseEvent):
-        if not evt.ControlDown():
-            return evt.Skip()  # normal scroll
+        self.set_model(document.textmodel)
+        self.add_model(document.charstyles)
+        self.add_model(document.liststyles)
+        self.add_model(document.basestyles)
         
-        rotation = evt.GetWheelRotation()
-        delta = evt.GetWheelDelta()  # meist 120
-
-        if rotation > 0:
-            self.zoom += self.zoom_step
-        else:
-            self.zoom -= self.zoom_step
-
-        # Begrenzen
-        self.zoom = max(self.min_zoom, min(self.max_zoom, self.zoom))
-
-        print("Zoom:", self.zoom)
-
-    def on_mousewheel(self, evt: wx.MouseEvent):
-        if not evt.ControlDown():
-            return evt.Skip()  # normales Scrollen
-
-        # Fenstergröße
-        client_w, client_h = self.GetClientSize()
-        scroll_x, scroll_y = self.GetViewStart()
-        unit_x, unit_y = self.GetScrollPixelsPerUnit()
-
-        # Mittelpunkt vor Zoom in Pixel
-        mid_x = scroll_x * unit_x + client_w // 2
-        mid_y = scroll_y * unit_y + client_h // 2
-
-        # Zoom-Faktor
-        factor = 1.1 if evt.GetWheelRotation() > 0 else 0.9
+    def on_mousewheel(self, event):
+        if not event.ControlDown():
+            return event.Skip()  # scroll
         old_zoom = self.zoom
-        self.zoom *= factor
-        self.zoom = max(self.min_zoom, min(self.max_zoom, self.zoom))
+        factor = 1.1 if event.GetWheelRotation() > 0 else 1 / 1.1
+        new_zoom = max(0.2, min(5.0, old_zoom * factor))
 
-        # Update Virtual Size
-        #self.update_virtual_size()
+        cw, ch = self.GetClientSize()
+        rx, ry = getattr(self, '_scrollrate', (10, 10))
+        sx, sy = self.GetViewStart()
+        scroll_x = sx * rx
+        scroll_y = sy * ry
 
-        # Neue Scrollposition berechnen, sodass Mittelpunkt gleich bleibt
-        new_scroll_x = mid_x * self.zoom / old_zoom - client_w // 2
-        new_scroll_y = mid_y * self.zoom / old_zoom - client_h // 2
+        # Content-center in old zoom
+        cx_content = (scroll_x + cw / 2) / old_zoom
+        cy_content = (scroll_y + ch / 2) / old_zoom
 
-        self.Scroll(int(new_scroll_x / unit_x), int(new_scroll_y / unit_y))
+        # new scroll so that content-center does not change
+        new_scroll_x = cx_content * new_zoom - cw / 2
+        new_scroll_y = cy_content * new_zoom - ch / 2
 
-        self.Refresh()
+        self.set_zoom(new_zoom)
 
+        # VirtualSize must be updateted before Scroll()
+        layout = self.layout
+        self.SetVirtualSize((int(layout.width * new_zoom), int(layout.height * new_zoom)))
+        self.SetScrollRate(rx, ry)
+
+        self.Scroll(max(0, int(new_scroll_x / rx)),
+                    max(0, int(new_scroll_y / ry)))        
 
     def style_changed(self, stylesheet, key):
         j1 = j2 = None
@@ -71,11 +59,9 @@ class DocumentView(WXTextView):
                 if j1 is None:
                     j1 = i1
                 j2 = i2
-        print("style changed", key, "range: %i - %i" % (j1, j2))
         self.clear_caches()
-        self.builder.rebuild_dirty(j1, j2, 0) # klappt nicht!!!!
-        #self.rebuild()
-        self.builder.waitfor_finish() # XXX
+        self.builder.rebuild_dirty(j1, j2, 0)
+        self.builder.waitfor_finish() # XXX should a wait-dialog be shown?
         self.refresh()
 
     def style_removed(self, stylesheet, key):
@@ -129,6 +115,7 @@ class DocumentView(WXTextView):
             self.move_up(shift)
         else:
             return WXTextView.handle_action(self, action, shift)
+
 
 
 def test_00():

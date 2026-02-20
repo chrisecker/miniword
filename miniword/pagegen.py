@@ -118,6 +118,7 @@ class Page(Box):
         self.pagenum = pagenum
 
     def draw(self, x, y, gc):
+        self.device.fill_rect(x, y, self.width, self.height, 'white', gc)
         Box.draw(self, x, y, gc)
         self.device.draw_rect(x, y, self.width, self.height, gc)
         margin = self.margin

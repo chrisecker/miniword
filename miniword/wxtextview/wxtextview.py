@@ -150,7 +150,7 @@ class WXTextView(wx.ScrolledWindow, TextView):
 
         wx.TheClipboard.Close()
         return textmodel
-
+   
     def on_paint(self, event):
         self._update_scroll()
         self.keep_cursor_on_screen()
@@ -187,32 +187,97 @@ class WXTextView(wx.ScrolledWindow, TextView):
         dc = None
         painter = None
 
+    def on_paint(self, event):
+        self._update_scroll()
+        self.keep_cursor_on_screen()
+
+        pdc = wx.PaintDC(self)
+        pdc.SetAxisOrientation(True, False)
+        device = self.builder.get_device()
+        if device.buffering:
+            dc = wx.BufferedDC(pdc)
+            if not dc.IsOk():
+                return
+        else:
+            dc = pdc
+        dc.SetBackgroundMode(wx.SOLID)
+        dc.SetBackground(wx.GREY_BRUSH)
+        
+        dc.Clear()
+        region = self.GetUpdateRegion()
+        rx, ry, rw, rh = region.Box
+        dc.SetClippingRegion(rx-1, ry-1, rw+2, rh+2)
+        painter = device.create_painter(dc)
+
+        zoom = self.zoom
+        layout = self.layout
+        cw, ch = self.GetClientSize()
+        vw = int(layout.width * zoom)
+        vh = int(layout.height * zoom)
+
+        # Content origin needs to be centered when content < window
+        px, py = self.CalcScrolledPosition((0, 0))
+        if vw < cw:
+            px = (cw - vw) // 2
+        if vh < ch:
+            py = (ch - vh) // 2
+
+        x = px / zoom
+        y = py / zoom
+
+        layout.draw(x, y, painter)
+
+        if wx.Window.FindFocus() is self:
+            layout.draw_cursor(self.index, x, y, painter,
+                               self.model.defaultstyle)
+        for j1, j2 in self.get_selected():
+            layout.draw_selection(j1, j2, x, y, painter)
+        dc = None
+        painter = None
+        
     def on_size(self, event):
         self.keep_cursor_on_screen()
 
+    def _virtual_size(self):
+        return int(self.content_width * self.zoom), int(self.content_height * self.zoom)
+
+    def _window_to_content(self, pos):
+        """Calculates content coordinates from window-coordinates,
+        accounts for scroll and centering (content < window)."""
+        zoom = self.zoom
+        layout = self.layout
+        cw, ch = self.GetClientSize()
+        vw = int(layout.width * zoom)
+        vh = int(layout.height * zoom)
+        x, y = self.CalcUnscrolledPosition(pos)
+
+        if vw < cw:
+            ox = (cw - vw) // 2
+            x = x - ox
+        if vh < ch:
+            oy = (ch - vh) // 2
+            y = y - oy
+        return x / zoom, y / zoom
+    
     def on_motion(self, event):
         if not event.LeftIsDown():
             return event.Skip()
-        x, y = self.CalcUnscrolledPosition(event.Position) 
-        zoom = self.zoom
-        i = self.layout.get_index(x/zoom, y/zoom)
+        x, y = self._window_to_content(event.Position)
+        i = self.layout.get_index(x, y)
         if i is not None:
             self.set_index(i, extend=True)
 
     def on_leftdown(self, event):
-        x, y = self.CalcUnscrolledPosition(event.Position) 
-        zoom = self.zoom
-        i = self.compute_index(x/zoom, y/zoom)
+        x, y = self._window_to_content(event.Position)
+        i = self.compute_index(x, y)
         if i is not None:
             self.set_index(i, extend=event.ShiftDown())
         self.SetFocus()
 
     def on_leftdclick(self, event):
-        # Mark word
-        x, y = self.CalcUnscrolledPosition(event.Position)
-        zoom = self.zoom
-        self.select_word(x/zoom, y/zoom)
-        self.SetFocus()
+        x, y = self._window_to_content(event.Position)
+        self.select_word(x, y)
+        self.SetFocus()        
 
     ### Scroll
     def _update_scroll(self):

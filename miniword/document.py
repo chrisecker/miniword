@@ -1,4 +1,5 @@
 from .textmodel.modelbase import Model
+from .textmodel.textmodel import TextModel
 from .stylesheet import StyleSheet
 
 
@@ -8,9 +9,9 @@ class Document(Model):
         self.charstyles.set_owner(self, 'charstyles')
         self.liststyles = StyleSheet()
         self.liststyles.set_owner(self, 'liststyles')
-        self.parstyles = StyleSheet()
-        self.parstyles.set_owner(self, 'parstyles')
-        #self.textmodel = sss
+        self.basestyles = StyleSheet()
+        self.basestyles.set_owner(self, 'basestyles')
+        self.textmodel = TextModel()
         
     def charstyles_changed(self, *args, **kwds):
         self.notify_views('charstyles_changed')
@@ -18,8 +19,8 @@ class Document(Model):
     def liststyles_changed(self, *args, **kwds):
         self.notify_views('liststyles_changed')
 
-    def parstyles_changed(self, *args, **kwds):
-        self.notify_views('parstyles_changed')
+    def basestyles_changed(self, *args, **kwds):
+        self.notify_views('basestyles_changed')
         
 
         
@@ -71,6 +72,6 @@ def test_01():
     assert view.msg == ('charstyles_changed', (doc,), {})
 
     # testing the fallback handler
-    doc.parstyles.set('normal', dict(fontsize=9, dolor="black"))    
+    doc.basestyles.set('normal', dict(fontsize=9, dolor="black"))    
     assert view.msg == ('model_changed', (doc,), {})
 
