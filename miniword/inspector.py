@@ -34,7 +34,26 @@ class ButtonBarEvent(wx.CommandEvent):
         super().__init__(wxEVT_BUTTONBAR, id)
         self.name = name
 
-        
+
+def _is_text_input(w: wx.Window) -> bool:
+    return isinstance(w, (wx.TextCtrl, wx.ComboBox))
+
+def passfocus(widget: wx.Window, mainwidget: wx.Window, interval_ms: int = 100):
+    def _check(event):
+        focused = wx.Window.FindFocus()
+        if focused is None:
+            return
+        if widget.IsDescendant(focused) and not _is_text_input(focused):
+            mainwidget.SetFocus()
+
+    timer = wx.Timer(widget)
+    widget.Bind(wx.EVT_TIMER, _check, timer)
+    timer.Start(interval_ms)
+
+    widget.Bind(wx.EVT_WINDOW_DESTROY, lambda e: timer.Stop())
+    widget._passfocus_timer = timer  # reference to prevent gc
+
+    
 class ButtonBar(wx.Panel):
     def __init__(self, parent, *, exclusive=False, button_size=36):
         super().__init__(parent)
@@ -53,7 +72,7 @@ class ButtonBar(wx.Panel):
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_toggle)
         else:
             btn = wx.Button(self, label="")
-            #btn.Bind(wx.EVT_BUTTON, self._on_click)
+            btn.Bind(wx.EVT_BUTTON, self._on_click)
 
         btn.SetBitmap(bitmap)
         btn.SetMinSize(self.btn_size)
@@ -120,7 +139,8 @@ class IndentBar(ButtonBar):
     
 class PromptingComboBox(wx.ComboBox) :
     def __init__(self, parent, choices=[], style=0, **par):
-        wx.ComboBox.__init__(self, parent, wx.ID_ANY, style=style|wx.CB_DROPDOWN, choices=choices, **par)
+        wx.ComboBox.__init__(self, parent, wx.ID_ANY, style=style| \
+                             wx.CB_DROPDOWN, choices=choices, **par)
         self.all_choices = choices
         self.choices = choices
         self.Bind(wx.EVT_TEXT, self.OnText)
@@ -247,10 +267,12 @@ def add_section(label, panel, sizer):
     text.SetFont(font)        
     sizer.Add(text, 0, wx.EXPAND|wx.TOP, 10)
 
+
+ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
+    
 def add_row(sizer, *widgets):
     # Helper: add a row of widgets    
     rowsizer = wx.BoxSizer(wx.HORIZONTAL)
-    ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
 
     for i, widget in enumerate(widgets):
         if i==0:
@@ -261,31 +283,45 @@ def add_row(sizer, *widgets):
     
         
 
-
-class Inspector(wx.Frame, ViewBase):
-    sizes = (8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30)
-    def __init__(self, view, parent, *args, **kwds):
-        ViewBase.__init__(self)
+class Inspector(wx.Frame):
+    def __init__(self, view, parent, *args, **kwds):    
         wx.Frame.__init__(self, parent, *args, title='Format',
                           style=wx.DEFAULT_FRAME_STYLE|wx.FRAME_FLOAT_ON_PARENT
                           |wx.FRAME_TOOL_WINDOW, **kwds)
-        self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
-        
+        self.panel = InspectorPanel(self, view)
         framesizer = wx.BoxSizer( wx.VERTICAL )
+        framesizer.Add(self.panel, 1, wx.EXPAND, 0)
+        self.SetSizer(framesizer)
+        self.Layout()
+        framesizer.Fit(self)
+
+    
+class InspectorPanel(wx.Panel, ViewBase):
+    sizes = (8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30)
+    def __init__(self, parent, view, basestyles, *args, **kwds):
+        ViewBase.__init__(self)
+        wx.Panel.__init__(self, parent, *args, **kwds)
+        self.basestyles = basestyles
+        # XXX restliche stylesheets
+        
+        mainsizer = wx.BoxSizer( wx.VERTICAL )
 
         self.basestyle = BasestyleDropdown(self, size=(-1, 40))
         self.basestyle.Bind(wx.EVT_CHOICE, self.on_basestyle)
         stylesheet = view.builder.stylesheet
-        self.basestyle.set_stylesheet(stylesheet)
-        framesizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
+        self.basestyle.set_stylesheet(self.basestyles)
+        mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
         
         notebook = wx.Notebook(self)
-
+        notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,
+            lambda e: (e.Skip(), wx.CallAfter(view.SetFocus)))
+        
         panel = self.panel = wx.Panel(notebook)
         panelsizer = wx.BoxSizer(wx.VERTICAL)        
         notebook.AddPage(panel, 'Style')
-        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
-        
+        panel.SetBackgroundColour(wx.SystemSettings.GetColour(
+            wx.SYS_COLOUR_BTNFACE))
+
 
         #line = wx.StaticLine(panel, style=wx.LI_HORIZONTAL)
         #panelsizer.Add(line, 0, wx.ALL, 5)
@@ -317,7 +353,11 @@ class Inspector(wx.Frame, ViewBase):
         self.color = ColourButton(panel)
         self.bgcolor = ColourButton(panel)
         self.reset_colors = ResetButton(panel, ['color', 'bgcolor'])
-        add_row(contentsizer, self.color, self.bgcolor, self.reset_colors)
+        rowsizer = wx.BoxSizer(wx.HORIZONTAL)
+        rowsizer.Add(self.color, 1, wx.ALL, 5)
+        rowsizer.Add(self.bgcolor, 1, wx.ALL, 5)
+        rowsizer.Add(self.reset_colors, 0, wx.ALL, 5)
+        contentsizer.Add(rowsizer, 0, wx.EXPAND)
         
         self.color.callback = lambda: self.set_properties(
                 color=self.color.get_colour())
@@ -500,12 +540,11 @@ class Inspector(wx.Frame, ViewBase):
         self.start_value = wx.TextCtrl(spanel)
         self.reset_start = ResetButton(spanel, ['--']) # as a placeholder
         self.start_value.Enable(False) # XXX
-        add_row(spanelsizer, self.start_check, self.start_value, self.reset_start)
+        add_row(spanelsizer, self.start_check, self.start_value,
+                self.reset_start)
 
         contentsizer.Add(spanel, 0, wx.EXPAND, 5)
 
-
-        # ....
         panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
         panel.SetSizer(panelsizer)
         panel.Layout()
@@ -524,16 +563,9 @@ class Inspector(wx.Frame, ViewBase):
         panel.Layout()
         panelsizer.Fit(panel )
         
-        ###
-        framesizer.Add(notebook, 1, wx.EXPAND |wx.ALL, 5)
-
-        
-        
-        ###
-        self.SetBackgroundColour(panel.BackgroundColour)
-        self.SetSizer(framesizer)
-        self.Layout()
-        framesizer.Fit(self)
+        ### Epilog
+        mainsizer.Add(notebook, 1, wx.EXPAND |wx.ALL, 5)
+        self.SetSizer(mainsizer)
 
         for resetter in [
                 self.reset_colors,
@@ -560,6 +592,7 @@ class Inspector(wx.Frame, ViewBase):
         ]:
             resetter.callback = self.clear_parproperties            
 
+        passfocus(self, view)            
         self.add_model(view)
         model = view.model
         assert model is not None
@@ -628,9 +661,6 @@ class Inspector(wx.Frame, ViewBase):
     def on_line_spacing(self, event):
         value = event.Value
         self.set_parproperties(line_spacing=value)
-
-    def on_destroy(self, event):
-        self.destroy()
 
     def model_changed(self, *args):
         self.queue_update()
@@ -870,7 +900,8 @@ class Inspector(wx.Frame, ViewBase):
         
         ### update paragraph_type & visibility
         try:
-            i = ["normal", "list", "numbered"].index(properties['paragraph_type'])
+            i = ["normal", "list", "numbered"].index(properties[ \
+                                               'paragraph_type'])
         except ValueError:
             i = -1
         self.paragraph_type.Selection = i
@@ -884,9 +915,6 @@ class Inspector(wx.Frame, ViewBase):
         self.Layout()
         
             
-
-        
-
         
 def _collect_properties(texel, i1, i2, parstyle, indent, mk_style):
     """Gibt ein Dict mit Properties zurück (values sind None wenn
@@ -963,18 +991,6 @@ def mk_demo(redirect=False):
     frame.Show()    
     return app, view, model
     
-def demo_00():
-    app, view, model = mk_demo(redirect=True)
-    inspector = TextCellInspector(view, None)
-    inspector.Show()
-    if 1:
-        from pynotebook.wxtextview import testing
-        l = locals()
-        l.update(globals())
-        testing.pyshell(l)
-
-    app.MainLoop()
-
 
 
 def test_00():
