@@ -1,10 +1,9 @@
-
 import wx
 from .inspector import InspectorPanel
 from .documentview import DocumentView
 
-ICON_SIZE   = 32
-ICON_BAR_W  = 44
+ICON_SIZE    = 32
+ICON_BAR_W   = 44
 RIGHTPANEL_W = 360
 
 
@@ -19,15 +18,15 @@ class IconBar(wx.Panel):
         super().__init__(parent, size=(ICON_BAR_W, -1))
         self.SetBackgroundColour(wx.Colour(230, 230, 230))
         self.on_toggle = on_toggle
-        self._active: str | None = None  # currently active icon key
+        self._active: str | None = None
 
         self._buttons: dict[str, wx.BitmapButton] = {}
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.AddSpacer(8)
 
         for key, label, tooltip in [
-            ("style", "S",  "Style Inspector"),
-            ("page",  "P",  "Page Inspector"),
+            ("style", "S", "Style Inspector"),
+            ("page",  "P", "Document Settings"),
         ]:
             btn = self._make_button(key, label, tooltip)
             self._buttons[key] = btn
@@ -35,20 +34,24 @@ class IconBar(wx.Panel):
 
         self.SetSizer(sizer)
 
-    def _make_button(self, key: str, label: str, tooltip: str) -> wx.BitmapButton:
+    def _make_button(self, key, label, tooltip):
         bmp = self._render_icon(label, active=False)
-        btn = wx.BitmapButton(self, bitmap=bmp, size=(ICON_SIZE, ICON_SIZE),
-                              style=wx.BORDER_NONE)
+        btn = wx.BitmapButton(
+            self,
+            bitmap=bmp,
+            size=(ICON_SIZE, ICON_SIZE),
+            style=wx.BORDER_NONE,
+        )
         btn.SetToolTip(tooltip)
         btn.Bind(wx.EVT_BUTTON, lambda e, k=key: self._on_click(k))
         return btn
 
-    def _on_click(self, key: str):
-        # Second click on active button → close panel
+    def _on_click(self, key):
         if self._active == key:
             self._active = None
         else:
             self._active = key
+
         self._refresh_icons()
         self.on_toggle(self._active)
 
@@ -59,59 +62,183 @@ class IconBar(wx.Panel):
             btn.SetBitmap(bmp)
 
     @staticmethod
-    def _render_icon(label: str, active: bool) -> wx.Bitmap:
-        """Draw a simple square icon with a letter."""
+    def _render_icon(label, active):
         size = ICON_SIZE
-        bmp  = wx.Bitmap(size, size)
-        dc   = wx.MemoryDC(bmp)
+        bmp = wx.Bitmap(size, size)
+        dc = wx.MemoryDC(bmp)
 
         bg = wx.Colour(90, 130, 200) if active else wx.Colour(200, 200, 200)
         dc.SetBackground(wx.Brush(bg))
         dc.Clear()
 
         fg = wx.WHITE if active else wx.Colour(60, 60, 60)
-        font = wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                       wx.FONTWEIGHT_BOLD)
+        font = wx.Font(13, wx.FONTFAMILY_DEFAULT,
+                       wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
         dc.SetFont(font)
         dc.SetTextForeground(fg)
+
         tw, th = dc.GetTextExtent(label)
         dc.DrawText(label, (size - tw) // 2, (size - th) // 2)
+
         dc.SelectObject(wx.NullBitmap)
         return bmp
 
 
 # ---------------------------------------------------------------------------
-# Right panel
+# Document Settings Inspector (Mockup)
 # ---------------------------------------------------------------------------
 
+class DocumentSettingsInspector(wx.Panel):
 
-class RightPanel(wx.Panel):
-    """Right-hand inspector. Content switches based on active mode."""
-
-    def __init__(self, parent, textview, document):
-        super().__init__(parent, size=(RIGHTPANEL_W, -1))
+    def __init__(self, parent):
+        super().__init__(parent)
         self.SetBackgroundColour(wx.Colour(248, 248, 248))
 
-        outer  = wx.BoxSizer(wx.VERTICAL)
+        outer = wx.BoxSizer(wx.VERTICAL)
+        scrolled = wx.ScrolledWindow(self, style=wx.VSCROLL)
+        scrolled.SetScrollRate(0, 10)
 
-        self._title = wx.StaticText(self, label="Style")
-        title_font = self._title.GetFont()
-        title_font.SetWeight(wx.FONTWEIGHT_BOLD)
-        self._title.SetFont(title_font)
+        form = wx.BoxSizer(wx.VERTICAL)
 
-        self._content = InspectorPanel(self, textview, document.basestyles)
-        self._content.SetBackgroundColour(wx.Colour(248, 248, 248))
-        
-        outer.Add(self._title,   0, wx.ALL, 10)
-        outer.Add(self._content, 1, wx.EXPAND | wx.ALL, 2)
+        # Page size
+        box_page = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Page Size")
 
-        self._title.Hide()
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        row.Add(wx.StaticText(scrolled, label="Format"),
+                0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+
+        self.choice_format = wx.Choice(
+            scrolled,
+            choices=["A4", "A5", "Letter", "Legal", "Custom"]
+        )
+        self.choice_format.SetSelection(0)
+        row.Add(self.choice_format, 1)
+
+        box_page.Add(row, 0, wx.EXPAND | wx.ALL, 6)
+
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        row.Add(wx.StaticText(scrolled, label="Orientation"),
+                0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
+
+        self.choice_orientation = wx.Choice(
+            scrolled,
+            choices=["Portrait", "Landscape"]
+        )
+        self.choice_orientation.SetSelection(0)
+        row.Add(self.choice_orientation, 1)
+
+        box_page.Add(row, 0, wx.EXPAND | wx.ALL, 6)
+        form.Add(box_page, 0, wx.EXPAND | wx.ALL, 8)
+
+        # Margins
+        box_margins = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Margins (mm)")
+        grid = wx.FlexGridSizer(2, 4, 6, 6)
+
+        labels = ["Top", "Bottom", "Left", "Right"]
+        self.margin_ctrls = {}
+
+        for label in labels:
+            grid.Add(wx.StaticText(scrolled, label=label),
+                     0, wx.ALIGN_CENTER_VERTICAL)
+
+            ctrl = wx.SpinCtrlDouble(
+                scrolled, min=0, max=100, inc=1, initial=25
+            )
+            ctrl.SetDigits(1)
+            self.margin_ctrls[label.lower()] = ctrl
+            grid.Add(ctrl, 1, wx.EXPAND)
+
+        grid.AddGrowableCol(1)
+        grid.AddGrowableCol(3)
+
+        box_margins.Add(grid, 1, wx.EXPAND | wx.ALL, 6)
+        form.Add(box_margins, 0, wx.EXPAND | wx.ALL, 8)
+
+        # Header/Footer
+        box_header = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Header / Footer")
+
+        self.chk_header = wx.CheckBox(scrolled, label="Enable Header")
+        self.chk_footer = wx.CheckBox(scrolled, label="Enable Footer")
+
+        box_header.Add(self.chk_header, 0, wx.ALL, 4)
+        box_header.Add(self.chk_footer, 0, wx.ALL, 4)
+
+        form.Add(box_header, 0, wx.EXPAND | wx.ALL, 8)
+
+        # Metadata
+        box_meta = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Document Info")
+        meta = wx.FlexGridSizer(2, 2, 6, 6)
+
+        meta.Add(wx.StaticText(scrolled, label="Title"),
+                 0, wx.ALIGN_CENTER_VERTICAL)
+        self.txt_title = wx.TextCtrl(scrolled)
+        meta.Add(self.txt_title, 1, wx.EXPAND)
+
+        meta.Add(wx.StaticText(scrolled, label="Author"),
+                 0, wx.ALIGN_CENTER_VERTICAL)
+        self.txt_author = wx.TextCtrl(scrolled)
+        meta.Add(self.txt_author, 1, wx.EXPAND)
+
+        meta.AddGrowableCol(1)
+
+        box_meta.Add(meta, 1, wx.EXPAND | wx.ALL, 6)
+        form.Add(box_meta, 0, wx.EXPAND | wx.ALL, 8)
+
+        form.AddStretchSpacer()
+
+        scrolled.SetSizer(form)
+        outer.Add(scrolled, 1, wx.EXPAND)
         self.SetSizer(outer)
 
 
-    def set_mode(self, mode: str | None):
-        labels = {"style": "Style Inspector", "page": "Page Inspector"}
-        self._title.SetLabel(labels.get(mode, ""))
+# ---------------------------------------------------------------------------
+# Right panel with Simplebook
+# ---------------------------------------------------------------------------
+
+class RightPanel(wx.Panel):
+
+    def __init__(self, parent):
+        super().__init__(parent, size=(RIGHTPANEL_W, -1))
+        self.SetBackgroundColour(wx.Colour(248, 248, 248))
+
+        outer = wx.BoxSizer(wx.VERTICAL)
+
+        self._title = wx.StaticText(self, label="")
+        font = self._title.GetFont()
+        font.SetWeight(wx.FONTWEIGHT_BOLD)
+        self._title.SetFont(font)
+
+        self._book = wx.Simplebook(self)
+        self._pages: dict[str, int] = {}
+
+        outer.Add(self._title, 0, wx.ALL, 10)
+        outer.Add(self._book, 1, wx.EXPAND | wx.ALL, 2)
+
+        self.SetSizer(outer)
+        self.Hide()
+
+    def add_page(self, key, panel):
+        idx = self._book.GetPageCount()
+        self._book.AddPage(panel, "")
+        self._pages[key] = idx
+
+    def show_page(self, key):
+        if key is None:
+            self.Hide()
+            return
+
+        if key not in self._pages:
+            return
+
+        self._book.SetSelection(self._pages[key])
+
+        labels = {
+            "style": "Style Inspector",
+            "page":  "Document Settings",
+        }
+
+        self._title.SetLabel(labels.get(key, ""))
+        self.Show()
 
 
 # ---------------------------------------------------------------------------
@@ -122,14 +249,13 @@ class EditorPanel(wx.Panel):
 
     def __init__(self, parent, document):
         super().__init__(parent)
-        self.SetBackgroundColour(wx.Colour(180, 180, 180))  # grey "desktop"
+        self.SetBackgroundColour(wx.Colour(180, 180, 180))
 
-        self._page  = DocumentView(self, document)
-        
+        self.page = DocumentView(self, document)
+
         outer = wx.BoxSizer(wx.VERTICAL)
-        outer.Add(self._page, 1, wx.EXPAND | wx.ALL, 0)
+        outer.Add(self.page, 1, wx.EXPAND)
         self.SetSizer(outer)
-
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +263,7 @@ class EditorPanel(wx.Panel):
 # ---------------------------------------------------------------------------
 
 class MainFrame(wx.Frame):
+
     def __init__(self, document):
         self.document = document
         super().__init__(None, title="Writer — Mockup", size=(1200, 680))
@@ -146,69 +273,53 @@ class MainFrame(wx.Frame):
         self._build_layout()
         self.Centre()
 
-    # ------------------------------------------------------------------
-    # Menu
-    # ------------------------------------------------------------------
-
     def _build_menu(self):
         bar = wx.MenuBar()
 
         file_menu = wx.Menu()
-        file_menu.Append(wx.ID_NEW,   "&New\tCtrl+N")
-        file_menu.Append(wx.ID_OPEN,  "&Open…\tCtrl+O")
-        file_menu.Append(wx.ID_SAVE,  "&Save\tCtrl+S")
-        file_menu.Append(wx.ID_SAVEAS,"Save &As…\tCtrl+Shift+S")
-        file_menu.AppendSeparator()
-        file_menu.Append(wx.ID_EXIT,  "E&xit\tAlt+F4")
+        file_menu.Append(wx.ID_EXIT, "E&xit\tAlt+F4")
 
-        edit_menu = wx.Menu()
-        edit_menu.Append(wx.ID_UNDO,      "&Undo\tCtrl+Z")
-        edit_menu.Append(wx.ID_REDO,      "&Redo\tCtrl+Y")
-        edit_menu.AppendSeparator()
-        edit_menu.Append(wx.ID_CUT,       "Cu&t\tCtrl+X")
-        edit_menu.Append(wx.ID_COPY,      "&Copy\tCtrl+C")
-        edit_menu.Append(wx.ID_PASTE,     "&Paste\tCtrl+V")
-        edit_menu.AppendSeparator()
-        edit_menu.Append(wx.ID_SELECTALL, "Select &All\tCtrl+A")
-        edit_menu.Append(wx.ID_FIND,      "&Find…\tCtrl+F")
-
-        tools_menu = wx.Menu()
-        tools_menu.Append(wx.ID_ANY, "&Spelling…")
-        tools_menu.Append(wx.ID_ANY, "Word &Count")
-        tools_menu.AppendSeparator()
-        tools_menu.Append(wx.ID_PREFERENCES, "&Preferences…")
-
-        bar.Append(file_menu,  "&File")
-        bar.Append(edit_menu,  "&Edit")
-        bar.Append(tools_menu, "&Tools")
+        bar.Append(file_menu, "&File")
         self.SetMenuBar(bar)
 
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
 
-    # ------------------------------------------------------------------
-    # Layout
-    # ------------------------------------------------------------------
-
     def _build_layout(self):
         root = wx.BoxSizer(wx.HORIZONTAL)
 
-        self._editor    = EditorPanel(self, self.document)
-        self._icon_bar  = IconBar(self, on_toggle=self._on_inspector_toggle)
-        self._inspector = RightPanel(self, self._editor._page, self.document)
-        self._inspector.Hide()
+        # Editor
+        self._editor = EditorPanel(self, self.document)
+        self.textview = self._editor.page
 
-        root.Add(self._editor,    1, wx.EXPAND)
-        root.Add(self._inspector, 0, wx.EXPAND)
-        root.Add(self._icon_bar,  0, wx.EXPAND)
+        # Inspector container
+        self._right_panel = RightPanel(self)
+
+        # Style inspector
+        self.inspector = InspectorPanel(
+            self._right_panel,
+            self.textview,
+            self.document.basestyles
+        )
+
+        # Document settings inspector
+        self.document_settings = DocumentSettingsInspector(
+            self._right_panel
+        )
+
+        self._right_panel.add_page("style", self.inspector)
+        self._right_panel.add_page("page", self.document_settings)
+
+        # Icon bar
+        self._icon_bar = IconBar(self, self._on_inspector_toggle)
+
+        root.Add(self._editor, 1, wx.EXPAND)
+        root.Add(self._right_panel, 0, wx.EXPAND)
+        root.Add(self._icon_bar, 0, wx.EXPAND)
 
         self.SetSizer(root)
 
-    def _on_inspector_toggle(self, mode: str | None):
-        if mode is None:
-            self._inspector.Hide()
-        else:
-            self._inspector.set_mode(mode)
-            self._inspector.Show()
+    def _on_inspector_toggle(self, mode):
+        self._right_panel.show_page(mode)
         self.Layout()
 
 
@@ -218,23 +329,25 @@ class MainFrame(wx.Frame):
 
 def demo_00():
     from einstein import get_einstein_model
-
     from .document import Document
     from .styles import stylesheet
-    
+
     app = wx.App(True)
+
     doc = Document()
     doc.textmodel = get_einstein_model()
-    doc.basestyles = stylesheet # XXX Setting of stylesheets is not implemented yet
-    
+    doc.basestyles = stylesheet
+
     frame = MainFrame(doc)
     frame.Show()
-    if 1:
-        view = frame._editor._page
-        inspector = frame._inspector._content
-        from .wxtextview import testing
-        l = locals()
-        l.update(globals())
-        testing.pyshell(l)
-    app.MainLoop()
 
+    view = frame.textview
+    inspector = frame.inspector
+
+    from .wxtextview import testing
+    l = locals()
+    l.update(globals())
+    testing.pyshell(l)
+
+    app.MainLoop()
+    
