@@ -109,6 +109,8 @@ class Builder(BuilderBase):
 
         self.rest_memo = irest, rest
         texel = self.model.get_xtexel()
+        print("starting layout. len(model)=", len(self.model))
+        
         p = len(layout)
         self.generator = self.create_generator(
             texel, p, state, self.factory)
@@ -177,6 +179,7 @@ class Builder(BuilderBase):
 
     def rebuild(self):
         """Rebuild the entire layout from i=0; nothing is reused."""
+        print("rebuild")
         self._layout = Layout([], self.factory.device)
         self.start(RestartMemo(), 0, ())
 
@@ -200,6 +203,7 @@ class Builder(BuilderBase):
         except:
             print("layout:", len(self._layout))
             print("model:", len(self.model))
+            raise
         self._layout.is_finished = True
         self.dump_updatestats()
 
@@ -227,6 +231,7 @@ class Builder(BuilderBase):
                 break
 
         if not k1:
+            # k1 is either None (empty layout) or 0 (first page)
             pages_before = []
             state = RestartMemo()
         else:
@@ -291,6 +296,14 @@ class Builder(BuilderBase):
         if n1 != n2:
             return False
 
+        # Condition 4: RestartMemo must have the same length
+        # (sufficient in the simple model here, but insufficient in
+        # general.)
+        n1 = old_restartmemo.get_length()
+        n2 = state.get_length()
+        if n1 != n2:
+            return False
+        
         return True
 
     def get_updatestats(self):
