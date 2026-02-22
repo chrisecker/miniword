@@ -18,7 +18,6 @@ import pickle
 
 
 
-
 class WXTextView(wx.ScrolledWindow, TextView):
     _scrollrate = 10, 10
     zoom = overridable_property('zoom')
@@ -201,7 +200,8 @@ class WXTextView(wx.ScrolledWindow, TextView):
         else:
             dc = pdc
         dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.GREY_BRUSH)
+        dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
+        #dc.SetBackground(wx.WHITE_BRUSH)
         
         dc.Clear()
         region = self.GetUpdateRegion()

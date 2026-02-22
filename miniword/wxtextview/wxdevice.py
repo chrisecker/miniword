@@ -81,7 +81,7 @@ class WxDevice:
         """
         key = (text, tuple(sorted(style.items())))
         try:
-            return self._cache[key]
+            return self._cache.get(key)
         except KeyError:
             pass
             
@@ -95,11 +95,7 @@ class WxDevice:
             GetFullTextExtent(text)
 
         result = (w, htot-depth, depth)
-        self._cache[key] = result
-        self._cache_keys.insert(0, key)
-        if len(self._cache_keys) > self._cache_max:
-            old_key = self._cache_keys.pop()
-            del self._cache[old_key]            
+        self._cache.set(key, result)
         return result
     
     def measure_parts(self, text, style):
