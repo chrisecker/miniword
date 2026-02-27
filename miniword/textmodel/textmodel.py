@@ -261,7 +261,8 @@ class TextModel(Model):
         texel = self.get_xtexel()
         memo = get_parstyles(texel, i1, i2)
         t = grouped(
-            clear_parproperties(self.texel, i1, i2, keys))
+            clear_parproperties(texel, i1, i2, keys))
+        assert length(t) == length(texel)
         self._set_xtexel(t)
         #assert check(self.texel)
         self.notify_views('properties_changed', i1, i2)
@@ -824,11 +825,13 @@ def test_18():
 def test_19():
     "parstyle"
     model = TextModel(text1+'\n'+text2)
+    n = len(model)
     assert model.get_parstyle(1) == {}
     model.set_parproperties(0, len(model), textcolor='red')
     assert model.get_parstyle(1) == {'textcolor':'red'}
     model.clear_parproperties(0, len(model), 'textcolor')
     assert model.get_parstyle(1) == {}
+    assert n == len(model)
 
     
 def test_20():
@@ -844,6 +847,7 @@ def test_20():
     assert model.get_indents(0, n) == [1, 1, 0, 0, 0, 0, 0]
     model.decrease_indent(0, n)
     assert model.get_indents(0, n) == [0, 0, 0, 0, 0, 0, 0]
+    assert len(model) == n
     
 
 __all__ = ['TextModel']
