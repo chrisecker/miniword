@@ -3,11 +3,15 @@ from .textmodel.iterators import iter_newlines
 from .builder import Factory, Builder
 from .styles import stylesheet
 from .cairodevice import CairoDevice
+from .annotation import highlight, squiggle
 
 import wx
 
 class DocumentView(WXTextView):
-    
+
+    highlights = []  # list of (i1, i2) or (i1, i2, color)
+    squiggles  = []  # list of (i1, i2) or (i1, i2, color)
+
     min_zoom = 0.2
     max_zoom = 5.0
     zoom_step = 0.1
@@ -51,6 +55,63 @@ class DocumentView(WXTextView):
 
         self.Scroll(max(0, int(new_scroll_x / rx)),
                     max(0, int(new_scroll_y / ry)))        
+
+    def on_paint(self, event):
+        self._update_scroll()
+        self.keep_cursor_on_screen()
+
+        pdc = wx.PaintDC(self)
+        pdc.SetAxisOrientation(True, False)
+        device = self.builder.get_device()
+        if device.buffering:
+            dc = wx.BufferedDC(pdc)
+            if not dc.IsOk():
+                return
+        else:
+            dc = pdc
+        dc.SetBackgroundMode(wx.SOLID)
+        dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
+        dc.Clear()
+        region = self.GetUpdateRegion()
+        rx, ry, rw, rh = region.Box
+        dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
+        painter = device.create_painter(dc)
+
+        zoom = self.zoom
+        layout = self.layout
+        cw, ch = self.GetClientSize()
+        vw = int(layout.width * zoom)
+        vh = int(layout.height * zoom)
+
+        px, py = self.CalcScrolledPosition((0, 0))
+        if vw < cw:
+            px = (cw - vw) // 2
+        if vh < ch:
+            py = (ch - vh) // 2
+        x = px / zoom
+        y = py / zoom
+
+        layout.draw_background(x, y, painter)          # 1. white page fills
+
+        for entry in self.highlights:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'yellow'
+            highlight(painter, layout, i1, i2, x, y, c)  # 2. colored backgrounds
+
+        layout.draw(x, y, painter)                      # 3. text on top
+
+        for entry in self.squiggles:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'red'
+            squiggle(painter, layout, i1, i2, x, y, c)   # 4. lines on top
+
+        if wx.Window.FindFocus() is self:
+            layout.draw_cursor(self.index, x, y, painter,
+                               self.model.defaultstyle)
+        for j1, j2 in self.get_selected():
+            layout.draw_selection(j1, j2, x, y, painter)
+        dc = None
+        painter = None
 
     def style_changed(self, stylesheet, key):
         j1 = j2 = None

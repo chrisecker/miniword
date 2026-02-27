@@ -16,6 +16,7 @@ from .wxtextview.boxes import Box, VBox, TextBox, select_i_by_x, \
     select_i_by_y
 from .wxtextview.testdevice import TESTDEVICE
 from .wxtextview.builder import BuilderBase
+from .wxtextview.boxes import get_text
 from .textmodel.texeltree import length, NewLine
 from .wxtextview.linewrap import simple_linewrap
 from .styles import mm, cm, pt, updated
@@ -117,8 +118,11 @@ class Page(Box):
         """
         self.pagenum = pagenum
 
-    def draw(self, x, y, gc):
+    def draw_background(self, x, y, gc):
+        """Fill the page with its background color."""
         self.device.fill_rect(x, y, self.width, self.height, 'white', gc)
+
+    def draw(self, x, y, gc):
         Box.draw(self, x, y, gc)
         self.device.draw_rect(x, y, self.width, self.height, gc)
         margin = self.margin
@@ -145,10 +149,10 @@ def show_page(page):
     if memo:
         print("RestartMemo present")
         for x, y, row in memo.rows:
-            print("--", x, y, row)
+            print("--", x, y, get_text(row))
 
     for i1, i2, x, y, row in page.iter_boxes(0, 0, 0):
-        print(x, y, repr(row))
+        print(x, y, repr(get_text(row)))
     print()
 
 
@@ -367,7 +371,12 @@ def iter_paragraphs(texel, i):
             yield i1, j2, l
             l  = []
             i1 = j2
-
+    try:
+        assert len(l) == 0
+    except:
+        from .textmodel.texeltree import dump
+        dump(texel)
+        raise
 
 def generate_boxes(texel, i, factory):
     for i1, i2, l in iter_paragraphs(texel, i):

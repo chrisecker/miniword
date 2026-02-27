@@ -67,6 +67,7 @@ class Search(ViewBase, Model):
 
 class SearchResultsList(wx.VListBox):
     MAX_LINES = 3
+    on_select = None  # optional callback()
 
     def __init__(self, parent, textview):
         super().__init__(parent)
@@ -177,6 +178,8 @@ class SearchResultsList(wx.VListBox):
             if rect.Contains(pos):
                 self.SetSelection(idx)
                 self.goto_index(idx)
+                if self.on_select:
+                    self.on_select()
                 break
 
     def goto_index(self, index):
@@ -207,6 +210,7 @@ class SearchPanel(wx.Panel, ViewBase):
         outer.Add(self.search_ctrl, 0, wx.EXPAND | wx.ALL, 10)
 
         self.result_list = SearchResultsList(self, textview)
+        self.result_list.on_select = self._update_highlights
         outer.Add(self.result_list, 1, wx.EXPAND | wx.ALL, 6)
 
         self.SetSizer(outer)
@@ -225,10 +229,20 @@ class SearchPanel(wx.Panel, ViewBase):
         self._update_queued = True
         wx.CallAfter(self.update)
 
+    def _update_highlights(self):
+        sel = self.result_list.GetSelection()
+        highlights = []
+        for idx, (i1, i2, *_) in enumerate(self.result_list.results):
+            color = 'orange' if idx == sel else 'yellow'
+            highlights.append((i1, i2, color))
+        self.textview.highlights = highlights
+        self.textview.Refresh()
+
     def update(self):
         results = self.search.get_results()
         self.result_list.set_results(results)
         self._update_queued = False
+        self._update_highlights()
         
 
 

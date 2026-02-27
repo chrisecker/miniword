@@ -206,68 +206,7 @@ def demo_00():
     from einstein import get_einstein_model
     from .document import Document
     from .documentview import DocumentView
-    from .cairodevice import CairoDevice
     from .styles import stylesheet
-    from .builder import Factory, Builder
-
-    class AnnotatedView(DocumentView):
-        """DocumentView that draws annotations between background and text."""
-        highlights = []   # list of (i1, i2) or (i1, i2, color)
-        squiggles  = []   # list of (i1, i2) or (i1, i2, color)
-
-        def create_builder(self):
-            factory = Factory(stylesheet, device=CairoDevice())
-            builder = Builder(self.model, factory)
-            return builder
-
-        def on_paint(self, event):
-            self._update_scroll()
-            self.keep_cursor_on_screen()
-
-            pdc = wx.PaintDC(self)
-            pdc.SetAxisOrientation(True, False)
-            device = self.builder.get_device()
-            dc = wx.BufferedDC(pdc) if device.buffering else pdc
-            if device.buffering and not dc.IsOk():
-                return
-            dc.SetBackgroundMode(wx.SOLID)
-            dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
-            dc.Clear()
-            rx, ry, rw, rh = self.GetUpdateRegion().Box
-            dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
-            gc = device.create_painter(dc)
-
-            zoom   = self.zoom
-            layout = self.layout
-            cw, ch = self.GetClientSize()
-            vw = int(layout.width  * zoom)
-            vh = int(layout.height * zoom)
-            px, py = self.CalcScrolledPosition((0, 0))
-            if vw < cw:
-                px = (cw - vw) // 2
-            if vh < ch:
-                py = (ch - vh) // 2
-            x, y = px / zoom, py / zoom
-
-            layout.draw_background(x, y, gc)        # 1. white page fills
-
-            for entry in self.highlights:
-                i1, i2 = entry[:2]
-                c = entry[2] if len(entry) > 2 else 'yellow'
-                highlight(gc, layout, i1, i2, x, y, c)  # 2. colored backgrounds
-
-            layout.draw(x, y, gc)                    # 3. text on top
-
-            for entry in self.squiggles:
-                i1, i2 = entry[:2]
-                c = entry[2] if len(entry) > 2 else 'red'
-                squiggle(gc, layout, i1, i2, x, y, c)   # 4. lines on top
-
-            if wx.Window.FindFocus() is self:
-                layout.draw_cursor(self.index, x, y, gc,
-                                   self.model.defaultstyle)
-            for j1, j2 in self.get_selected():
-                layout.draw_selection(j1, j2, x, y, gc)
 
     app = wx.App(True)
     doc = Document()
@@ -275,7 +214,9 @@ def demo_00():
     doc.basestyles = stylesheet
 
     frame = wx.Frame(None, title='Annotation Demo', size=(900, 600))
-    view  = AnnotatedView(frame, doc)
+    view  = DocumentView(frame, doc)
+    view.highlights = []
+    view.squiggles  = []
     view.SetBackgroundColour('light grey')
 
     # Seed example annotations from the first six long words in the text.
