@@ -60,6 +60,9 @@ class DocumentView(WXTextView):
                     j1 = i1
                 j2 = i2
         self.clear_caches()
+        if j1 is None:
+            # style was not used
+            return
         self.builder.rebuild_dirty(j1, j2, 0)
         self.builder.waitfor_finish() # XXX should a wait-dialog be shown?
         self.refresh()

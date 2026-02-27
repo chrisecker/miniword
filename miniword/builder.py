@@ -10,6 +10,7 @@ from .wxtextview.builder import BuilderBase
 from .wxtextview.wxtextview import WXTextView
 from .wxtextview.boxes import VBox, get_text
 from .wxtextview import boxes
+from .wxtextview.rect import Rect
 
 from .pagegen import show_page, RestartMemo, generate_pages
 from .styles import stylesheet, cm, mm, updated
@@ -46,6 +47,15 @@ class Layout(VBox):
 
     def create_group(self, l):
         assert False
+
+    def draw_background(self, x, y, gc):
+        """Fill the background of every visible page."""
+        device = self.device
+        for j1, j2, x1, y1, child in self.iter_boxes(0, x, y):
+            if device.intersects(gc, Rect(x1, y1,
+                                          x1 + child.width,
+                                          y1 + child.height)):
+                child.draw_background(x1, y1, gc)
 
     def get_text(self):
         # For debugging
@@ -109,8 +119,10 @@ class Builder(BuilderBase):
 
         self.rest_memo = irest, rest
         texel = self.model.get_xtexel()
-        print("starting layout. len(model)=", len(self.model))
-        
+        print("starting layout. len(model)=", len(self.model),
+              "len(layout)=", len(layout))
+        if self.generator is not None: 
+            print("overriding old generator")
         p = len(layout)
         self.generator = self.create_generator(
             texel, p, state, self.factory)
@@ -187,6 +199,7 @@ class Builder(BuilderBase):
         """Clean up, append rest pages, update statistics."""
         rest_i, rest = self.rest_memo
         self.nrest = len(rest)
+        print("nrest=", self.nrest)
         if rest:
             for page in rest:
                 print("finish: appending_rest page")
@@ -303,7 +316,8 @@ class Builder(BuilderBase):
         n2 = state.get_length()
         if n1 != n2:
             return False
-        
+
+        print("can finish!")
         return True
 
     def get_updatestats(self):
