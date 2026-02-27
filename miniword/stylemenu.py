@@ -207,7 +207,7 @@ class StylePopup(wx.PopupWindow):
         if idx is not None:                         # FIX: was `idx >= 0` which raises on None
             if self._is_over_triangle(x):
                 return self._show_context_menu(idx)
-            self.dropdown.SetSelection(idx)
+            self.dropdown.Choose(idx)
         self.Hide()
 
     # ------------------------------------------------------------------
@@ -319,14 +319,14 @@ class StyleDropdown(wx.Control, ViewBase):
 
     def model_changed(self, *args):
         self.styles = self.stylesheet.keys()
+        self.Refresh()
 
     def SetSelection(self, idx: int):
-        if idx == -1 or idx >= len(self.styles):  # FIX: guard against -1 / out-of-range
-            self.selection = idx
-            self.Refresh()
-            return
         self.selection = idx
         self.Refresh()
+        
+    def Choose(self, idx: int):
+        self.SetSelection(idx)
         evt = wx.CommandEvent(wx.EVT_CHOICE.typeId, self.GetId())
         evt.SetInt(idx)
         evt.SetString(self.styles[idx])
@@ -363,7 +363,8 @@ class StyleDropdown(wx.Control, ViewBase):
         color = wx.Colour("red") if self.modified else wx.Colour(80, 80, 80)
         dc.SetBrush(wx.Brush(color))
         dc.SetPen(wx.Pen(color))
-        dc.DrawPolygon([wx.Point(cx - 4, cy - 2), wx.Point(cx + 4, cy - 2), wx.Point(cx, cy + 3)])
+        dc.DrawPolygon([wx.Point(cx - 6, cy - 3), wx.Point(cx + 6, cy - 3),
+                        wx.Point(cx, cy + 3)])
 
     def _on_click(self, _evt):
         if self._popup and self._popup.IsShown():
