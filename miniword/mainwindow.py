@@ -1,94 +1,147 @@
 import wx
+from typing import Callable, List, Tuple
 from .textmodel.viewbase import ViewBase
 from .inspector import InspectorPanel
 from .documentview import DocumentView
+from . import icons
 
-ICON_SIZE    = 32
-ICON_BAR_W   = 44
 SIDE_PANEL_W = 360
+ICON_BAR_W = 48
+ICON_SIZE = 20
+
+BAR_BG = wx.Colour(245, 245, 245)
+ACTIVE_COLOR = wx.Colour(60, 120, 200)
 
 
-# ---------------------------------------------------------------------------
-# Icon bar
-# ---------------------------------------------------------------------------
+# Farben
+COLOR_NORMAL = wx.Colour(90, 90, 90)       # #5A5A5A
+COLOR_HOVER  = wx.Colour(30, 144, 255)     # #1E90FF
+COLOR_ACTIVE = wx.Colour(0, 122, 204)      # #007ACC
 
 class IconBar(wx.Panel):
-    """Thin vertical toolbar. Buttons toggle the side panels."""
+    """
+    Custom drawn vertical toolbar with SVG icons.
+    Active indicator can be on left or right.
+    """
 
-    def __init__(self, parent, on_toggle, buttons=None):
+    def __init__(
+        self, parent: wx.Window,
+        on_toggle: Callable[[str | None], None],
+        entries: List[Tuple[str, str, str]],
+        side: str = 'left'
+    ):
         super().__init__(parent, size=(ICON_BAR_W, -1))
-        self.SetBackgroundColour(wx.Colour(230, 230, 230))
+
+        self.entries = entries
+        self.side = side
         self.on_toggle = on_toggle
+
         self._active: str | None = None
+        self._hover: str | None = None
 
-        self._buttons: dict[str, wx.BitmapButton] = {}
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(8)
+        self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        self.SetBackgroundColour(BAR_BG)
 
-        # Default buttons
-        if buttons is None:
-            buttons = [
-                ("style", "S", "Style Inspector"),
-                ("page",  "P", "Document Settings"),
-            ]
+        self.Bind(wx.EVT_PAINT, self._on_paint)
+        self.Bind(wx.EVT_LEFT_DOWN, self._on_click)
+        self.Bind(wx.EVT_MOTION, self._on_motion)
+        self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
 
-        for key, label, tooltip in buttons:
-            btn = self._make_button(key, label, tooltip)
-            self._buttons[key] = btn
-            sizer.Add(btn, 0, wx.ALIGN_CENTRE_HORIZONTAL | wx.BOTTOM, 6)
+        # Berechne Button-Rects für Klick/MouseOver
+        self._button_rects: dict[str, wx.Rect] = {}
+        self._recalculate_rects()
 
-        self.SetSizer(sizer)
+        self.Bind(wx.EVT_SIZE, lambda e: (self._recalculate_rects(), e.Skip()))
 
-    def _make_button(self, key, label, tooltip):
-        bmp = self._render_icon(label, active=False)
-        btn = wx.BitmapButton(
-            self,
-            bitmap=bmp,
-            size=(ICON_SIZE, ICON_SIZE),
-            style=wx.BORDER_NONE,
-        )
-        btn.SetToolTip(tooltip)
-        btn.Bind(wx.EVT_BUTTON, lambda e, k=key: self._on_click(k))
-        return btn
+    # ------------------------------------------------------------
+    # Layout / Button Rects
+    # ------------------------------------------------------------
+    def _recalculate_rects(self):
+        y = 8
+        self._button_rects.clear()
+        for key, _, _ in self.entries:
+            rect = wx.Rect(0, y, ICON_BAR_W, ICON_SIZE + 8)  # 8px Abstand unten
+            self._button_rects[key] = rect
+            y += ICON_SIZE + 8
+        self.Refresh()
 
-    def _on_click(self, key):
-        if self._active == key:
-            self._active = None
+    # ------------------------------------------------------------
+    # Mouse Events
+    # ------------------------------------------------------------
+    def _on_click(self, event: wx.MouseEvent):
+        pos = event.GetPosition()
+        for key, rect in self._button_rects.items():
+            if rect.Contains(pos):
+                self._active = None if self._active == key else key
+                self.on_toggle(self._active)
+                self.Refresh()
+                break
+
+    def _on_motion(self, event: wx.MouseEvent):
+        pos = event.GetPosition()
+        hover_changed = False
+        for key, rect in self._button_rects.items():
+            if rect.Contains(pos):
+                if self._hover != key:
+                    self._hover = key
+                    hover_changed = True
+                break
         else:
-            self._active = key
+            if self._hover is not None:
+                self._hover = None
+                hover_changed = True
+        if hover_changed:
+            self.Refresh()
 
-        self._refresh_icons()
-        self.on_toggle(self._active)
+    def _on_leave(self, event: wx.MouseEvent):
+        if self._hover is not None:
+            self._hover = None
+            self.Refresh()
 
-    def _refresh_icons(self):
-        for key, btn in self._buttons.items():
-            label = "S" if key == "style" else "P"
-            bmp = self._render_icon(label, active=(key == self._active))
-            btn.SetBitmap(bmp)
-
-    @staticmethod
-    def _render_icon(label, active):
-        size = ICON_SIZE
-        bmp = wx.Bitmap(size, size)
-        dc = wx.MemoryDC(bmp)
-
-        bg = wx.Colour(90, 130, 200) if active else wx.Colour(200, 200, 200)
-        dc.SetBackground(wx.Brush(bg))
+    # ------------------------------------------------------------
+    # Paint
+    # ------------------------------------------------------------
+    def _on_paint(self, event):
+        dc = wx.AutoBufferedPaintDC(self)
         dc.Clear()
+        size = self.GetClientSize()
 
-        fg = wx.WHITE if active else wx.Colour(60, 60, 60)
-        font = wx.Font(13, wx.FONTFAMILY_DEFAULT,
-                       wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        dc.SetFont(font)
-        dc.SetTextForeground(fg)
+        # Hintergrund
+        dc.SetBrush(wx.Brush(BAR_BG))
+        dc.SetPen(wx.TRANSPARENT_PEN)
+        dc.DrawRectangle(0, 0, size.width, size.height)
 
-        tw, th = dc.GetTextExtent(label)
-        dc.DrawText(label, (size - tw) // 2, (size - th) // 2)
+        # Draw each icon
+        for key, iconname, tooltip in self.entries:
+            rect = self._button_rects[key]
+            x = (ICON_BAR_W - ICON_SIZE) // 2
+            y = rect.y
 
-        dc.SelectObject(wx.NullBitmap)
-        return bmp
+            # Active indicator
+            if key == self._active:
+                dc.SetBrush(wx.Brush(COLOR_ACTIVE))
+                dc.SetPen(wx.TRANSPARENT_PEN)
+                if self.side == 'left':
+                    dc.DrawRectangle(0, rect.y, 4, rect.height)
+                else:
+                    dc.DrawRectangle(ICON_BAR_W - 4, rect.y, 4, rect.height)
 
+            # Icon zeichnen (SVG als BitmapBundle laden)
+            # Wir nehmen einfach icons.icon(iconname+state) konvention
+            iconname = iconname.replace(".svg", "")
+            state_suffix = ''
+            if key == self._active:
+                state_suffix = '_active.svg'
+            elif key == self._hover:
+                state_suffix = '_hover.svg'
+            else:
+                state_suffix = '.svg'
 
+            bundle = icons.icon(iconname + state_suffix, size=(ICON_SIZE, ICON_SIZE))
+            bmp = bundle.GetBitmapFor(self)
+            dc.DrawBitmap(bmp, x, y, True)
+
+            
 # ---------------------------------------------------------------------------
 # Document Settings Inspector (Mockup)
 # ---------------------------------------------------------------------------
@@ -201,14 +254,12 @@ class SidePanel(wx.Panel):
             self.Hide()
             return
         if key not in self._pages:
+            print("key:", key)
+            print("pages:", self._pages)
+            assert False
             return
 
         self._book.SetSelection(self._pages[key])
-        labels = {
-            "style": "Style Inspector",
-            "page":  "Document Settings",
-        }
-        self._title.SetLabel(labels.get(key, ""))
         self.Show()
 
 
@@ -259,15 +310,29 @@ class MainFrame(wx.Frame, ViewBase):
         # Inspectors for right panel
         self.inspector = InspectorPanel(self._right_panel, self.textview, self.document.basestyles)
         self.document_settings = DocumentSettingsInspector(self._right_panel)
-        self._right_panel.add_page("style", self.inspector)
-        self._right_panel.add_page("page", self.document_settings)
+        self._right_panel.add_page("format", self.inspector)
+        self._right_panel.add_page("settings", self.document_settings)
 
         # Left panel example page (optional)
         # self._left_panel.add_page("left_plugin", SomePanel(self._left_panel))
 
+        from .search import SearchPanel
+        self._left_panel.add_page("search", SearchPanel(self._left_panel, self.textview))
+        self._left_icon_bar = IconBar(
+            self,
+            self.show_left_panel,
+            [("search", "search.svg", "Search")],
+            side = 'left'            
+        )
         # Icon bars
-        self._left_icon_bar = IconBar(self, lambda key: self._left_panel.show_page(key))
-        self._right_icon_bar = IconBar(self, lambda key: self._right_panel.show_page(key))
+        #self._left_icon_bar = IconBar(self, self.show_left_panel)
+        self._right_icon_bar = IconBar(
+            self,
+            self.show_right_panel,
+            [("format", "style.svg", "Paragraph format"),
+             ("settings", "settings.svg", "Document settings")],
+            side = 'right'            
+        )
 
         # Layout: LeftIcon | LeftPanel | Editor | RightPanel | RightIcon
         root.Add(self._left_icon_bar, 0, wx.EXPAND)
@@ -278,6 +343,16 @@ class MainFrame(wx.Frame, ViewBase):
 
         self.SetSizer(root)
 
+    def show_right_panel(self, key):
+        print("showing right: ", key)
+        self._right_panel.show_page(key)
+        self.Layout()
+
+    def show_left_panel(self, key):
+        print("show left:", key)
+        self._left_panel.show_page(key)
+        self.Layout()
+        
     def _update_undo_ui(self):
         if not hasattr(self, "textview"): return
         self.undo_item.Enable(self.textview.undocount() > 0)
@@ -286,6 +361,7 @@ class MainFrame(wx.Frame, ViewBase):
     def undo_changed(self, *args):
         wx.CallAfter(self._update_undo_ui)
 
+        
 
 def demo_00():
     from einstein import get_einstein_model

@@ -13,17 +13,10 @@ from .unit_entry import UnitInput, EVT_UNIT_CHANGED
 from .threestatespin import SpinCtrl3, EVT_SPIN_VALUE
 from .styles import defaultbullets
 from .stylemenu import BasestyleDropdown
-from pathlib import Path
-
-BASE_DIR = Path(__file__).resolve().parent
-ICONS_DIR = BASE_DIR / "icons"
+from .icons import icon
 
 
-def icon(name, size=(20, 20)):
-    p = str(ICONS_DIR / name)
-    return wx.BitmapBundle.FromSVGFile(p, size)
     
-
 
 wxEVT_BUTTONBAR = wx.NewEventType()
 EVT_BUTTONBAR = wx.PyEventBinder(wxEVT_BUTTONBAR, 1)
