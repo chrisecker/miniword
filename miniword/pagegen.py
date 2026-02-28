@@ -19,7 +19,7 @@ from .wxtextview.builder import BuilderBase
 from .wxtextview.boxes import get_text
 from .textmodel.texeltree import length, NewLine
 from .wxtextview.linewrap import simple_linewrap
-from .styles import mm, cm, pt, updated
+from .styles import mm, cm, pt, updated, n_levels
 from .factory import Factory
 from .stretchable import justify_line
 
@@ -310,6 +310,7 @@ class RestartMemo:
     geometry  = 210 * mm, 297 * mm  # A4
     border    = 2 * cm, 2 * cm, 2 * cm, 2 * cm
     y         = None
+    counters  = {}   # dict: numbering_style -> list[int] of length n_levels
 
     def get_length(self):
         n = 0
@@ -331,7 +332,11 @@ class RestartMemo:
         return node
 
     def copy(self):
-        return shallow_copy(self)
+        r = shallow_copy(self)
+        # counters contains mutable lists — deep copy required so that
+        # future increments do not corrupt previously saved snapshots.
+        r.counters = {k: list(v) for k, v in self.counters.items()}
+        return r
 
 
 # Could be moved to texeltree
@@ -378,6 +383,61 @@ def iter_paragraphs(texel, i):
         dump(texel)
         raise
 
+import re as _re
+
+
+def _to_roman(n):
+    """Convert positive integer to lowercase Roman numeral string."""
+    val  = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+    syms = ['m', 'cm', 'd', 'cd', 'c', 'xc', 'l', 'xl', 'x', 'ix', 'v', 'iv', 'i']
+    result = ''
+    for v, s in zip(val, syms):
+        while n >= v:
+            result += s
+            n -= v
+    return result or 'i'
+
+
+def format_number(arr, level, style):
+    """Format a numbered-list marker from a counter array.
+
+    Each occurrence of ``1``, ``a``, ``A``, ``i``, or ``I`` in *style* is
+    replaced by the counter at the corresponding nesting depth (left to right,
+    starting at depth 0).  Everything else is literal text.
+
+    Examples::
+
+        format_number([3, 0, ...], 0, "1.")   → "3."
+        format_number([2, 4, ...], 1, "1.1.") → "2.4."
+        format_number([5, 0, ...], 0, "a.")   → "e."
+        format_number([3, 0, ...], 0, "i.")   → "iii."
+    """
+    parts    = _re.split(r'([1aAiI])', style)
+    n_tokens = (len(parts) - 1) // 2
+    result   = parts[0]
+    # Single-token styles ("1.", "a.", …) display the counter at the
+    # current indent level.  Composite styles ("1.1.") start at level 0
+    # so the full hierarchy is shown.
+    lev = level if n_tokens == 1 else 0
+    for k in range(1, len(parts), 2):
+        typ = parts[k]
+        n   = arr[lev] if lev < len(arr) else 0
+        lev += 1
+        if typ == '1':
+            result += str(n)
+        elif typ == 'a':
+            result += chr(ord('a') + (n - 1) % 26) if n > 0 else 'a'
+        elif typ == 'A':
+            result += chr(ord('A') + (n - 1) % 26) if n > 0 else 'A'
+        elif typ == 'i':
+            result += _to_roman(n) if n > 0 else 'i'
+        else:  # 'I'
+            result += _to_roman(n).upper() if n > 0 else 'I'
+        if k + 1 < len(parts):
+            result += parts[k + 1]
+    return result
+
+
 def generate_boxes(texel, i, factory):
     for i1, i2, l in iter_paragraphs(texel, i):
         boxes = []
@@ -399,6 +459,10 @@ def generate_pages(texel, i, restartmemo, factory):
 
     # In this minimal model, state and RestartMemo are the same thing.
     state = restartmemo.copy()
+
+    # Restore per-style counter arrays from the restart memo so that
+    # numbered lists continue with the correct numbers after a restart.
+    counters = {k: list(v) for k, v in state.counters.items()}
 
     # Shift the box-generator start position by the amount of row
     # material already present in the restart memo.
@@ -461,6 +525,21 @@ def generate_pages(texel, i, restartmemo, factory):
                     style,
                 )
 
+            elif first and r['paragraph_type'] == 'numbered':
+                ns = r['numbering_style'][indent]
+                if ns is not None:
+                    if ns not in counters:
+                        counters[ns] = [0] * n_levels
+                    sn = r.get('start_number')
+                    if sn is not None:
+                        counters[ns][indent] = sn - 1
+                    counters[ns][indent] += 1
+                    marker = format_number(counters[ns], indent, ns)
+                    style = factory.mk_style(factory.markerstyle)
+                    style['font_size'] *= style['marker_size'][indent]
+                    style['color']      = style['marker_color'][indent]
+                    row.set_marker(marker, r['marker_pos'][indent], style)
+
             if not draft.can_addrow(row, line_spacing, before):
                 draft = draft.create_newpage()
 
@@ -489,6 +568,7 @@ def generate_pages(texel, i, restartmemo, factory):
             # XXX adjust depth of last row?
 
         pages, state = draft.fix_draft()
+        state.counters = {k: list(v) for k, v in counters.items()}
         if pages:
             pages[0].restartmemo = restartmemo
             restartmemo = state.copy()

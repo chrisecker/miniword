@@ -65,7 +65,7 @@ structure_default = {
     # "marker_alignment": ('right',) * n_levels,
     "marker_size":     (1,) * n_levels,
     "marker_color":    ("black",) * n_levels,
-    "numbering_style": (None,) * n_levels, # e.g. "1.", "1.1", "a."
+    "numbering_style": ("1.",) * n_levels,  # e.g. "1.", "1.1", "a."
     "start_number":    None,               # None or int (for numbered lists)
 }
 
@@ -91,6 +91,11 @@ layout_default = {
 other_default = {
     "next_style": "standard",
 }
+
+
+# Keys that live exclusively on individual paragraphs and must never be
+# promoted to base styles or treated as style overrides (no red triangle).
+PARAGRAPH_ONLY_KEYS = frozenset({'start_number'})
 
 
 def updated(default, *styles):

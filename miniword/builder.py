@@ -320,6 +320,11 @@ class Builder(BuilderBase):
         if n1 != n2:
             return False
 
+        # Condition 5: numbered-list counter state must match so that
+        # reused rest pages carry the correct counter values.
+        if old_restartmemo.counters != state.counters:
+            return False
+
         print("can finish!")
         return True
 

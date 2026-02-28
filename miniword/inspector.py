@@ -11,9 +11,12 @@ from .wxtextview.wxdevice import defaultstyle
 
 from .unit_entry import UnitInput, EVT_UNIT_CHANGED
 from .threestatespin import SpinCtrl3, EVT_SPIN_VALUE
-from .styles import defaultbullets
+from .styles import defaultbullets, n_levels
 from .stylemenu import BasestyleDropdown
 from .icons import icon
+
+# Display labels and matching format strings for the numbering dropdown.
+_NUMBERING_FORMATS = ['1.', 'a.', 'A.', 'i.']
 
 
     
@@ -531,6 +534,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.numbering.SetSelection(0) # XXX
         self.reset_numbering = ResetButton(spanel, ['numbering_style'])
         add_row(spanelsizer, label, self.numbering, self.reset_numbering)
+        self.numbering.Bind(wx.EVT_CHOICE, self.on_numbering)
 
         self.start_check = wx.CheckBox(spanel, label="Start value")
         self.start_value = wx.TextCtrl(spanel)
@@ -585,6 +589,7 @@ class InspectorPanel(wx.Panel, ViewBase):
                 self.reset_marker_color,
                 self.reset_marker_size,
                 self.reset_bullet,
+                self.reset_numbering,
         ]:
             resetter.callback = self.clear_parproperties            
 
@@ -616,7 +621,11 @@ class InspectorPanel(wx.Panel, ViewBase):
         i = self.paragraph_type.Selection
         value = ['normal', 'list', 'numbered'][i]
         self.set_parproperties(paragraph_type=value)
-        
+
+    def on_numbering(self, event):
+        fmt = _NUMBERING_FORMATS[self.numbering.Selection]
+        self.set_parproperties(numbering_style=(fmt,) * n_levels)
+
     def set_list_value(self, name, value):
         # Helper
         view = self.model
@@ -973,6 +982,18 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.paragraph_type.Selection = i
         x = 'paragraph_type' in overrides
         self.reset_paragraph_type.set_x(x)
+
+        ns = properties['numbering_style']
+        if ns is not None:
+            fmt = ns[indent]
+            try:
+                self.numbering.SetSelection(_NUMBERING_FORMATS.index(fmt))
+            except ValueError:
+                self.numbering.SetSelection(0)
+        else:
+            self.numbering.SetSelection(0)
+        x = 'numbering_style' in overrides
+        self.reset_numbering.set_x(x)
 
         ptype = properties['paragraph_type']
         self.marker_panel.Show(ptype in ("list", "numbered"))

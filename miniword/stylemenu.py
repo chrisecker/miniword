@@ -12,6 +12,7 @@ import wx
 from typing import Optional
 from dataclasses import dataclass, field
 from .textmodel.viewbase import ViewBase
+from .styles import PARAGRAPH_ONLY_KEYS
 
 
 # ---------------------------------------------------------------------------
@@ -306,7 +307,9 @@ class StyleDropdown(wx.Control, ViewBase):
 
     def set_properties(self, name: Optional[str], properties: dict, overrides: dict):
         self.properties = properties
-        self.overrides  = overrides
+        # Strip paragraph-only keys: they must not trigger the modified flag
+        # and must not be cleared when reverting to base style.
+        self.overrides  = overrides - PARAGRAPH_ONLY_KEYS
 
         if name is None:
             # Ambiguous selection (multiple paragraphs with different styles).
@@ -317,7 +320,7 @@ class StyleDropdown(wx.Control, ViewBase):
 
         i = self.styles.index(name)
         self.selection = i                      # set directly to avoid spurious EVT_CHOICE
-        self.modified  = any(k in overrides for k in self.stylesheet.get(name).keys())
+        self.modified  = any(k in self.overrides for k in self.stylesheet.get(name).keys())
         self.UpdateSelection()
         self.Refresh()
 
@@ -386,7 +389,7 @@ class StyleDropdown(wx.Control, ViewBase):
         label = self.GetItemLabel(name)
         new_style = self.stylesheet.get(name).copy()
         for key, value in self.properties.items():
-            if key in new_style and value is not None:
+            if key in new_style and value is not None and key not in PARAGRAPH_ONLY_KEYS:
                 new_style[key] = value
 
         # Pick an unused internal key.
@@ -411,7 +414,7 @@ class StyleDropdown(wx.Control, ViewBase):
     def UpdateStyle(self, name: str):
         new_style = self.stylesheet.get(name).copy()
         for key, value in self.properties.items():
-            if key in new_style and value is not None:
+            if key in new_style and value is not None and key not in PARAGRAPH_ONLY_KEYS:
                 new_style[key] = value
 
         if self.on_redefine_style:
