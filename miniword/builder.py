@@ -79,12 +79,15 @@ class Builder(BuilderBase):
     waitfor_height and waitfor_page, both of which can be called from
     Update().
     """
-    _layout    = None
-    layout     = property(BuilderBase.get_layout)
+    _layout         = None
+    layout          = property(BuilderBase.get_layout)
     # Required by wxtextview:
-    device     = property(lambda self: self.factory.device)
-    stylesheet = property(lambda self: self.factory.stylesheet)
-    rest_memo  = 0, ()
+    device          = property(lambda self: self.factory.device)
+    stylesheet      = property(lambda self: self.factory.stylesheet)
+    rest_memo       = 0, ()
+    # Rebuild batching (used by DocumentView.atomic()):
+    _inhibit_depth  = 0
+    _pending_range  = None  # (j1, j2) while inhibited, else None
     # Stats for debugging:
     nbefore = 0
     nrest   = 0
@@ -330,10 +333,36 @@ class Builder(BuilderBase):
         print("pages before %s, pages updated %s, rest %s" %
               self.get_updatestats())
 
+    # --- Rebuild inhibiting ---
+
+    def _enqueue_rebuild(self, j1, j2):
+        """Schedule a dirty rebuild.  When inhibited, accumulate the range;
+        otherwise execute immediately."""
+        if self._inhibit_depth > 0:
+            if self._pending_range is None:
+                self._pending_range = (j1, j2)
+            else:
+                pj1, pj2 = self._pending_range
+                self._pending_range = (min(j1, pj1), max(j2, pj2))
+        else:
+            self.rebuild_dirty(j1, j2, 0)
+
+    def inhibit_rebuilds(self):
+        """Prevent rebuild_dirty from firing until resume_rebuilds()."""
+        self._inhibit_depth += 1
+
+    def resume_rebuilds(self):
+        """Re-enable rebuilds and fire a single merged rebuild if needed."""
+        self._inhibit_depth -= 1
+        if self._inhibit_depth == 0 and self._pending_range is not None:
+            j1, j2 = self._pending_range
+            self._pending_range = None
+            self.rebuild_dirty(j1, j2, 0)
+
     # --- Signal handlers ---
 
     def properties_changed(self, i1, i2):
-        self.rebuild_dirty(i1, i2, 0)
+        self._enqueue_rebuild(i1, i2)
 
     def inserted(self, i, n):
         self.rebuild_dirty(i, i, n)

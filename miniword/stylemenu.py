@@ -254,7 +254,7 @@ class StylePopup(wx.PopupWindow):
         actions = {
             0: lambda: self.Parent.CreateNewStyle(self._clicked_style),
             1: lambda: self.Parent.UpdateStyle(self._clicked_style),
-            # TODO: implement remaining actions (2–7)
+            2: lambda: self.Parent.RevertStyle(self._clicked_style),
         }
         action = actions.get(i)
         if action:
@@ -292,6 +292,9 @@ class StyleDropdown(wx.Control, ViewBase):
         self.Bind(wx.EVT_LEAVE_WINDOW, lambda _: self._set_hover(False))
 
     stylesheet = None
+    on_redefine_style = None  # callable(name, new_style, overrides)
+    on_create_style   = None  # callable(new_name, new_style, overrides)
+    on_revert_style   = None  # callable(overrides)
 
     def set_stylesheet(self, stylesheet):
         if self.stylesheet is not None:
@@ -385,7 +388,7 @@ class StyleDropdown(wx.Control, ViewBase):
             if key in new_style and value is not None:
                 new_style[key] = value
 
-        # Pick an unused internal key
+        # Pick an unused internal key.
         i = 0
         while True:
             new_name = f"style{i}"
@@ -395,15 +398,31 @@ class StyleDropdown(wx.Control, ViewBase):
 
         existing_labels = [self.GetItemLabel(k) for k in self.styles]
         new_style["name"] = mk_label(label, existing_labels)
-        self.stylesheet.set(new_name, new_style)
+
+        if self.on_create_style:
+            # Delegate stylesheet.set() to the callback so it can wrap both
+            # the stylesheet change and the text-model change in one atomic().
+            self.on_create_style(new_name, new_style, self.overrides)
+        else:
+            self.stylesheet.set(new_name, new_style)
         self.SetSelection(len(self.stylesheet.keys()) - 1)
 
     def UpdateStyle(self, name: str):
-        style = self.stylesheet.get(name).copy()
+        new_style = self.stylesheet.get(name).copy()
         for key, value in self.properties.items():
-            if key in style and value is not None:
-                style[key] = value
-        self.stylesheet.set(name, style)
+            if key in new_style and value is not None:
+                new_style[key] = value
+
+        if self.on_redefine_style:
+            # Delegate stylesheet.set() to the callback so it can wrap both
+            # the stylesheet change and the text-model change in one atomic().
+            self.on_redefine_style(name, new_style, self.overrides)
+        else:
+            self.stylesheet.set(name, new_style)
+
+    def RevertStyle(self, name: str):
+        if self.on_revert_style:
+            self.on_revert_style(self.overrides)
 
     # ------------------------------------------------------------------
     # Overridable interface

@@ -303,6 +303,9 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.basestyle.Bind(wx.EVT_CHOICE, self.on_basestyle)
         stylesheet = view.builder.stylesheet
         self.basestyle.set_stylesheet(self.basestyles)
+        self.basestyle.on_redefine_style = self._redefine_style
+        self.basestyle.on_create_style   = self._create_style
+        self.basestyle.on_revert_style   = self._revert_style
         mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
         
         notebook = wx.Notebook(self)
@@ -700,6 +703,76 @@ class InspectorPanel(wx.Panel, ViewBase):
     def on_basestyle(self, event=None):
         key = self.basestyle.GetSelectedKey()
         self.set_parproperties(base=key)
+
+    # ------------------------------------------------------------------
+    # Style menu callbacks
+    # ------------------------------------------------------------------
+
+    def _split_overrides(self, overrides):
+        """Split a combined overrides set into (char_keys, par_keys).
+
+        Reads the current char- and par-style from the model to determine
+        which keys belong to which layer.
+        """
+        view  = self.model
+        model = view.model
+        index = view.index
+        char_keys = set(model.get_style(max(0, index - 1)).keys()) & overrides
+        par_keys  = set(model.get_parstyle(index).keys()) & overrides
+        return char_keys, par_keys
+
+    def _clear_overrides(self, overrides):
+        """Remove *overrides* from the current selection in the text model.
+
+        Each call to clear_properties / clear_parproperties adds an undo entry
+        on its own.  Wrap this call inside view.atomic() to group all entries
+        together with any surrounding stylesheet changes.
+        """
+        char_keys, par_keys = self._split_overrides(overrides)
+        if char_keys:
+            self.clear_properties(*char_keys)
+        if par_keys:
+            self.clear_parproperties(*par_keys)
+
+    def _redefine_style(self, name, new_style, overrides):
+        """Redefine an existing style and clear matching text-model overrides.
+
+        Coordinator for the 'Redefine style from selection' action.
+        Performs stylesheet update + override removal as a single atomic
+        operation (one rebuild, one undo entry).
+        """
+        view = self.model
+        old_style = view.document.basestyles.get(name).copy()
+        with view.atomic():
+            view.add_undo((view._undo_stylesheet, name, old_style, new_style))
+            view.document.basestyles.set(name, new_style)
+            self._clear_overrides(overrides)
+
+    def _create_style(self, new_name, new_style, overrides):
+        """Create a new paragraph style and apply it to the current paragraph.
+
+        Coordinator for the 'Create new paragraph style from selection' action.
+        Performs stylesheet insert + base change + override removal as a single
+        atomic operation (one rebuild, one undo entry).
+        """
+        view = self.model
+        with view.atomic():
+            # Undo entry: delete the new style (restore_to=None means delete).
+            view.add_undo((view._undo_stylesheet, new_name, None, new_style))
+            view.document.basestyles.set(new_name, new_style)
+            pi1, pi2 = self.get_parrange()
+            self.model.set_parproperties(pi1, pi2, base=new_name)
+            self._clear_overrides(overrides - {'base'})
+
+    def _revert_style(self, overrides):
+        """Remove all local overrides from the current paragraph / selection.
+
+        Coordinator for the 'Revert to original style' action.
+        Groups all override removals into one rebuild and one undo entry.
+        """
+        view = self.model
+        with view.atomic():
+            self._clear_overrides(overrides)
         
     def mk_style(self, parstyle, style):
         # Computes the style of a single run of text. Unlike the code

@@ -139,16 +139,21 @@ class TextView(ViewBase, Model):
             self.add_redo(undo(self._undoinfo[0]))
             del self._undoinfo[0]
                 
-    def add_undo(self, info, clear_redo = 1):
-        if info is not None:
-            if len(self._undoinfo):
-                joined = self.join_undo(info, self._undoinfo[0])
-                self._undoinfo = joined + self._undoinfo[1:]
-            else:
-                self._undoinfo.insert(0, info)
-            if clear_redo:
-                self._redoinfo = []
-            self.notify_views('undo_changed')
+    def add_undo(self, info, clear_redo=1):
+        if info is None:
+            return
+        if self._undo_group is not None:
+            # Grouping active: collect instead of committing immediately.
+            self._undo_group.append(info)
+            return
+        if len(self._undoinfo):
+            joined = self.join_undo(info, self._undoinfo[0])
+            self._undoinfo = joined + self._undoinfo[1:]
+        else:
+            self._undoinfo.insert(0, info)
+        if clear_redo:
+            self._redoinfo = []
+        self.notify_views('undo_changed')
 
     def redo(self):
         if len(self._redoinfo) > 0:
@@ -169,6 +174,27 @@ class TextView(ViewBase, Model):
     def clear_undo(self):
         self._undoinfo = []
         self._redoinfo = []
+        self._undo_group = None  # None = not grouping; list = collecting entries
+
+    # ------------------------------------------------------------------
+    # Undo grouping
+    # ------------------------------------------------------------------
+
+    def begin_undo_group(self):
+        """Start collecting undo entries into a single group."""
+        self._undo_group = []
+
+    def end_undo_group(self):
+        """Flush the collected group as one atomic undo entry."""
+        group = self._undo_group
+        self._undo_group = None
+        if not group:
+            return
+        entry = group[0] if len(group) == 1 else group
+        # Insert directly, bypassing join_undo (groups must not be merged).
+        self._undoinfo.insert(0, entry)
+        self._redoinfo = []
+        self.notify_views('undo_changed')
 
     def insert(self, i, textmodel):
         self.model.insert(i, textmodel)

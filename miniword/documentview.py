@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from .wxtextview.wxtextview import WXTextView
 from .textmodel.iterators import iter_newlines
 from .builder import Factory, Builder
@@ -113,6 +115,45 @@ class DocumentView(WXTextView):
         dc = None
         painter = None
 
+    # ------------------------------------------------------------------
+    # Atomic style operations
+    # ------------------------------------------------------------------
+
+    @contextmanager
+    def atomic(self):
+        """Group rebuild and undo into one atomic operation.
+
+        Both the rebuild (via builder.inhibit/resume) and the undo entries
+        (via begin/end_undo_group) are coalesced.  After the context exits,
+        the layout is built to completion and the view is refreshed.
+        """
+        self.begin_undo_group()
+        self.builder.inhibit_rebuilds()
+        try:
+            yield
+        finally:
+            self.end_undo_group()
+            self.builder.resume_rebuilds()  # fires one merged rebuild
+        self.builder.waitfor_finish()
+        self.Refresh()
+
+    def _undo_stylesheet(self, name, restore_to, after_redo):
+        """Undo/redo a stylesheet change.
+
+        restore_to: style dict to restore, or None to delete the style.
+        after_redo: style dict for the redo direction (or None to delete).
+        Returns the complementary redo/undo entry.
+        """
+        if restore_to is None:
+            self.document.basestyles.delete(name)
+        else:
+            self.document.basestyles.set(name, restore_to)
+        return (self._undo_stylesheet, name, after_redo, restore_to)
+
+    # ------------------------------------------------------------------
+    # Stylesheet observer
+    # ------------------------------------------------------------------
+
     def style_changed(self, stylesheet, key):
         j1 = j2 = None
         for i1, i2, nl in iter_newlines(self.model.get_xtexel(), 0):
@@ -122,14 +163,19 @@ class DocumentView(WXTextView):
                 j2 = i2
         self.clear_caches()
         if j1 is None:
-            # style was not used
             return
-        self.builder.rebuild_dirty(j1, j2, 0)
-        self.builder.waitfor_finish() # XXX should a wait-dialog be shown?
-        self.refresh()
+        # Enqueue instead of rebuilding immediately so that a surrounding
+        # atomic() context can merge this rebuild with further changes.
+        self.builder._enqueue_rebuild(j1, j2)
+        if not self.builder._inhibit_depth:
+            # Outside an atomic context: finish and repaint synchronously.
+            self.builder.waitfor_finish()
+            self.refresh()
 
     def style_removed(self, stylesheet, key):
-        print("style removed", key)
+        self.clear_caches()
+        self.builder.rebuild()
+        self.refresh()
 
     def create_builder(self):
         factory = Factory(stylesheet, device=CairoDevice())
