@@ -164,42 +164,6 @@ class WXTextView(wx.ScrolledWindow, TextView):
         else:
             dc = pdc
         dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.WHITE_BRUSH)
-        dc.Clear()
-        region = self.GetUpdateRegion()
-        x, y, w, h = region.Box
-        dc.SetClippingRegion(x-1, y-1, w+2, h+2)
-        painter = device.create_painter(dc)
-
-        zoom = self.zoom
-        x, y = self.CalcScrolledPosition((0,0))
-        x /= zoom
-        y /= zoom
-        layout = self.layout
-        layout.draw(x, y, painter)
-        
-        if wx.Window.FindFocus() is self:
-            layout.draw_cursor(self.index, x, y, painter,
-                               self.model.defaultstyle)
-        for j1, j2 in self.get_selected():
-            layout.draw_selection(j1, j2, x, y, painter)
-        dc = None
-        painter = None
-
-    def on_paint(self, event):
-        self._update_scroll()
-        self.keep_cursor_on_screen()
-
-        pdc = wx.PaintDC(self)
-        pdc.SetAxisOrientation(True, False)
-        device = self.builder.get_device()
-        if device.buffering:
-            dc = wx.BufferedDC(pdc)
-            if not dc.IsOk():
-                return
-        else:
-            dc = pdc
-        dc.SetBackgroundMode(wx.SOLID)
         dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
         #dc.SetBackground(wx.WHITE_BRUSH)
         
@@ -283,7 +247,12 @@ class WXTextView(wx.ScrolledWindow, TextView):
     def _update_scroll(self):
         layout = self.layout
         zoom = self.zoom
-        self.SetVirtualSize((int(layout.width*zoom), int(layout.height*zoom)))
+        w = int(layout.width  * zoom)
+        h = int(layout.height * zoom)
+        vw, vh = self.GetVirtualSize()
+        if vw == w and vh == h:
+            return
+        self.SetVirtualSize((w, h))
         self._scrollrate = 10, 10
         self.SetScrollRate(*self._scrollrate)
         
@@ -325,7 +294,6 @@ class WXTextView(wx.ScrolledWindow, TextView):
             firstcol = ceil(vx / float(fh))
 
         if (firstcol, firstrow) != self.GetViewStart():
-            self.Update()
             self.Scroll(firstcol, firstrow)
 
             
@@ -342,12 +310,12 @@ class WXTextView(wx.ScrolledWindow, TextView):
         
         
 
-testtext = u"""Ein männlicher Briefmark erlebte
-Was Schönes, bevor er klebte.
+testtext = u"""Ein mï¿½nnlicher Briefmark erlebte
+Was Schï¿½nes, bevor er klebte.
 Er war von einer Prinzessin beleckt.
 Da war die Liebe in ihm geweckt.
-Er wollte sie wiederküssen,
-Da hat er verreisen müssen.
+Er wollte sie wiederkï¿½ssen,
+Da hat er verreisen mï¿½ssen.
 So liebte er sie vergebens.
 Das ist die Tragik des Lebens.
 

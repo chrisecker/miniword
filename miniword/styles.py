@@ -110,8 +110,6 @@ normal = updated(
     dict(name="Normal"),
 )
 
-standard = updated(normal, dict(name="Standard"))
-
 h0 = updated(normal, dict(name="Heading 1", font_size=18, bold=True,
                           page_break_before=True))
 h1 = updated(normal, dict(name="Heading 2", font_size=16, bold=True,
@@ -123,7 +121,6 @@ from .stylesheet import StyleSheet
 
 stylesheet = StyleSheet()
 stylesheet.set('normal', normal)
-stylesheet.set('standard', standard)
 stylesheet.set('h0', h0)
 stylesheet.set('h1', h1)
 stylesheet.set('h2', h2)
