@@ -153,7 +153,8 @@ class StylePopup(wx.PopupWindow):
 
         if self.triangle_hover:
             dc.SetBrush(wx.Brush(wx.Colour(180, 210, 255)))
-            dc.SetPen(wx.Pen(wx.Colour(120, 160, 220)))
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            #dc.SetPen(wx.Pen(wx.Colour(120, 160, 220)))
             dc.DrawCircle(cx, cy, 9)
 
         pts = [wx.Point(cx - 3, cy - 5), wx.Point(cx - 3, cy + 5), wx.Point(cx + 4, cy)]

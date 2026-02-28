@@ -15,13 +15,15 @@
 
 from .wxtextview.boxes import _TextBoxBase
 from .wxtextview.rect import Rect
+from .stretchable import StretchableText
 
 
 def _iter_textboxes(dc, box, i1, i2, x, y):
-    """Yield (x1, y1, k1, k2, child) for every TextBox leaf that overlaps
+    """Yield (x1, y1, px1, px2, child) for every text leaf that overlaps
     [i1, i2] and lies inside the current clipping region.
 
-    k1, k2 are the character offsets *within* child that fall in [i1, i2].
+    px1, px2 are pixel offsets *within* child at the start and end of the
+    [i1, i2] range.  Handles both _TextBoxBase and StretchableText leaves.
     """
     device = box.device
     for j1, j2, x1, y1, child in box.iter_boxes(0, x, y):
@@ -33,7 +35,15 @@ def _iter_textboxes(dc, box, i1, i2, x, y):
         if isinstance(child, _TextBoxBase):
             k1 = max(0, i1 - j1)
             k2 = min(len(child.text), i2 - j1)
-            yield x1, y1, k1, k2, child
+            px1 = child.measure(child.text[:k1])[0]
+            px2 = child.measure(child.text[:k2])[0]
+            yield x1, y1, px1, px2, child
+        elif isinstance(child, StretchableText):
+            k1 = max(0, i1 - j1)
+            k2 = min(len(child), i2 - j1)
+            px1 = child.find_x(k1)
+            px2 = child.find_x(k2)
+            yield x1, y1, px1, px2, child
         else:
             yield from _iter_textboxes(dc, child, i1 - j1, i2 - j1, x1, y1)
 
@@ -53,9 +63,9 @@ def highlight(dc, box, i1, i2, x=0, y=0, color='yellow'):
                     passed to box.draw().
         color:      Fill color accepted by device.fill_rect().
     """
-    for x1, y1, k1, k2, child in _iter_textboxes(dc, box, i1, i2, x, y):
-        hx1 = x1 + child.measure(child.text[:k1])[0]
-        hx2 = x1 + child.measure(child.text[:k2])[0]
+    for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1, i2, x, y):
+        hx1 = x1 + px1
+        hx2 = x1 + px2
         if hx2 > hx1:
             child.device.fill_rect(
                 hx1, y1, hx2 - hx1, child.height + child.depth, color, dc)
@@ -121,9 +131,9 @@ def squiggle(dc, box, i1, i2, x=0, y=0, color='red'):
         color:      Line color, any string accepted by wx.Colour.
     """
     draw = _squiggle_wx if hasattr(dc, 'CreatePath') else _squiggle_cairo
-    for x1, y1, k1, k2, child in _iter_textboxes(dc, box, i1, i2, x, y):
-        hx1 = x1 + child.measure(child.text[:k1])[0]
-        hx2 = x1 + child.measure(child.text[:k2])[0]
+    for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1, i2, x, y):
+        hx1 = x1 + px1
+        hx2 = x1 + px2
         if hx2 > hx1:
             draw(dc, hx1, y1 + child.height, hx2 - hx1, color)
 
@@ -162,17 +172,18 @@ def test_highlight():
 def test_iter_textboxes():
     # Tests the shared iteration core used by both highlight and squiggle.
     from .wxtextview.boxes import TextBox, VBox, HBox
+    from .stretchable import create_stretchtext
 
     t1 = TextBox('01234')
     t2 = TextBox('56789')
     par = VBox([t1, t2])
 
-    # Single box, partial range
+    # Single box, partial range: px1/px2 are pixel offsets (TestDevice: 1pt/char)
     results = list(_iter_textboxes(None, par, 2, 5, 0, 0))
     assert len(results) == 1
-    x1, y1, k1, k2, child = results[0]
+    x1, y1, px1, px2, child = results[0]
     assert child is t1
-    assert k1 == 2 and k2 == 5
+    assert px1 == 2 and px2 == 5
 
     # Range spanning both boxes
     results = list(_iter_textboxes(None, par, 3, 8, 0, 0))
@@ -185,6 +196,18 @@ def test_iter_textboxes():
     outer = VBox([h])
     results = list(_iter_textboxes(None, outer, 1, 5, 0, 0))
     assert len(results) == 2   # both inner TextBoxes
+
+    # StretchableText leaf: highlights must not be silently dropped
+    tb = TextBox('Hello world')
+    st = create_stretchtext(tb, is_last=False)
+    st.set_stretch(10)
+    row = VBox([st])
+    results = list(_iter_textboxes(None, row, 0, len(st), 0, 0))
+    assert len(results) == 1
+    x1, y1, px1, px2, child = results[0]
+    assert child is st
+    assert px1 == 0                      # start of first character
+    assert px2 == st.find_x(len(st))    # end of last character
 
 
 # --- Demo ---
