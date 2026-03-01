@@ -357,18 +357,32 @@ class TextView(ViewBase, Model):
             return 0
         return self.layout.get_index(x, y)
 
-    def current_style(self):
-        index = self.index
-        if index == 0:
-            return self.model.get_style(index)            
-        return self.model.get_style(index-1)
+    _current_style = None
+
+    def get_current_style(self):
+        if self._current_style is None:
+            index = self.index
+            if index == 0:
+                self._current_style = dict(self.model.get_style(index))
+            else:
+                self._current_style = dict(self.model.get_style(index - 1))
+        return self._current_style
+
+    def set_current_style(self, **properties):
+        style = self.get_current_style()
+        style.update(properties)
+
+    def clear_current_style(self, *keys):
+        style = self.get_current_style()
+        for key in keys:
+            style.pop(key, None)
 
     def handle_action(self, action, shift=False):
         #print("action = ", action, shift)
         model = self.model
         index = self.index
         layout = self.layout
-        style = self.current_style()
+        style = self.get_current_style()
         parstyle = model.get_parstyle(index)
         row, col = self.current_position()
         rect = layout.get_rect(index, 0, 0)
@@ -653,6 +667,10 @@ class TextView(ViewBase, Model):
             index = len(self.model)
         if index != self._index:
             self._index = index
+            if index == 0:
+                self._current_style = dict(self.model.get_style(0))
+            else:
+                self._current_style = dict(self.model.get_style(index - 1))
             if extend:
                 self.extend_selection()
             elif update:

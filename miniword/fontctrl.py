@@ -189,15 +189,14 @@ class FontCombo(wx.ComboCtrl):
             self.SetText("")
 
     def GetFontName(self):
-        if self._current_selection == -1:
-            return None
-        return self._filtered_fonts[self._current_selection]
+        return self.GetValue() or None
 
     def SetFontName(self, name):
         if name in self._filtered_fonts:
-            idx = self._filtered_fonts.index(name)
-            self._current_selection = idx
-            self.SetText(name)
+            self._current_selection = self._filtered_fonts.index(name)
+        else:
+            self._current_selection = -1
+        self.SetText(name)
 
 
 # =============================

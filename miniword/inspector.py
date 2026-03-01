@@ -358,33 +358,33 @@ class InspectorPanel(wx.Panel, ViewBase):
         rowsizer.Add(self.reset_colors, 0, wx.ALL, 5)
         contentsizer.Add(rowsizer, 0, wx.EXPAND)
         
-        self.color.callback = lambda: self.set_properties(
+        self.color.callback = lambda: self.set_char_properties(
                 color=self.color.get_colour())
 
-        self.bgcolor.callback = lambda: self.set_properties(
+        self.bgcolor.callback = lambda: self.set_char_properties(
                 bgcolor=self.bgcolor.get_colour())
 
         self.underline = wx.CheckBox(panel, -1, "Underline",
                                      style=wx.CHK_3STATE)
         self.reset_underline = ResetButton(panel, ['underline'])
-        add_row(contentsizer, self.underline, self.reset_underline)        
+        add_row(contentsizer, self.underline, self.reset_underline)
         self.underline.Bind(
             wx.EVT_CHECKBOX,
-            lambda e:self.set_properties(underline=self.underline.GetValue()))
+            lambda e:self.set_char_properties(underline=self.underline.GetValue()))
 
         self.bold = wx.CheckBox(panel, -1, "Bold", style=wx.CHK_3STATE)
         self.reset_bold = ResetButton(panel, ['bold'])
-        add_row(contentsizer, self.bold, self.reset_bold)        
+        add_row(contentsizer, self.bold, self.reset_bold)
         self.bold.Bind(
             wx.EVT_CHECKBOX,
-            lambda e:self.set_properties(bold=self.bold.GetValue()))
+            lambda e:self.set_char_properties(bold=self.bold.GetValue()))
 
         self.italic = wx.CheckBox(panel, -1, "Italic", style=wx.CHK_3STATE)
         self.reset_italic = ResetButton(panel, ['italic'])
         add_row(contentsizer, self.italic, self.reset_italic)
         self.italic.Bind(
             wx.EVT_CHECKBOX,
-            lambda e:self.set_properties(italic=self.italic.GetValue()))
+            lambda e:self.set_char_properties(italic=self.italic.GetValue()))
 
         panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
         panel.SetSizer(panelsizer)
@@ -682,13 +682,31 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.Unbind(wx.EVT_IDLE, handler=self.on_update)
         self.update()
         
-    def set_properties(self, **properties):        
-        i1, i2  = self.get_range()
+    def set_properties(self, **properties):
+        i1, i2 = self.get_range()
         self.model.set_properties(i1, i2, **properties)
 
     def clear_properties(self, *keys):
         i1, i2 = self.get_range()
         self.model.clear_properties(i1, i2, *keys)
+
+    def set_char_properties(self, **properties):
+        """Apply character properties: to the selection, or to the input
+        style when there is no selection."""
+        i1, i2 = self.get_range()
+        if i1 == i2:
+            self.model.set_current_style(**properties)
+        else:
+            self.model.set_properties(i1, i2, **properties)
+
+    def clear_char_properties(self, *keys):
+        """Clear character properties: from the selection, or from the
+        input style when there is no selection."""
+        i1, i2 = self.get_range()
+        if i1 == i2:
+            self.model.clear_current_style(*keys)
+        else:
+            self.model.clear_properties(i1, i2, *keys)
     
     def set_parproperties(self, **properties):
         i1, i2 = self.get_parrange()
@@ -703,11 +721,11 @@ class InspectorPanel(wx.Panel, ViewBase):
             font_size=float(self.size.GetValue())
         except ValueError:
             return self.update()
-        self.set_properties(font_size=font_size)
+        self.set_char_properties(font_size=font_size)
 
     def on_family(self, event=None):
         name = self.family.GetFontName()
-        self.set_properties(font_family = name)
+        self.set_char_properties(font_family=name)
 
     def on_basestyle(self, event=None):
         key = self.basestyle.GetSelectedKey()
