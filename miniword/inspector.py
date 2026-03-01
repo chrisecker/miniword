@@ -553,15 +553,24 @@ class InspectorPanel(wx.Panel, ViewBase):
 
         # Other tab
         panel = self.panel = wx.Panel(notebook)
-        panelsizer = wx.BoxSizer(wx.VERTICAL)        
+        panelsizer = wx.BoxSizer(wx.VERTICAL)
         notebook.AddPage(panel, 'Other')
         panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
         contentsizer = wx.BoxSizer(wx.VERTICAL)
-        # ...
+
+        self.page_break_before = wx.CheckBox(panel, -1, "Page break before",
+                                             style=wx.CHK_3STATE)
+        self.reset_page_break_before = ResetButton(panel, ['page_break_before'])
+        add_row(contentsizer, self.page_break_before, self.reset_page_break_before)
+        self.page_break_before.Bind(
+            wx.EVT_CHECKBOX,
+            lambda e: self.set_parproperties(
+                page_break_before=self.page_break_before.GetValue()))
+
         panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
         panel.SetSizer(panelsizer)
         panel.Layout()
-        panelsizer.Fit(panel )
+        panelsizer.Fit(panel)
         
         ### Epilog
         mainsizer.Add(notebook, 1, wx.EXPAND |wx.ALL, 5)
@@ -590,6 +599,7 @@ class InspectorPanel(wx.Panel, ViewBase):
                 self.reset_marker_size,
                 self.reset_bullet,
                 self.reset_numbering,
+                self.reset_page_break_before,
         ]:
             resetter.callback = self.clear_parproperties            
 
@@ -1018,6 +1028,15 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.marker_panel.Show(ptype in ("list", "numbered"))
         self.list_panel.Show(ptype == "list")
         self.enum_panel.Show(ptype == "numbered")
+
+        value = properties['page_break_before']
+        if value is None:
+            self.page_break_before.Set3StateValue(wx.CHK_UNDETERMINED)
+        else:
+            self.page_break_before.SetValue(value)
+        x = 'page_break_before' in overrides
+        self.reset_page_break_before.set_x(x)
+
         self.Layout()
         
             
