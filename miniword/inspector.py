@@ -574,7 +574,7 @@ class InspectorPanel(wx.Panel, ViewBase):
                 self.reset_underline,
                 self.reset_bold,
                 self.reset_italic]:
-            resetter.callback = self.clear_properties
+            resetter.callback = self.clear_char_properties
 
         for resetter in [
                 self.reset_align,
@@ -860,8 +860,9 @@ class InspectorPanel(wx.Panel, ViewBase):
                 textmodel, s1, s2, self.mk_style)
             indent = min(textmodel.get_indents(s1, s2)+[index_indent])
         else:
-            properties = self.mk_style(index_parstyle, index_style)
-            overrides = index_overrides
+            current_style = textview.get_current_style()
+            properties = self.mk_style(index_parstyle, current_style)
+            overrides = set(current_style.keys()).union(index_parstyle.keys())
             indent = index_indent
 
         #print("overrides", overrides)

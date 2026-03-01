@@ -371,11 +371,13 @@ class TextView(ViewBase, Model):
     def set_current_style(self, **properties):
         style = self.get_current_style()
         style.update(properties)
+        self.notify_views('current_style_changed')
 
     def clear_current_style(self, *keys):
         style = self.get_current_style()
         for key in keys:
             style.pop(key, None)
+        self.notify_views('current_style_changed')
 
     def handle_action(self, action, shift=False):
         #print("action = ", action, shift)
