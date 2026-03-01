@@ -6,7 +6,6 @@ import string
 
 from ..textmodel import TextModel
 from ..textmodel.styles import updated_style
-from ..textmodel.viewbase import overridable_property
 from .textview import TextView
 from .wxdevice import WxDevice, defaultstyle
 from .testdevice import TESTDEVICE
@@ -20,7 +19,6 @@ import pickle
 
 class WXTextView(wx.ScrolledWindow, TextView):
     _scrollrate = 10, 10
-    zoom = overridable_property('zoom')
 
     def __init__(self, parent, id=-1,  
                  pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):

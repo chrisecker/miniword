@@ -79,6 +79,8 @@ class TextView(ViewBase, Model):
     layout = overridable_property('layout')
     maxw = overridable_property('maxw')
     _maxw = 0
+    zoom = overridable_property('zoom')
+    _zoom = 1.0
     _scrollrate = 10, 10
     _TextModel = TextModel
     def __init__(self):
@@ -274,9 +276,15 @@ class TextView(ViewBase, Model):
         self.rebuild()
         return self._set_texel, old
 
+    def get_zoom(self):
+        return self._zoom
+
+    def set_zoom(self, zoom):
+        self._zoom = zoom
+
     def get_maxw(self):
         return self._maxw
-    
+
     def set_maxw(self, maxw):
         if maxw == self._maxw:
             return
@@ -468,12 +476,12 @@ class TextView(ViewBase, Model):
         elif action == 'move_line_end':
             self.set_index(model.linestart(row)+model.linelength(row)-1, shift)
         elif action == 'move_page_down':
-            width, height = self.GetClientSize()
-            i = self.compute_index(x, y+height)
-            self.set_index(i, shift)            
+            _, height = self.GetClientSize()
+            i = self.compute_index(x, y + height / self.zoom)
+            self.set_index(i, shift)
         elif action == 'move_page_up':
-            width, height = self.GetClientSize()
-            i = self.compute_index(x, y-height)
+            _, height = self.GetClientSize()
+            i = self.compute_index(x, y - height / self.zoom)
             self.set_index(i, shift)
         elif action == 'move_document_start':
             self.set_index(0, shift)

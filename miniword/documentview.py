@@ -210,7 +210,7 @@ class DocumentView(WXTextView):
         x, y   = layout.get_rect(index, 0, 0).items()[:2]
         prev   = None
         for r1, r2, rx, ry, row in self.iter_rows():
-            if ry + row.height + row.depth >= y:
+            if ry + row.height + row.depth > y:
                 if not prev:
                     return
                 r1, r2, rx, ry, row = prev
