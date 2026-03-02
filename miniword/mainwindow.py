@@ -201,14 +201,22 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetMinSize((800, 480))
         self._build_menu()
         self._build_layout()
+        self._update_title()
         self.Centre()
 
     def _build_menu(self):
         bar = wx.MenuBar()
         file_menu = wx.Menu()
-        file_menu.Append(wx.ID_EXIT, "E&xit\tAlt+F4")
+        file_menu.Append(wx.ID_OPEN,    "&Open\tCtrl+O")
+        file_menu.Append(wx.ID_SAVE,    "&Save\tCtrl+S")
+        file_menu.Append(wx.ID_SAVEAS,  "Save &As…\tCtrl+Shift+S")
+        file_menu.AppendSeparator()
+        file_menu.Append(wx.ID_EXIT,    "E&xit\tAlt+F4")
         bar.Append(file_menu, "&File")
         self.SetMenuBar(bar)
+        self.Bind(wx.EVT_MENU, self._on_open,   id=wx.ID_OPEN)
+        self.Bind(wx.EVT_MENU, self._on_save,   id=wx.ID_SAVE)
+        self.Bind(wx.EVT_MENU, self._on_saveas, id=wx.ID_SAVEAS)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
         # --- Edit ---
         edit_menu = wx.Menu()
@@ -267,6 +275,63 @@ class MainFrame(wx.Frame, ViewBase):
 
         self.SetSizer(root)
 
+    def _update_title(self):
+        import os
+        path = getattr(self, '_current_path', None)
+        name = os.path.basename(path) if path else "Untitled"
+        dirty = hasattr(self, 'textview') and self.textview.undocount() > 0
+        suffix = ' *' if dirty else ''
+        self.SetTitle("Writer — " + name + suffix)
+
+    def _on_open(self, event):
+        with wx.FileDialog(
+            self, "Open TXL file",
+            wildcard="TXL files (*.txl)|*.txl|All files (*.*)|*.*",
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            path = dlg.GetPath()
+        from .document import Document
+        doc = Document.load(path)
+        self._current_path = path
+        self._replace_document(doc)
+        self._update_title()
+
+    def _on_save(self, event):
+        if not getattr(self, '_current_path', None):
+            self._on_saveas(event)
+            return
+        self.document.save(self._current_path)
+        self.textview.clear_undo()
+        self._update_title()
+
+    def _on_saveas(self, event):
+        with wx.FileDialog(
+            self, "Save TXL file",
+            wildcard="TXL files (*.txl)|*.txl|All files (*.*)|*.*",
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            path = dlg.GetPath()
+        self._current_path = path
+        self.document.save(path)
+        self.textview.clear_undo()
+        self._update_title()
+
+    def _replace_document(self, doc):
+        self.document = doc
+        self.textview.set_model(doc.textmodel)
+        self.textview.add_model(doc.charstyles)
+        self.textview.add_model(doc.liststyles)
+        self.textview.add_model(doc.basestyles)
+        self.textview.add_model(doc)
+        self.inspector.basestyles = doc.basestyles
+        self.inspector.basestyle.set_stylesheet(doc.basestyles)
+        self.document_settings.model = doc
+        self.document_settings._refresh()
+
     def show_right_panel(self, key):
         print("showing right: ", key)
         self._right_panel.show_page(key)
@@ -281,6 +346,7 @@ class MainFrame(wx.Frame, ViewBase):
         if not hasattr(self, "textview"): return
         self.undo_item.Enable(self.textview.undocount() > 0)
         self.redo_item.Enable(self.textview.redocount() > 0)
+        self._update_title()
 
     def undo_changed(self, *args):
         wx.CallAfter(self._update_undo_ui)

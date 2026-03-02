@@ -31,6 +31,15 @@ class Document(Model):
     def set_settings(self, settings):
         self.settings = settings
         self.notify_views('settings_changed')
+
+    def save(self, path):
+        from . import txlio
+        txlio.save(self, path)
+
+    @classmethod
+    def load(cls, path):
+        from . import txlio
+        return txlio.load(path)
         
     def charstyles_changed(self, *args, **kwds):
         self.notify_views('charstyles_changed')
