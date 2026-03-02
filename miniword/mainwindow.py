@@ -206,7 +206,8 @@ def demo_00():
     app = wx.App(True)
     doc = Document()
     doc.textmodel = get_einstein_model()
-    doc.basestyles = testsheet
+    for name, style in testsheet.items():
+        doc.basestyles.set(name, style)
     frame = MainFrame(doc)
     frame.Show()
 
@@ -223,14 +224,18 @@ def demo_00():
     
 
 def demo_01():
-    from moby import get_moby_model
+    from moby import get_moby_styled
     from .document import Document
     from .styles import testsheet
 
+    textmodel = get_moby_styled()
+
+
     app = wx.App(True)
     doc = Document()
-    doc.textmodel = get_moby_model()
-    doc.basestyles = testsheet
+    doc.textmodel = textmodel
+    for name, style in testsheet.items():
+        doc.basestyles.set(name, style)
     frame = MainFrame(doc)
     frame.Show()
 
