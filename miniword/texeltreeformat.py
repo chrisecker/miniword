@@ -543,7 +543,7 @@ def test_02():
     f = Fraction(Text("Sin(x)"), Text("Cos(x)"))
     root = Group([f])
     out = serialize(root)
-    root2, _ = parse(out)
+    root2, _, _ = parse(out)
     assert get_text(root2) == "\tSin(x)\tCos(x)\t"
 
 
@@ -554,7 +554,7 @@ def test_03():
     outer = Fraction(inner, Text("c"))
     root = Group([outer])
     out = serialize(root)
-    root2, _ = parse(out)
+    root2, _, _ = parse(out)
     assert get_text(root2) == "\t\ta\tb\t\tc\t"
 
 
@@ -586,7 +586,7 @@ def test_04():
     t = Table(Text("A"), Text("B"))
     root = Group([t])
     out = serialize(root)
-    root2, _ = parse(out)
+    root2, _, _ = parse(out)
     assert get_text(root2) == "\tA\tB\t"
     assert 'align' in out
 

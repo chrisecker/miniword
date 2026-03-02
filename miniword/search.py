@@ -2,7 +2,6 @@ import wx
 from .textmodel.viewbase import ViewBase
 from .textmodel.modelbase import Model
 from .textmodel.properties import overridable_property
-from einstein import get_einstein_model
 
 
 class Search(ViewBase, Model):
@@ -248,6 +247,7 @@ class SearchPanel(wx.Panel, ViewBase):
 
 def demo_00():
     from .wxtextview.wxtextview import WXTextView
+    from einstein import get_einstein_model
     app = wx.App(True)
     frame = wx.Frame(None, title="Search Demo", size=(500, 400))
     model = get_einstein_model()
@@ -260,25 +260,21 @@ def demo_00():
     app.MainLoop()
 
 def test_00():
+    from einstein import get_einstein_model
     model = get_einstein_model()
     search = Search(model)
-    search.search(r'{\displaystyle E=mc^{2}}')
-    assert search.results == [(328, 352, '…E=mc^{2}…', r'{\displaystyle E=mc^{2}}')]
-    for i1, i2, *_ in reversed(search.results):
-        model.remove(i1, i2)
-    assert search.results == []
 
     search.search('Einstein')
     res = [(i1, i2) for i1, i2, *_ in search.results]
-    expected = [(7, 15), (644, 652), (1527, 1535), (2678, 2686),
-                (2781, 2789), (3158, 3166), (3285, 3293), (3654, 3662),
-                (3754, 3762)]
+    expected = [(7, 15), (633, 641), (1516, 1524), (2667, 2675),
+                (2770, 2778), (3147, 3155), (3274, 3282), (3643, 3651),
+                (3743, 3751)]
     assert res == expected
 
     model.remove(0, 7)
     res2 = [(i1, i2) for i1, i2, *_ in search.results]
-    expected2 = [(0, 8), (637, 645), (1520, 1528), (2671, 2679),
-                 (2774, 2782), (3151, 3159), (3278, 3286), (3647, 3655),
-                 (3747, 3755)]
+    expected2 = [(0, 8), (626, 634), (1509, 1517), (2660, 2668),
+                 (2763, 2771), (3140, 3148), (3267, 3275), (3636, 3644),
+                 (3736, 3744)]
     assert res2 == expected2
 

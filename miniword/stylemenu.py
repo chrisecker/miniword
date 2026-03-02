@@ -313,7 +313,7 @@ class StyleDropdown(wx.Control, ViewBase):
         self.properties = properties
         # Strip paragraph-only keys: they must not trigger the modified flag
         # and must not be cleared when reverting to base style.
-        self.overrides  = overrides - PARAGRAPH_ONLY_KEYS
+        self.overrides  = {k: v for k, v in overrides.items() if k not in PARAGRAPH_ONLY_KEYS}
 
         if name is None:
             # Ambiguous selection (multiple paragraphs with different styles).

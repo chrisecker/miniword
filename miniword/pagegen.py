@@ -631,9 +631,9 @@ def test_01():
 
     for i in range(20):
         row = TextBox("Row %i" % i)
-        if not draft.can_addrow(row):
+        if not draft.can_addrow(row, 1.0, 0):
             draft = draft.create_newpage()
-        draft.add_row(row)
+        draft.add_row(row, 1.0, 0)
     pages, restartmemo = draft.fix_draft()
     for i, page in enumerate(pages):
         print("page %i:" % i)
@@ -646,7 +646,7 @@ def test_01():
     draft = restartmemo.start_draft()
     for i in range(10):
         row = TextBox("New row %i" % i)
-        draft.add_row(row)
+        draft.add_row(row, 1.0, 0)
 
     pages, restartmemo = draft.fix_draft()
     for i, page in enumerate(pages):
