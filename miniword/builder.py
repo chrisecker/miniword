@@ -376,11 +376,9 @@ class Builder(BuilderBase):
 
     def inserted(self, i, n):
         self.rebuild_dirty(i, i, n)
-        self.waitfor_index(i + n + 1000)
 
     def removed(self, i, n):
         self.rebuild_dirty(i, i, -n)
-        self.waitfor_index(i + 1000)
 
 
 class MyView(WXTextView):

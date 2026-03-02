@@ -58,9 +58,28 @@ class DocumentView(WXTextView):
         self.Scroll(max(0, int(new_scroll_x / rx)),
                     max(0, int(new_scroll_y / ry)))        
 
+    def _ensure_viewport(self):
+        """Build synchronously until the visible area and cursor are covered."""
+        layout = self.builder._layout
+        if layout.is_finished:
+            return
+        rx, ry = getattr(self, '_scrollrate', (10, 10))
+        _, sy  = self.GetViewStart()
+        ch     = self.GetClientSize()[1]
+        bottom = (sy * ry + ch) / self.zoom
+        cursor = self.index
+        while not layout.is_finished:
+            covered = len(layout) > cursor
+            if covered:
+                for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
+                    if py + page.height + page.depth >= bottom:
+                        return
+            self.builder.build_step(call_after=False)
+
     def on_paint(self, event):
         self._update_scroll()
         self.keep_cursor_on_screen()
+        self._ensure_viewport()
 
         pdc = wx.PaintDC(self)
         pdc.SetAxisOrientation(True, False)
@@ -119,7 +138,7 @@ class DocumentView(WXTextView):
     # Atomic style operations
     # ------------------------------------------------------------------
 
-    def _viewport_start_index(self):
+    def _viewport_start(self):
         """Return the text index of the first character on the currently visible page."""
         rx, ry = getattr(self, '_scrollrate', (10, 10))
         _, sy = self.GetViewStart()
@@ -145,9 +164,9 @@ class DocumentView(WXTextView):
             self.end_undo_group()
             j1 = self.builder._pending_range[0] if self.builder._pending_range else None
             self.builder.resume_rebuilds()  # fires one merged rebuild
-        if j1 is not None and j1 < self._viewport_start_index():
+        if j1 is not None and j1 < self._viewport_start():
             self.notify_views('layout_progress_start')
-        self.builder.waitfor_finish()
+            self.builder.waitfor_finish()  # fallback if no modal listener
         self.Refresh()
 
     def _undo_stylesheet(self, name, restore_to, after_redo):
@@ -181,9 +200,9 @@ class DocumentView(WXTextView):
         # atomic() context can merge this rebuild with further changes.
         self.builder._enqueue_rebuild(j1, j2)
         if not self.builder._inhibit_depth:
-            if j1 < self._viewport_start_index():
+            if j1 < self._viewport_start():
                 self.notify_views('layout_progress_start')
-            self.builder.waitfor_finish()  # no-op if modal finished it; fallback otherwise
+                self.builder.waitfor_finish()  # fallback if no modal listener
             self.refresh()
 
     def settings_changed(self, *args, **kwds):
@@ -290,6 +309,7 @@ def test_00():
         new_normal = doc.basestyles.get('normal').copy()
         new_normal['font_size'] = 8
         doc.basestyles.set('normal', new_normal)
+        view.builder.waitfor_finish()
         stats = view.builder.get_updatestats()
 
     # are the styles updated?
