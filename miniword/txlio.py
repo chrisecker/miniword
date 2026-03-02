@@ -23,7 +23,7 @@ import re
 from .document import Document
 from .textmodel.textmodel import TextModel
 from .texeltreeformat import serialize, parse, serialize_style, _Parser
-from .styles import style_default
+from .styles import style_default, updated
 
 
 def _style_diff(style):
@@ -71,7 +71,7 @@ def load(path):
     for attr in ('charstyles', 'basestyles', 'liststyles'):
         if attr in sections:
             for key, style in _parse_stylesheet(sections[attr]).items():
-                getattr(doc, attr).set(key, style)
+                getattr(doc, attr).set(key, updated(style_default, style))
 
     # Document content
     root, endmark, settings = parse(sections['document'])
@@ -163,8 +163,9 @@ def test_01():
     try:
         doc.save(path)
         doc2 = Document.load(path)
-        assert doc2.basestyles.get('h1') == {'font_size': 18, 'bold': True}
-        assert doc2.charstyles.get('em') == {'italic': True}
+        assert doc2.basestyles.get('h1')['font_size'] == 18
+        assert doc2.basestyles.get('h1')['bold'] == True
+        assert doc2.charstyles.get('em')['italic'] == True
     finally:
         os.unlink(path)
 
@@ -182,10 +183,10 @@ def test_03():
     assert abs(style['space_after'] - 14.17) < 0.1
     assert abs(style['first_line_indent'] - 11.34) < 0.1
     assert style['alignment'] == 'justify'
-    # Default values must NOT be stored (compact format)
-    assert 'indent_levels' not in style
-    assert 'bold' not in style
-    assert 'underline' not in style
+    # In-memory styles are complete: defaults are present too
+    assert style['bold'] == False
+    assert style['underline'] == False
+    assert 'font_size' in style
     text = get_text(doc.textmodel.get_xtexel())
     assert 'Albert Einstein' in text
 

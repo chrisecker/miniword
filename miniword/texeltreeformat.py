@@ -25,6 +25,7 @@ Document format:
     ENDMARK({parStyle="h1", indent=0})
 """
 
+import ast
 import re
 from .textmodel.texeltree import (
     Text, Single, Group, Container, NewLine, Tabulator,
@@ -479,7 +480,7 @@ class _Parser:
 
     def parse_string(self):
         kind, value = self.tok.consume('STRING')
-        return value[1:-1]  # strip surrounding quotes
+        return ast.literal_eval(value)  # decode escape sequences (e.g. \' \" \\)
 
 
 def _make_container(ctype, childs):
@@ -519,7 +520,7 @@ def test_00():
     root = Group([t])
     out = serialize(root)
     assert "T('Hello'" in out
-    root2, em = parse(out)
+    root2, em, _ = parse(out)
     assert get_text(root2) == "Hello"
 
 
@@ -531,7 +532,7 @@ def test_01():
     root = Group([Text("Hello"), nl])
     em = ENDMARK.set_parstyle(as_style({'base': 'body'}))
     out = serialize(root, em)
-    root2, em2 = parse(out)
+    root2, em2, _ = parse(out)
     assert get_text(root2) == "Hello\n"
     assert em2 is not None
 

@@ -38,11 +38,15 @@ def mk_label(base: str, existing: list[str]) -> str:
 def get_font(style: dict) -> wx.Font:
     weight = wx.FONTWEIGHT_BOLD if style.get("bold") else wx.FONTWEIGHT_NORMAL
     slant  = wx.FONTSTYLE_ITALIC if style.get("italic") else wx.FONTSTYLE_NORMAL
-    size = int(style["font_size"])
-    return wx.Font(
-        min(max(8, size), 26), wx.FONTFAMILY_ROMAN, slant, weight,
-        style["underline"], style["font_family"],
-    )
+    size   = min(max(8.0, float(style["font_size"])), 26.0)
+    info   = wx.FontInfo(size).FaceName(style["font_family"])
+    if style.get("bold"):
+        info = info.Bold()
+    if style.get("italic"):
+        info = info.Italic()
+    if style["underline"]:
+        info = info.Underlined()
+    return wx.Font(info)
 
 
 PADDING_LEFT  = 8
