@@ -1,6 +1,20 @@
 from .textmodel.modelbase import Model
 from .textmodel.textmodel import TextModel
 from .stylesheet import StyleSheet
+from .styles import cm, mm
+
+
+settings_default = {
+    "title":         "",
+    "author":        "",
+    "paper":         "A4",        # "A4" / "Letter" / "custom"
+    "paper_width":   210 * mm,    # used when paper == "custom"
+    "paper_height":  297 * mm,
+    "margin_top":    2.5 * cm,
+    "margin_right":  2.5 * cm,
+    "margin_bottom": 2.5 * cm,
+    "margin_left":   2.5 * cm,
+}
 
 
 class Document(Model):
@@ -12,6 +26,11 @@ class Document(Model):
         self.basestyles = StyleSheet()
         self.basestyles.set_owner(self, 'basestyles')
         self.textmodel = TextModel()
+        self.settings = {}
+
+    def set_settings(self, settings):
+        self.settings = settings
+        self.notify_views('settings_changed')
         
     def charstyles_changed(self, *args, **kwds):
         self.notify_views('charstyles_changed')

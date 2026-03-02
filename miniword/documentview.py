@@ -26,6 +26,7 @@ class DocumentView(WXTextView):
         self.add_model(document.charstyles)
         self.add_model(document.liststyles)
         self.add_model(document.basestyles)
+        self.add_model(document)
         
     def on_mousewheel(self, event):
         if not event.ControlDown():
@@ -171,6 +172,11 @@ class DocumentView(WXTextView):
             # Outside an atomic context: finish and repaint synchronously.
             self.builder.waitfor_finish()
             self.refresh()
+
+    def settings_changed(self, *args, **kwds):
+        self.builder.settings = self.document.settings
+        self.builder.rebuild()
+        self.refresh()
 
     def style_removed(self, stylesheet, key):
         self.clear_caches()

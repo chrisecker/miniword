@@ -2,6 +2,7 @@ import wx
 from typing import Callable, List, Tuple
 from .textmodel.viewbase import ViewBase
 from .inspector import InspectorPanel
+from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
 from . import icons
 
@@ -143,83 +144,6 @@ class IconBar(wx.Panel):
 
             
 # ---------------------------------------------------------------------------
-# Document Settings Inspector (Mockup)
-# ---------------------------------------------------------------------------
-
-class DocumentSettingsInspector(wx.Panel):
-    """Panel with document settings like page size, margins, etc."""
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.SetBackgroundColour(wx.Colour(248, 248, 248))
-
-        outer = wx.BoxSizer(wx.VERTICAL)
-        scrolled = wx.ScrolledWindow(self, style=wx.VSCROLL)
-        scrolled.SetScrollRate(0, 10)
-
-        form = wx.BoxSizer(wx.VERTICAL)
-
-        # Page size
-        box_page = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Page Size")
-        row = wx.BoxSizer(wx.HORIZONTAL)
-        row.Add(wx.StaticText(scrolled, label="Format"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        self.choice_format = wx.Choice(scrolled, choices=["A4", "A5", "Letter", "Legal", "Custom"])
-        self.choice_format.SetSelection(0)
-        row.Add(self.choice_format, 1)
-        box_page.Add(row, 0, wx.EXPAND | wx.ALL, 6)
-
-        row = wx.BoxSizer(wx.HORIZONTAL)
-        row.Add(wx.StaticText(scrolled, label="Orientation"), 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
-        self.choice_orientation = wx.Choice(scrolled, choices=["Portrait", "Landscape"])
-        self.choice_orientation.SetSelection(0)
-        row.Add(self.choice_orientation, 1)
-        box_page.Add(row, 0, wx.EXPAND | wx.ALL, 6)
-        form.Add(box_page, 0, wx.EXPAND | wx.ALL, 8)
-
-        # Margins
-        box_margins = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Margins (mm)")
-        grid = wx.FlexGridSizer(2, 4, 6, 6)
-        labels = ["Top", "Bottom", "Left", "Right"]
-        self.margin_ctrls = {}
-        for label in labels:
-            grid.Add(wx.StaticText(scrolled, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
-            ctrl = wx.SpinCtrlDouble(scrolled, min=0, max=100, inc=1, initial=25)
-            ctrl.SetDigits(1)
-            self.margin_ctrls[label.lower()] = ctrl
-            grid.Add(ctrl, 1, wx.EXPAND)
-        grid.AddGrowableCol(1)
-        grid.AddGrowableCol(3)
-        box_margins.Add(grid, 1, wx.EXPAND | wx.ALL, 6)
-        form.Add(box_margins, 0, wx.EXPAND | wx.ALL, 8)
-
-        # Header/Footer
-        box_header = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Header / Footer")
-        self.chk_header = wx.CheckBox(scrolled, label="Enable Header")
-        self.chk_footer = wx.CheckBox(scrolled, label="Enable Footer")
-        box_header.Add(self.chk_header, 0, wx.ALL, 4)
-        box_header.Add(self.chk_footer, 0, wx.ALL, 4)
-        form.Add(box_header, 0, wx.EXPAND | wx.ALL, 8)
-
-        # Metadata
-        box_meta = wx.StaticBoxSizer(wx.VERTICAL, scrolled, "Document Info")
-        meta = wx.FlexGridSizer(2, 2, 6, 6)
-        meta.Add(wx.StaticText(scrolled, label="Title"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.txt_title = wx.TextCtrl(scrolled)
-        meta.Add(self.txt_title, 1, wx.EXPAND)
-        meta.Add(wx.StaticText(scrolled, label="Author"), 0, wx.ALIGN_CENTER_VERTICAL)
-        self.txt_author = wx.TextCtrl(scrolled)
-        meta.Add(self.txt_author, 1, wx.EXPAND)
-        meta.AddGrowableCol(1)
-        box_meta.Add(meta, 1, wx.EXPAND | wx.ALL, 6)
-        form.Add(box_meta, 0, wx.EXPAND | wx.ALL, 8)
-
-        form.AddStretchSpacer()
-        scrolled.SetSizer(form)
-        outer.Add(scrolled, 1, wx.EXPAND)
-        self.SetSizer(outer)
-
-
-# ---------------------------------------------------------------------------
 # Generic Side Panel (Left or Right)
 # ---------------------------------------------------------------------------
 
@@ -309,7 +233,7 @@ class MainFrame(wx.Frame, ViewBase):
 
         # Inspectors for right panel
         self.inspector = InspectorPanel(self._right_panel, self.textview, self.document.basestyles)
-        self.document_settings = DocumentSettingsInspector(self._right_panel)
+        self.document_settings = SettingsInspector(self._right_panel, self.document)
         self._right_panel.add_page("format", self.inspector)
         self._right_panel.add_page("settings", self.document_settings)
 

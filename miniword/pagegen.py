@@ -339,6 +339,28 @@ class RestartMemo:
         return r
 
 
+PAPER_SIZES = {
+    'A4':     (210 * mm, 297 * mm),
+    'Letter': (215.9 * mm, 279.4 * mm),
+}
+
+
+def restartmemo_from_settings(settings):
+    """Convert a document settings dict to a RestartMemo with geometry/border."""
+    from .document import settings_default
+    props = updated(settings_default, settings)
+    paper = props['paper']
+    if paper in PAPER_SIZES:
+        w, h = PAPER_SIZES[paper]
+    else:
+        w, h = props['paper_width'], props['paper_height']
+    memo = RestartMemo()
+    memo.geometry = (w, h)
+    memo.border   = (props['margin_top'],    props['margin_right'],
+                     props['margin_bottom'], props['margin_left'])
+    return memo
+
+
 # Could be moved to texeltree
 def iter_leafes(texel, i):
     """Iterate through all leaf elements starting at position i.

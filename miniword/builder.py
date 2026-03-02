@@ -12,7 +12,7 @@ from .wxtextview.boxes import VBox, get_text
 from .wxtextview import boxes
 from .wxtextview.rect import Rect
 
-from .pagegen import show_page, RestartMemo, generate_pages
+from .pagegen import show_page, RestartMemo, generate_pages, restartmemo_from_settings
 from .styles import stylesheet, cm, mm, updated
 from .factory import Factory
 from .cairodevice import CairoDevice
@@ -25,11 +25,6 @@ import time
 
 
 
-
-class PageGeometry:
-    width  = 210 * mm
-    height = 297 * mm
-    margin = (2.5 * cm,) * 4  # TRBL — Top, Right, Bottom, Left
 
 
 class Layout(VBox):
@@ -89,8 +84,9 @@ class Builder(BuilderBase):
     _inhibit_depth  = 0
     _pending_range  = None  # (j1, j2) while inhibited, else None
     # Stats for debugging:
-    nbefore = 0
-    nrest   = 0
+    nbefore  = 0
+    nrest    = 0
+    settings = {}  # document settings dict; set by DocumentView
 
     def __init__(self, model, factory):
         self.model   = model
@@ -196,7 +192,7 @@ class Builder(BuilderBase):
         """Rebuild the entire layout from i=0; nothing is reused."""
         print("rebuild")
         self._layout = Layout([], self.factory.device)
-        self.start(RestartMemo(), 0, ())
+        self.start(restartmemo_from_settings(self.settings), 0, ())
 
     def finish(self):
         """Clean up, append rest pages, update statistics."""

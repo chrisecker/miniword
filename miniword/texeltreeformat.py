@@ -20,6 +20,7 @@ Canonical format uses 3 types (Groups dissolved):
     )
 
 Document format:
+    PROPS({author="...", paper="A4"})   -- optional document properties
     TEXELS...
     ENDMARK({parStyle="h1", indent=0})
 """
@@ -156,17 +157,22 @@ def serialize_container(texel, indent=0):
     return '\n'.join(lines)
 
 
-def serialize(root, endmark=None):
+def serialize(root, endmark=None, properties=None):
     """Serialize a TexelTree root to canonical string.
 
     Args:
-        root: the root Texel
-        endmark: optional NewLine endmark (carries parStyle of last paragraph)
+        root:       the root Texel
+        endmark:    optional NewLine endmark (carries parStyle of last paragraph)
+        properties: optional document-properties dict (only non-default values)
 
     Returns:
         str in canonical format
     """
     lines = []
+
+    if properties:
+        lines.append('PROPS(%s)' % serialize_style(properties))
+
     for texel in _flatten(root):
         lines.append(serialize_texel(texel, indent=0))
 
@@ -259,19 +265,29 @@ class _Parser:
         self.tok = _Tokenizer(text)
 
     def parse_document(self):
-        """Parse full document: texels + optional ENDMARK."""
+        """Parse full document: optional PROPS + texels + optional ENDMARK."""
         texels = []
         endmark = None
+        properties = {}
 
         while not self.tok.at_end():
             kind, value = self.tok.peek()
-            if kind == 'IDENT' and value == 'ENDMARK':
+            if kind == 'IDENT' and value == 'PROPS':
+                properties = self.parse_props()
+            elif kind == 'IDENT' and value == 'ENDMARK':
                 endmark = self.parse_endmark()
             else:
                 texels.append(self.parse_texel())
 
         root = grouped(join(texels)) if texels else Group([])
-        return root, endmark
+        return root, endmark, properties
+
+    def parse_props(self):
+        self.tok.consume('IDENT')  # PROPS
+        self.tok.consume('LPAREN')
+        props = self.parse_style()
+        self.tok.consume('RPAREN')
+        return props
 
     def parse_texel(self):
         """Parse one texel: T, NL, TAB, S, or C."""
@@ -453,7 +469,8 @@ def parse(text):
     """Parse canonical TexelTree format.
 
     Returns:
-        (root, endmark) where endmark may be None
+        (root, endmark, properties)
+        where endmark may be None and properties may be {}
     """
     p = _Parser(text)
     return p.parse_document()
@@ -507,6 +524,20 @@ def test_03():
     out = serialize(root)
     root2, _ = parse(out)
     assert get_text(root2) == "\t\ta\tb\t\tc\t"
+
+
+def test_05():
+    "Roundtrip: document properties"
+    from .textmodel.texeltree import get_text
+    props = {'author': 'Max', 'paper': 'A4', 'margin_top': 2.5}
+    root = Group([Text("Hello")])
+    out = serialize(root, properties=props)
+    assert out.startswith('PROPS(')
+    root2, em2, props2 = parse(out)
+    assert get_text(root2) == "Hello"
+    assert props2['author'] == 'Max'
+    assert props2['paper'] == 'A4'
+    assert props2['margin_top'] == 2.5
 
 
 def test_04():
