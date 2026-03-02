@@ -21,7 +21,7 @@ modules = [
     "miniword.pagegen",
     "miniword.stylemenu",
     "miniword.inspector",
-    "miniword.search",
+    "miniword.searchtool",
     "miniword.annotation",
     "miniword.builder",
     "miniword.documentview",

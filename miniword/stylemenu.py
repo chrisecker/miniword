@@ -286,7 +286,7 @@ class StyleDropdown(wx.Control, ViewBase):
         self.selection: int = 0
         self.styles: tuple[str, ...] = ()
         self.properties: dict = {}
-        self.overrides: dict  = {}
+        self.overrides: set   = set()
         self.modified: bool   = False
         self._popup: Optional[StylePopup] = None
         self._hover: bool     = False
@@ -309,11 +309,11 @@ class StyleDropdown(wx.Control, ViewBase):
         self.set_model(stylesheet)
         self.styles = stylesheet.keys()
 
-    def set_properties(self, name: Optional[str], properties: dict, overrides: dict):
+    def set_properties(self, name: Optional[str], properties: dict, overrides: set):
         self.properties = properties
         # Strip paragraph-only keys: they must not trigger the modified flag
         # and must not be cleared when reverting to base style.
-        self.overrides  = {k: v for k, v in overrides.items() if k not in PARAGRAPH_ONLY_KEYS}
+        self.overrides  = {k for k in overrides if k not in PARAGRAPH_ONLY_KEYS}
 
         if name is None:
             # Ambiguous selection (multiple paragraphs with different styles).

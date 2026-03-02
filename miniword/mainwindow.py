@@ -70,7 +70,7 @@ class MainFrame(wx.Frame, ViewBase):
         # Left panel example page (optional)
         # self._left_panel.add_page("left_plugin", SomePanel(self._left_panel))
 
-        from .search import SearchPanel
+        from .searchtool import SearchPanel
         self._left_panel.add_page("search", SearchPanel(self._left_panel, self.textview))
         self._left_icon_bar = IconBar(
             self,
