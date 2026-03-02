@@ -170,7 +170,7 @@ def test_01():
 
 
 def test_03():
-    "load: read test/einstein.txl with tuple-valued style properties"
+    "load: read test/einstein.txl — only non-default style values are stored"
     import os
     from .textmodel.texeltree import get_text
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -178,10 +178,14 @@ def test_03():
     doc = Document.load(path)
     assert doc.basestyles.get('normal') is not None
     style = doc.basestyles.get('normal')
+    # Non-default values must be present
     assert abs(style['space_after'] - 14.17) < 0.1
     assert abs(style['first_line_indent'] - 11.34) < 0.1
-    assert isinstance(style.get('indent_levels'), tuple)
-    assert isinstance(style.get('marker'), tuple)
+    assert style['alignment'] == 'justify'
+    # Default values must NOT be stored (compact format)
+    assert 'indent_levels' not in style
+    assert 'bold' not in style
+    assert 'underline' not in style
     text = get_text(doc.textmodel.get_xtexel())
     assert 'Albert Einstein' in text
 

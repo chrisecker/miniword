@@ -322,7 +322,9 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _replace_document(self, doc):
         self.document = doc
+        self.textview.document = doc   # must be set before set_model → create_builder
         self.textview.set_model(doc.textmodel)
+        self.textview.index = 0        # reset cursor; old position may be out of range
         self.textview.add_model(doc.charstyles)
         self.textview.add_model(doc.liststyles)
         self.textview.add_model(doc.basestyles)

@@ -11,7 +11,7 @@ from .wxtextview.wxdevice import defaultstyle
 
 from .unit_entry import UnitInput, EVT_UNIT_CHANGED
 from .threestatespin import SpinCtrl3, EVT_SPIN_VALUE
-from .styles import defaultbullets, n_levels
+from .styles import defaultbullets, n_levels, style_default
 from .stylemenu import BasestyleDropdown
 from .icons import icon
 
@@ -818,8 +818,8 @@ class InspectorPanel(wx.Panel, ViewBase):
         # styles. Further we include defaultstyles which is not done
         # in nbviews (but in wxdevice).
         stylesheet = self.model.builder.stylesheet
-        basestyle = stylesheet.get(parstyle.get('base', 'normal'))
-        r = updated(defaultstyle, basestyle, parstyle, style)
+        basestyle = stylesheet.get(parstyle.get('base', 'normal')) or {}
+        r = updated(style_default, basestyle, parstyle, style)
         if not 'base' in r:
             r['base'] = 'normal'
         return r

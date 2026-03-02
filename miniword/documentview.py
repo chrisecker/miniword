@@ -19,8 +19,8 @@ class DocumentView(WXTextView):
     zoom_step = 0.1
     
     def __init__(self, parent, document):
-        super().__init__(parent)
         self.document = document
+        super().__init__(parent)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.set_model(document.textmodel)
         self.add_model(document.charstyles)
@@ -184,7 +184,7 @@ class DocumentView(WXTextView):
         self.refresh()
 
     def create_builder(self):
-        factory = Factory(stylesheet, device=CairoDevice())
+        factory = Factory(self.document.basestyles, device=CairoDevice())
         builder = Builder(self.model, factory)
         return builder
 
