@@ -224,13 +224,16 @@ class StylePopup(wx.PopupWindow):
         style = self.styles[idx]
         label = self.Parent.GetItemLabel(style)
         self._clicked_style = style
+        is_protected = (style == 'normal')
 
         menu = wx.Menu()
         self._menu_ids: list[int] = []
 
-        def add(text: str):
-            item_id = menu.Append(wx.ID_ANY, text).GetId()
-            self._menu_ids.append(item_id)
+        def add(text: str, enabled: bool = True):
+            item = menu.Append(wx.ID_ANY, text)
+            self._menu_ids.append(item.GetId())
+            if not enabled:
+                menu.Enable(item.GetId(), False)
 
         add("Create new paragraph style from selection")
         add("Redefine style from selection")
@@ -238,8 +241,8 @@ class StylePopup(wx.PopupWindow):
         menu.AppendSeparator()
         add(f"Select all uses of \"{label}\"")
         menu.AppendSeparator()
-        add("Rename style")
-        add("Delete style")
+        add("Rename style", not is_protected)
+        add("Delete style", not is_protected)
 
         role_map = {"Title": "Title", "Heading 1": "H1", "Heading 2": "H2"}
         role = role_map.get(label, "?")
@@ -261,6 +264,8 @@ class StylePopup(wx.PopupWindow):
             0: lambda: self.Parent.CreateNewStyle(self._clicked_style),
             1: lambda: self.Parent.UpdateStyle(self._clicked_style),
             2: lambda: self.Parent.RevertStyle(self._clicked_style),
+            4: lambda: self.Parent.RenameStyle(self._clicked_style),
+            5: lambda: self.Parent.DeleteStyle(self._clicked_style),
         }
         action = actions.get(i)
         if action:
@@ -301,6 +306,8 @@ class StyleDropdown(wx.Control, ViewBase):
     on_redefine_style = None  # callable(name, new_style, overrides)
     on_create_style   = None  # callable(new_name, new_style, overrides)
     on_revert_style   = None  # callable(overrides)
+    on_rename_style   = None  # callable(name, new_label)
+    on_delete_style   = None  # callable(name)
 
     def set_stylesheet(self, stylesheet):
         if self.stylesheet is not None:
@@ -432,6 +439,20 @@ class StyleDropdown(wx.Control, ViewBase):
         if self.on_revert_style:
             self.on_revert_style(self.overrides)
 
+    def RenameStyle(self, name: str):
+        current_label = self.GetItemLabel(name)
+        new_label = wx.GetTextFromUser(
+            "New style name:", "Rename Style", current_label, self)
+        if new_label and new_label != current_label:
+            if self.on_rename_style:
+                self.on_rename_style(name, new_label)
+
+    def DeleteStyle(self, name: str):
+        if name == 'normal':
+            return
+        if self.on_delete_style:
+            self.on_delete_style(name)
+
     # ------------------------------------------------------------------
     # Overridable interface
     # ------------------------------------------------------------------
@@ -532,6 +553,23 @@ def test_02():
     n = len(stylesheet.keys())
     dropdown.CreateNewStyle("h1")
     assert len(stylesheet.keys()) == n + 1
+
+
+def test_04():
+    "DeleteStyle – blocks 'normal', fires callback for other styles"
+    app = wx.App(False)
+    frame = wx.Frame(None)
+    dropdown = BasestyleDropdown(frame)
+    from .styles import testsheet as stylesheet
+    dropdown.set_stylesheet(stylesheet)
+    called = []
+    dropdown.on_delete_style = lambda name: called.append(name)
+
+    dropdown.DeleteStyle('normal')   # protected — must not fire
+    assert called == []
+
+    dropdown.DeleteStyle('h1')
+    assert called == ['h1']
 
 
 def test_03():

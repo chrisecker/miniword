@@ -198,6 +198,8 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.basestyle.on_redefine_style = self._redefine_style
         self.basestyle.on_create_style   = self._create_style
         self.basestyle.on_revert_style   = self._revert_style
+        self.basestyle.on_rename_style   = self._rename_style
+        self.basestyle.on_delete_style   = self._delete_style
         mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
         
         notebook = wx.Notebook(self)
@@ -699,7 +701,32 @@ class InspectorPanel(wx.Panel, ViewBase):
         view = self.model
         with view.atomic():
             self._clear_overrides(overrides)
-        
+
+    def _rename_style(self, name, new_label):
+        """Change the display name of a style (undo-able)."""
+        view = self.model
+        old_style = view.document.basestyles.get(name).copy()
+        new_style = old_style.copy()
+        new_style["name"] = new_label
+        with view.atomic():
+            view.add_undo((view._undo_stylesheet, name, old_style, new_style))
+            view.document.basestyles.set(name, new_style)
+
+    def _delete_style(self, name):
+        """Delete a style and remap all uses to 'normal' (undo-able)."""
+        view = self.model
+        textmodel = view.model
+        texel = textmodel.get_xtexel()
+        old_style = view.document.basestyles.get(name).copy()
+        with view.atomic():
+            for j1, j2, _ in iter_newlines(texel, 0):
+                if textmodel.get_parstyle(j1).get('base') == name:
+                    view.set_parproperties(j1, j2, base='normal')
+            # Add stylesheet undo last so it's applied first when undoing,
+            # ensuring the style exists before paragraph bases are restored.
+            view.add_undo((view._undo_stylesheet, name, old_style, None))
+            view.document.basestyles.delete(name)
+
     def mk_style(self, parstyle, style):
         # Computes the style of a single run of text. Unlike the code
         # in nbview, we aggregate parstyle and textstyles. This way,
