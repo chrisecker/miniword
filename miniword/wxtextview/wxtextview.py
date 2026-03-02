@@ -106,9 +106,11 @@ class WXTextView(wx.ScrolledWindow, TextView):
         keycode = event.GetKeyCode()
         ctrl = event.ControlDown()
         shift = event.ShiftDown()
-        alt = event.AltDown()        
+        alt = event.AltDown()
         action = self.actions.get((keycode, ctrl, alt))
         if action is None:
+            if ctrl or alt or keycode < 32:
+                return event.Skip()  # unhandled control key — let menu accelerators fire
             action = chr(keycode)
         self.handle_action(action, shift)
 

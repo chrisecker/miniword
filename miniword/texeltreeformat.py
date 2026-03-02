@@ -418,6 +418,28 @@ class _Parser:
         em = em.set_indent(indent)
         return em
 
+    def _parse_tuple(self):
+        """Parse a (v, v, ...) tuple of numbers or strings."""
+        self.tok.consume('LPAREN')
+        items = []
+        while self.tok.peek()[0] != 'RPAREN':
+            kind, val = self.tok.peek()
+            if kind == 'NUMBER':
+                self.tok.consume()
+                items.append(float(val) if '.' in val else int(val))
+            elif kind == 'STRING':
+                self.tok.consume()
+                items.append(val[1:-1])
+            elif kind == 'IDENT':
+                self.tok.consume()
+                items.append(val)
+            else:
+                raise ParseError("Unexpected token in tuple: %r" % val)
+            if self.tok.peek()[0] == 'COMMA':
+                self.tok.consume('COMMA')
+        self.tok.consume('RPAREN')
+        return tuple(items)
+
     def parse_style(self):
         """Parse a {key, key="value", key=number} block. Returns dict."""
         self.tok.consume('LBRACE')
@@ -435,7 +457,16 @@ class _Parser:
                     d[k_val] = float(v_val) if '.' in v_val else int(v_val)
                 elif v_kind == 'IDENT':
                     self.tok.consume()
-                    d[k_val] = v_val
+                    if v_val == 'True':
+                        d[k_val] = True
+                    elif v_val == 'False':
+                        d[k_val] = False
+                    elif v_val == 'None':
+                        d[k_val] = None
+                    else:
+                        d[k_val] = v_val
+                elif v_kind == 'LPAREN':
+                    d[k_val] = self._parse_tuple()
                 else:
                     raise ParseError("Expected style value, got %r" % v_val)
             else:

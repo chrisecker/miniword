@@ -161,6 +161,21 @@ def test_01():
         os.unlink(path)
 
 
+def test_03():
+    "load: read test/einstein.txl with tuple-valued style properties"
+    import os
+    from .textmodel.texeltree import get_text
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(here, 'test', 'einstein.txl')
+    doc = Document.load(path)
+    assert doc.basestyles.get('normal') is not None
+    style = doc.basestyles.get('normal')
+    assert isinstance(style.get('indent_levels'), tuple)
+    assert isinstance(style.get('marker'), tuple)
+    text = get_text(doc.textmodel.get_xtexel())
+    assert 'Albert Einstein' in text
+
+
 def test_02():
     "load: missing stylesheet sections are silently skipped"
     import tempfile, os
