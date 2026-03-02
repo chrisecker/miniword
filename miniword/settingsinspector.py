@@ -1,7 +1,7 @@
 import wx
 from .textmodel.viewbase import ViewBase
 from .inspector import add_section, add_row
-from .unit_entry import UnitInput, EVT_UNIT_CHANGED
+from .ui.unitentry import UnitInput, EVT_UNIT_CHANGED
 from .document import settings_default
 from .styles import updated
 

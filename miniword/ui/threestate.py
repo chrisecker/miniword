@@ -1,20 +1,22 @@
 import wx
+import wx.lib.newevent
 
 
 ValueChangeEvent, EVT_SPIN_VALUE = wx.lib.newevent.NewCommandEvent()
 
+
 class SpinCtrl3(wx.Panel):
     def __init__(self, parent, initial=None, min=0.0, max=100.0, inc=0.1, digits=2):
         super().__init__(parent)
-        
+
         self.min_val = min
         self.max_val = max
         self.inc = inc
         self.digits = digits
-        self._value = initial # internal float value or None
+        self._value = initial
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
+
         self.text = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.spin = wx.SpinButton(self, style=wx.SP_VERTICAL)
         self.spin.SetRange(-10000, 10000)
@@ -26,7 +28,6 @@ class SpinCtrl3(wx.Panel):
 
         self._update_ui()
 
-        # Events
         self.text.Bind(wx.EVT_TEXT_ENTER, self._on_text_enter)
         self.text.Bind(wx.EVT_KILL_FOCUS, self._on_text_enter)
         self.spin.Bind(wx.EVT_SPIN, self._on_spin)
@@ -55,7 +56,7 @@ class SpinCtrl3(wx.Panel):
                 val = float(raw.replace(",", "."))
                 self._value = max(self.min_val, min(self.max_val, val))
             except ValueError:
-                pass # ignore invalid entries
+                pass
         self._update_ui()
         event.Skip()
 
@@ -63,16 +64,62 @@ class SpinCtrl3(wx.Panel):
         pos = event.GetPosition()
         step = self.inc if pos > self._last_spin else -self.inc
         self._last_spin = pos
-        
+
         if self._value is None:
             self._value = self.min_val
         else:
             self._value = max(self.min_val, min(self.max_val, self._value + step))
-            
+
         self._update_ui()
         self._post_event()
 
     def _post_event(self):
         evt = ValueChangeEvent(self.GetId(), Value=self.GetValue())
-        self.GetEventHandler().ProcessEvent(evt)        
+        self.GetEventHandler().ProcessEvent(evt)
 
+
+class ColourButton(wx.Button):
+    """Colour picker button with three-state support (None = mixed)."""
+    callback = None
+
+    def __init__(self, parent, size=(100, 30)):
+        super().__init__(parent, label="", size=size)
+        self._colour = None
+        self.Bind(wx.EVT_BUTTON, self.on_click)
+        self.update_bitmap()
+
+    def on_click(self, event):
+        cd = wx.ColourData()
+        cd.SetColour(self._colour)
+        dlg = wx.ColourDialog(self, cd)
+        if dlg.ShowModal() == wx.ID_OK:
+            self.set_colour(dlg.GetColourData().GetColour())
+            if self.callback:
+                self.callback()
+        dlg.Destroy()
+
+    def set_colour(self, colour):
+        self._colour = colour
+        self.update_bitmap()
+
+    def get_colour(self):
+        return wx.Colour(self._colour).GetAsString()
+
+    def update_bitmap(self):
+        w, h = self.GetSize()
+        bmp = wx.Bitmap(w, h)
+        dc = wx.MemoryDC(bmp)
+
+        if self._colour is None:
+            dc.SetBackground(wx.WHITE_BRUSH)
+            dc.Clear()
+            brush = wx.Brush(wx.BLACK, wx.BRUSHSTYLE_BDIAGONAL_HATCH)
+        else:
+            brush = wx.Brush(self._colour)
+
+        dc.SetPen(wx.Pen("black", 5))
+        dc.SetBrush(brush)
+        dc.DrawRectangle(0, 0, w, h)
+
+        dc.SelectObject(wx.NullBitmap)
+        self.SetBitmap(bmp)

@@ -9,8 +9,9 @@ from .textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
 from .textmodel.styles import create_style, updated_style
 from .wxtextview.wxdevice import defaultstyle
 
-from .unit_entry import UnitInput, EVT_UNIT_CHANGED
-from .threestatespin import SpinCtrl3, EVT_SPIN_VALUE
+from .ui.unitentry import UnitInput, EVT_UNIT_CHANGED
+from .ui.threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
+from .ui.buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
 from .styles import defaultbullets, n_levels, style_default
 from .stylemenu import BasestyleDropdown
 from .icons import icon
@@ -20,16 +21,6 @@ _NUMBERING_FORMATS = ['1.', 'a.', 'A.', 'i.']
 
 
     
-
-wxEVT_BUTTONBAR = wx.NewEventType()
-EVT_BUTTONBAR = wx.PyEventBinder(wxEVT_BUTTONBAR, 1)
-
-
-class ButtonBarEvent(wx.CommandEvent):
-    def __init__(self, id=0, name=None):
-        super().__init__(wxEVT_BUTTONBAR, id)
-        self.name = name
-
 
 def _is_text_input(w: wx.Window) -> bool:
     return isinstance(w, (wx.TextCtrl, wx.ComboBox))
@@ -50,60 +41,6 @@ def passfocus(widget: wx.Window, mainwidget: wx.Window, interval_ms: int = 100):
     widget._passfocus_timer = timer  # reference to prevent gc
 
     
-class ButtonBar(wx.Panel):
-    def __init__(self, parent, *, exclusive=False, button_size=36):
-        super().__init__(parent)
-
-        self.exclusive = exclusive
-        self.buttons = {}
-
-        self.sizer = wx.GridSizer(1, 0, 0, 0)
-        self.SetSizer(self.sizer)
-
-        self.btn_size = self.FromDIP(wx.Size(button_size, button_size))
-
-    def add(self, name, bitmap):
-        if self.exclusive:
-            btn = wx.ToggleButton(self, label="")
-            btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_toggle)
-        else:
-            btn = wx.Button(self, label="")
-            btn.Bind(wx.EVT_BUTTON, self._on_click)
-
-        btn.SetBitmap(bitmap)
-        btn.SetMinSize(self.btn_size)
-
-        self.buttons[name] = btn
-        self.sizer.Add(btn, 1, wx.EXPAND)
-
-        self.Layout()
-
-    def select(self, name):
-        if not self.exclusive:
-            return
-        for n, btn in self.buttons.items():
-            btn.SetValue(n == name)
-
-    def _fire(self, name):
-        evt = ButtonBarEvent(self.GetId(), name=name)
-        evt.SetEventObject(self)
-        self.ProcessWindowEvent(evt)
-
-    def _on_click(self, event):
-        for name, btn in self.buttons.items():
-            if btn is event.GetEventObject():
-                self._fire(name)
-                break
-
-    def _on_toggle(self, event):
-        clicked = event.GetEventObject()
-
-        for name, btn in self.buttons.items():
-            btn.SetValue(btn is clicked)
-            if btn is clicked:
-                self._fire(name)
-
-
 class AlignBar(ButtonBar):
     def __init__(self, parent):
         ButtonBar.__init__(self, parent, exclusive=True)
@@ -181,54 +118,6 @@ class PromptingComboBox(wx.ComboBox) :
                 break
 
             
-class ColourButton(wx.Button):
-    """3 state color button"""
-    callback = None
-    def __init__(self, parent, size=(100,30)):
-        super().__init__(parent, label="", size=size)
-        self._colour = None # initial color
-        self.Bind(wx.EVT_BUTTON, self.on_click)
-        self.update_bitmap()
-
-    def on_click(self, event):
-        cd = wx.ColourData()
-        cd.SetColour(self._colour)
-        dlg = wx.ColourDialog(self, cd)
-        if dlg.ShowModal() == wx.ID_OK:
-            self.set_colour(dlg.GetColourData().GetColour())
-            if self.callback:
-                self.callback()
-        dlg.Destroy()
-
-    def set_colour(self, colour):
-        self._colour = colour
-        self.update_bitmap()
-
-    def get_colour(self):
-        return wx.Colour(self._colour).GetAsString()
-        
-    def update_bitmap(self):
-        w, h = self.GetSize()
-        bmp = wx.Bitmap(w, h)
-        dc = wx.MemoryDC(bmp)
-
-        if self._colour is None:
-            # Mixed-State: diagonalen Streifen auf weiße Hintergrund
-            dc.SetBackground(wx.WHITE_BRUSH)
-            dc.Clear()
-            brush = wx.Brush(wx.BLACK, wx.BRUSHSTYLE_BDIAGONAL_HATCH)            
-        else:
-            brush = wx.Brush(self._colour)
-
-        dc.SetPen(wx.Pen("black", 5))
-        dc.SetBrush(brush)
-        dc.DrawRectangle(0, 0, w, h)
-
-        dc.SelectObject(wx.NullBitmap)
-        self.SetBitmap(bmp)
-
-
-        
 class ResetButton(wx.Button):
     callback = None
     def __init__(self, parent, properties):

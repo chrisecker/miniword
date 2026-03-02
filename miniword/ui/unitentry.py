@@ -1,8 +1,39 @@
+import re
 import wx
 from wx.lib.newevent import NewEvent
 
 
 UnitChangedEvent, EVT_UNIT_CHANGED = NewEvent()
+
+
+UNIT_TO_PT = {
+    "pt": 1.0,
+    "mm": 72.0 / 25.4,
+    "cm": 72.0 / 2.54,
+    "inch": 72.0,
+    "in": 72.0,
+}
+
+UNIT_PATTERN = re.compile(
+    r"""
+    ^\s*
+    (?P<value>[+-]?\d+(?:\.\d+)?)
+    \s*
+    (?P<unit>pt|mm|cm|inch|in)?
+    \s*$
+    """,
+    re.VERBOSE | re.IGNORECASE
+)
+
+
+def parse_measure(text, default_unit="pt"):
+    m = UNIT_PATTERN.match(text)
+    if not m:
+        raise ValueError("Ungültiges Maß")
+    value = float(m.group("value"))
+    unit = (m.group("unit") or default_unit).lower()
+    return value * UNIT_TO_PT[unit]
+
 
 class UnitInput(wx.Panel):
     _last_pt = None
@@ -46,7 +77,7 @@ class UnitInput(wx.Panel):
             )
             wx.PostEvent(self, evt)
             self._last_pt = pt
-        
+
     def on_commit(self, event):
         self.commit()
         event.Skip()
@@ -67,7 +98,6 @@ class UnitInput(wx.Panel):
             except ValueError:
                 return
 
-        # zurück in aktuelle Einheit
         factor = UNIT_TO_PT[self.default_unit]
         value = pt / factor + delta
 
@@ -75,7 +105,6 @@ class UnitInput(wx.Panel):
         self.commit()
 
     def SetValue(self, value):
-        #print("unit_entry - set value:", value)
         if value is None:
             self.text.SetValue("")
             self._last_pt = None
@@ -87,56 +116,15 @@ class UnitInput(wx.Panel):
 
     def GetValue(self):
         return self._last_pt
-        
 
-
-import re
-
-UNIT_TO_PT = {
-    "pt": 1.0,
-    "mm": 72.0 / 25.4,
-    "cm": 72.0 / 2.54,
-    "inch": 72.0,
-    "in": 72.0,
-}
-
-UNIT_PATTERN = re.compile(
-    r"""
-    ^\s*
-    (?P<value>[+-]?\d+(?:\.\d+)?)
-    \s*
-    (?P<unit>pt|mm|cm|inch|in)?
-    \s*$
-    """,
-    re.VERBOSE | re.IGNORECASE
-)
-
-
-def parse_measure(text, default_unit="pt"):
-    m = UNIT_PATTERN.match(text)
-    if not m:
-        raise ValueError("Ungültiges Maß")
-
-    value = float(m.group("value"))
-    unit = (m.group("unit") or default_unit).lower()
-
-    return value * UNIT_TO_PT[unit]
-
-
-class MyFrame(wx.Frame):
-    def __init__(self):
-        super().__init__(None, title="Unit Input")
-
-        panel = wx.Panel(self)
-        unit_input = UnitInput(panel, default_unit="mm")
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(unit_input, 0, wx.ALL | wx.EXPAND, 10)
-        panel.SetSizer(sizer)
-
-        self.Show()
 
 def demo_00():
     app = wx.App(redirect=False)
-    f = MyFrame()
+    frame = wx.Frame(None, title="Unit Input")
+    panel = wx.Panel(frame)
+    unit_input = UnitInput(panel, default_unit="mm")
+    sizer = wx.BoxSizer(wx.VERTICAL)
+    sizer.Add(unit_input, 0, wx.ALL | wx.EXPAND, 10)
+    panel.SetSizer(sizer)
+    frame.Show()
     app.MainLoop()
