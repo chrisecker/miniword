@@ -51,6 +51,7 @@ def get_font(style: dict) -> wx.Font:
 
 PADDING_LEFT  = 8
 TRIANGLE_AREA = 30
+PLUS_HEIGHT   = 28
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +114,8 @@ class StylePopup(wx.PopupWindow):
     def _compute_rects(self) -> list[tuple[int, int]]:
         dc = wx.MemoryDC()
         dc.SelectObject(wx.NullBitmap)
-        rects: list[tuple[int, int]] = []
-        y = 0
+        rects: list[tuple[int, int]] = [(0, PLUS_HEIGHT)]  # index 0 = "+" item
+        y = PLUS_HEIGHT
         for name in self.styles:
             _, h = self.Parent.GetItemExtent(name, dc)
             rects.append((y, h))
@@ -123,7 +124,7 @@ class StylePopup(wx.PopupWindow):
 
     def _total_height(self) -> int:
         if not self._item_rects:
-            return 0
+            return PLUS_HEIGHT
         last_y, last_h = self._item_rects[-1]
         return last_y + last_h
 
@@ -138,17 +139,28 @@ class StylePopup(wx.PopupWindow):
 
         w, _ = self.panel.GetSize()
 
-        for i, (name, label) in enumerate(zip(self.styles, self._labels)):
-            item_y, item_h = self._item_rects[i]
+        # "+" item at index 0
+        plus_y, plus_h = self._item_rects[0]
+        if self.hover_item == 0:
+            dc.SetBrush(wx.Brush(wx.Colour(235, 235, 235)))
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            dc.DrawRectangle(0, plus_y, w, plus_h)
+        dc.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
+        dc.SetTextForeground(wx.Colour(60, 60, 60))
+        dc.DrawText("+ New Style", PADDING_LEFT, plus_y + (plus_h - dc.GetCharHeight()) // 2)
 
-            if i == self.hover_item:
+        # Style items at indices 1…n
+        for i, (name, label) in enumerate(zip(self.styles, self._labels)):
+            item_y, item_h = self._item_rects[i + 1]
+
+            if i + 1 == self.hover_item:
                 dc.SetBrush(wx.Brush(wx.Colour(235, 235, 235)))
                 dc.SetPen(wx.TRANSPARENT_PEN)
                 dc.DrawRectangle(0, item_y, w, item_h)
 
             self.Parent.DrawItem(name, dc, PADDING_LEFT, item_y, item_h)
 
-            if i == self.hover_item:
+            if i + 1 == self.hover_item:
                 self._draw_triangle(dc, w, item_y, item_h)
 
     def _draw_triangle(self, dc: wx.DC, panel_w: int, item_y: int, item_h: int):
@@ -193,7 +205,7 @@ class StylePopup(wx.PopupWindow):
     def _on_mouse_move(self, evt: wx.MouseEvent):
         x, y = evt.GetPosition()
         new_hover = self._item_at(y)
-        new_tri   = self._is_over_triangle(x) if new_hover is not None else False
+        new_tri   = self._is_over_triangle(x) if new_hover and new_hover > 0 else False
 
         if new_hover != self.hover_item or new_tri != self.triangle_hover:
             self.hover_item     = new_hover
@@ -210,11 +222,15 @@ class StylePopup(wx.PopupWindow):
     def _on_left_down(self, evt: wx.MouseEvent):
         x, y = evt.GetPosition()
         idx = self._item_at(y)
-        if idx is not None:                         # FIX: was `idx >= 0` which raises on None
+        if idx == 0:
+            key = self.dropdown.GetSelectedKey() or self.styles[0]
+            self.Hide()
+            self.dropdown.CreateNewStyle(key)
+        elif idx is not None:
             if self._is_over_triangle(x):
-                return self._show_context_menu(idx)
-            self.dropdown.Choose(idx)
-        self.Hide()
+                return self._show_context_menu(idx - 1)
+            self.dropdown.Choose(idx - 1)
+            self.Hide()
 
     # ------------------------------------------------------------------
     # Context menu

@@ -200,15 +200,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.basestyle.on_revert_style   = self._revert_style
         self.basestyle.on_rename_style   = self._rename_style
         self.basestyle.on_delete_style   = self._delete_style
-        btn_new_style = wx.Button(self, label="+", size=(32, 40))
-        btn_new_style.SetToolTip("Create new style from selection")
-        btn_new_style.Bind(wx.EVT_BUTTON,
-                           lambda _: self.basestyle.CreateNewStyle(
-                               self.basestyle.GetSelectedKey() or 'normal'))
-        style_row = wx.BoxSizer(wx.HORIZONTAL)
-        style_row.Add(self.basestyle, 1, wx.EXPAND)
-        style_row.Add(btn_new_style, 0)
-        mainsizer.Add(style_row, 0, wx.ALL|wx.EXPAND, 5)
+        mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
         
         notebook = wx.Notebook(self)
         notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,
