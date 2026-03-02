@@ -221,7 +221,7 @@ class InspectorPanel(wx.Panel, ViewBase):
 
         add_section("Fontstyle", panel, contentsizer)
 
-        from .fontctrl import FontCombo
+        from .ui.fontctrl import FontCombo
         self.family = FontCombo(panel)
         self.reset_family = ResetButton(panel, ['font_family'])
         #self.size.SetMinSize((100, -1))
