@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from .wxtextview.wxtextview import WXTextView
 from .textmodel.iterators import iter_newlines
 from .builder import Factory, Builder
-from .styles import stylesheet
+from .styles import testsheet
 from .cairodevice import CairoDevice
 from .annotation import highlight, squiggle
 
@@ -243,13 +243,13 @@ def test_00():
     frame = wx.Frame(None)
     view  = DocumentView(frame, -1)
     view.model = model
-    stylesheet.add_view(view)
-    normal = stylesheet.get('normal').copy()
+    testsheet.add_view(view)
+    normal = testsheet.get('normal').copy()
     normal['font_size'] = 8
     view.builder.nbefore = 0
     view.builder.nrest = 0
     
-    stylesheet.set('normal', normal)
+    testsheet.set('normal', normal)
     stats = view.builder.get_updatestats()
 
     # are the styles updated?
@@ -277,7 +277,7 @@ def demo_00():
     view  = DocumentView(frame, -1)
     view.model = model
     view.builder.device.zoom = 2
-    stylesheet.add_view(view)
+    testsheet.add_view(view)
     frame.Show()
 
     if 1:

@@ -132,12 +132,12 @@ h3 = updated(normal, dict(name="Heading 4", font_size=12, bold=True))
 
 from .stylesheet import StyleSheet
 
-stylesheet = StyleSheet()
-stylesheet.set('normal', normal)
-stylesheet.set('h0', h0)
-stylesheet.set('h1', h1)
-stylesheet.set('h2', h2)
-stylesheet.set('h3', h3)
+testsheet = StyleSheet()
+testsheet.set('normal', normal)
+testsheet.set('h0', h0)
+testsheet.set('h1', h1)
+testsheet.set('h2', h2)
+testsheet.set('h3', h3)
 
 
 def mk_style(stylesheet, parstyle, style):
@@ -154,4 +154,4 @@ def test_00():
     assert (21*cm - 595.27) < 0.1
     
 def test_01():
-    stylesheet.get('normal')['font_size'] == 12
+    testsheet.get('normal')['font_size'] == 12

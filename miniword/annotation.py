@@ -229,12 +229,12 @@ def demo_00():
     from einstein import get_einstein_model
     from .document import Document
     from .documentview import DocumentView
-    from .styles import stylesheet
+    from .styles import testsheet
 
     app = wx.App(True)
     doc = Document()
     doc.textmodel = get_einstein_model()
-    doc.basestyles = stylesheet
+    doc.basestyles = testsheet
 
     frame = wx.Frame(None, title='Annotation Demo', size=(900, 600))
     view  = DocumentView(frame, doc)

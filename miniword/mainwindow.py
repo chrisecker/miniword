@@ -186,12 +186,12 @@ class MainFrame(wx.Frame, ViewBase):
 def demo_00():
     from einstein import get_einstein_model
     from .document import Document
-    from .styles import stylesheet
+    from .styles import testsheet
 
     app = wx.App(True)
     doc = Document()
     doc.textmodel = get_einstein_model()
-    doc.basestyles = stylesheet
+    doc.basestyles = testsheet
     frame = MainFrame(doc)
     frame.Show()
 
@@ -210,12 +210,12 @@ def demo_00():
 def demo_01():
     from moby import get_moby_model
     from .document import Document
-    from .styles import stylesheet
+    from .styles import testsheet
 
     app = wx.App(True)
     doc = Document()
     doc.textmodel = get_moby_model()
-    doc.basestyles = stylesheet
+    doc.basestyles = testsheet
     frame = MainFrame(doc)
     frame.Show()
 

@@ -658,11 +658,11 @@ def test_02():
     """Page generation driven by a texel with a given geometry."""
 
     import einstein
-    from .styles import stylesheet
+    from .styles import testsheet
     model   = einstein.get_einstein_model()
     texel   = model.get_xtexel()
     device  = TESTDEVICE
-    factory = Factory(stylesheet, device)
+    factory = Factory(testsheet, device)
 
     info          = RestartMemo()
     info.geometry = (100, 10)
