@@ -195,6 +195,22 @@ class DocumentView(WXTextView):
         import printer
         printer.show_printdlg(self.builder.layout)
 
+    def export_pdf(self, path):
+        import cairo
+        self.builder.waitfor_finish()
+        pages = self.layout.childs
+        if not pages:
+            return
+        device = self.builder.get_device()
+        w, h = pages[0].width, pages[0].height
+        surface = cairo.PDFSurface(path, w, h)
+        ctx = cairo.Context(surface)
+        for page in pages:
+            page.draw_background(0, 0, ctx)
+            page.draw(0, 0, ctx)
+            ctx.show_page()
+        surface.finish()
+
     def iter_rows(self):
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):

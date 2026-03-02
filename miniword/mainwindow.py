@@ -31,6 +31,9 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu.Append(wx.ID_SAVE,    "&Save\tCtrl+S")
         file_menu.Append(wx.ID_SAVEAS,  "Save &As…\tCtrl+Shift+S")
         file_menu.AppendSeparator()
+        self._id_export_pdf = wx.NewIdRef()
+        file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
+        file_menu.AppendSeparator()
         file_menu.Append(wx.ID_EXIT,    "E&xit\tAlt+F4")
         bar.Append(file_menu, "&File")
         self.SetMenuBar(bar)
@@ -38,6 +41,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_open,   id=wx.ID_OPEN)
         self.Bind(wx.EVT_MENU, self._on_save,   id=wx.ID_SAVE)
         self.Bind(wx.EVT_MENU, self._on_saveas, id=wx.ID_SAVEAS)
+        self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
         # --- Edit ---
         edit_menu = wx.Menu()
@@ -147,6 +151,17 @@ class MainFrame(wx.Frame, ViewBase):
         self.document.save(path)
         self.textview.clear_undo()
         self._update_title()
+
+    def _on_export_pdf(self, event):
+        with wx.FileDialog(
+            self, "Export as PDF",
+            wildcard="PDF files (*.pdf)|*.pdf|All files (*.*)|*.*",
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            path = dlg.GetPath()
+        self.textview.export_pdf(path)
 
     def _replace_document(self, doc):
         self.document = doc
