@@ -27,5 +27,13 @@ modules = [
     "miniword.documentview",
 ]
 
+total_n = 0
+total_ok = 0
 for modname in modules:
-    runtests.test_library(modname)
+    n, n_ok = runtests.test_library(modname)
+    total_n += n
+    total_ok += n_ok
+
+print()
+print("=" * 62)
+print("Total: %i tests, %i failed" % (total_n, total_n - total_ok))

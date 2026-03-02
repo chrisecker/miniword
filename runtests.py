@@ -134,6 +134,7 @@ def test_library(modulname, silent=False, profile=False, names=()):
             n_ok += 1
     print("Number of tests:\t%i" % n)
     print("Tests failed:   \t%i" % (n-n_ok))
+    return n, n_ok
 
 
 
@@ -143,7 +144,7 @@ def test_file(filename, silent=False, profile=False, names=()):
     else:
         modulname = filename
     modulname = modulname.replace('/', '.')
-    test_library(modulname, names=names, silent=silent, profile=profile)
+    return test_library(modulname, names=names, silent=silent, profile=profile)
 
     
 if __name__ == '__main__':
