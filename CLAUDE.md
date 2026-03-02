@@ -11,3 +11,4 @@
 - All tests must pass before a commit
 - Individual .py files should be as independent as possible
 - textmodel and texeltree are also used in separate projects. They should not be extended.
+- Ignoriere Dateien und Verzeichnisse mit dem Präfix dev_ - sie sind nur Entwürfe zum Ausprobieren. 
