@@ -23,6 +23,13 @@ import re
 from .document import Document
 from .textmodel.textmodel import TextModel
 from .texeltreeformat import serialize, parse, serialize_style, _Parser
+from .styles import style_default
+
+
+def _style_diff(style):
+    """Return only entries that differ from the built-in defaults."""
+    return {k: v for k, v in style.items()
+            if k not in style_default or style_default[k] != v}
 
 
 def save(doc, path):
@@ -35,7 +42,8 @@ def save(doc, path):
         if items:
             parts.append('[%s]' % name)
             for key, style in items:
-                parts.append('"%s" = %s' % (key, serialize_style(style)))
+                diff = _style_diff(style)
+                parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
             parts.append('')
 
     # Document section — always written
@@ -170,6 +178,8 @@ def test_03():
     doc = Document.load(path)
     assert doc.basestyles.get('normal') is not None
     style = doc.basestyles.get('normal')
+    assert abs(style['space_after'] - 14.17) < 0.1
+    assert abs(style['first_line_indent'] - 11.34) < 0.1
     assert isinstance(style.get('indent_levels'), tuple)
     assert isinstance(style.get('marker'), tuple)
     text = get_text(doc.textmodel.get_xtexel())

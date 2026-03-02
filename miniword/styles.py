@@ -98,6 +98,14 @@ other_default = {
 PARAGRAPH_ONLY_KEYS = frozenset({'start_number'})
 
 
+style_default = {
+    **text_default,
+    **structure_default,
+    **layout_default,
+    **other_default,
+}
+
+
 def updated(default, *styles):
     """Merges dicts by updating from left to right."""
     r = default.copy()
