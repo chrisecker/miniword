@@ -13,7 +13,7 @@ from .wxtextview import boxes
 from .wxtextview.rect import Rect
 
 from .pagegen import show_page, RestartMemo, generate_pages, restartmemo_from_settings
-from .styles import testsheet, cm, mm, updated
+from .styles import cm, mm, updated
 from .factory import Factory
 from .cairodevice import CairoDevice
 
@@ -376,6 +376,7 @@ class MyView(WXTextView):
     """Simple view for testing."""
 
     def create_builder(self):
+        from .styles import testsheet
         factory = Factory(testsheet, device=CairoDevice())
         builder = Builder(self.model, factory)
         return builder
@@ -461,6 +462,7 @@ def demo_00():
 def test_01():
     "generate_pages"
     from einstein import get_einstein
+    from .styles import testsheet
 
     xtexel     = get_einstein()
     restartmemo = RestartMemo()
@@ -479,6 +481,7 @@ def test_01():
 def test_02():
     "restartmemo"
     from einstein import get_einstein
+    from .styles import testsheet
 
     info          = RestartMemo()
     info.geometry = (100, 10)

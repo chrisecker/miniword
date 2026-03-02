@@ -3,7 +3,6 @@ from contextlib import contextmanager
 from .wxtextview.wxtextview import WXTextView
 from .textmodel.iterators import iter_newlines
 from .builder import Factory, Builder
-from .styles import testsheet
 from .cairodevice import CairoDevice
 from .annotation import highlight, squiggle
 
@@ -237,6 +236,7 @@ class DocumentView(WXTextView):
 def test_00():
     "modifying a basestyle"
     from einstein import get_einstein_model
+    from .styles import testsheet
     model = get_einstein_model()
 
     app   = wx.App(redirect=False)
@@ -268,6 +268,7 @@ def test_00():
     
 def demo_00():
     from einstein import get_einstein_model
+    from .styles import testsheet
     model = get_einstein_model()
 
     model.set_properties(0, 15, color='red')
