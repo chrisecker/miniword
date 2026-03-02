@@ -276,11 +276,47 @@ class DocumentView(WXTextView):
                 return self.set_index(r1 + i, shift)
             prev = r1, r2, rx, ry, row
 
+    def move_page_down(self, shift):
+        index    = self.index
+        layout   = self.layout
+        x, y     = layout.get_rect(index, 0, 0).items()[:2]
+        _, ch    = self.GetClientSize()
+        target_y = y + ch / self.zoom
+        last     = None
+        for r1, r2, rx, ry, row in self.iter_rows():
+            if ry >= target_y:
+                i = row.get_index(x - rx, row.height)
+                return self.set_index(r1 + i, shift)
+            last = r1, r2, rx, ry, row
+        if last:
+            r1, r2, rx, ry, row = last
+            self.set_index(r2 - 1, shift)  # end of last row
+
+    def move_page_up(self, shift):
+        index    = self.index
+        layout   = self.layout
+        x, y     = layout.get_rect(index, 0, 0).items()[:2]
+        _, ch    = self.GetClientSize()
+        target_y = y - ch / self.zoom
+        prev     = None
+        for r1, r2, rx, ry, row in self.iter_rows():
+            if ry + row.height + row.depth > target_y:
+                if prev is None:
+                    return self.set_index(0, shift)
+                r1, r2, rx, ry, row = prev
+                i = row.get_index(x - rx, row.height)
+                return self.set_index(r1 + i, shift)
+            prev = r1, r2, rx, ry, row
+
     def handle_action(self, action, shift=False):
         if action == 'move_down':
             self.move_down(shift)
         elif action == 'move_up':
             self.move_up(shift)
+        elif action == 'move_page_down':
+            self.move_page_down(shift)
+        elif action == 'move_page_up':
+            self.move_page_up(shift)
         else:
             return WXTextView.handle_action(self, action, shift)
 
