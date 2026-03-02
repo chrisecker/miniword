@@ -46,9 +46,12 @@ class StretchableText(Box):
 
     def draw(self, x, y, dc):
         self.device.set_style(self.style, dc)
-        draw_text = self.device.draw_text
-        for i1, i2, x, y, string in self.iter_strings(x, y):
-            draw_text(string, x, y, dc)
+        if self.stretch:
+            unit_stretch = self.stretch / self.get_stretchability()
+        else:
+            unit_stretch = 0
+        strings = [item[0] for item in self.items]
+        self.device.draw_strings(strings, x, y, unit_stretch, dc)
 
     def find_x(self, i):
         # For testing

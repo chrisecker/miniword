@@ -153,6 +153,58 @@ class CairoDevice:
         ctx.rectangle(x, ul_y, width, thickness)
         ctx.fill()
 
+    def draw_strings(self, strings, x, y, spacing, ctx):
+        """Draw a list of strings at consecutive horizontal positions.
+
+        strings: list of str
+        spacing: horizontal gap between consecutive strings (PT)
+
+        Renders bgcolor as one merged rectangle and underline as one
+        continuous line across all strings and the gaps between them.
+        """
+        if not strings:
+            return
+
+        fe = ctx.font_extents()
+        line_h  = fe[2]
+        descent = fe[1]
+
+        # Measure each string and compute starting x positions
+        positions = []   # (text, tx, advance_width)
+        cur_x = x
+        for text in strings:
+            xa = ctx.text_extents(text)[4]
+            positions.append((text, cur_x, xa))
+            cur_x += xa + spacing
+
+        # Total span: covers all strings and the inter-string gaps,
+        # but not a trailing gap after the last string.
+        total_width = cur_x - spacing - x
+
+        # 1. Draw bgcolor as one block
+        bgcolor = getattr(self, '_current_bgcolor', 'white')
+        if wx.Colour(bgcolor) != wx.WHITE:
+            c = wx.Colour(bgcolor)
+            ctx.save()
+            ctx.set_source_rgba(
+                c.Red()   / 255,
+                c.Green() / 255,
+                c.Blue()  / 255,
+                c.Alpha() / 255,
+            )
+            ctx.rectangle(x, y, total_width, line_h + descent)
+            ctx.fill()
+            ctx.restore()
+
+        # 2. Draw all text strings
+        for text, tx, _ in positions:
+            ctx.move_to(tx, y + line_h)
+            ctx.show_text(text)
+
+        # 3. Draw underline as one continuous line
+        if getattr(self, '_current_underline', False):
+            self.draw_underline(x, y, total_width, ctx)
+
     def draw_text(self, text, x, y, ctx):
         # Cairo draws text from the baseline upward.
         # If y is the top edge, y_bearing must be added.
