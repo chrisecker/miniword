@@ -241,7 +241,7 @@ class StylePopup(wx.PopupWindow):
         menu.AppendSeparator()
         add(f"Select all uses of \"{label}\"")
         menu.AppendSeparator()
-        add("Rename style", not is_protected)
+        add("Rename style")
         add("Delete style", not is_protected)
 
         role_map = {"Title": "Title", "Heading 1": "H1", "Heading 2": "H2"}
