@@ -87,6 +87,8 @@ class Builder(BuilderBase):
     nbefore  = 0
     nrest    = 0
     settings = {}  # document settings dict; set by DocumentView
+    # Progress reporting: callable(n_pages, n_chars, total_chars) or None
+    progress_callback = None
 
     def __init__(self, model, factory):
         self.model   = model
@@ -160,7 +162,7 @@ class Builder(BuilderBase):
                 _ = rest.pop(0)
                 rest_i += len(_)
             self.rest_memo = rest_i, rest
-            
+
             state  = page.restartmemo
             if state is not None:
                 if self.can_finish(state):
@@ -168,6 +170,10 @@ class Builder(BuilderBase):
         except StopIteration:
             return self.finish()
         if call_after:
+            if self.progress_callback:
+                self.progress_callback(len(self._layout.childs),
+                                       len(self._layout),
+                                       len(self.model) + 1)
             wx.Yield()
             wx.CallAfter(self.build_step)
 
@@ -218,6 +224,10 @@ class Builder(BuilderBase):
             raise
         self._layout.is_finished = True
         self.dump_updatestats()
+        if self.progress_callback:
+            total_chars = len(self.model) + 1
+            self.progress_callback(len(self._layout.childs),
+                                   total_chars, total_chars)
 
     def adjust_pages(self):
         # Used here solely to update page numbers.
@@ -273,7 +283,6 @@ class Builder(BuilderBase):
 
         self._layout = Layout(pages_before, self.factory.device)
         self.start(state, i_rest, pages_rest)
-        self.waitfor_index(i2 + delta + 1000)  # XXX
 
     def can_finish(self, state):
         """Update rest_memo and check whether the remaining pages can
@@ -367,9 +376,11 @@ class Builder(BuilderBase):
 
     def inserted(self, i, n):
         self.rebuild_dirty(i, i, n)
+        self.waitfor_index(i + n + 1000)
 
     def removed(self, i, n):
         self.rebuild_dirty(i, i, -n)
+        self.waitfor_index(i + 1000)
 
 
 class MyView(WXTextView):

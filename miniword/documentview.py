@@ -134,6 +134,7 @@ class DocumentView(WXTextView):
         finally:
             self.end_undo_group()
             self.builder.resume_rebuilds()  # fires one merged rebuild
+        self.notify_views('layout_progress_start')
         self.builder.waitfor_finish()
         self.Refresh()
 
@@ -168,8 +169,8 @@ class DocumentView(WXTextView):
         # atomic() context can merge this rebuild with further changes.
         self.builder._enqueue_rebuild(j1, j2)
         if not self.builder._inhibit_depth:
-            # Outside an atomic context: finish and repaint synchronously.
-            self.builder.waitfor_finish()
+            self.notify_views('layout_progress_start')
+            self.builder.waitfor_finish()  # no-op if modal finished it; fallback otherwise
             self.refresh()
 
     def settings_changed(self, *args, **kwds):
@@ -185,7 +186,11 @@ class DocumentView(WXTextView):
     def create_builder(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
         builder = Builder(self.model, factory)
+        builder.progress_callback = self._on_build_progress
         return builder
+
+    def _on_build_progress(self, n_pages, n_chars, total_chars):
+        self.notify_views('layout_progress', n_pages, n_chars, total_chars)
 
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()

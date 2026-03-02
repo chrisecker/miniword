@@ -7,10 +7,34 @@ from .ui.sidepanel import SidePanel, IconBar
 
 
 # ---------------------------------------------------------------------------
+# Progress dialog
+# ---------------------------------------------------------------------------
+
+class _LayoutProgressDlg(wx.Dialog):
+    def __init__(self, parent, total_chars):
+        wx.Dialog.__init__(self, parent, title="Laying out document",
+                           style=wx.CAPTION)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        self.label = wx.StaticText(self, label="Processing page 1…")
+        sizer.Add(self.label, 0, wx.ALL, 12)
+        self.gauge = wx.Gauge(self, range=max(total_chars, 1), size=(300, 16))
+        sizer.Add(self.gauge, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 12)
+        self.SetSizerAndFit(sizer)
+        self.CentreOnParent()
+
+    def update(self, n_pages, n_chars, total_chars):
+        if n_pages is not None:
+            self.label.SetLabel("Processing page %d…" % n_pages)
+        self.gauge.SetValue(min(n_chars, total_chars))
+
+
+# ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
 
 class MainFrame(wx.Frame, ViewBase):
+
+    _progress_dlg = None
 
     def __init__(self, document):
         self.document = document
@@ -195,6 +219,23 @@ class MainFrame(wx.Frame, ViewBase):
 
     def undo_changed(self, *args):
         wx.CallAfter(self._update_undo_ui)
+
+    def layout_progress_start(self, view):
+        if view.builder.layout.is_finished:
+            return
+        total_chars = len(view.model) + 1
+        self._progress_dlg = _LayoutProgressDlg(self, total_chars)
+        self._progress_dlg.ShowModal()
+        self._progress_dlg.Destroy()
+        self._progress_dlg = None
+
+    def layout_progress(self, view, n_pages, n_chars, total_chars):
+        if n_chars >= total_chars:
+            if self._progress_dlg:
+                self._progress_dlg.EndModal(0)
+            return
+        if self._progress_dlg:
+            self._progress_dlg.update(n_pages, n_chars, total_chars)
 
         
 
