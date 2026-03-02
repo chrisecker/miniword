@@ -26,6 +26,7 @@ class MainFrame(wx.Frame, ViewBase):
     def _build_menu(self):
         bar = wx.MenuBar()
         file_menu = wx.Menu()
+        file_menu.Append(wx.ID_NEW,     "&New\tCtrl+N")
         file_menu.Append(wx.ID_OPEN,    "&Open\tCtrl+O")
         file_menu.Append(wx.ID_SAVE,    "&Save\tCtrl+S")
         file_menu.Append(wx.ID_SAVEAS,  "Save &As…\tCtrl+Shift+S")
@@ -33,6 +34,7 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu.Append(wx.ID_EXIT,    "E&xit\tAlt+F4")
         bar.Append(file_menu, "&File")
         self.SetMenuBar(bar)
+        self.Bind(wx.EVT_MENU, self._on_new,    id=wx.ID_NEW)
         self.Bind(wx.EVT_MENU, self._on_open,   id=wx.ID_OPEN)
         self.Bind(wx.EVT_MENU, self._on_save,   id=wx.ID_SAVE)
         self.Bind(wx.EVT_MENU, self._on_saveas, id=wx.ID_SAVEAS)
@@ -103,6 +105,11 @@ class MainFrame(wx.Frame, ViewBase):
         suffix = ' *' if dirty else ''
         self.SetTitle("Writer — " + name + suffix)
 
+    def _on_new(self, event):
+        from .document import Document
+        frame = MainFrame(Document())
+        frame.Show()
+
     def _on_open(self, event):
         with wx.FileDialog(
             self, "Open TXL file",
@@ -114,9 +121,10 @@ class MainFrame(wx.Frame, ViewBase):
             path = dlg.GetPath()
         from .document import Document
         doc = Document.load(path)
-        self._current_path = path
-        self._replace_document(doc)
-        self._update_title()
+        frame = MainFrame(doc)
+        frame._current_path = path
+        frame._update_title()
+        frame.Show()
 
     def _on_save(self, event):
         if not getattr(self, '_current_path', None):
