@@ -127,7 +127,7 @@ def _extract_nl(em):
 # ---------------------------------------------------------------------------
 
 def test_00():
-    "roundtrip: text and settings are preserved"
+    "roundtrip"
     import tempfile, os
     from .textmodel.texeltree import get_text
 
@@ -149,7 +149,7 @@ def test_00():
 
 
 def test_01():
-    "roundtrip: stylesheets are preserved"
+    "stylesheets roundtrip"
     import tempfile, os
 
     doc = Document()
@@ -171,7 +171,7 @@ def test_01():
 
 
 def test_03():
-    "load: read test/einstein.txl — only non-default style values are stored"
+    "load einstein.txl"
     import os
     from .textmodel.texeltree import get_text
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -192,7 +192,7 @@ def test_03():
 
 
 def test_02():
-    "load: missing stylesheet sections are silently skipped"
+    "missing sections"
     import tempfile, os
 
     doc = Document()

@@ -3,53 +3,57 @@
 
 # Neuester Stand: Alle Tests verlaufen erfolgreich
 #
-# Neuster Stand: Löschen von Marken ist fehlerhaft. Die Korrektur
-# durch insert funktioniert in vielen Fällen nicht.
+# Neuster Stand: Lï¿½schen von Marken ist fehlerhaft. Die Korrektur
+# durch insert funktioniert in vielen Fï¿½llen nicht.
 #
-# Lösungskonzept: remove_mark sollte zwei Rückgabewerte haben, den
-# Baum und den Übertrag. Der Übertrag gibt den Wert, um den die
+# Lï¿½sungskonzept: remove_mark sollte zwei Rï¿½ckgabewerte haben, den
+# Baum und den ï¿½bertrag. Der ï¿½bertrag gibt den Wert, um den die
 # folgende Node nach rechts verschoben werden muss.
 #
-# Überlegungen dazu: Das Problem tritt immer an Grenzen auf und muss
+# ï¿½berlegungen dazu: Das Problem tritt immer an Grenzen auf und muss
 # an der Stelle korrigiert werden, an der die beiden angrenzenden
-# Teilbäume zusammenlaufen. Die Korrektur besteht in einem Aufruf
+# Teilbï¿½ume zusammenlaufen. Die Korrektur besteht in einem Aufruf
 # insert(r, 0, delta), d.h. in den rechten TReilbaum wird an der
-# Stelle 0 die Korrektur um Delta eingefügt. Elegant wäre, hierfür
+# Stelle 0 die Korrektur um Delta eingefï¿½gt. Elegant wï¿½re, hierfï¿½r
 # eine eigene Funktion zu benutzen move_right(tree, n).
 
 
 # Neuer Stand: repariert. Sollte mehr getestet werden.
 #
 # Stand: es gibt noch ein konzeptionelles Problem. Das ist auch der
-# Grund für den Fehler in test_01. Das Problem: bisher ist ungeklärt
+# Grund fï¿½r den Fehler in test_01. Das Problem: bisher ist ungeklï¿½rt
 # ob insert(i, n) links oder rechts von Marken, die an i liegen
-# eingefügt wird.
+# eingefï¿½gt wird.
 # 
 # In Writer: 
 #  - Marken werden nach rechts verschoben (bei Formatierung)
-# Das ist auch das Verhalten, das wir für Nummerierungen brauchen
+# Das ist auch das Verhalten, das wir fï¿½r Nummerierungen brauchen
 
 
 # Konzepte die hier ausprobiert werden sollen:
-#  - Node enthält n leerstellen links der Marke
-#  - insert & remove ändern die Hierarchie nicht, sondern nur Werte n
+#  - Node enthï¿½lt n leerstellen links der Marke
+#  - insert & remove ï¿½ndern die Hierarchie nicht, sondern nur Werte n
 #
-# Achtung: auch wenn der Code ähnlich aussieht wie texel, so gibt es
-# konzeptionelle Unterschiede. Hier sind die Noden veränderbar! 
-#  - insert / remove ändert die Hierarchie nicht, aber die Gewichte n
-#  - create_mark / remove_mark ändert die Hierarchie auf nicht reentrent-
-#    fähige weise
+# Achtung: auch wenn der Code ï¿½hnlich aussieht wie texel, so gibt es
+# konzeptionelle Unterschiede. Hier sind die Noden verï¿½nderbar! 
+#  - insert / remove ï¿½ndert die Hierarchie nicht, aber die Gewichte n
+#  - create_mark / remove_mark ï¿½ndert die Hierarchie auf nicht reentrent-
+#    fï¿½hige weise
 #
 
 
 
 class Mark:
     parent = None
+    _removed = False
+
     def __init__(self, label, n=0):
         self.n = n
         self.label = label
-        
+
     def get(self):
+        if self._removed:
+            return None
         if not self.parent:
             return self.n
         return abspos(self)+self.n
@@ -231,8 +235,8 @@ class MarkBuffer:
 
     def remove_mark(self, m):
         i = m.get()
-        #print "remove ", i
         self.tree = grouped(remove_mark(self.tree, m, i)[0])
+        m._removed = True
 
     def insert(self, i, n):
         insert(self.tree, i, n)

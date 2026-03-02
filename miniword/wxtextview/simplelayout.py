@@ -273,6 +273,7 @@ def test_01():
     box2 = _grouped(replace_boxes(box, 5, 10, [p]))
     #box2.dump_boxes(0, 0, 0)
     assert len(box2) == 6
+    saved_nmax = boxes.nmax
     boxes.nmax = 5
     box2 = Paragraph([
         Row([EmptyTextBox()])
@@ -286,7 +287,8 @@ def test_01():
     for x in l:
         assert isinstance(x, Paragraph)
     box2 = _grouped(replace_boxes(box, 5, 10, l))
-    #box2.dump_boxes(0, 0, 0) # check that the tree is balenced    
+    #box2.dump_boxes(0, 0, 0) # check that the tree is balenced
+    boxes.nmax = saved_nmax
     return box2
 
 
