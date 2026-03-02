@@ -256,7 +256,7 @@ class TextModel(Model):
         return memo
 
     def clear_parproperties(self, i1, i2, *keys):
-        if not (-1 <= i1 <= i2 <= len(self)):
+        if not (-1 <= i1 <= i2 <= len(self)+1):
             raise IndexError((i1, i2))
         texel = self.get_xtexel()
         memo = get_parstyles(texel, i1, i2)
