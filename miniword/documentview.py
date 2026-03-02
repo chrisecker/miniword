@@ -119,6 +119,16 @@ class DocumentView(WXTextView):
     # Atomic style operations
     # ------------------------------------------------------------------
 
+    def _viewport_start_index(self):
+        """Return the text index of the first character on the currently visible page."""
+        rx, ry = getattr(self, '_scrollrate', (10, 10))
+        _, sy = self.GetViewStart()
+        scroll_y = sy * ry / self.zoom
+        for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
+            if py + page.height + page.depth >= scroll_y:
+                return p1
+        return 0
+
     @contextmanager
     def atomic(self):
         """Group rebuild and undo into one atomic operation.
@@ -133,8 +143,10 @@ class DocumentView(WXTextView):
             yield
         finally:
             self.end_undo_group()
+            j1 = self.builder._pending_range[0] if self.builder._pending_range else None
             self.builder.resume_rebuilds()  # fires one merged rebuild
-        self.notify_views('layout_progress_start')
+        if j1 is not None and j1 < self._viewport_start_index():
+            self.notify_views('layout_progress_start')
         self.builder.waitfor_finish()
         self.Refresh()
 
@@ -169,7 +181,8 @@ class DocumentView(WXTextView):
         # atomic() context can merge this rebuild with further changes.
         self.builder._enqueue_rebuild(j1, j2)
         if not self.builder._inhibit_depth:
-            self.notify_views('layout_progress_start')
+            if j1 < self._viewport_start_index():
+                self.notify_views('layout_progress_start')
             self.builder.waitfor_finish()  # no-op if modal finished it; fallback otherwise
             self.refresh()
 
