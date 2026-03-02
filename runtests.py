@@ -9,8 +9,7 @@
 # - Commandline arguments --silent, --redirect
 
 import sys
-sys.path.insert(0, "./test")
-
+sys.path.insert(0, ".")
 
 import types
 import traceback
@@ -122,8 +121,8 @@ def test_library(modulname, silent=False, profile=False, names=()):
         names.sort()
 
         
-    hashes = '#' * int((60-len(filename))/2)
-    print(" %s %s %s" % (hashes, filename, hashes))
+    hashes = '#' * int((60-len(modulname))/2)
+    print(" %s %s %s" % (hashes, modulname, hashes))
     tester = Tester(silent=silent, profile=profile)
     n_ok = 0
     n = 0
@@ -137,27 +136,38 @@ def test_library(modulname, silent=False, profile=False, names=()):
     print("Tests failed:   \t%i" % (n-n_ok))
 
 
-import sys
 
-profile = False
-silent = False
+def test_file(filename, silent=False, profile=False, names=()):
+    if filename.lower().endswith('.py'):
+        modulname = filename[:-3]
+    else:
+        modulname = filename
+    modulname = modulname.replace('/', '.')
+    test_library(modulname, names=names, silent=silent, profile=profile)
 
-for name in sys.argv:
-    if name == '--silent':
-        silent = True
-        sys.argv.remove(name)
-    elif name == '--profile':
-        profile = True
-        sys.argv.remove(name)
-        
-
-name = sys.argv[1]
-
-if name.lower().endswith('.py'):
-    name = name[:-3]
-filename = name.replace('/', '.')
-fun_names = sys.argv[2:]
-print("testing:", filename)
-
-test_library(filename, names=fun_names, silent=silent, profile=profile)
     
+if __name__ == '__main__':
+    import sys
+
+    profile = False
+    silent = False
+
+    for name in sys.argv:
+        if name == '--silent':
+            silent = True
+            sys.argv.remove(name)
+        elif name == '--profile':
+            profile = True
+            sys.argv.remove(name)
+
+
+    name = sys.argv[1]
+
+    if name.lower().endswith('.py'):
+        name = name[:-3]
+    filename = name.replace('/', '.')
+    fun_names = sys.argv[2:]
+    print("testing:", filename)
+
+    test_library(filename, names=fun_names, silent=silent, profile=profile)
+
