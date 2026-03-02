@@ -235,6 +235,8 @@ class DocumentView(WXTextView):
 
 def test_00():
     "modifying a basestyle updates the layout"
+    import io
+    from contextlib import redirect_stdout
     from einstein import get_einstein_model
     from .document import Document
     from .styles import style_default
@@ -244,16 +246,17 @@ def test_00():
     doc.textmodel = model
     doc.basestyles.set('normal', dict(style_default))
 
-    app   = wx.App(redirect=False)
-    frame = wx.Frame(None)
-    view  = DocumentView(frame, doc)
-    view.builder.nbefore = 0
-    view.builder.nrest = 0
+    with redirect_stdout(io.StringIO()):
+        app   = wx.App(redirect=False)
+        frame = wx.Frame(None)
+        view  = DocumentView(frame, doc)
+        view.builder.nbefore = 0
+        view.builder.nrest = 0
 
-    new_normal = doc.basestyles.get('normal').copy()
-    new_normal['font_size'] = 8
-    doc.basestyles.set('normal', new_normal)
-    stats = view.builder.get_updatestats()
+        new_normal = doc.basestyles.get('normal').copy()
+        new_normal['font_size'] = 8
+        doc.basestyles.set('normal', new_normal)
+        stats = view.builder.get_updatestats()
 
     # are the styles updated?
     style = view.builder.factory.mk_style({})

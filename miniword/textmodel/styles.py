@@ -344,7 +344,5 @@ def test_12():
     t = grouped([T("0123456789"), NL, T("abcdef"), NL]) 
     iterator = StyleIterator(iter([(10, {'bold':True})]))
     g = grouped(set_parstyles(t, 5, iterator))
-    texeltree.dump(g)
-
-    print(get_parstyles(g, 0, length(g)))
+    assert get_parstyles(g, 0, length(g)) == [(10, {}), (1, {'bold': True}), (7, {})]
 

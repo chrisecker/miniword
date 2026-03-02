@@ -635,23 +635,17 @@ def test_01():
             draft = draft.create_newpage()
         draft.add_row(row, 1.0, 0)
     pages, restartmemo = draft.fix_draft()
-    for i, page in enumerate(pages):
-        print("page %i:" % i)
-        page.dump_boxes(0, 0, 0)
-
-    print("restartmemo:")
-    for x, y, row in restartmemo.rows:
-        print("", x, y, row)
+    assert len(pages) > 0
+    assert len(restartmemo.rows) > 0
 
     draft = restartmemo.start_draft()
     for i in range(10):
         row = TextBox("New row %i" % i)
         draft.add_row(row, 1.0, 0)
 
-    pages, restartmemo = draft.fix_draft()
-    for i, page in enumerate(pages):
-        print("page %i:" % i)
-        page.dump_boxes(0, 0, 0)
+    pages2, restartmemo2 = draft.fix_draft()
+    # rows that fit on one page end up in restartmemo, not pages
+    assert len(pages2) + len(restartmemo2.rows) > 0
 
 
 def test_02():
@@ -672,7 +666,5 @@ def test_02():
     for page in generate_pages(texel, 0, info, factory):
         allpages.append(page)
 
-    for i, page in enumerate(allpages):
-        print("\nPage", i + 1)
-        show_page(page)
+    assert len(allpages) > 0
 

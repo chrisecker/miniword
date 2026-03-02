@@ -266,7 +266,6 @@ def test_01():
     #box.dump_boxes(0, 0, 0)
 
     box2 = _grouped(replace_boxes(box, 5, 10, []))
-    box2.dump_boxes(0, 0, 0)
     assert len(box2) == 5
 
     xbox, tmp = _create_testobjects("X")
@@ -359,18 +358,13 @@ def test_05():
     assert tree_depth(p1) == 0
     tmp = _grouped([p1])
     assert not tmp.is_group
-    print(tmp)
-    tmp.dump_boxes(0, 0, 0)
     assert tmp is p1
 
     p2 = Paragraph([Row([t2, NL])])
-    print(p2, tree_depth(p2))
     assert tree_depth(p2) == 0
-    
+
     tmp = _grouped([p1, p2])
-    tmp.dump_boxes(0, 0, 0)
     assert tmp.is_group
-    print(tree_depth(tmp))
     assert tree_depth(tmp) == 1
     # ...
 

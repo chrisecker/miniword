@@ -467,15 +467,8 @@ def test_01():
     xtexel     = get_einstein()
     restartmemo = RestartMemo()
     factory    = Factory(testsheet)
-    if 1:
-        i = 1
-        i1 = i2 = 0
-        for page in generate_pages(xtexel, 0, restartmemo, factory):
-            i2 = i1 + len(page)
-            print("Page", i, "[%i, %i]" % (i1, i2))
-            show_page(page)
-            i  += 1
-            i2  = i1
+    pages = list(generate_pages(xtexel, 0, restartmemo, factory))
+    assert len(pages) > 0
 
 
 def test_02():
@@ -489,46 +482,20 @@ def test_02():
 
     xtexel  = get_einstein()
     factory = Factory(testsheet)
-    pages   = []
-    i = i1 = i2 = 0
+    pages = []
+    i1 = i2 = 0
     for page in generate_pages(xtexel, 0, info, factory):
-        i  += 1
-        i2  = i1 + len(page)
-        print("Page", i, "[%i, %i]" % (i1, i2))
-        show_page(page)
+        i2 = i1 + len(page)
         pages.append((i1, i2, page))
         i1 = i2
 
-    for i, (i1, i2, page) in enumerate(pages):
-        info = page.restartmemo
-        if info:
-            print(i, "n info:", len(info.rows), repr(page)[:40])
-        else:
-            print(i, "no info", repr(page)[:40])
-
-    print(len(pages))
-    i = 4
-    i1, i2, p = pages[i - 1]
+    assert len(pages) >= 4
+    i1, i2, p = pages[3]
     info = p.restartmemo
+    assert info is not None
 
-    if 1:
-        print("RestartMemo of page", i, ":",
-              len(info.rows), "rows", repr(info.rows)[:40])
-        for row in info.rows:
-            print("info:", repr(row)[:40])
-
-    print("Restarting from i1=", i1)
-
-    newpages = []
-    i1 = i2 = 0
-    for page in generate_pages(xtexel, i1, info, factory):
-        i2 = i1 + len(page)
-        print("Page", i, "[%i, %i]" % (i1, i2))
-        if 1:
-            show_page(page)
-        i1 = i2
-        newpages.append(page)
-        i += 1
+    newpages = list(generate_pages(xtexel, i1, info, factory))
+    assert len(newpages) > 0
 
 
 def demo_01():

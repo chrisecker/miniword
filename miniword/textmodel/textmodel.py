@@ -818,8 +818,11 @@ def test_17():
 
 def test_18():
     "dump_range"
+    import io
+    from contextlib import redirect_stdout
     t = TextModel(text1+'\n'+text2)
-    dump_range(t.texel, 1, 10)
+    with redirect_stdout(io.StringIO()):
+        dump_range(t.texel, 1, 10)
 
 
 def test_19():
