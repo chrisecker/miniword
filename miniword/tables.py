@@ -348,6 +348,31 @@ def test_05():
     assert result.get_text() == 'Hello'
 
 
+def test_06():
+    "copy/paste: copied sub-table can be inserted into another model"
+    from .wxtextview.builder import Factory
+    from .textmodel.textmodel import TextModel
+    from .textmodel.texeltree import length, get_text
+    texts = [['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']]
+    table = mk_table(texts)
+    model = TextModel()
+    model.texel = table
+    factory = Factory()
+    box = build_table_box(table, factory, col_width=60, row_height=14)
+
+    i1 = box._offsets[(0, 0)]
+    i2 = box._offsets[(1, 1)] + len(box.cells[1][1])
+    copied = box.get_copy(i1, i2, model, 0)
+    assert isinstance(copied.texel, Table)
+    assert copied.texel.n_rows == 2
+    assert copied.texel.n_cols == 2
+
+    dest = TextModel()
+    dest.insert(0, copied)
+    assert get_text(dest.texel) == 'A\tB\nD\tE\n'
+    assert length(dest.texel) == length(copied.texel)
+
+
 # ---------------------------------------------------------------------------
 # Demo
 # ---------------------------------------------------------------------------
@@ -355,33 +380,20 @@ def test_05():
 def demo_00():
     """Interactive demo: click and shift-click to select cells."""
     import wx
-    from .textmodel.textmodel import TextModel
-    from .wxtextview.wxtextview import WXTextView
-    from .wxtextview.wxdevice import WxDevice
-    from .wxtextview.simplelayout import Builder
+    from .document import Document
+    from .documentview import DocumentView
 
     TEXTS = [['Name',     'City',       'Country'],
              ['Einstein', 'Ulm',        'Germany'],
              ['Darwin',   'Shrewsbury', 'England'],
              ['Curie',    'Warsaw',     'Poland']]
 
-    table_texel = mk_table(TEXTS)
-
-    class MyBuilder(Builder):
-        def Table_handler(self, texel, i1, i2):
-            return [build_table_box(texel, self, col_width=120, row_height=22)]
-
-    model = TextModel()
-    model.texel = table_texel
-
-    class TableView(WXTextView):
-        def create_builder(self):
-            return MyBuilder(self.model, WxDevice())
+    doc = Document()
+    doc.textmodel.texel = mk_table(TEXTS)
 
     app   = wx.App(redirect=False)
     frame = wx.Frame(None, title='Table demo', size=(420, 420))
-    view  = TableView(frame)
-    view.set_model(model)
+    view  = DocumentView(frame, doc)
     frame.Show()
     from .wxtextview import testing
     testing.pyshell(locals())
