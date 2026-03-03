@@ -1,6 +1,6 @@
 """Table: texel model + TableBox rendering for n×m grids."""
 
-from .textmodel.texeltree import Container, NL, TAB
+from .textmodel.texeltree import Container, NL, TAB, EMPTYSTYLE as EMPTY_TEXEL_STYLE
 from .wxtextview.boxes import Box, Row, TextBox, EMPTYSTYLE
 from .wxtextview.testdevice import TESTDEVICE
 
@@ -11,6 +11,7 @@ from .wxtextview.testdevice import TESTDEVICE
 
 class Table(Container):
     """n_rows × n_cols table texel. All children are mutable cell texels."""
+    style = EMPTY_TEXEL_STYLE
 
     def __init__(self, n_rows, n_cols, cells):
         # cells ist eine Liste von Zeilen, Zeilen bestehen aus Zellen. 
