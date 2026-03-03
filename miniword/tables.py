@@ -74,6 +74,9 @@ class CellBox(Box):
     def __len__(self):
         return self.length
 
+    def get_index(self, x, y):
+        return self.content.get_index(x, max(0, y - self.fill))
+
     def iter_boxes(self, i, x, y):
         yield 0, self.length-1, x, y+self.fill, self.content
 
@@ -138,12 +141,35 @@ class TableBox(Box):
     def get_ranges(self, i1, i2):
         ar, ac = self._find_cell(i1)
         cr, cc = self._find_cell(max(i1, i2 - 1))
+        if ar == cr and ac == cc:
+            ci1 = self._offsets[(ar, ac)]
+            cell = self.cells[ar][ac]
+            return [(r1 + ci1, r2 + ci1)
+                    for r1, r2 in cell.get_ranges(i1 - ci1, i2 - ci1)]
         r1, r2 = min(ar, cr), max(ar, cr)
         c1, c2 = min(ac, cc), max(ac, cc)
         return [(self._offsets[(r, c)],
                  self._offsets[(r, c)] + len(self.cells[r][c]))
                 for r in range(r1, r2 + 1)
                 for c in range(c1, c2 + 1)]
+
+    def draw_selection(self, i1, i2, x0, y0, dc):
+        ar, ac = self._find_cell(i1)
+        cr, cc = self._find_cell(max(i1, i2 - 1))
+        if ar == cr and ac == cc:
+            Box.draw_selection(self, i1, i2, x0, y0, dc)
+            return
+        r1, r2 = min(ar, cr), max(ar, cr)
+        c1, c2 = min(ac, cc), max(ac, cc)
+        cy = y0
+        for r, rh in enumerate(self.row_heights):
+            if r1 <= r <= r2:
+                cx = x0
+                for c, cw in enumerate(self.col_widths):
+                    if c1 <= c <= c2:
+                        self.device.invert_rect(cx, cy, cw, rh, dc)
+                    cx += cw
+            cy += rh
 
     def draw(self, x, y, dc):
         Box.draw(self, x, y, dc)
@@ -262,7 +288,7 @@ def demo_00():
     from .textmodel.textmodel import TextModel
     from .wxtextview.wxtextview import WXTextView
     from .wxtextview.wxdevice import WxDevice
-    from .wxtextview.builder import BuilderBase, Factory
+    from .wxtextview.simplelayout import Builder
 
     TEXTS = [['Name',     'City',       'Country'],
              ['Einstein', 'Ulm',        'Germany'],
@@ -271,30 +297,19 @@ def demo_00():
 
     table_texel = mk_table(TEXTS)
 
-    class TableFactory(Factory):
+    class MyBuilder(Builder):
         def Table_handler(self, texel, i1, i2):
             return [build_table_box(texel, self, col_width=120, row_height=22)]
 
-    class TableBuilder(BuilderBase):
-        def __init__(self, device):
-            self._device = device
-            factory = TableFactory(device)
-            self._layout = build_table_box(table_texel, factory,
-                                           col_width=120, row_height=22)
-        def get_device(self):   return self._device
-        def rebuild(self):      pass
-        def clear_caches(self): pass
-        def set_maxw(self, w):  pass
-
-    # Model text: cell texts joined by newlines; last char = endmark position
-    model = TextModel('\n'.join(t for row in TEXTS for t in row))
+    model = TextModel()
+    model.texel = table_texel
 
     class TableView(WXTextView):
         def create_builder(self):
-            return TableBuilder(WxDevice())
+            return MyBuilder(self.model, WxDevice())
 
     app   = wx.App(redirect=False)
-    frame = wx.Frame(None, title='Table demo', size=(420, 120))
+    frame = wx.Frame(None, title='Table demo', size=(420, 420))
     view  = TableView(frame)
     view.set_model(model)
     frame.Show()
