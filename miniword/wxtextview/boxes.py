@@ -185,9 +185,14 @@ class Box:
     def get_ranges(self, i1, i2):
         """Return selected character ranges for the interval [i1, i2].
 
-        Override in container boxes (e.g. tables) to return one range per
-        selected cell instead of a single contiguous range.
+        If the selection falls entirely within one child, delegate to that
+        child (which may be a TableBox returning multiple cell ranges).
+        Otherwise return a single range via extend_range.
         """
+        for j1, j2, x1, y1, child in self.iter_boxes(0, 0, 0):
+            if j1 <= i1 and i2 <= j2:
+                return [(r1 + j1, r2 + j1)
+                        for r1, r2 in child.get_ranges(i1 - j1, i2 - j1)]
         return [self.extend_range(i1, i2)]
 
     def extend_range(self, i1, i2):
