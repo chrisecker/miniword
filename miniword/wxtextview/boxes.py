@@ -182,6 +182,14 @@ class Box:
         # Convience method.
         return reversed(tuple(self.iter_boxes(i, x, y)))
         
+    def get_ranges(self, i1, i2):
+        """Return selected character ranges for the interval [i1, i2].
+
+        Override in container boxes (e.g. tables) to return one range per
+        selected cell instead of a single contiguous range.
+        """
+        return [self.extend_range(i1, i2)]
+
     def extend_range(self, i1, i2):
         """In some situations the user may not be allowed to select from $i1$
         to $i2$. We solve this by extending the selection to a
@@ -822,8 +830,8 @@ def test_06():
     import wx
     app = wx.App(redirect=False)
     device = WxDevice()
-    t1 = TextBox('Ein männlicher Briefmark erlebte', device=device)
-    t2 = TextBox('Was Schönes, bevor er klebte.', device=device)
+    t1 = TextBox('Ein mï¿½nnlicher Briefmark erlebte', device=device)
+    t2 = TextBox('Was Schï¿½nes, bevor er klebte.', device=device)
     par = VBox([t1, t2])
     assert par.height == t1.height+t1.depth+t2.height
     assert par.depth == t2.depth

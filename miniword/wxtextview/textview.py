@@ -732,15 +732,11 @@ class TextView(ViewBase, Model):
         return selection[0] != selection[1]
 
     def get_selected(self):
-        # Returns a list of selected regions. So far only a
-        # continguous region can be selected. In the futur this can
-        # change (for example for tables). Box.extend_selection should
-        # be renamed in Box.get_selection then.
         selection = self.selection
         if selection is None:
             return []
-        s1, s2 = sorted(self.selection)
-        return [self.layout.extend_range(s1, s2)]
+        s1, s2 = sorted(selection)
+        return self.layout.get_ranges(s1, s2)
 
     def start_selection(self):
         index = self.index
