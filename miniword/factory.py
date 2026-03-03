@@ -38,3 +38,6 @@ class Factory(FactoryBase):
             w, h = 50, 50
         return [ImageBox(bitmap, w, h, self.device)]
 
+    def Table_handler(self, texel, i1, i2):
+        from .tables import build_table_box
+        return [build_table_box(texel, self)]

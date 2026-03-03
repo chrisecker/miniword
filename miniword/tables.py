@@ -1,0 +1,303 @@
+"""Table: texel model + TableBox rendering for n×m grids."""
+
+from .textmodel.texeltree import Container, NL, TAB
+from .wxtextview.boxes import Box, Row, TextBox, EMPTYSTYLE
+from .wxtextview.testdevice import TESTDEVICE
+
+
+# ---------------------------------------------------------------------------
+# Texel model
+# ---------------------------------------------------------------------------
+
+class Table(Container):
+    """n_rows × n_cols table texel. All children are mutable cell texels."""
+
+    def __init__(self, n_rows, n_cols, cells):
+        # cells ist eine Liste von Zeilen, Zeilen bestehen aus Zellen. 
+        self.n_rows = n_rows
+        self.n_cols = n_cols
+
+        l = []
+        for row in cells:
+            assert len(row) == n_cols
+            for j, cell in enumerate(row):
+                l.append(cell)
+                if j < len(row) - 1:
+                    l.append(TAB)
+                else:
+                    l.append(NL)
+        self.childs = l
+        self.compute_weights()
+
+    def get_mutability(self):
+        # cells at even positions are mutable; TAB/NL separators at odd are not
+        return [i % 2 == 0 for i in range(len(self.childs))]
+
+    def set_childs(self, childs):
+        clone = Container.set_childs(self, childs)
+        clone.n_rows = self.n_rows
+        clone.n_cols = self.n_cols
+        return clone
+
+    def __repr__(self):
+        return 'Table(%d\xd7%d)' % (self.n_rows, self.n_cols)
+
+
+def mk_table(texts):
+    """Create a Table texel from a 2D list of strings."""
+    from .textmodel.texeltree import T, NL, G
+    n_rows = len(texts)
+    n_cols = max(len(row) for row in texts) if texts else 0
+    cells = [[T(t) for t in row] for row in texts]
+    return Table(n_rows, n_cols, cells)
+
+
+# ---------------------------------------------------------------------------
+# Box
+# ---------------------------------------------------------------------------
+
+class CellBox(Box):
+    # A box which has one empty index position at the end to seperate
+    # the content from the following boxes.
+    def __init__(self, boxes, device=None):
+        if device is not None:
+            self.device = device
+        content = self.content = Row(boxes, device=device)
+        self.length = content.length+1
+        m = self.device.measure("M", {})[1] # We use the capital
+                                            # M as a reference
+        self.fill = max(0, m-content.height)                                            
+        self.height = self.fill+content.height
+        self.depth = content.depth
+        self.width = content.width
+
+    def __len__(self):
+        return self.length
+
+    def iter_boxes(self, i, x, y):
+        yield 0, self.length-1, x, y+self.fill, self.content
+
+        
+class TableBox(Box):
+    """A n_rows × n_cols table box with per-cell selection via get_ranges()."""
+
+    def __init__(self, cells, col_widths, row_heights, device=None):
+        if device is not None:
+            self.device = device
+        self.cells       = cells
+        self.col_widths  = col_widths
+        self.row_heights = row_heights
+        self.n_rows      = len(cells)
+        self.n_cols      = len(cells[0]) if cells else 0
+        self.width       = sum(col_widths)
+        self.height      = sum(row_heights)
+        self.depth       = 0
+        self._offsets = {}
+        i = 0
+        for r, row in enumerate(cells):
+            for c, cell in enumerate(row):
+                self._offsets[(r, c)] = i
+                i += len(cell)
+        self.length = i
+
+    def __len__(self):
+        return self.length
+
+    def iter_boxes(self, i0, x0, y0):
+        y = y0
+        for r, row in enumerate(self.cells):
+            x = x0
+            for c, cell in enumerate(row):
+                ci1 = i0 + self._offsets[(r, c)]
+                yield ci1, ci1 + len(cell), x, y, cell
+                x += self.col_widths[c]
+            y += self.row_heights[r]
+
+    def get_index(self, x, y):
+        cy = 0
+        for r, rh in enumerate(self.row_heights):
+            if y < cy + rh or r == self.n_rows - 1:
+                cx = 0
+                for c, cw in enumerate(self.col_widths):
+                    if x < cx + cw or c == self.n_cols - 1:
+                        cell = self.cells[r][c]
+                        return self._offsets[(r, c)] + cell.get_index(x - cx, y - cy)
+                    cx += cw
+            cy += rh
+        return self.length
+
+    def _find_cell(self, i):
+        for r in range(self.n_rows):
+            for c in range(self.n_cols):
+                ci1 = self._offsets[(r, c)]
+                ci2 = ci1 + len(self.cells[r][c])
+                if ci1 <= i < ci2:
+                    return r, c
+        return self.n_rows - 1, self.n_cols - 1
+
+    def get_ranges(self, i1, i2):
+        ar, ac = self._find_cell(i1)
+        cr, cc = self._find_cell(max(i1, i2 - 1))
+        r1, r2 = min(ar, cr), max(ar, cr)
+        c1, c2 = min(ac, cc), max(ac, cc)
+        return [(self._offsets[(r, c)],
+                 self._offsets[(r, c)] + len(self.cells[r][c]))
+                for r in range(r1, r2 + 1)
+                for c in range(c1, c2 + 1)]
+
+    def draw(self, x, y, dc):
+        Box.draw(self, x, y, dc)
+        cy = y
+        for rh in self.row_heights:
+            self.device.draw_rect(x, cy, self.width, rh, dc)
+            cy += rh
+
+    def draw_background(self, x, y, dc):
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Build TableBox from Table texel
+# ---------------------------------------------------------------------------
+
+def build_table_box(texel, factory, col_width=120, row_height=22):
+    """Build a TableBox from a Table texel using factory to create cell boxes."""
+    # cells are at even positions; TAB/NL separators at odd positions
+    cell_texels = texel.childs[::2]
+    n_rows, n_cols = texel.n_rows, texel.n_cols
+    grid = []
+    for r in range(n_rows):
+        row = []
+        for c in range(n_cols):
+            boxes = list(factory.create_all(cell_texels[r * n_cols + c]))
+            row.append(CellBox(boxes, factory.device))
+        grid.append(row)
+    return TableBox(grid, [col_width] * n_cols, [row_height] * n_rows,
+                    device=factory.device)
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+def _mk_box_table(texts, col_width=60, row_height=14, device=None):
+    """Build a TableBox directly from strings (for box-level tests)."""
+    dev = device or TESTDEVICE
+    style = EMPTYSTYLE
+    n_rows, n_cols = len(texts), max(len(r) for r in texts)
+    cells = [[CellBox([TextBox(text, style, dev)], dev) for text in row]
+             for row in texts]
+    return TableBox(cells, [col_width] * n_cols, [row_height] * n_rows, device=dev)
+
+
+def test_00():
+    "get_ranges returns one range per cell in the rectangular selection"
+    table = _mk_box_table([['A', 'B', 'C'],
+                           ['D', 'E', 'F'],
+                           ['G', 'H', 'I']])
+    assert len(table) == 18
+    cell_len = 2
+
+    i1 = table._offsets[(1, 0)]
+    i2 = table._offsets[(1, 1)] + cell_len
+    ranges = table.get_ranges(i1, i2)
+    assert ranges == [(table._offsets[(1, 0)], table._offsets[(1, 0)] + cell_len),
+                      (table._offsets[(1, 1)], table._offsets[(1, 1)] + cell_len)]
+
+    i1 = table._offsets[(0, 0)]
+    i2 = table._offsets[(1, 1)] + cell_len
+    ranges = table.get_ranges(i1, i2)
+    assert len(ranges) == 4
+    assert ranges[0] == (table._offsets[(0, 0)], table._offsets[(0, 0)] + cell_len)
+    assert ranges[3] == (table._offsets[(1, 1)], table._offsets[(1, 1)] + cell_len)
+
+    i1 = table._offsets[(0, 0)]
+    i2 = i1 + cell_len
+    ranges = table.get_ranges(i1, i2)
+    assert len(ranges) == 1
+
+
+def test_01():
+    "Box.get_ranges propagates into a TableBox child"
+    from .wxtextview.boxes import VBox as WVBox
+    table = _mk_box_table([['X', 'Y'], ['Z', 'W']])
+    outer = WVBox([table], TESTDEVICE)
+    cell_len = 2
+    i1 = table._offsets[(1, 0)]
+    i2 = table._offsets[(1, 1)] + cell_len
+    ranges = outer.get_ranges(i1, i2)
+    assert len(ranges) == 2
+
+
+def test_02():
+    "mk_table creates Table texel with correct length"
+    texts = [['A', 'B'], ['C', 'D']]
+    table = mk_table(texts)
+    assert table.n_rows == 2
+    assert table.n_cols == 2
+    from .textmodel.texeltree import length
+    # 4 cells + 2 TABs + 2 NLs = 8
+    assert length(table) == 8
+
+
+def test_03():
+    "build_table_box produces TableBox with correct length"
+    from .wxtextview.builder import Factory
+    texts = [['Hi', 'World'], ['Foo', 'Bar']]
+    table = mk_table(texts)
+    factory = Factory()
+    box = build_table_box(table, factory, col_width=60, row_height=14)
+    assert isinstance(box, TableBox)
+    from .textmodel.texeltree import length
+    assert len(box) == length(table)
+
+
+# ---------------------------------------------------------------------------
+# Demo
+# ---------------------------------------------------------------------------
+
+def demo_00():
+    """Interactive demo: click and shift-click to select cells."""
+    import wx
+    from .textmodel.textmodel import TextModel
+    from .wxtextview.wxtextview import WXTextView
+    from .wxtextview.wxdevice import WxDevice
+    from .wxtextview.builder import BuilderBase, Factory
+
+    TEXTS = [['Name',     'City',       'Country'],
+             ['Einstein', 'Ulm',        'Germany'],
+             ['Darwin',   'Shrewsbury', 'England'],
+             ['Curie',    'Warsaw',     'Poland']]
+
+    table_texel = mk_table(TEXTS)
+
+    class TableFactory(Factory):
+        def Table_handler(self, texel, i1, i2):
+            return [build_table_box(texel, self, col_width=120, row_height=22)]
+
+    class TableBuilder(BuilderBase):
+        def __init__(self, device):
+            self._device = device
+            factory = TableFactory(device)
+            self._layout = build_table_box(table_texel, factory,
+                                           col_width=120, row_height=22)
+        def get_device(self):   return self._device
+        def rebuild(self):      pass
+        def clear_caches(self): pass
+        def set_maxw(self, w):  pass
+
+    # Model text: cell texts joined by newlines; last char = endmark position
+    model = TextModel('\n'.join(t for row in TEXTS for t in row))
+
+    class TableView(WXTextView):
+        def create_builder(self):
+            return TableBuilder(WxDevice())
+
+    app   = wx.App(redirect=False)
+    frame = wx.Frame(None, title='Table demo', size=(420, 120))
+    view  = TableView(frame)
+    view.set_model(model)
+    frame.Show()
+    from .wxtextview import testing
+    testing.pyshell(locals())
+    app.MainLoop()
