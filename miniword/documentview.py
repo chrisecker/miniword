@@ -163,6 +163,26 @@ class DocumentView(WXTextView):
         painter = None
 
     # ------------------------------------------------------------------
+    # Copy / paste
+    # ------------------------------------------------------------------
+
+    def copy(self):
+        if not self.has_selection():
+            return
+        s1, s2 = sorted(self.selection)
+        part = self._dispatch_copy(self.layout, s1, s2, 0)
+        self.to_clipboard(part)
+
+    def _dispatch_copy(self, box, i1, i2, offset):
+        """Traverse layout to find a box with get_copy; fall back to model.copy."""
+        if hasattr(box, 'get_copy'):
+            return box.get_copy(i1, i2, self.model, offset)
+        for j1, j2, x, y, child in box.iter_boxes(0, 0, 0):
+            if j1 <= i1 and i2 <= j2:
+                return self._dispatch_copy(child, i1 - j1, i2 - j1, offset + j1)
+        return self.model.copy(offset + i1, offset + i2)
+
+    # ------------------------------------------------------------------
     # Atomic style operations
     # ------------------------------------------------------------------
 
