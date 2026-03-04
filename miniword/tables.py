@@ -14,31 +14,18 @@ class Table(Container):
     style = EMPTY_TEXEL_STYLE
 
     def __init__(self, n_rows, n_cols, cells):
-        # cells ist eine Liste von Zeilen, Zeilen bestehen aus Zellen. 
         self.n_rows = n_rows
         self.n_cols = n_cols
-
         l = []
-        for row in cells:
+        for i, row in enumerate(cells):
             assert len(row) == n_cols
+            if i == 0:
+                l.append(TAB)  # leading separator so separators are at even positions
             for j, cell in enumerate(row):
                 l.append(cell)
-                if j < len(row) - 1:
-                    l.append(TAB)
-                else:
-                    l.append(NL)
+                l.append(TAB if j < n_cols - 1 else NL)
         self.childs = l
         self.compute_weights()
-
-    def get_mutability(self):
-        # cells at even positions are mutable; TAB/NL separators at odd are not
-        return [i % 2 == 0 for i in range(len(self.childs))]
-
-    def set_childs(self, childs):
-        clone = Container.set_childs(self, childs)
-        clone.n_rows = self.n_rows
-        clone.n_cols = self.n_cols
-        return clone
 
     def __repr__(self):
         return 'Table(%d\xd7%d)' % (self.n_rows, self.n_cols)
@@ -97,7 +84,7 @@ class TableBox(Box):
         self.height      = sum(row_heights)
         self.depth       = 0
         self._offsets = {}
-        i = 0
+        i = 1  # offset 0 reserved for leading TAB in Table texel
         for r, row in enumerate(cells):
             for c, cell in enumerate(row):
                 self._offsets[(r, c)] = i
@@ -183,9 +170,13 @@ class TableBox(Box):
     def draw_selection(self, i1, i2, x0, y0, dc):
         ar, ac = self._find_cell(i1)
         cr, cc = self._find_cell(max(i1, i2 - 1))
-        if ar == cr and ac == cc:
+        ci1 = self._offsets[(ar, ac)]
+        cell = self.cells[ar][ac]
+        if ar == cr and ac == cc and not (i1 == ci1 and i2 == ci1 + len(cell)):
+            # partial selection within a single cell: draw text-level highlight
             Box.draw_selection(self, i1, i2, x0, y0, dc)
             return
+        # full-cell selection (one or more cells): invert each cell's full rect
         r1, r2 = min(ar, cr), max(ar, cr)
         c1, c2 = min(ac, cc), max(ac, cc)
         cy = y0
@@ -215,8 +206,8 @@ class TableBox(Box):
 
 def build_table_box(texel, factory, col_width=120, row_height=22):
     """Build a TableBox from a Table texel using factory to create cell boxes."""
-    # cells are at even positions; TAB/NL separators at odd positions
-    cell_texels = texel.childs[::2]
+    # cells at odd positions; TAB/NL separators at even positions
+    cell_texels = texel.childs[1::2]
     n_rows, n_cols = texel.n_rows, texel.n_cols
     grid = []
     for r in range(n_rows):
@@ -248,7 +239,7 @@ def test_00():
     table = _mk_box_table([['A', 'B', 'C'],
                            ['D', 'E', 'F'],
                            ['G', 'H', 'I']])
-    assert len(table) == 18
+    assert len(table) == 19
     cell_len = 2
 
     i1 = table._offsets[(1, 0)]
@@ -289,8 +280,8 @@ def test_02():
     assert table.n_rows == 2
     assert table.n_cols == 2
     from .textmodel.texeltree import length
-    # 4 cells + 2 TABs + 2 NLs = 8
-    assert length(table) == 8
+    # structure: [TAB, A, TAB, B, NL, C, TAB, D, NL] → 4 cells + 5 separators = 9
+    assert length(table) == 9
 
 
 def test_03():
@@ -324,9 +315,9 @@ def test_04():
     assert isinstance(result.texel, Table)
     assert result.texel.n_rows == 2
     assert result.texel.n_cols == 2
-    # length must equal sum of selected cell lengths (index preservation)
+    # length = sum of selected cell lengths + 1 (leading TAB of new sub-table)
     selected = [(1,0),(1,1),(2,0),(2,1)]
-    assert length(result.texel) == sum(len(box.cells[r][c]) for r,c in selected)
+    assert length(result.texel) == sum(len(box.cells[r][c]) for r,c in selected) + 1
 
 
 def test_05():
@@ -370,7 +361,7 @@ def test_06():
 
     dest = TextModel()
     dest.insert(0, copied)
-    assert get_text(dest.texel) == 'A\tB\nD\tE\n'
+    assert get_text(dest.texel) == '\tA\tB\nD\tE\n'
     assert length(dest.texel) == length(copied.texel)
 
 
@@ -392,7 +383,7 @@ def demo_00():
     doc = Document()
     doc.textmodel.texel = mk_table(TEXTS)
 
-    app   = wx.App(redirect=False)
+    app   = wx.App(redirect=True)
     frame = wx.Frame(None, title='Table demo', size=(420, 420))
     view  = DocumentView(frame, doc)
     frame.Show()
