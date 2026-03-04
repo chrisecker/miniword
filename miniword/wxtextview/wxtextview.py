@@ -260,6 +260,8 @@ class WXTextView(wx.ScrolledWindow, TextView):
         layout = self.layout
         zoom = self.zoom
 
+        if self.index > len(layout):
+            return  # layout not yet rebuilt to cursor position
         r = layout.get_rect(self.index, 0, 0)
 
         # curosr in device coordinates
