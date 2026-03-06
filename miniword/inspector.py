@@ -674,7 +674,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         with view.atomic():
             view.add_undo((view._undo_stylesheet, name, old_style, new_style))
             view.document.basestyles.set(name, new_style)
-            self._clear_overrides(overrides)
+            self._clear_overrides(overrides - {'base'})
 
     def _create_style(self, new_name, new_style, overrides):
         """Create a new paragraph style and apply it to the current paragraph.
