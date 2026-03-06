@@ -1,174 +1,201 @@
 
-# Spezifikation: TexelTree File Format
+# TexelTree File Format Specification
 
-## 1. Dokumentenstruktur & Sektionen
+## 1. File Structure
 
-Das Format ist ein minimalistischer Stream. Alle Sektionen außer `[document]` sind optional.
+A file consists of sections in fixed order. All sections except `[document]` are optional.
+Empty sections may be omitted. Comments start with `#`.
 
-1. **`[metadata]`**: Globale Einstellungen (Papierformat, Autor, Ränder).
-2. **`[basestyles]`**: Absatz-Vorlagen (Paragraph Styles).
-3. **`[charstyles]`**: Zeichen-Vorlagen (Character Styles).
-4. **`[liststyles]`**: Listen-Definitionen (Bullet/Ordered).
-5. **`[resources]`**: Binär-Referenzen (Bilder/Blobs).
-6. **`[document]`**: Der Inhalts-Stream.
-
----
-
-## 2. Metadaten-Konkretisierung (`[metadata]`)
-
-
-| Feld                          | Typ     | Default  | Beschreibung                    |
-| ------------------------------| ------- | -------- | ------------------------------- |
-| `title` / `author`            | String  | `""`     | Dokumentinfos                   |
-| `paper`                       | String  | `"A4"`   | `"A4"`, `"Letter"`, `"custom"`  |
-| `margin_top/bottom/left/right`| Zahl    | `70.08`  | Seitenränder in pt              |
-| `paper_width/height`          | Zahl    | *(A4)*   | Nur bei `paper="custom"`        |
+1. **`[metadata]`** – Document properties (paper size, margins, author).
+2. **`[basestyles]`** – Named basestyles.
+3. **`[charstyles]`** – Named charstyles.
+4. **`[liststyles]`** – Named liststyles.
+5. **`[document]`** – Content stream.
 
 ---
 
-## 3. Style-System: IDs und Rollen
+## 2. Metadata (`[metadata]`)
 
-Styles enthalten Parameter (properties) mit denen der Text gesetzt wird. Es werden die folgenden Kategorien benutzt:
-
-Text-Properties:
-
-| Name          | Default   | Comment                                     |
-| ---           | ---       | ---                                         |
-| `font_family` | `"Arial"` | Festlegung der Schriftart                   |
-| `font_size`   | `12`      | Schriftgröße (Standardwert)                 |
-| `bold`        | `False`   | Deaktiviert Fettkapselung                   |
-| `italic`      | `False`   | Deaktiviert Kursivschrift                   |
-| `underline`   | `False`   | Deaktiviert Unterstreichung                 |
-| `strike`      | `False`   | Deaktiviert Durchstreichung                 |
-| `color`       | `"black"` | Textfarbe (Vordergrund)                     |
-| `bgcolor`     | `"white"` | Hintergrundfarbe                            |
-| `text`        | `"none"`  | Id eines benannten Text-Style als Grundlage |
-
-
-List-Properties:
-
-| Name                | Default                                                                          | Comment                                                |
-| ------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `paragraph_type`    | `"normal"`                                                                       | normal / list / numbered                               |
-| `level_policy`      | `"free"`                                                                         | free / fixed                                           |
-| `indent_levels`     | (0cm, 1cm, 2cm, 3cm, 4cm, 5cm, 6cm, 7cm, 8cm, 9cm)                               | Einzugsstufen basierend auf cm und Level-Anzahl        |
-| `first_line_indent` | `0`                                                                              | Einzug der ersten Zeile (negativ für hängenden Einzug) |
-| `marker`            | ("•","◦","-","-","-","-","-","-","-","-")                                        | Symbole für Aufzählungszeichen                         |
-| `marker_pos`        | (-0.5cm, -0.5cm, -0.5cm, -0.5cm, -0.5cm, -0.5cm, -0.5cm, -0.5cm, -0.5cm, -0.5cm) | Position der Marker relativ zum Text                   |
-| `marker_size`       | (1, 1, 1, 1, 1, 1, 1, 1, 1)                                                      | Größe der Aufzählungszeichen pro Ebene                 |
-| `marker_color`      | ("black", "black", "black", "black", "black", "black", "black", "black", "black")| Farbe der Aufzählungszeichen pro Ebene                 |
-| `numbering_style`   | ("1.0", "1.0", "1.0", "1.0", "1.0", "1.0", "1.0", "1.0", "1.0")                  | Formatierung der Nummerierung (z.B. "1.", "1.1", "a.") |
-| `start_number`      | `None`                                                                           | Startwert für nummerierte Listen (None oder Integer)   |
-| `list`              | `none`                                                                           | Id eines Liststyle als Grundlage                       |
-
-
-Structure-Properties:
-
-
-| Name                | Default  | Comment                                      |
-| ---                 | ---      | ---                                          |
-| `alignment`         | `"left"` | Ausrichtung: left / center / right / justify |
-| `space_before`      | `0`      | Abstand vor dem Absatz in pt                 |
-| `space_after`       | `0`      | Abstand nach dem Absatz in pt                |
-| `line_spacing`      | `1.0`    | Zeilenabstand (1 = einzeilig)                |
-| `page_break_before` | `False`  | Erzwingt einen Seitenumbruch vor dem Absatz  |
-
-
-### Speicherort der Styleinformationen
-Die Text-Properties liegen in den Texeln. Zu jeder Indexposition gibt es einen Satz von Text-Properties. Beispielsweise 
-T("ein Text", {color="red", bold})
-
-Structure- und List-Properties liegen in NL und TAB. NL und TAB haben damit alle drei Arten von Properties. 
-
-
-### Benannte Styles und Overrides
-Gruppen von Properties können mit einer Id versehen werden und als benannter Style referenziert werden. Identifier (IDs) wie `"normal"` oder `"a3f9"` sind **stabil**. Es gibt 3 Arten von benannte Styles: 
-- Basestyles
-- Text-Styles 
-- List-Styles
-
-
-Ein Basestyle umfasst Properties aus allen drei Property-Kategorien: Text-Properties, Structure-Properties und List-Properties. Basestyles sind immer vollständig, sind nicht alle Werte angegeben, dann wird der entsprechende Defaultwert verwendet. 
-
-Basestyles werden in den NL und TAB-Texeln durch die Angabe "base" gewählt. Ist "base" nicht angegeben, dann gilt "normal":
-
-NL()
-NL({base="normal"}) # äquivalent
-
-Properties können auch direkt angegeben werden und überschreiben dann den entsprechenden Wert des Basestyle (Override):
-NL({base="normal", align="right"}) # überschreiben einer Structure-Property
-NL({base="normal", color="red"}) # Überschreiben einer Text-Property
-
-Basestyles kann eine **Rolle** (`role`) zugewiesen werden. Sie definiert die semantische Bedeutung (z.B. `"h1"`, `"bold"`, `"code"`) und kann geändert werden, ohne den Text zu modifiziere.
-
-Text-Styles und List-Styles sind spezialisierter. Text-Styles enthalten lediglich Text-Properties und List-Styles lediglich List-Properties. 
-
-Text-Styles werden für alle Indexpositionen definiert: 
-T("Ein Text", {text="highlight"})
-
-Auch hier werden Properties des benannten Styles durch Overrides überschrieben: 
-T("Ein Text", {text="highlight"m bgcolor="red"})
-
-Identifier (IDs) wie `"normal"` oder `"a3f9"` sind **stabil** und werden im Stream referenziert. Die **Rolle** (`role`) definiert die semantische Bedeutung (z.B. `"h1"`, `"bold"`, `"code"`) und kann geändert werden, ohne den Text zu modifizieren.
-
-
-## 4. Content-Stream & Syntax
-
-### Style-Notation
-
-* `{bold}`: Boolesches Flag (True).
-* `{font="Arial", size=12}`: String- und numerische Werte.
-
-### Elemente
-
-* **T("text", {base="char_id", ...})**: Textinhalt. Referenziert nun optional `charstyles`.
-* **NL({base="base_id", ...})**: Absatz-Ende. Referenziert `basestyles`. Es kann ein Wert für ident angegeben werden (eine Zahl zwischen 0 und 9), Default ist der Wert 0:
-  - NL(2, base="normal")
-* **TAB({base="base_id", ...})**: Tabulator-Zeichen, dient als horizontaler Trenner (innerhalb von Containern).
-* **C("typ", params, {D0}, [Slots])**: Container (Tabelle, Bild, etc.).
+| Field                           | Type   | Default | Description                          |
+| ------------------------------- | ------ | ------- | ------------------------------------ |
+| `title` / `author`              | String | `""`    | Document info                        |
+| `paper`                         | String | `"A4"`  | `"A4"`, `"Letter"`, `"custom"`       |
+| `margin_top/bottom/left/right`  | Number | `70.08` | Page margins in pt                   |
+| `paper_width` / `paper_height`  | Number | *(A4)*  | Only when `paper="custom"`           |
 
 ---
 
-## 5. Vollständiges Referenz-Beispiel
+## 3. Style System
 
-```rust
+### Properties
+
+Properties control text rendering. There are three categories:
+
+**Text Properties** – carried by `T` elements:
+
+| Name          | Default   | Description        |
+| ------------- | --------- | ------------------ |
+| `font_family` | `"Arial"` | Font face          |
+| `font_size`   | `12`      | Font size in pt    |
+| `bold`        | `False`   | Bold               |
+| `italic`      | `False`   | Italic             |
+| `underline`   | `False`   | Underline          |
+| `strike`      | `False`   | Strikethrough      |
+| `color`       | `"black"` | Foreground color   |
+| `bgcolor`     | `"white"` | Background color   |
+
+**Structure Properties** – carried by `NL` and `TAB` elements:
+
+| Name                | Default  | Description                              |
+| ------------------- | -------- | ---------------------------------------- |
+| `alignment`         | `"left"` | `left` / `center` / `right` / `justify` |
+| `space_before`      | `0`      | Space before paragraph in pt             |
+| `space_after`       | `0`      | Space after paragraph in pt              |
+| `line_spacing`      | `1.0`    | Line spacing factor                      |
+| `page_break_before` | `False`  | Force page break before paragraph        |
+
+**List Properties** – carried by `NL` and `TAB` elements:
+
+Several list properties hold a list of 10 values, one per indent level (levels 0–9).
+The `ident` attribute of `NL` selects which value applies to a given paragraph.
+
+| Name              | Default                                                    | Description                                    |
+| ----------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| `paragraph_type`  | `"normal"`                                                 | `normal` / `list` / `numbered`                 |
+| `level_policy`    | `"free"`                                                   | `free` / `fixed`                               |
+| `indent_levels`   | (0cm, 1cm, 2cm, 3cm, 4cm, 5cm, 6cm, 7cm, 8cm, 9cm)        | Left indent per level                          |
+| `first_line_indent` | `0`                                                      | First-line indent in pt (negative = hanging)   |
+| `marker`          | ("•","◦","-","-","-","-","-","-","-","-")                  | Bullet symbol per level                        |
+| `marker_pos`      | (-0.5cm × 10)                                              | Marker position relative to text per level     |
+| `marker_size`     | (1 × 10)                                                   | Marker size per level                          |
+| `marker_color`    | ("black" × 10)                                             | Marker color per level                         |
+| `numbering_style` | ("1.0" × 10)                                               | Numbering format per level                     |
+| `start_number`    | `None`                                                     | Start value for numbered lists (None or int)   |
+
+### Named Styles
+
+Properties can be grouped and assigned a stable ID to form a named style. There are three kinds:
+
+- **Basestyle** – covers all three property categories (Text, Structure, List). Referenced by `NL` and `TAB` via `base=`. A basestyle is always complete: unspecified properties fall back to built-in defaults.
+- **Charstyle** – covers Text Properties only. Referenced by `T` via `char=`.
+- **Liststyle** – covers List Properties only. Referenced by `NL` and `TAB` via `list=`.
+
+Each named style may have:
+- `name` – display name in the UI (optional)
+
+Basestyles additionally support:
+- `role` – semantic role for exporters, e.g. `"h1"`, `"bullet"`, `"code"` (optional)
+
+**IDs are stable.** When editing a document, always reuse existing IDs. The `role` can be changed without touching the content stream.
+
+### Overrides
+
+Any element may specify properties directly alongside a named style reference. These override the named style's values for that element only.
+
+```
+NL({base="normal", alignment="right"})       # structure override
+T("text", {char="highlight", bgcolor="red"}) # text override
+```
+
+---
+
+## 4. Content Stream
+
+### Property Block Notation
+
+```
+{bold}                               # boolean flag (True)
+{bold, italic}                       # multiple flags
+{font_family="Arial"}                # string value
+{font_size=12}                       # numeric value
+{bold, color="red", font_size=12}    # combined
+```
+
+### Elements
+
+**`T("text")`** / **`T("text", {char="id", prop=val, ...})`**
+Text content. `char` references a charstyle (optional). Additional properties are overrides.
+
+**`NL`** / **`NL(ident, {base="id", prop=val, ...})`**
+Paragraph end. Carries the properties of the preceding paragraph.
+- `ident`: indent level 0–9 (optional, default `0`). Selects the active value from all
+  list-valued properties (e.g. `marker[ident]`, `indent_levels[ident]`).
+- `base`: references a basestyle (optional, defaults to `"normal"`).
+
+```
+NL                          # ident=0, base="normal"
+NL({base="h1"})             # ident=0, base="h1"
+NL(2, {base="bullet"})      # ident=2: uses marker[2], indent_levels[2], etc.
+```
+
+**`TAB({base="id", prop=val, ...})`**
+Tab character, used as horizontal separator within containers. Carries the same
+properties as `NL`.
+
+**`C("type", [{sep_style}], [slot], [slot], ...)`**
+Container (table, image, etc.). Each slot is enclosed in square brackets and contains a
+sequence of elements, with an optional style block at the end.
+
+Every container has an internal leading separator that optionally carries style
+information. If present, a style block `{...}` appears before the first slot. It may be
+omitted (equivalent to `{}`). The separator style is preserved for roundtrip fidelity but
+has no effect on typesetting — analogous to `space_before`/`space_after` on `TAB`.
+
+For tables, `m` (rows) and `n` (columns) are leading arguments before the optional
+separator style:
+
+```
+C("table", m, n,
+  [T("Cell 1.1")],
+  [T("Cell 1.2"), {alignment="center"}]
+)
+```
+
+**`ENDMARK`** / **`ENDMARK({base="id", prop=val, ...})`**
+Closes the last paragraph. Same syntax as `NL`. Every document has exactly one `ENDMARK`,
+at the end of `[document]`.
+
+---
+
+## 5. Full Reference Example
+
+```
 [metadata]
-title = "Technische Spezifikation"
+title = "Technical Specification"
 author = "C. Ecker"
 paper = "A4"
 margin_left = 50.0
 
 [basestyles]
-"h1" = {name="Header 1", role="h1", bold, size=18}
-"body" = {name="Standard", alignment="justify", line_spacing=1.2}
+"h1"     = {name="Header 1",  role="h1", bold, font_size=18}
+"body"   = {name="Standard",  alignment="justify", line_spacing=1.2}
+"bullet" = {name="Bullet",    role="bullet", paragraph_type="list"}
 
 [charstyles]
 "key" = {name="Keyword", bold, color="blue"}
 
 [document]
-T("Einführung")
+T("Introduction")
 NL({base="h1"})
 
-T("Dies ist ein ")
-T("wichtiger", {char="key"})
-T(" Begriff im Dokument.")
+T("This is an ")
+T("important", {char="key"})
+T(" term in the document.")
 NL({base="body"})
 
-C("table", 2, 1, {size=10}, 
-  [T("ID"), {bold}], 
-  [T("Wert")]
-)
-NL({base="body"})
+T("First level item.")
+NL(0, {base="bullet"})
+T("Second level item.")
+NL(1, {base="bullet"})
 
-ENDMARK
-
+ENDMARK({base="body"})
 ```
 
 ---
 
-## 6. Wichtige Regeln für KI & Parser
+## 6. Rules for AI & Parsers
 
-1. **Stabilität:** Verwende beim Bearbeiten bestehende IDs weiter, auch wenn du die Attribute innerhalb der Sektionen änderst.
-2. **Minimalismus:** Nicht definierte Attribute fallen auf die System-Defaults zurück.
-3. **Rollen:** Die `role` in `[basestyles]` dient der semantischen Einordnung für Konverter (z.B. nach Markdown oder HTML).
-
+1. **ID stability:** Always reuse existing style IDs. Never invent new IDs unless adding a new style.
+2. **Minimal overrides:** Only specify properties that differ from the named style. Unspecified properties fall back to the named style, then to built-in defaults.
+3. **Roles:** The `role` field enables semantic export (e.g. to Markdown or HTML). It may change without modifying the content stream.
+4. **ident:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. For `paragraph_type="list"` or `"numbered"` it also activates the corresponding marker.
