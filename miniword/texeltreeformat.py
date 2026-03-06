@@ -5,24 +5,26 @@ TexelTree Canonical Format - Parser and Serializer
 Canonical format uses 3 types (Groups dissolved):
     T("text")                         -- Text with empty style
     T("text", {bold, color="red"})    -- Text with style
-    NL                                -- NewLine with empty styles
-    NL({parStyle="h1", indent=2})     -- NewLine with parStyle/indent
+    NL                                -- NewLine, ident=0, base="normal"
+    NL({base="h1"})                   -- NewLine with basestyle
+    NL(2, {base="bullet"})            -- NewLine with ident and basestyle
     TAB                               -- Tabulator
     S("-")                            -- Other Single (char only)
     S("-", {color="red"})             -- Other Single with style
     C("frac",                         -- Container
-      T("a"),
-      T("b")
+      [T("a")],
+      [T("b")]
     )
-    C("table",                        -- Container with slot styles
-      {align="left"}: T("cell1"),
-      {align="right"}: (T("line1") NL T("line2"))
+    C("table", m, n,                  -- Table with m rows, n cols
+      {align="left"},                 -- optional leading separator style
+      [T("cell1")],
+      [T("cell2"), {align="right"}]   -- optional slot style at end
     )
 
 Document format:
     PROPS({author="...", paper="A4"})   -- optional document properties
     TEXELS...
-    ENDMARK({parStyle="h1", indent=0})
+    ENDMARK({base="h1"})
 """
 
 import ast
@@ -79,12 +81,15 @@ def serialize_texel(texel, indent=0):
             parts = {}
             if texel.parstyle:
                 parts.update(texel.parstyle)
-            if texel.indent:
-                parts['indent'] = texel.indent
             if texel.style:
                 parts['_style'] = texel.style  # rare, stored separately
-            if parts:
-                s = serialize_style(parts)
+            ident = texel.indent or 0
+            s = serialize_style(parts) if parts else ''
+            if ident and s:
+                return '%sNL(%d, %s)' % (pad, ident, s)
+            elif ident:
+                return '%sNL(%d)' % (pad, ident)
+            elif s:
                 return '%sNL(%s)' % (pad, s)
             return '%sNL' % pad
 
@@ -106,53 +111,49 @@ def serialize_texel(texel, indent=0):
     raise ValueError("Unknown texel type: %r" % texel)
 
 
+def _serialize_slot(content, slot_style, indent):
+    """Serialize a slot as [texel, ..., {style}]."""
+    pad = '  ' * indent
+    flat = list(_flatten(content))
+    parts = [serialize_texel(t, indent=0).strip() for t in flat]
+    if slot_style:
+        parts.append(serialize_style(slot_style))
+    return '%s[%s]' % (pad, ', '.join(parts))
+
+
 def serialize_container(texel, indent=0):
     """Serialize a Container with hidden separators."""
     pad = '  ' * indent
     inner = '  ' * (indent + 1)
 
-    # Extract type name
     ctype = texel.__class__.__name__
 
-    # Get mutable slots and their preceding separator styles
     mutable = texel.get_mutability()
     slots = []
     sep_style = EMPTYSTYLE
 
     for k, (i1, i2, child) in enumerate(iter_childs(texel)):
         if not mutable[k]:
-            # This is a separator - capture its style
             sep_style = child.style if hasattr(child, 'style') else EMPTYSTYLE
         else:
-            # This is content - serialize with preceding sep style
             slots.append((sep_style, child))
             sep_style = EMPTYSTYLE
 
     if not slots:
         return '%sC("%s")' % (pad, ctype)
 
+    leading_sep_style = slots[0][0]
     lines = ['%sC("%s",' % (pad, ctype)]
+
+    if leading_sep_style:
+        lines.append('%s%s,' % (inner, serialize_style(leading_sep_style)))
+
     for i, (sep_s, content) in enumerate(slots):
         is_last = (i == len(slots) - 1)
         comma = '' if is_last else ','
-
-        # Serialize content (flatten groups)
-        flat = list(_flatten(content))
-        if len(flat) == 1:
-            content_str = serialize_texel(flat[0], indent=indent + 1).lstrip()
-        else:
-            # Multiple texels in slot -> wrap in (...)
-            inner_lines = [serialize_texel(t, indent=indent + 2) for t in flat]
-            content_str = '(\n%s\n%s)' % (
-                '\n'.join(inner_lines),
-                inner
-            )
-
-        if sep_s:
-            style_str = serialize_style(sep_s)
-            lines.append('%s%s: %s%s' % (inner, style_str, content_str, comma))
-        else:
-            lines.append('%s%s%s' % (inner, content_str, comma))
+        # slot 0 has no trailing style (leading sep handled above)
+        slot_style = sep_s if i > 0 else EMPTYSTYLE
+        lines.append(_serialize_slot(content, slot_style, indent + 1) + comma)
 
     lines.append('%s)' % pad)
     return '\n'.join(lines)
@@ -181,10 +182,14 @@ def serialize(root, endmark=None, properties=None):
         parts = {}
         if endmark.parstyle:
             parts.update(endmark.parstyle)
-        if endmark.indent:
-            parts['indent'] = endmark.indent
-        if parts:
-            lines.append('ENDMARK(%s)' % serialize_style(parts))
+        ident = endmark.indent or 0
+        s = serialize_style(parts) if parts else ''
+        if ident and s:
+            lines.append('ENDMARK(%d, %s)' % (ident, s))
+        elif ident:
+            lines.append('ENDMARK(%d)' % ident)
+        elif s:
+            lines.append('ENDMARK(%s)' % s)
         else:
             lines.append('ENDMARK')
 
@@ -203,18 +208,20 @@ class _Tokenizer:
     """Simple tokenizer for the canonical format."""
     
     # Token types
-    IDENT   = 'IDENT'
-    STRING  = 'STRING'
-    NUMBER  = 'NUMBER'
-    LPAREN  = 'LPAREN'
-    RPAREN  = 'RPAREN'
-    LBRACE  = 'LBRACE'
-    RBRACE  = 'RBRACE'
-    COMMA   = 'COMMA'
-    COLON   = 'COLON'
-    EQUALS  = 'EQUALS'
-    NEWLINE = 'NEWLINE'
-    EOF     = 'EOF'
+    IDENT    = 'IDENT'
+    STRING   = 'STRING'
+    NUMBER   = 'NUMBER'
+    LPAREN   = 'LPAREN'
+    RPAREN   = 'RPAREN'
+    LBRACE   = 'LBRACE'
+    RBRACE   = 'RBRACE'
+    LBRACKET = 'LBRACKET'
+    RBRACKET = 'RBRACKET'
+    COMMA    = 'COMMA'
+    COLON    = 'COLON'
+    EQUALS   = 'EQUALS'
+    NEWLINE  = 'NEWLINE'
+    EOF      = 'EOF'
 
     TOKEN_RE = re.compile(
         r'(?P<COMMENT>\#[^\n]*)'
@@ -226,6 +233,8 @@ class _Tokenizer:
         r'|(?P<RPAREN>\))'
         r'|(?P<LBRACE>\{)'
         r'|(?P<RBRACE>\})'
+        r'|(?P<LBRACKET>\[)'
+        r'|(?P<RBRACKET>\])'
         r'|(?P<COMMA>,)'
         r'|(?P<COLON>:)'
         r'|(?P<EQUALS>=)'
@@ -327,9 +336,15 @@ class _Parser:
         indent = 0
         if self.tok.peek()[0] == 'LPAREN':
             self.tok.consume('LPAREN')
-            d = self.parse_style()
-            indent = d.pop('indent', 0)
-            parstyle = as_style(d)
+            if self.tok.peek()[0] == 'NUMBER':
+                _, v = self.tok.consume()
+                indent = int(float(v))
+                if self.tok.peek()[0] == 'COMMA':
+                    self.tok.consume('COMMA')
+            if self.tok.peek()[0] == 'LBRACE':
+                d = self.parse_style()
+                indent = d.pop('indent', indent)  # backward compat
+                parstyle = as_style(d)
             self.tok.consume('RPAREN')
         nl = NL.set_parstyle(parstyle)
         nl = nl.set_indent(indent)
@@ -366,42 +381,47 @@ class _Parser:
         ctype = self.parse_string()
         self.tok.consume('COMMA')
 
-        # Build a Container subclass dynamically
-        slots = []  # list of (sep_style, content_texel)
-        while self.tok.peek()[0] != 'RPAREN':
-            sep_style = EMPTYSTYLE
-            # Check for optional {style}:
-            if self.tok.peek()[0] == 'LBRACE':
-                sep_style = as_style(self.parse_style())
-                self.tok.consume('COLON')
+        # Optional leading separator style: {style}
+        sep0_style = EMPTYSTYLE
+        if self.tok.peek()[0] == 'LBRACE':
+            sep0_style = as_style(self.parse_style())
+            if self.tok.peek()[0] == 'COMMA':
+                self.tok.consume('COMMA')
 
-            # Parse content: single texel or (texel texel ...)
-            if self.tok.peek()[0] == 'LPAREN':
-                self.tok.consume('LPAREN')
-                children = []
-                while self.tok.peek()[0] != 'RPAREN':
+        # Slots: [content..., {optional_style}]
+        # slot_style is the style of the separator preceding that slot (i>0)
+        slots = []  # list of (slot_style, content)
+        while self.tok.peek()[0] == 'LBRACKET':
+            self.tok.consume('LBRACKET')
+            children = []
+            slot_style = EMPTYSTYLE
+            while self.tok.peek()[0] != 'RBRACKET':
+                if self.tok.peek()[0] == 'LBRACE':
+                    slot_style = as_style(self.parse_style())
+                else:
                     children.append(self.parse_texel())
-                self.tok.consume('RPAREN')
-                content = grouped(children) if children else Group([])
-            else:
-                content = self.parse_texel()
-
-            slots.append((sep_style, content))
-
+                if self.tok.peek()[0] == 'COMMA':
+                    self.tok.consume('COMMA')
+            self.tok.consume('RBRACKET')
+            content = grouped(children) if children else Group([])
+            slots.append((slot_style, content))
             if self.tok.peek()[0] == 'COMMA':
                 self.tok.consume('COMMA')
 
         self.tok.consume('RPAREN')
 
-        # Reconstruct childs: [SEP, content, SEP, content, ..., SEP]
-        childs = []
-        for sep_style, content in slots:
-            sep = TAB.set_style(sep_style) if sep_style else TAB
-            childs.append(sep)
+        # Reconstruct childs: [SEP0, content0, SEP1, content1, ..., trailing_TAB]
+        # SEP0.style = sep0_style
+        # SEP_i (i>0).style = slots[i][0] (style at end of slot i)
+        childs = [TAB.set_style(sep0_style) if sep0_style else TAB]
+        for i, (slot_style, content) in enumerate(slots):
             childs.append(content)
-        childs.append(TAB)  # trailing separator
+            if i < len(slots) - 1:
+                next_style = slots[i + 1][0]
+                childs.append(TAB.set_style(next_style) if next_style else TAB)
+            else:
+                childs.append(TAB)  # trailing separator
 
-        # Create anonymous Container subclass with given type name
         c = _make_container(ctype, childs)
         return c
 
@@ -411,9 +431,15 @@ class _Parser:
         indent = 0
         if self.tok.peek()[0] == 'LPAREN':
             self.tok.consume('LPAREN')
-            d = self.parse_style()
-            indent = d.pop('indent', 0)
-            parstyle = as_style(d)
+            if self.tok.peek()[0] == 'NUMBER':
+                _, v = self.tok.consume()
+                indent = int(float(v))
+                if self.tok.peek()[0] == 'COMMA':
+                    self.tok.consume('COMMA')
+            if self.tok.peek()[0] == 'LBRACE':
+                d = self.parse_style()
+                indent = d.pop('indent', indent)  # backward compat
+                parstyle = as_style(d)
             self.tok.consume('RPAREN')
         em = ENDMARK.set_parstyle(parstyle)
         em = em.set_indent(indent)
@@ -525,13 +551,14 @@ def test_00():
 
 
 def test_01():
-    "Roundtrip: NewLine with parStyle"
+    "Roundtrip: NewLine with parStyle and ident"
     from .textmodel.texeltree import as_style, get_text
     s = as_style({'base': 'h1'})
     nl = NL.set_parstyle(s).set_indent(2)
     root = Group([Text("Hello"), nl])
     em = ENDMARK.set_parstyle(as_style({'base': 'body'}))
     out = serialize(root, em)
+    assert 'NL(2, ' in out
     root2, em2, _ = parse(out)
     assert get_text(root2) == "Hello\n"
     assert em2 is not None
@@ -586,8 +613,11 @@ def test_04():
     t = Table(Text("A"), Text("B"))
     root = Group([t])
     out = serialize(root)
+    # leading sep style before slots, slot style at end of slot
+    assert '{align="left"}' in out
+    assert '[T(\'A\')]' in out or '[T("A")]' in out
+    assert 'align="right"' in out
     root2, _, _ = parse(out)
     assert get_text(root2) == "\tA\tB\t"
-    assert 'align' in out
 
 

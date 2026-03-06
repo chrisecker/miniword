@@ -3,19 +3,21 @@ TXL file format — load and save for Document objects.
 
 File structure (all sections except [document] are optional):
 
-    [charstyles]
-    "em" = {bold, name="Hervorhebung"}
-
     [basestyles]
-    "h1" = {font_size=18, bold, name="Überschrift 1"}
+    "h1" = {font_size=18, bold, name="Header 1", role="h1"}
+
+    [charstyles]
+    "em" = {bold, name="Emphasis"}
 
     [liststyles]
-    "bullet" = {name="Aufzählung", marker="•"}
+    "bullet" = {name="Bullet list", marker="•"}
 
     [document]
     PROPS({author="Ada"})
     T("Hello")
-    NL
+    NL({base="h1"})
+    T("First item.")
+    NL(1, {base="bullet"})
     ENDMARK
 """
 
