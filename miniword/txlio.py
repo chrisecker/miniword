@@ -12,6 +12,9 @@ File structure (all sections except [document] are optional):
     [liststyles]
     "bullet" = {name="Bullet list", marker="•"}
 
+    [blobs]
+    "photo.png" = "base64encodeddata..."
+
     [document]
     PROPS({author="Ada"})
     T("Hello")
@@ -22,6 +25,7 @@ File structure (all sections except [document] are optional):
 """
 
 import re
+import base64
 from .document import Document
 from .textmodel.textmodel import TextModel
 from .texeltreeformat import serialize, parse, serialize_style, _Parser
@@ -47,6 +51,13 @@ def save(doc, path):
                 diff = _style_diff(style)
                 parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
             parts.append('')
+
+    # Blobs section — only written when non-empty
+    if doc.blobs:
+        parts.append('[blobs]')
+        for key, data in doc.blobs.items():
+            parts.append('"%s" = "%s"' % (key, base64.b64encode(data).decode('ascii')))
+        parts.append('')
 
     # Document section — always written
     parts.append('[document]')
@@ -75,6 +86,10 @@ def load(path):
             for key, style in _parse_stylesheet(sections[attr]).items():
                 getattr(doc, attr).set(key, updated(style_default, style))
 
+    # Blobs — optional
+    if 'blobs' in sections:
+        doc.blobs = _parse_blobs(sections['blobs'])
+
     # Document content
     root, endmark, settings = parse(sections['document'])
     doc.settings = settings
@@ -101,6 +116,18 @@ def _split_sections(text):
     for name in it:
         sections[name] = next(it, '').strip()
     return sections
+
+
+def _parse_blobs(text):
+    """Parse blobs section body into {key: bytes}."""
+    p = _Parser(text)
+    blobs = {}
+    while not p.tok.at_end():
+        key = p.parse_string()
+        p.tok.consume('EQUALS')
+        b64 = p.parse_string()
+        blobs[key] = base64.b64decode(b64)
+    return blobs
 
 
 def _parse_stylesheet(text):
@@ -191,6 +218,25 @@ def test_03():
     assert 'font_size' in style
     text = get_text(doc.textmodel.get_xtexel())
     assert 'Albert Einstein' in text
+
+
+def test_04():
+    "blobs roundtrip"
+    import tempfile, os
+
+    doc = Document()
+    doc.textmodel = TextModel("Hello")
+    doc.blobs = {'photo.png': b'\x89PNG\r\nfakedata', 'logo.jpg': b'\xff\xd8fake'}
+
+    with tempfile.NamedTemporaryFile(
+            suffix='.txl', delete=False, mode='w') as f:
+        path = f.name
+    try:
+        doc.save(path)
+        doc2 = Document.load(path)
+        assert doc2.blobs == doc.blobs
+    finally:
+        os.unlink(path)
 
 
 def test_02():

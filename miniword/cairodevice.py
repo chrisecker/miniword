@@ -49,6 +49,7 @@ class CairoDevice:
 
     def __init__(self):
         self._cache = LRUCache(1000)
+        self._image_cache = {}   # id(blob_data) → (surface, w, h)
         self._temp_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)
         self._temp_ctx = cairo.Context(self._temp_surface)
         fo = cairo.FontOptions()
@@ -59,6 +60,7 @@ class CairoDevice:
 
     def clear_caches(self):
         self._cache.clear()
+        self._image_cache.clear()
 
     def reset_blink(self):
         self._blink_reference_time = time.time()
@@ -278,6 +280,58 @@ class CairoDevice:
         ctx.set_source_rgba(r / 255.0, g / 255.0, b / 255.0, a / 255.0)
         ctx.rectangle(x, y, w, h)
         ctx.fill()
+
+    def load_image(self, blob_data):
+        """Decode blob_data → (cairo.ImageSurface, width, height).
+
+        Returns (None, 0, 0) if decoding fails.
+        Decoded surfaces are cached by object identity of blob_data.
+        """
+        key = id(blob_data)
+        if key in self._image_cache:
+            return self._image_cache[key]
+        result = self._decode_image(blob_data)
+        self._image_cache[key] = result
+        return result
+
+    def _decode_image(self, blob_data):
+        import io
+        # PNG: native pycairo support
+        try:
+            surface = cairo.ImageSurface.create_from_png(io.BytesIO(blob_data))
+            return surface, surface.get_width(), surface.get_height()
+        except Exception:
+            pass
+        # JPEG / other formats: via Pillow
+        try:
+            from PIL import Image as PILImage
+            import numpy as np
+            img = PILImage.open(io.BytesIO(blob_data)).convert('RGBA')
+            w, h = img.size
+            arr = np.array(img)
+            # Cairo ARGB32 stores bytes as B, G, R, A (little-endian)
+            bgra = np.ascontiguousarray(arr[:, :, [2, 1, 0, 3]])
+            surface = cairo.ImageSurface.create_for_data(
+                bytearray(bgra), cairo.FORMAT_ARGB32, w, h, w * 4)
+            return surface, w, h
+        except Exception:
+            pass
+        return None, 0, 0
+
+    def draw_bitmap(self, bitmap, x, y, width, height, ctx):
+        """Draw a cairo.ImageSurface scaled to (width, height) at (x, y)."""
+        if bitmap is None:
+            return
+        src_w = bitmap.get_width()
+        src_h = bitmap.get_height()
+        if src_w == 0 or src_h == 0:
+            return
+        ctx.save()
+        ctx.translate(x, y)
+        ctx.scale(width / src_w, height / src_h)
+        ctx.set_source_surface(bitmap, 0, 0)
+        ctx.paint()
+        ctx.restore()
 
 
 def eq(a, b, delta=1e-2):

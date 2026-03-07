@@ -110,9 +110,8 @@ class UnitInput(wx.Panel):
             self._last_pt = None
             return
         factor = UNIT_TO_PT[self.default_unit]
-        value = value / factor
-        self.text.SetValue(f"{value:g} {self.default_unit}")
         self._last_pt = value
+        self.text.SetValue(f"{value / factor:g} {self.default_unit}")
 
     def GetValue(self):
         return self._last_pt

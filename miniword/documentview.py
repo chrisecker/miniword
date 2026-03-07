@@ -292,6 +292,7 @@ class DocumentView(WXTextView):
 
     def create_builder(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
+        factory.blobs = self.document.blobs
         builder = Builder(self.model, factory)
         return builder
 

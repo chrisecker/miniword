@@ -3,6 +3,7 @@ from .textmodel.viewbase import ViewBase
 from .inspector import InspectorPanel
 from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
+from .image import Image, ImageInspector
 from .ui.sidepanel import SidePanel, IconBar
 
 
@@ -92,8 +93,12 @@ class MainFrame(wx.Frame, ViewBase):
         # Inspectors for right panel
         self.inspector = InspectorPanel(self._right_panel, self.textview, self.document.basestyles)
         self.document_settings = SettingsInspector(self._right_panel, self.document)
+        self.image_inspector = ImageInspector(
+            self._right_panel, self._on_image_insert, self._on_image_change)
+        self.image_inspector.blobs = self.document.blobs
         self._right_panel.add_page("format", self.inspector)
         self._right_panel.add_page("settings", self.document_settings)
+        self._right_panel.add_page("image", self.image_inspector)
 
         # Left panel example page (optional)
         # self._left_panel.add_page("left_plugin", SomePanel(self._left_panel))
@@ -112,8 +117,9 @@ class MainFrame(wx.Frame, ViewBase):
             self,
             self.show_right_panel,
             [("format", "style.svg", "Paragraph format"),
-             ("settings", "settings.svg", "Document settings")],
-            side = 'right'            
+             ("settings", "settings.svg", "Document settings"),
+             ("image", "image.svg", "Image properties")],
+            side = 'right'
         )
 
         # Layout: LeftIcon | LeftPanel | Editor | RightPanel | RightIcon
@@ -200,6 +206,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.inspector.basestyle.set_stylesheet(doc.basestyles)
         self.document_settings.model = doc
         self.document_settings._refresh()
+        self.image_inspector.blobs = doc.blobs
+        self.image_inspector.clear()
 
     def show_right_panel(self, key):
         print("showing right: ", key)
@@ -219,6 +227,57 @@ class MainFrame(wx.Frame, ViewBase):
 
     def undo_changed(self, *args):
         wx.CallAfter(self._update_undo_ui)
+
+    def index_changed(self, *args):
+        wx.CallAfter(self._update_image_inspector)
+
+    def _update_image_inspector(self):
+        if not hasattr(self, 'textview'):
+            return
+        from .textmodel.textmodel import _get_texel
+        index = self.textview.index
+        model = self.textview.model
+        try:
+            texel = _get_texel(model.get_xtexel(), index)
+        except (IndexError, AttributeError):
+            texel = None
+        if isinstance(texel, Image):
+            self.image_inspector.refresh(texel, index)
+            self.show_right_panel("image")
+            self._right_icon_bar._active = "image"
+            self._right_icon_bar.Refresh()
+        else:
+            self.image_inspector.clear()
+
+    def _on_image_insert(self, blob_id):
+        from .textmodel.texeltree import grouped
+        from .pagegen import restartmemo_from_settings
+        model = self.textview.model
+        index = self.textview.index
+        scale = 1.0
+        blob = self.document.blobs.get(blob_id)
+        load_image = getattr(self.textview.builder.device, 'load_image', None)
+        if blob and load_image:
+            _, src_w, src_h = load_image(blob)
+            if src_w > 0:
+                memo = restartmemo_from_settings(self.document.settings)
+                avail_w = memo.geometry[0] - memo.border[1] - memo.border[3]
+                if src_w > avail_w:
+                    scale = avail_w / src_w
+        img = Image(blob_id, scale)
+        tmp = model.create_textmodel()
+        tmp.texel = grouped([img])
+        self.textview.insert(index, tmp)
+
+    def _on_image_change(self, index, blob_id, scale, crop):
+        from .textmodel.texeltree import grouped
+        model = self.textview.model
+        img = Image(blob_id, scale, crop)
+        tmp = model.create_textmodel()
+        tmp.texel = grouped([img])
+        with self.textview.atomic():
+            model.remove(index, index + 1)
+            model.insert(index, tmp)
 
     def layout_progress_start(self, view):
         if view.builder.layout.is_finished:

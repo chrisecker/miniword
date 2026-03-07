@@ -27,6 +27,7 @@ class Document(Model):
         self.basestyles.set_owner(self, 'basestyles')
         self.textmodel = TextModel()
         self.settings = {}
+        self.blobs = {}   # {blob_id: bytes}
 
     def set_settings(self, settings):
         self.settings = settings

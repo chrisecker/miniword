@@ -191,20 +191,13 @@ class DraftNode:
         self.rows += (x, y, row)
 
     def can_addrow(self, row, line_spacing, before):
+        if not self.rows:
+            return True  # always accept first row even if oversized
         border_top, border_right, border_bottom, border_left = self.border
-
-        # Natural box height
         natural = row.height + row.depth
-
-        # Effective height after line_spacing
         advance = natural * line_spacing
-
-        # Available height
         max_y = self.geometry[1] - border_top - border_bottom
-
-        if self.rows:
-            return self.y + before + advance <= max_y
-        return self.y + advance <= max_y
+        return self.y + before + advance <= max_y
 
     def add_row(self, row, line_spacing, before):
         border_top, border_right, border_bottom, border_left = self.border
