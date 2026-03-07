@@ -1,7 +1,11 @@
 from .wxtextview.builder import Factory as FactoryBase
 from .wxtextview.testdevice import TESTDEVICE
+from .wxtextview.boxes import NewlineBox
 from .styles import updated, style_default
 
+
+class ForceBreakBox(NewlineBox):
+    """Sentinel box for a forced line break (BR texel)."""
 
 
 class Factory(FactoryBase):
@@ -15,5 +19,7 @@ class Factory(FactoryBase):
         stylesheet = self.stylesheet
         basestyle = stylesheet.get(parstyle.get('base', 'normal')) or {}
         return updated(style_default, basestyle, parstyle, style)
-        
-    
+
+    def BR_handler(self, texel, i1, i2):
+        return [ForceBreakBox(self.mk_style(texel.style), self.device)]
+

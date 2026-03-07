@@ -37,6 +37,7 @@ from .textmodel.texeltree import (
     as_style, grouped, join, length, depth,
     iter_childs
 )
+from .texels import BR
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +100,12 @@ def serialize_texel(texel, indent=0):
             if s:
                 return '%sTAB(%s)' % (pad, s)
             return '%sTAB' % pad
+
+        elif isinstance(texel, BR):
+            s = serialize_style(texel.style) if texel.style else ''
+            if s:
+                return '%sBR(%s)' % (pad, s)
+            return '%sBR' % pad
 
         else:
             s = serialize_style(texel.style) if texel.style else ''
@@ -314,6 +321,8 @@ class _Parser:
             return self.parse_newline()
         elif value == 'TAB':
             return self.parse_tab()
+        elif value == 'BR':
+            return self.parse_br()
         elif value == 'S':
             return self.parse_single()
         elif value == 'C':
@@ -362,6 +371,16 @@ class _Parser:
         if style:
             tab = tab.set_style(style)
         return tab
+
+    def parse_br(self):
+        self.tok.consume('IDENT')  # BR
+        style = EMPTYSTYLE
+        if self.tok.peek()[0] == 'LPAREN':
+            self.tok.consume('LPAREN')
+            if self.tok.peek()[0] == 'LBRACE':
+                style = as_style(self.parse_style())
+            self.tok.consume('RPAREN')
+        return BR(style or None)
 
     def parse_single(self):
         self.tok.consume('IDENT')  # S
@@ -638,5 +657,16 @@ def test_04():
     assert 'align="right"' in out
     root2, _, _ = parse(out)
     assert get_text(root2) == "\tA\tB\t"
+
+
+def test_07():
+    "Roundtrip: BR (forced line break)"
+    from .textmodel.texeltree import get_text, as_style
+    br = BR()
+    root = Group([Text("line1"), br, NL])
+    out = serialize(root)
+    assert 'BR' in out
+    root2, _, _ = parse(out)
+    assert get_text(root2) == 'line1\x0b\n'
 
 

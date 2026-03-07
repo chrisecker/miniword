@@ -20,7 +20,7 @@ from .wxtextview.boxes import get_text
 from .textmodel.texeltree import length, NewLine
 from .wxtextview.linewrap import simple_linewrap
 from .styles import mm, cm, pt, updated, n_levels
-from .factory import Factory
+from .factory import Factory, ForceBreakBox
 from .stretchable import justify_line
 
 import wx
@@ -405,6 +405,19 @@ def iter_paragraphs(texel, i):
         dump(texel)
         raise
 
+def split_at_breaks(boxlist):
+    """Split boxlist at ForceBreakBox markers; each marker ends its segment."""
+    segments, current = [], []
+    for box in boxlist:
+        current.append(box)
+        if isinstance(box, ForceBreakBox):
+            segments.append(current)
+            current = []
+    if current:
+        segments.append(current)
+    return segments
+
+
 import re as _re
 
 
@@ -525,7 +538,11 @@ def generate_pages(texel, i, restartmemo, factory):
         line_width_first = line_right - line_left_first
         line_width_rest  = line_right - line_left_rest
 
-        lines      = simple_linewrap(boxlist, line_width_first, line_width_rest)
+        segments = split_at_breaks(boxlist)
+        lines = []
+        for seg in segments:
+            w = line_width_first if not lines else line_width_rest
+            lines.extend(simple_linewrap(seg, w, line_width_rest))
         line_width = line_width_first
         line_left  = line_left_first
         first      = True

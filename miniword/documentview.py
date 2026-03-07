@@ -29,6 +29,22 @@ class DocumentView(WXTextView):
         self.add_model(document.basestyles)
         self.add_model(document)
         
+    def on_char(self, event):
+        if event.GetKeyCode() == wx.WXK_RETURN and event.ShiftDown():
+            self.insert_linebreak()
+            return
+        super().on_char(event)
+
+    def insert_linebreak(self):
+        from .texels import BR
+        from .textmodel.texeltree import grouped
+        model = self.model
+        index = self.index
+        style = model.get_style(index)
+        tmp = model.create_textmodel()
+        tmp.texel = grouped([BR(style)])
+        self.insert(index, tmp)
+
     def on_mousewheel(self, event):
         if not event.ControlDown():
             return event.Skip()  # scroll
