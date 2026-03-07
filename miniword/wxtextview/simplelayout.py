@@ -164,35 +164,20 @@ class Builder(BuilderBase, Factory):
         self._layout = self.grouped(l)
         assert isinstance(self._layout, Box)
 
-    ### Signal handlers
-    def properties_changed(self, i1, i2):
-        #print "properties changed", i1, i2
-        j1, j2 = self.get_envelope(i1, i2)
-        texel = self.extended_texel()
-        new = self.create_paragraphs(texel, j1, j2)
-        self.replace_paragraphs(j1, j2, new)
-
-    def inserted(self, i, n):
-        j1, j2 = self.get_envelope(i, i+1) # +1 is needed when we
-                                            # insert between two
-                                            # paragraphs
-        texel = self.extended_texel()
-        new = self.create_paragraphs(texel, j1, j2+n)
-        self.replace_paragraphs(j1, j2, new)
-
-    def removed(self, i, n):
-        #print "removed", i, n
-        i1 = i
-        i2 = i+n
-        if i2<len(self._layout):
-            # Removing the NL at the paragraph end meens, that the
-            # paragraph sould be merged with the next paragraph. We
-            # therefore have to extend the interval so that both
-            # paragraphs are rebuild.
-            i2 = i2+1
-        j1, j2 = self.get_envelope(i1, i2)
-        texel = self.extended_texel()
-        new = self.create_paragraphs(texel, j1, j2-n)
+    def rebuild_range(self, i1, i2, delta):
+        if delta >= 0:
+            # insert or properties change: envelope around affected range
+            j1, j2 = self.get_envelope(i1, min(i2+1, len(self._layout)))
+            texel = self.extended_texel()
+            new = self.create_paragraphs(texel, j1, j2 + delta)
+        else:
+            n = -delta
+            end = i1 + n
+            if end < len(self._layout):
+                end += 1  # include next paragraph when NL is removed
+            j1, j2 = self.get_envelope(i1, end)
+            texel = self.extended_texel()
+            new = self.create_paragraphs(texel, j1, j2 + delta)
         self.replace_paragraphs(j1, j2, new)
 
 

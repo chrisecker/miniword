@@ -58,28 +58,79 @@ class DocumentView(WXTextView):
         self.Scroll(max(0, int(new_scroll_x / rx)),
                     max(0, int(new_scroll_y / ry)))        
 
-    def _ensure_viewport(self):
-        """Build synchronously until the visible area and cursor are covered."""
-        layout = self.builder._layout
-        if layout.is_finished:
-            return
+    def _viewport_start(self):
+        """Return the text index of the first character on the currently visible page."""
+        rx, ry = getattr(self, '_scrollrate', (10, 10))
+        _, sy = self.GetViewStart()
+        scroll_y = sy * ry / self.zoom
+        for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
+            if py + page.height + page.depth >= scroll_y:
+                return p1
+        return 0
+
+    def _viewport_bottom_y(self):
+        """Return the bottom coordinate of the currently visible viewport."""
         rx, ry = getattr(self, '_scrollrate', (10, 10))
         _, sy  = self.GetViewStart()
         ch     = self.GetClientSize()[1]
-        bottom = (sy * ry + ch) / self.zoom
-        cursor = self.index
+        return (sy * ry + ch) / self.zoom
+
+    _showing_progress = False
+
+    def ensure_viewport(self):
+        """Safety net: build until viewport is covered (no dialog)."""
+        if self._showing_progress:
+            return
+        layout = self.builder._layout
+        y = self._viewport_bottom_y()
         while not layout.is_finished:
-            covered = len(layout) > cursor
-            if covered:
-                for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
-                    if py + page.height + page.depth >= bottom:
-                        return
+            if self.index < len(layout) and layout.height + layout.depth >= y:
+                break
             self.builder.build_step(call_after=False)
 
+    def _progress_until_viewport(self):
+        """Show a progress dialog and build until viewport is covered.
+
+        Returns immediately if viewport is already covered or layout is
+        finished.  Continues the rest of the build in the background.
+        """
+        if self._showing_progress:
+            return
+        layout = self.builder._layout
+        y = self._viewport_bottom_y()
+        if layout.is_finished or layout.height + layout.depth >= y:
+            return
+        total = len(self.builder.model) + 1
+        self._showing_progress = True
+        dlg = wx.ProgressDialog(
+            "Building layout", "Please wait...",
+            maximum=100, parent=self,
+            style=wx.PD_AUTO_HIDE)
+        try:
+            while not layout.is_finished:
+                if layout.height + layout.depth >= y:
+                    break
+                self.builder.build_step(call_after=False)
+                dlg.Update(min(99, int(100 * len(layout) / total)))
+                wx.Yield()
+        finally:
+            self._showing_progress = False
+            dlg.Destroy()
+
+    def rebuild_progress(self, i1, i2):
+        """Rebuild range i1..i2 with a progress dialog until viewport covered."""
+        self.builder.rebuild_range(i1, i2, 0)
+        self._progress_until_viewport()
+
+    def rebuild(self):
+        self.builder.rebuild()
+        self._progress_until_viewport()
+        self.refresh()
+
     def on_paint(self, event):
+        self.ensure_viewport()
         self._update_scroll()
         self.keep_cursor_on_screen()
-        self._ensure_viewport()
 
         pdc = wx.PaintDC(self)
         pdc.SetAxisOrientation(True, False)
@@ -126,11 +177,12 @@ class DocumentView(WXTextView):
             c = entry[2] if len(entry) > 2 else 'red'
             squiggle(painter, layout, i1, i2, x, y, c)   # 4. lines on top
 
-        if wx.Window.FindFocus() is self:
+        if wx.Window.FindFocus() is self and self.index <= len(layout):
             layout.draw_cursor(self.index, x, y, painter,
                                self.model.defaultstyle)
         for j1, j2 in self.get_selected():
-            layout.draw_selection(j1, j2, x, y, painter)
+            if j1 <= len(layout):
+                layout.draw_selection(j1, min(j2, len(layout)), x, y, painter)
         dc = None
         painter = None
 
@@ -138,36 +190,38 @@ class DocumentView(WXTextView):
     # Atomic style operations
     # ------------------------------------------------------------------
 
-    def _viewport_start(self):
-        """Return the text index of the first character on the currently visible page."""
-        rx, ry = getattr(self, '_scrollrate', (10, 10))
-        _, sy = self.GetViewStart()
-        scroll_y = sy * ry / self.zoom
-        for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
-            if py + page.height + page.depth >= scroll_y:
-                return p1
-        return 0
+    _inhibit_depth = 0
+    _pending_range = None  # (i1, i2, delta) accumulated while inhibited
+
+    def _accumulate(self, i1, i2, delta=0):
+        r = (i1, i2, delta)
+        if self._pending_range is None:
+            self._pending_range = r
+        else:
+            self._pending_range = accumulate(self._pending_range, r)
+
+    def rebuild_range(self, i1, i2, delta):
+        if self._inhibit_depth > 0:
+            self._accumulate(i1, i2, delta)
+        else:
+            self.builder.rebuild_range(i1, i2, delta)
 
     @contextmanager
     def atomic(self):
-        """Group rebuild and undo into one atomic operation.
-
-        Both the rebuild (via builder.inhibit/resume) and the undo entries
-        (via begin/end_undo_group) are coalesced.  After the context exits,
-        the layout is built to completion and the view is refreshed.
-        """
+        """Group multiple model/stylesheet changes into one layout rebuild."""
         self.begin_undo_group()
-        self.builder.inhibit_rebuilds()
+        self._inhibit_depth += 1
         try:
             yield
         finally:
             self.end_undo_group()
-            j1 = self.builder._pending_range[0] if self.builder._pending_range else None
-            self.builder.resume_rebuilds()  # fires one merged rebuild
-        if j1 is not None and j1 < self._viewport_start():
-            self.notify_views('layout_progress_start')
-            self.builder.waitfor_finish()  # fallback if no modal listener
-        self.Refresh()
+            self._inhibit_depth -= 1
+            if self._inhibit_depth == 0 and self._pending_range is not None:
+                i1, i2, delta = self._pending_range
+                self._pending_range = None
+                self.builder.rebuild_range(i1, i2, delta)
+                self._progress_until_viewport()
+                self.refresh()
 
     def _undo_stylesheet(self, name, restore_to, after_redo):
         """Undo/redo a stylesheet change.
@@ -193,44 +247,35 @@ class DocumentView(WXTextView):
                 if j1 is None:
                     j1 = i1
                 j2 = i2
-        self.clear_caches()
         if j1 is None:
             return
-        # Enqueue instead of rebuilding immediately so that a surrounding
-        # atomic() context can merge this rebuild with further changes.
-        self.builder._enqueue_rebuild(j1, j2)
-        if not self.builder._inhibit_depth:
-            if j1 < self._viewport_start():
-                self.notify_views('layout_progress_start')
-                self.builder.waitfor_finish()  # fallback if no modal listener
+        self.clear_caches()
+        if self._inhibit_depth > 0:
+            self._accumulate(j1, j2)
+        else:
+            self.rebuild_progress(j1, j2)
             self.refresh()
 
     def settings_changed(self, *args, **kwds):
         self.builder.settings = self.document.settings
         self.builder.rebuild()
+        self._progress_until_viewport()
         self.refresh()
 
     def style_removed(self, stylesheet, key):
         self.clear_caches()
         self.builder.rebuild()
+        self._progress_until_viewport()
         self.refresh()
 
     def create_builder(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
         builder = Builder(self.model, factory)
-        builder.progress_callback = self._on_build_progress
         return builder
-
-    def _on_build_progress(self, n_pages, n_chars, total_chars):
-        self.notify_views('layout_progress', n_pages, n_chars, total_chars)
 
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
         WXTextView.set_index(self, index, extend, update)
-
-    def print(self):
-        import printer
-        printer.show_printdlg(self.builder.layout)
 
     def export_pdf(self, path):
         import cairo
@@ -322,6 +367,86 @@ class DocumentView(WXTextView):
 
 
 
+def accumulate(r1, r2):
+    """Combine two consecutive update ranges into one.
+
+    r1 = (i1, i2, delta) in original model coordinates.
+    r2 = (b1, b2, d2)    in model coordinates after r1 was applied.
+
+    Returns a merged (i1, i2, delta) in original model coordinates that
+    covers both changes and carries the combined delta.
+    """
+    pi1, pi2, pd = r1
+    b1,  b2,  d2 = r2
+
+    pi2_m0  = pi2 + max(0, -pd)   # M0 end: includes deleted chars if pd<0
+    pi1_m1  = pi1 + max(0,  pd)   # first M1 position after the change
+
+    if b1 > pi1_m1:                # r2 entirely after r1
+        b1o = b1 - pd
+        b2o = b2 - pd
+    elif b2 < pi1:                 # r2 entirely before r1
+        b1o = b1
+        b2o = b2
+    else:                          # overlap — conservative
+        b1o = min(b1, pi1)
+        b2o = max(b2 - pd, pi2_m0)
+
+    return (min(pi1, b1o), max(pi2_m0, b2o), pd + d2)
+
+
+def test_accumulate():
+    "accumulate: combining two update ranges"
+    # --- delta=0: property changes ---
+
+    # r2 after r1, no overlap
+    assert accumulate((2, 5, 0), (8, 12, 0)) == (2, 12, 0)
+
+    # r2 before r1, no overlap
+    assert accumulate((8, 12, 0), (2, 5, 0)) == (2, 12, 0)
+
+    # r2 overlaps r1
+    assert accumulate((2, 8, 0), (5, 12, 0)) == (2, 12, 0)
+
+    # --- insertion (pd > 0) ---
+
+    # r2 after r1: positions shift by pd (user's example)
+    # insert 1 at 5, then insert 1 at 10-in-M1 (= 9 in M0)
+    assert accumulate((5, 5, 1), (10, 10, 1)) == (5, 9, 2)
+
+    # r2 before r1: no shift needed
+    # insert 1 at 10, then insert 1 at 3-in-M1 (before change)
+    assert accumulate((10, 10, 1), (3, 3, 1)) == (3, 10, 2)
+
+    # r2 within inserted region (overlap)
+    # insert 3 at 5; property change at pos 6-in-M1 (inside insertion)
+    assert accumulate((5, 5, 3), (6, 6, 0)) == (5, 5, 3)
+
+    # --- deletion (pd < 0) ---
+
+    # r2 after deletion: shift right by |pd|, pi2_m0 covers deleted region
+    # delete 3 at 5 (removes M0 positions 5-7); property change at 7-in-M1 (=10 in M0)
+    assert accumulate((5, 5, -3), (7, 7, 0)) == (5, 10, -3)
+
+    # r2 before deletion: pi2_m0 must include the deleted region
+    # delete 3 at 5; property change at 2-3 in M1 (before deletion)
+    assert accumulate((5, 5, -3), (2, 3, 0)) == (2, 8, -3)
+
+    # insertion then deletion
+    # insert 2 at 3; delete 4 at 8-in-M1 (= 6 in M0)
+    assert accumulate((3, 3, 2), (8, 8, -4)) == (3, 6, -2)
+
+    # --- straddle: b1 before, b2 after — only b2 needs shifting ---
+
+    # insert 2 at 5; property change [3, 10] in M1 (b1 before, b2 after insert)
+    # b1=3 → no shift; b2=10 → shift: 10-2=8
+    assert accumulate((5, 5, 2), (3, 10, 0)) == (3, 8, 2)
+
+    # delete 3 at 5; property change [3, 7] in M1 (b1 before, b2 after delete)
+    # b1=3 → no shift; b2=7 → shift: 7+3=10; pi2_m0=8 → max(10,8)=10
+    assert accumulate((5, 5, -3), (3, 7, 0)) == (3, 10, -3)
+
+
 def test_00():
     "modifying a basestyle updates the layout"
     import io
@@ -362,6 +487,51 @@ def test_00():
     assert tb.style['font_size'] == 8
 
     
+def test_01():
+    "progress dialog is shown when viewport build takes long"
+    import io
+    import sys, os
+    from contextlib import redirect_stdout
+    from unittest.mock import patch
+    from .document import Document
+    from .styles import style_default
+
+    # Add test/ dir to path so moby.py is importable
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    test_dir = os.path.join(here, 'test')
+    if test_dir not in sys.path:
+        sys.path.insert(0, test_dir)
+    from moby import get_moby_model
+
+    with redirect_stdout(io.StringIO()):
+        app   = wx.App(redirect=False)
+        frame = wx.Frame(None)
+
+        doc = Document()
+        doc.textmodel = get_moby_model()
+        doc.basestyles.set('normal', dict(style_default))
+
+        view = DocumentView(frame, doc)
+        view.builder.waitfor_finish()
+
+        # Scroll to near the end so _ensure_viewport has a lot to build
+        view.Scroll(0, 9999)
+
+        dialogs = []
+        OrigDialog = wx.ProgressDialog
+        class TrackingDialog(OrigDialog):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                dialogs.append(self)
+
+        # Trigger a full rebuild; _progress_until_viewport must show dialog
+        with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
+            view.builder.rebuild()
+            view._progress_until_viewport()
+
+    assert len(dialogs) > 0, "progress dialog should have been shown"
+
+
 def demo_00():
     from einstein import get_einstein_model
     from .styles import testsheet

@@ -132,14 +132,7 @@ class BuilderBase:
         assert self._layout is not None
         return self._layout
 
-    ### Signal handlers
-    def properties_changed(self, i1, i2):
-        pass
-
-    def inserted(self, i, n):
-        pass
-
-    def removed(self, i, n):
+    def rebuild_range(self, i1, i2, delta):
         pass
 
 

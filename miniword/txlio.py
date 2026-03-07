@@ -183,7 +183,7 @@ def test_03():
     style = doc.basestyles.get('normal')
     # Non-default values must be present
     assert abs(style['space_after'] - 14.17) < 0.1
-    assert abs(style['first_line_indent'] - 11.34) < 0.1
+    assert abs(style['first_line_indent'] - 17.01) < 0.1
     assert style['alignment'] == 'justify'
     # In-memory styles are complete: defaults are present too
     assert style['bold'] == False

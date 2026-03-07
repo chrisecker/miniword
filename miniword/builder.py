@@ -108,21 +108,22 @@ class Builder(BuilderBase):
 
     generator = None
 
-    def start(self, state, irest, rest):
+    def start(self, state, irest, rest, i2=None):
         """Start the update task.
 
         Missing pages will be appended to the layout, using rest as a
         shortcut. A new layout must have been created before calling
         this, containing only the pages prior to the change.
+
+        i2: end of the changed range. When given, build synchronously
+        until i2+1000 is covered before switching to background mode.
         """
         layout = self._layout
         self.nbefore = len(layout.childs)
 
         self.rest_memo = irest, rest
         texel = self.model.get_xtexel()
-        print("starting layout. len(model)=", len(self.model),
-              "len(layout)=", len(layout))
-        if self.generator is not None: 
+        if self.generator is not None:
             print("overriding old generator")
         p = len(layout)
         self.generator = self.create_generator(
@@ -134,12 +135,10 @@ class Builder(BuilderBase):
             # startup by finishing manually here.
             return self.waitfor_finish()
 
-        # If a generator is already running this is redundant and will
-        # cause one extra build_step call at the very end. Since
-        # generator is set to None after finish, this has no effect.
-        wx.CallAfter(self.build_step)
-        # The caller may now produce pages itself via waitfor_xx, or
-        # simply wait for them to be produced via CallAfter.
+        if i2 is not None:
+            self.waitfor_index(min(i2 + 1000, len(self.model)))
+        else:
+            wx.CallAfter(self.build_step)
 
     def build_step(self, call_after=True):
         """Advance the active update task by one step.
@@ -150,6 +149,8 @@ class Builder(BuilderBase):
 
         Has no effect if the task is already finished.
         """
+        print("build_step", call_after)
+        #assert not call_after # XXX
         if self.generator is None:
             return
         try:
@@ -170,11 +171,6 @@ class Builder(BuilderBase):
         except StopIteration:
             return self.finish()
         if call_after:
-            if self.progress_callback:
-                self.progress_callback(len(self._layout.childs),
-                                       len(self._layout),
-                                       len(self.model) + 1)
-            wx.Yield()
             wx.CallAfter(self.build_step)
 
     def waitfor_finish(self):
@@ -186,14 +182,17 @@ class Builder(BuilderBase):
         layout = self._layout
         while len(layout) < i and not layout.is_finished:
             self.build_step(call_after=False)
-        wx.CallAfter(self.build_step)
 
     def waitfor_page(self, i):
         layout = self._layout
         while len(layout.childs) < i + 1 and not layout.is_finished:
             self.build_step(call_after=False)
-        wx.CallAfter(self.build_step)
 
+    def waitfor_y(self, y):
+        layout = self._layout
+        while layout.height+layout.depth < y and not layout.is_finished:
+            self.build_step(call_after=False)
+        
     def rebuild(self):
         """Rebuild the entire layout from i=0; nothing is reused."""
         print("rebuild")
@@ -204,10 +203,9 @@ class Builder(BuilderBase):
         """Clean up, append rest pages, update statistics."""
         rest_i, rest = self.rest_memo
         self.nrest = len(rest)
-        print("nrest=", self.nrest)
         if rest:
+            print("finish: appending %d rest pages" % self.nrest)
             for page in rest:
-                print("finish: appending_rest page")
                 self._layout.append_page(page)
             self.rest_memo = 0, ()
         
@@ -236,7 +234,7 @@ class Builder(BuilderBase):
         for i, page in enumerate(self._layout.childs):
             page.adjust(i + 1)
 
-    def rebuild_dirty(self, i1, i2, delta):
+    def rebuild_range(self, i1, i2, delta):
         layout = self._layout
         q1 = q2 = k1 = k2 = state = None
 
@@ -282,7 +280,7 @@ class Builder(BuilderBase):
             i_rest += delta
 
         self._layout = Layout(pages_before, self.factory.device)
-        self.start(state, i_rest, pages_rest)
+        self.start(state, i_rest, pages_rest, i2=i2)
 
     def can_finish(self, state):
         """Update rest_memo and check whether the remaining pages can
@@ -343,42 +341,7 @@ class Builder(BuilderBase):
         print("pages before %s, pages updated %s, rest %s" %
               self.get_updatestats())
 
-    # --- Rebuild inhibiting ---
 
-    def _enqueue_rebuild(self, j1, j2):
-        """Schedule a dirty rebuild.  When inhibited, accumulate the range;
-        otherwise execute immediately."""
-        if self._inhibit_depth > 0:
-            if self._pending_range is None:
-                self._pending_range = (j1, j2)
-            else:
-                pj1, pj2 = self._pending_range
-                self._pending_range = (min(j1, pj1), max(j2, pj2))
-        else:
-            self.rebuild_dirty(j1, j2, 0)
-
-    def inhibit_rebuilds(self):
-        """Prevent rebuild_dirty from firing until resume_rebuilds()."""
-        self._inhibit_depth += 1
-
-    def resume_rebuilds(self):
-        """Re-enable rebuilds and fire a single merged rebuild if needed."""
-        self._inhibit_depth -= 1
-        if self._inhibit_depth == 0 and self._pending_range is not None:
-            j1, j2 = self._pending_range
-            self._pending_range = None
-            self.rebuild_dirty(j1, j2, 0)
-
-    # --- Signal handlers ---
-
-    def properties_changed(self, i1, i2):
-        self._enqueue_rebuild(i1, i2)
-
-    def inserted(self, i, n):
-        self.rebuild_dirty(i, i, n)
-
-    def removed(self, i, n):
-        self.rebuild_dirty(i, i, -n)
 
 
 class MyView(WXTextView):

@@ -622,13 +622,16 @@ class TextView(ViewBase, Model):
         from ..textmodel.treebase import is_root_efficient
         assert is_root_efficient(self.layout)
 
+    def rebuild_range(self, i1, i2, delta):
+        self.builder.rebuild_range(i1, i2, delta)
+
     ### Signals issued by model
     def properties_changed(self, model, i1, i2):
-        self.builder.properties_changed(i1, i2)
+        self.rebuild_range(i1, i2, 0)
         self.refresh()
 
     def inserted(self, model, i, n):
-        self.builder.inserted(i, n)
+        self.rebuild_range(i, i, n)
         if debug:
             self.check()
         if i>= self.index:
@@ -643,7 +646,7 @@ class TextView(ViewBase, Model):
         self.refresh()
 
     def removed(self, model, i, text):
-        self.builder.removed(i, len(text))
+        self.rebuild_range(i, i, -len(text))
         n = len(text)
         i1 = i
         i2 = i+n

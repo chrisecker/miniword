@@ -252,6 +252,13 @@ class WXTextView(wx.ScrolledWindow, TextView):
         vw, vh = self.GetVirtualSize()
         if vw == w and vh == h:
             return
+        # While rebuilding, never shrink the virtual size — the scroll
+        # position must not be clamped before the layout catches up.
+        if not getattr(self.layout, 'is_finished', True):
+            w = max(w, vw)
+            h = max(h, vh)
+        if vw == w and vh == h:
+            return
         self.SetVirtualSize((w, h))
         self._scrollrate = 10, 10
         self.SetScrollRate(*self._scrollrate)

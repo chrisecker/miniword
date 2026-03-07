@@ -1,14 +1,13 @@
 [basestyles]
-"normal" = {alignment="justify", first_line_indent=11.338582677165356, name="Normal", space_after=14.173228346456694}
-"h0" = {bold, font_size=18, name="Heading 1", page_break_before}
+"normal" = {alignment="justify", first_line_indent=17.007874015748033, name="Normal", space_after=14.173228346456694}
+"h0" = {alignment="center", bold, font_size=18, name="Heading 1", page_break_before, space_after=17.007874015748033}
 "h1" = {bold, color="red", font_size=16, name="Heading 2"}
 "h2" = {bold, font_size=14, name="Heading 3"}
 "h3" = {bold, name="Heading 4"}
 
 [document]
-PROPS({author="C. Ecker", title="Wikipedia A. Einstein"})
 T('Albert Einstein')
-NL({alignment="center", base="h0", space_after=17.007874015748033})
+NL({base="h0"})
 T('Albert Einstein was a German-born theoretical physicist who developed the theory of relativity, one of the two pillars of modern physics (alongside quantum mechanics). His work is also known for its influence on the philosophy of science. He is best known to the general public for his mass–energy equivalence formula E = mc^2, which has been dubbed "the world\'s most famous equation". He received the 1921 Nobel Prize in Physics "for his services to theoretical physics, and especially for his discovery of the law of the photoelectric effect", a pivotal step in the development of quantum theory.')
 NL
 T('Near the beginning of his career, Einstein thought that Newtonian mechanics was no longer enough to reconcile the laws of classical mechanics with the laws of the electromagnetic field. This led him to develop his special theory of relativity during his time at the Swiss Patent Office in Bern (1902–1909). He subsequently realized that the principle of relativity could be extended to gravitational fields, and published a paper on general relativity in 1916 introducing his theory of gravitation. He continued to deal with problems of statistical mechanics and quantum theory, which led to his explanations of particle theory and the motion of molecules. He also investigated the thermal properties of light and the quantum theory of radiation, the basis of laser, which laid the foundation of the photon theory of light. In 1917, he applied the general theory of relativity to model the structure of the universe.')
