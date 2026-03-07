@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miniword"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+[tool.setuptools.packages.find]
+include = ["miniword*"]
+
+[tool.setuptools.package-data]
+miniword = ["icons/*.svg"]
+
+[project.scripts]
+miniword = "miniword.__main__:main"
