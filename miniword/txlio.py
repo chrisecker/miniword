@@ -17,7 +17,7 @@ File structure (all sections except [document] are optional):
     T("Hello")
     NL({base="h1"})
     T("First item.")
-    NL(1, {base="bullet"})
+    NL({indent=1, base="bullet"})
     ENDMARK
 """
 

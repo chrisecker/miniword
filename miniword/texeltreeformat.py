@@ -2,23 +2,25 @@
 """
 TexelTree Canonical Format - Parser and Serializer
 
-Canonical format uses 3 types (Groups dissolved):
-    T("text")                         -- Text with empty style
-    T("text", {bold, color="red"})    -- Text with style
-    NL                                -- NewLine, ident=0, base="normal"
-    NL({base="h1"})                   -- NewLine with basestyle
-    NL(2, {base="bullet"})            -- NewLine with ident and basestyle
-    TAB                               -- Tabulator
-    S("-")                            -- Other Single (char only)
-    S("-", {color="red"})             -- Other Single with style
-    C("frac",                         -- Container
+All element parameters — structural and stylistic — go in a single {…}
+property block.  There are no positional arguments other than the element
+type string and slot contents.
+
+    T("text")                           -- Text with empty style
+    T("text", {bold, color="red"})      -- Text with style
+    NL                                  -- NewLine, indent=0, base="normal"
+    NL({base="h1"})                     -- NewLine with basestyle
+    NL({indent=2, base="bullet"})       -- NewLine with indent and basestyle
+    TAB                                 -- Tabulator
+    S("-")                              -- Other Single (char only)
+    S("-", {color="red"})               -- Other Single with style
+    C("frac",                           -- Container (no properties)
       [T("a")],
       [T("b")]
     )
-    C("table", m, n,                  -- Table with m rows, n cols
-      {align="left"},                 -- optional leading separator style
+    C("table", {ncols=2},              -- Table: ncols structural, rest style
       [T("cell1")],
-      [T("cell2"), {align="right"}]   -- optional slot style at end
+      [T("cell2")]
     )
 
 Document format:
@@ -81,17 +83,14 @@ def serialize_texel(texel, indent=0):
     elif texel.is_single:
         if isinstance(texel, NewLine):
             parts = {}
+            if texel.indent:
+                parts['indent'] = texel.indent
             if texel.parstyle:
                 parts.update(texel.parstyle)
             if texel.style:
                 parts['_style'] = texel.style  # rare, stored separately
-            ident = texel.indent or 0
             s = serialize_style(parts) if parts else ''
-            if ident and s:
-                return '%sNL(%d, %s)' % (pad, ident, s)
-            elif ident:
-                return '%sNL(%d)' % (pad, ident)
-            elif s:
+            if s:
                 return '%sNL(%s)' % (pad, s)
             return '%sNL' % pad
 
@@ -145,10 +144,14 @@ def serialize_container(texel, indent=0):
         return '%sC("%s")' % (pad, ctype)
 
     leading_sep_style = slots[0][0]
-    lines = ['%sC("%s",' % (pad, ctype)]
+    ncols = getattr(texel, '_ncols', 1)
+    props = dict(leading_sep_style) if leading_sep_style else {}
+    if ncols != 1:
+        props['ncols'] = ncols
 
-    if leading_sep_style:
-        lines.append('%s%s,' % (inner, serialize_style(leading_sep_style)))
+    lines = ['%sC("%s",' % (pad, ctype)]
+    if props:
+        lines.append('%s%s,' % (inner, serialize_style(props)))
 
     for i, (sep_s, content) in enumerate(slots):
         is_last = (i == len(slots) - 1)
@@ -182,15 +185,12 @@ def serialize(root, endmark=None, properties=None):
 
     if endmark is not None:
         parts = {}
+        if endmark.indent:
+            parts['indent'] = endmark.indent
         if endmark.parstyle:
             parts.update(endmark.parstyle)
-        ident = endmark.indent or 0
         s = serialize_style(parts) if parts else ''
-        if ident and s:
-            lines.append('ENDMARK(%d, %s)' % (ident, s))
-        elif ident:
-            lines.append('ENDMARK(%d)' % ident)
-        elif s:
+        if s:
             lines.append('ENDMARK(%s)' % s)
         else:
             lines.append('ENDMARK')
@@ -339,14 +339,9 @@ class _Parser:
         nl_style = None
         if self.tok.peek()[0] == 'LPAREN':
             self.tok.consume('LPAREN')
-            if self.tok.peek()[0] == 'NUMBER':
-                _, v = self.tok.consume()
-                indent = int(float(v))
-                if self.tok.peek()[0] == 'COMMA':
-                    self.tok.consume('COMMA')
             if self.tok.peek()[0] == 'LBRACE':
                 d = self.parse_style()
-                indent = d.pop('indent', indent)  # backward compat
+                indent = d.pop('indent', 0)
                 nl_style = d.pop('_style', None)
                 parstyle = as_style(d)
             self.tok.consume('RPAREN')
@@ -387,10 +382,13 @@ class _Parser:
         ctype = self.parse_string()
         self.tok.consume('COMMA')
 
-        # Optional leading separator style: {style}
+        # Optional property block: {ncols=N, style...}
         sep0_style = EMPTYSTYLE
+        ncols = 1
         if self.tok.peek()[0] == 'LBRACE':
-            sep0_style = as_style(self.parse_style())
+            d = self.parse_style()
+            ncols = d.pop('ncols', 1)
+            sep0_style = as_style(d) if d else EMPTYSTYLE
             if self.tok.peek()[0] == 'COMMA':
                 self.tok.consume('COMMA')
 
@@ -429,6 +427,8 @@ class _Parser:
                 childs.append(TAB)  # trailing separator
 
         c = _make_container(ctype, childs)
+        if ncols != 1:
+            c._ncols = ncols
         return c
 
     def parse_endmark(self):
@@ -437,14 +437,9 @@ class _Parser:
         indent = 0
         if self.tok.peek()[0] == 'LPAREN':
             self.tok.consume('LPAREN')
-            if self.tok.peek()[0] == 'NUMBER':
-                _, v = self.tok.consume()
-                indent = int(float(v))
-                if self.tok.peek()[0] == 'COMMA':
-                    self.tok.consume('COMMA')
             if self.tok.peek()[0] == 'LBRACE':
                 d = self.parse_style()
-                indent = d.pop('indent', indent)  # backward compat
+                indent = d.pop('indent', 0)
                 parstyle = as_style(d)
             self.tok.consume('RPAREN')
         em = ENDMARK.set_parstyle(parstyle)
@@ -478,14 +473,9 @@ class _Parser:
         self.tok.consume('LBRACE')
         d = {}
         while self.tok.peek()[0] != 'RBRACE':
-            k_kind, k_val = self.tok.peek()
-            if k_kind == 'STRING':
-                self.tok.consume()
-                k_val = k_val[1:-1]  # strip quotes from string key
-            else:
-                k_kind, k_val = self.tok.consume('IDENT')
-            if self.tok.peek()[0] in ('EQUALS', 'COLON'):
-                self.tok.consume()  # consume EQUALS or COLON
+            k_kind, k_val = self.tok.consume('IDENT')
+            if self.tok.peek()[0] == 'EQUALS':
+                self.tok.consume('EQUALS')
                 v_kind, v_val = self.tok.peek()
                 if v_kind == 'STRING':
                     self.tok.consume()
@@ -564,14 +554,15 @@ def test_00():
 
 
 def test_01():
-    "Roundtrip: NewLine with parStyle and ident"
+    "Roundtrip: NewLine with parStyle and indent"
     from .textmodel.texeltree import as_style, get_text
     s = as_style({'base': 'h1'})
     nl = NL.set_parstyle(s).set_indent(2)
     root = Group([Text("Hello"), nl])
     em = ENDMARK.set_parstyle(as_style({'base': 'body'}))
     out = serialize(root, em)
-    assert 'NL(2, ' in out
+    assert 'indent=2' in out
+    assert 'NL(' in out
     root2, em2, _ = parse(out)
     assert get_text(root2) == "Hello\n"
     assert em2 is not None
@@ -610,6 +601,21 @@ def test_05():
     assert props2['author'] == 'Max'
     assert props2['paper'] == 'A4'
     assert props2['margin_top'] == 2.5
+
+
+def test_06():
+    "Roundtrip: Container with ncols"
+    from .textmodel.texeltree import get_text
+    childs = [TAB, Text("A"), TAB, Text("B"), TAB, Text("C"), TAB, Text("D"), TAB]
+    c = _make_container("table", childs)
+    c._ncols = 2
+    root = Group([c])
+    out = serialize(root)
+    assert 'ncols=2' in out
+    root2, _, _ = parse(out)
+    c2 = list(_flatten(root2))[0]
+    assert c2._ncols == 2
+    assert get_text(root2) == "\tA\tB\tC\tD\t"
 
 
 def test_04():

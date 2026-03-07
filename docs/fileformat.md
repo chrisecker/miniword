@@ -29,7 +29,7 @@ Empty sections may be omitted. Comments start with `#`.
 
 ### Properties
 
-Properties control text rendering. There are three categories:
+Properties control text rendering and structure. There are three categories:
 
 **Text Properties** – carried by `T` elements:
 
@@ -57,7 +57,7 @@ Properties control text rendering. There are three categories:
 **List Properties** – carried by `NL` and `TAB` elements:
 
 Several list properties hold a list of 10 values, one per indent level (levels 0–9).
-The `ident` attribute of `NL` selects which value applies to a given paragraph.
+The `indent` attribute of `NL` selects which value applies to a given paragraph.
 
 | Name              | Default                                                    | Description                                    |
 | ----------------- | ---------------------------------------------------------- | ---------------------------------------------- |
@@ -71,6 +71,14 @@ The `ident` attribute of `NL` selects which value applies to a given paragraph.
 | `marker_color`    | ("black" × 10)                                             | Marker color per level                         |
 | `numbering_style` | ("1.0" × 10)                                               | Numbering format per level                     |
 | `start_number`    | `None`                                                     | Start value for numbered lists (None or int)   |
+
+**Structural Parameters** – element-specific keys that appear in the property block
+alongside style properties:
+
+| Element   | Key      | Default | Description                              |
+| --------- | -------- | ------- | ---------------------------------------- |
+| `NL`      | `indent` | `0`     | Indent level 0–9, selects the active value from all level-indexed properties |
+| `C("table",…)` | `ncols` | —  | Number of columns; number of rows is implicit from slot count |
 
 ### Named Styles
 
@@ -103,55 +111,91 @@ T("text", {char="highlight", bgcolor="red"}) # text override
 
 ### Property Block Notation
 
+All parameters of an element — whether style properties or structural parameters — are
+written in a single `{…}` block. The distinction between "style" and "structure" is an
+implementation detail; from the format's perspective they are simply named attributes.
+
 ```
 {bold}                               # boolean flag (True)
 {bold, italic}                       # multiple flags
 {font_family="Arial"}                # string value
 {font_size=12}                       # numeric value
 {bold, color="red", font_size=12}    # combined
+{indent=2, base="bullet"}            # structural + style
+{ncols=3, alignment="center"}        # structural + style
 ```
 
 ### Elements
 
+The general pattern for all elements is:
+
+```
+TYPE
+TYPE({prop=val, ...})
+TYPE({prop=val, ...}, [slot], [slot], ...)
+```
+
+---
+
 **`T("text")`** / **`T("text", {char="id", prop=val, ...})`**
+
 Text content. `char` references a charstyle (optional). Additional properties are overrides.
 
-**`NL`** / **`NL(ident, {base="id", prop=val, ...})`**
+---
+
+**`NL`** / **`NL({prop=val, ...})`**
+
 Paragraph end. Carries the properties of the preceding paragraph.
-- `ident`: indent level 0–9 (optional, default `0`). Selects the active value from all
-  list-valued properties (e.g. `marker[ident]`, `indent_levels[ident]`).
-- `base`: references a basestyle (optional, defaults to `"normal"`).
+
+Key parameters:
+- `indent` – indent level 0–9 (default `0`). Selects the active value from all
+  level-indexed properties (e.g. `marker[indent]`, `indent_levels[indent]`).
+- `base` – references a basestyle (default `"normal"`).
 
 ```
-NL                          # ident=0, base="normal"
-NL({base="h1"})             # ident=0, base="h1"
-NL(2, {base="bullet"})      # ident=2: uses marker[2], indent_levels[2], etc.
+NL                              # indent=0, base="normal"
+NL({base="h1"})                 # indent=0, base="h1"
+NL({indent=2, base="bullet"})   # indent=2: uses marker[2], indent_levels[2], etc.
+NL({indent=1, color="red"})     # indent=1, with text color override
 ```
 
-**`TAB({base="id", prop=val, ...})`**
+---
+
+**`TAB({prop=val, ...})`**
+
 Tab character, used as horizontal separator within containers. Carries the same
 properties as `NL`.
 
-**`C("type", [{sep_style}], [slot], [slot], ...)`**
-Container (table, image, etc.). Each slot is enclosed in square brackets and contains a
-sequence of elements, with an optional style block at the end.
+---
 
-Every container has an internal leading separator that optionally carries style
-information. If present, a style block `{...}` appears before the first slot. It may be
-omitted (equivalent to `{}`). The separator style is preserved for roundtrip fidelity but
-has no effect on typesetting — analogous to `space_before`/`space_after` on `TAB`.
+**`C("type", {prop=val, ...}, [slot], [slot], ...)`**
 
-For tables, `m` (rows) and `n` (columns) are leading arguments before the optional
-separator style:
+Container (table, image, etc.). The property block and slots are all optional.
+
+- The `{…}` block carries both style properties and structural parameters.
+- Each slot is enclosed in `[…]` and contains a sequence of elements.
+- The number of rows in a table is implicit from the slot count and `ncols`.
 
 ```
-C("table", m, n,
+C("table", {ncols=2},
   [T("Cell 1.1")],
-  [T("Cell 1.2"), {alignment="center"}]
+  [T("Cell 1.2")],
+  [T("Cell 2.1")],
+  [T("Cell 2.2")]
 )
+
+C("table", {ncols=3, border=1},
+  [T("A")], [T("B")], [T("C")],
+  [T("D")], [T("E")], [T("F")]
+)
+
+C("image", {src="photo.png", width=200}, [])
 ```
 
-**`ENDMARK`** / **`ENDMARK({base="id", prop=val, ...})`**
+---
+
+**`ENDMARK`** / **`ENDMARK({prop=val, ...})`**
+
 Closes the last paragraph. Same syntax as `NL`. Every document has exactly one `ENDMARK`,
 at the end of `[document]`.
 
@@ -184,9 +228,17 @@ T(" term in the document.")
 NL({base="body"})
 
 T("First level item.")
-NL(0, {base="bullet"})
+NL({base="bullet"})
 T("Second level item.")
-NL(1, {base="bullet"})
+NL({indent=1, base="bullet"})
+
+C("table", {ncols=2},
+  [T("Name")],
+  [T("Value")],
+  [T("Alpha")],
+  [T("1")]
+)
+NL({base="body"})
 
 ENDMARK({base="body"})
 ```
@@ -198,4 +250,5 @@ ENDMARK({base="body"})
 1. **ID stability:** Always reuse existing style IDs. Never invent new IDs unless adding a new style.
 2. **Minimal overrides:** Only specify properties that differ from the named style. Unspecified properties fall back to the named style, then to built-in defaults.
 3. **Roles:** The `role` field enables semantic export (e.g. to Markdown or HTML). It may change without modifying the content stream.
-4. **ident:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. For `paragraph_type="list"` or `"numbered"` it also activates the corresponding marker.
+4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. For `paragraph_type="list"` or `"numbered"` it also activates the corresponding marker.
+5. **Unified property block:** All element parameters — structural and stylistic — go in the `{…}` block. There are no positional arguments other than the element type string and slot contents.
