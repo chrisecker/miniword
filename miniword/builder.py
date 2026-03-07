@@ -147,18 +147,13 @@ class Builder(BuilderBase):
             # startup by finishing manually here.
             return self.waitfor_finish()
         else:
-            wx.CallAfter(self.build_step)
+            wx.CallAfter(self.build_background)
 
-    def build_step(self, call_after=True):
+    def build_step(self):
         """Advance the active update task by one step.
-
-        Results are appended to the layout. Checks whether the task
-        can be finished; if not, schedules the next step via CallAfter
-        (when call_after is True).
 
         Has no effect if the task is already finished.
         """
-        #print("build_step", call_after)
         if self.generator is None:
             return
         try:
@@ -178,36 +173,40 @@ class Builder(BuilderBase):
                     return self.finish()
         except StopIteration:
             return self.finish()
-        if call_after:
-            #wx.CallAfter(self.build_step)
-            wx.CallLater(20, self.build_step)
+
+    def build_background(self):
+        """One build step for the async loop: step + Yield + reschedule."""
+        self.build_step()
+        if self.generator is not None:
+            wx.Yield()
+            wx.CallAfter(self.build_background)
 
     @trace
     def waitfor_finish(self, callback=NOOP):
         layout = self._layout
         while not layout.is_finished:
-            self.build_step(call_after=False)
+            self.build_step()
             callback()
 
     @trace
     def waitfor_index(self, i, callback=NOOP):
         layout = self._layout
         while len(layout) < i and not layout.is_finished:
-            self.build_step(call_after=False)
+            self.build_step()
             callback()
 
     @trace
     def waitfor_page(self, i, callback=NOOP):
         layout = self._layout
         while len(layout.childs) < i + 1 and not layout.is_finished:
-            self.build_step(call_after=False)
+            self.build_step()
             callback()
 
     @trace
     def waitfor_y(self, y, callback=NOOP):
         layout = self._layout
         while layout.height+layout.depth < y and not layout.is_finished:
-            self.build_step(call_after=False)
+            self.build_step()
             callback()
         
     def rebuild(self):
@@ -293,7 +292,7 @@ class Builder(BuilderBase):
             i_rest += delta
 
         self._layout = Layout(pages_before, self.factory.device)
-        self.start(state, i_rest, pages_rest, i2=i2)
+        self.start(state, i_rest, pages_rest)
 
     def can_finish(self, state):
         """Update rest_memo and check whether the remaining pages can
