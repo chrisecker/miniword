@@ -51,6 +51,8 @@ def serialize_style(style, indent=0):
             parts.append(k)
         elif isinstance(v, str):
             parts.append('%s="%s"' % (k, v))
+        elif isinstance(v, dict):
+            parts.append('%s=%s' % (k, serialize_style(v)))
         else:
             parts.append('%s=%r' % (k, v))
     return '{%s}' % ', '.join(parts)
@@ -334,6 +336,7 @@ class _Parser:
         self.tok.consume('IDENT')  # NL
         parstyle = EMPTYSTYLE
         indent = 0
+        nl_style = None
         if self.tok.peek()[0] == 'LPAREN':
             self.tok.consume('LPAREN')
             if self.tok.peek()[0] == 'NUMBER':
@@ -344,10 +347,13 @@ class _Parser:
             if self.tok.peek()[0] == 'LBRACE':
                 d = self.parse_style()
                 indent = d.pop('indent', indent)  # backward compat
+                nl_style = d.pop('_style', None)
                 parstyle = as_style(d)
             self.tok.consume('RPAREN')
         nl = NL.set_parstyle(parstyle)
         nl = nl.set_indent(indent)
+        if nl_style:
+            nl = nl.set_style(as_style(nl_style))
         return nl
 
     def parse_tab(self):
@@ -472,9 +478,14 @@ class _Parser:
         self.tok.consume('LBRACE')
         d = {}
         while self.tok.peek()[0] != 'RBRACE':
-            k_kind, k_val = self.tok.consume('IDENT')
-            if self.tok.peek()[0] == 'EQUALS':
-                self.tok.consume('EQUALS')
+            k_kind, k_val = self.tok.peek()
+            if k_kind == 'STRING':
+                self.tok.consume()
+                k_val = k_val[1:-1]  # strip quotes from string key
+            else:
+                k_kind, k_val = self.tok.consume('IDENT')
+            if self.tok.peek()[0] in ('EQUALS', 'COLON'):
+                self.tok.consume()  # consume EQUALS or COLON
                 v_kind, v_val = self.tok.peek()
                 if v_kind == 'STRING':
                     self.tok.consume()
@@ -494,6 +505,8 @@ class _Parser:
                         d[k_val] = v_val
                 elif v_kind == 'LPAREN':
                     d[k_val] = self._parse_tuple()
+                elif v_kind == 'LBRACE':
+                    d[k_val] = self.parse_style()
                 else:
                     raise ParseError("Expected style value, got %r" % v_val)
             else:
