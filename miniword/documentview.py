@@ -5,8 +5,10 @@ from .textmodel.iterators import iter_newlines
 from .builder import Factory, Builder
 from .cairodevice import CairoDevice
 from .annotation import highlight, squiggle
+from .builder import trace
 
 import wx
+
 
 class DocumentView(WXTextView):
 
@@ -75,57 +77,16 @@ class DocumentView(WXTextView):
         ch     = self.GetClientSize()[1]
         return (sy * ry + ch) / self.zoom
 
-    _showing_progress = False
-
     def ensure_viewport(self):
         """Safety net: build until viewport is covered (no dialog)."""
-        if self._showing_progress:
-            return
-        layout = self.builder._layout
+        layout = self.layout
         y = self._viewport_bottom_y()
-        while not layout.is_finished:
-            if self.index < len(layout) and layout.height + layout.depth >= y:
-                break
-            self.builder.build_step(call_after=False)
-
-    def _progress_until_viewport(self):
-        """Show a progress dialog and build until viewport is covered.
-
-        Returns immediately if viewport is already covered or layout is
-        finished.  Continues the rest of the build in the background.
-        """
-        if self._showing_progress:
-            return
-        layout = self.builder._layout
-        y = self._viewport_bottom_y()
-        if layout.is_finished or layout.height + layout.depth >= y:
-            return
-        total = len(self.builder.model) + 1
-        self._showing_progress = True
-        dlg = wx.ProgressDialog(
-            "Building layout", "Please wait...",
-            maximum=100, parent=self,
-            style=wx.PD_AUTO_HIDE)
-        try:
-            while not layout.is_finished:
-                if layout.height + layout.depth >= y:
-                    break
-                self.builder.build_step(call_after=False)
-                dlg.Update(min(99, int(100 * len(layout) / total)))
-                wx.Yield()
-        finally:
-            self._showing_progress = False
-            dlg.Destroy()
-
-    def rebuild_progress(self, i1, i2):
-        """Rebuild range i1..i2 with a progress dialog until viewport covered."""
-        self.builder.rebuild_range(i1, i2, 0)
-        self._progress_until_viewport()
-
-    def rebuild(self):
-        self.builder.rebuild()
-        self._progress_until_viewport()
-        self.refresh()
+        if layout.height + layout.depth < y and not layout.is_finished:
+            import time
+            t0 = time.time()
+            print("ensure_viewport")
+            self.builder.waitfor_y(y)
+            print("y reached after", time.time()-t0)
 
     def on_paint(self, event):
         self.ensure_viewport()
@@ -195,16 +156,31 @@ class DocumentView(WXTextView):
 
     def _accumulate(self, i1, i2, delta=0):
         r = (i1, i2, delta)
-        if self._pending_range is None:
-            self._pending_range = r
-        else:
-            self._pending_range = accumulate(self._pending_range, r)
+        self._pending_range = accumulate(self._pending_range, r)
 
+    @trace
     def rebuild_range(self, i1, i2, delta):
+        """Marks the range from i1 to i2 as dirty. In an atomic
+        context, updates are accumulated and deferred. Otherwise, the
+        update is triggered immediately. The building will happen in
+        the background. To enforce visibility the caller should use
+        ensure_viewport oder builder.waitfor_*. No progress dialog is
+        shown.
+        """        
         if self._inhibit_depth > 0:
             self._accumulate(i1, i2, delta)
         else:
             self.builder.rebuild_range(i1, i2, delta)
+            self.ensure_viewport()
+            self.refresh()
+
+    @trace
+    def rebuild(self):
+        """Start a rebuild of the complete document and wait until
+        viewport is completed."""
+        self.builder.rebuild()
+        self.ensure_viewport()
+        self.refresh()
 
     @contextmanager
     def atomic(self):
@@ -216,12 +192,41 @@ class DocumentView(WXTextView):
         finally:
             self.end_undo_group()
             self._inhibit_depth -= 1
-            if self._inhibit_depth == 0 and self._pending_range is not None:
-                i1, i2, delta = self._pending_range
-                self._pending_range = None
-                self.builder.rebuild_range(i1, i2, delta)
-                self._progress_until_viewport()
-                self.refresh()
+        if self._inhibit_depth == 0 and self._pending_range is not None:
+            i1, i2, delta = self._pending_range
+            self._pending_range = None
+            self._rebuild_with_progress(i1, i2, delta)
+
+    @trace
+    def _rebuild_with_progress(self, i1, i2, delta):
+        """Rebuild range and show progress dialog if viewport not yet covered."""
+        print("rebuild range=", i1, i2, delta)
+        self.builder.rebuild_range(i1, i2, delta)
+        layout = self.builder.layout
+        y = self._viewport_bottom_y()
+        index = self.index
+        total = max(1, len(self.model))
+        if layout.height + layout.depth >= y and index < len(layout):
+            print("conditions met, switching to background",
+                  layout.height + layout.depth, ">=", y, index ,"<", len(layout))
+            self.refresh()
+            return
+        print("showing progress")
+        
+        dlg = wx.ProgressDialog(
+            "Building layout", "Please wait...",
+            maximum=100, parent=self,
+            style=wx.PD_AUTO_HIDE)
+        def tick():
+            dlg.Update(min(99, int(100 * len(layout) / total)))            
+        try:
+            self.builder.waitfor_y(y, tick)
+            print("waiting for index", index)
+            self.builder.waitfor_index(index, tick)
+            print("finally reached without exception")
+        finally:
+            dlg.Destroy()
+        self.refresh()
 
     def _undo_stylesheet(self, name, restore_to, after_redo):
         """Undo/redo a stylesheet change.
@@ -253,15 +258,16 @@ class DocumentView(WXTextView):
         if self._inhibit_depth > 0:
             self._accumulate(j1, j2)
         else:
-            self.rebuild_progress(j1, j2)
-            self.refresh()
+            self._rebuild_with_progress(j1, j2, 0)
 
+    @trace
     def settings_changed(self, *args, **kwds):
         self.builder.settings = self.document.settings
         self.builder.rebuild()
         self._progress_until_viewport()
         self.refresh()
 
+    @trace
     def style_removed(self, stylesheet, key):
         self.clear_caches()
         self.builder.rebuild()
@@ -376,6 +382,11 @@ def accumulate(r1, r2):
     Returns a merged (i1, i2, delta) in original model coordinates that
     covers both changes and carries the combined delta.
     """
+    if r1 is None:
+        return r2
+    elif r2 is None:
+        return r1
+    
     pi1, pi2, pd = r1
     b1,  b2,  d2 = r2
 
@@ -488,48 +499,55 @@ def test_00():
 
     
 def test_01():
-    "progress dialog is shown when viewport build takes long"
+    "progress dialog is shown when viewport is not yet covered"
     import io
-    import sys, os
     from contextlib import redirect_stdout
     from unittest.mock import patch
+    #from einstein import get_einstein_model as get_model
+    from moby import get_moby_model as get_model
     from .document import Document
     from .styles import style_default
 
-    # Add test/ dir to path so moby.py is importable
-    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    test_dir = os.path.join(here, 'test')
-    if test_dir not in sys.path:
-        sys.path.insert(0, test_dir)
-    from moby import get_moby_model
-
     with redirect_stdout(io.StringIO()):
-        app   = wx.App(redirect=False)
+        app  = wx.App(redirect=False)
         frame = wx.Frame(None)
-
-        doc = Document()
-        doc.textmodel = get_moby_model()
+        doc  = Document()
+        doc.textmodel = get_model()
         doc.basestyles.set('normal', dict(style_default))
-
         view = DocumentView(frame, doc)
         view.builder.waitfor_finish()
 
-        # Scroll to near the end so _ensure_viewport has a lot to build
-        view.Scroll(0, 9999)
+    # Pretend the viewport extends far below the built layout so the
+    # dialog condition is always triggered.
+    view._viewport_bottom_y = lambda: float('inf')
 
-        dialogs = []
-        OrigDialog = wx.ProgressDialog
-        class TrackingDialog(OrigDialog):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                dialogs.append(self)
+    dialogs = []
+    ticks = []
+    class TrackingDialog(wx.ProgressDialog):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            dialogs.append(self)
+        def Update(self, x):
+            super().Update(x)
+            ticks.append(x)
+            return True, False
 
-        # Trigger a full rebuild; _progress_until_viewport must show dialog
-        with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
-            view.builder.rebuild()
-            view._progress_until_viewport()
+    with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
+        with view.atomic():
+            view.properties_changed(view.model, 0, 100)
 
+    assert len(ticks)
     assert len(dialogs) > 0, "progress dialog should have been shown"
+
+    view.index = len(view.model)
+    del ticks[:]
+    del dialogs[:]
+    with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
+        with view.atomic():
+            view.index = len(view.model)
+            view.properties_changed(view.model, 0, len(view.model))
+    
+    print("ticks=", ticks)
 
 
 def demo_00():

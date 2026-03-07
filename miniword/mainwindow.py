@@ -272,7 +272,7 @@ def demo_01():
     textmodel = get_moby_styled()
 
 
-    app = wx.App(True)
+    app = wx.App(False) #True)
     doc = Document()
     doc.textmodel = textmodel
     for name, style in testsheet.items():

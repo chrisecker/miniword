@@ -26,6 +26,24 @@ import time
 
 
 
+DEBUG = True
+def trace(fn):
+    """Decorator: print method entry, exit and duration."""
+    name = fn.__qualname__
+    def wrapper(*args, **kwargs):
+        t0 = time.perf_counter()
+        print(f">>> {name}")
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            dt = time.perf_counter() - t0
+            print(f"<<< {name}  ({dt*1000:.1f} ms)")
+    wrapper.__name__ = fn.__name__
+    if DEBUG:
+        return wrapper
+    return fn
+
+NOOP = lambda: None
 
 class Layout(VBox):
     """Simple single-column layout containing pages."""
@@ -80,15 +98,11 @@ class Builder(BuilderBase):
     device          = property(lambda self: self.factory.device)
     stylesheet      = property(lambda self: self.factory.stylesheet)
     rest_memo       = 0, ()
-    # Rebuild batching (used by DocumentView.atomic()):
-    _inhibit_depth  = 0
     _pending_range  = None  # (j1, j2) while inhibited, else None
     # Stats for debugging:
     nbefore  = 0
     nrest    = 0
     settings = {}  # document settings dict; set by DocumentView
-    # Progress reporting: callable(n_pages, n_chars, total_chars) or None
-    progress_callback = None
 
     def __init__(self, model, factory):
         self.model   = model
@@ -108,15 +122,13 @@ class Builder(BuilderBase):
 
     generator = None
 
-    def start(self, state, irest, rest, i2=None):
+    @trace
+    def start(self, state, irest, rest):
         """Start the update task.
 
         Missing pages will be appended to the layout, using rest as a
         shortcut. A new layout must have been created before calling
         this, containing only the pages prior to the change.
-
-        i2: end of the changed range. When given, build synchronously
-        until i2+1000 is covered before switching to background mode.
         """
         layout = self._layout
         self.nbefore = len(layout.childs)
@@ -134,9 +146,6 @@ class Builder(BuilderBase):
             # set_model is called later. We avoid a background task at
             # startup by finishing manually here.
             return self.waitfor_finish()
-
-        if i2 is not None:
-            self.waitfor_index(min(i2 + 1000, len(self.model)))
         else:
             wx.CallAfter(self.build_step)
 
@@ -149,8 +158,7 @@ class Builder(BuilderBase):
 
         Has no effect if the task is already finished.
         """
-        print("build_step", call_after)
-        #assert not call_after # XXX
+        #print("build_step", call_after)
         if self.generator is None:
             return
         try:
@@ -171,27 +179,36 @@ class Builder(BuilderBase):
         except StopIteration:
             return self.finish()
         if call_after:
-            wx.CallAfter(self.build_step)
+            #wx.CallAfter(self.build_step)
+            wx.CallLater(20, self.build_step)
 
-    def waitfor_finish(self):
+    @trace
+    def waitfor_finish(self, callback=NOOP):
         layout = self._layout
         while not layout.is_finished:
             self.build_step(call_after=False)
+            callback()
 
-    def waitfor_index(self, i):
+    @trace
+    def waitfor_index(self, i, callback=NOOP):
         layout = self._layout
         while len(layout) < i and not layout.is_finished:
             self.build_step(call_after=False)
+            callback()
 
-    def waitfor_page(self, i):
+    @trace
+    def waitfor_page(self, i, callback=NOOP):
         layout = self._layout
         while len(layout.childs) < i + 1 and not layout.is_finished:
             self.build_step(call_after=False)
+            callback()
 
-    def waitfor_y(self, y):
+    @trace
+    def waitfor_y(self, y, callback=NOOP):
         layout = self._layout
         while layout.height+layout.depth < y and not layout.is_finished:
             self.build_step(call_after=False)
+            callback()
         
     def rebuild(self):
         """Rebuild the entire layout from i=0; nothing is reused."""
@@ -222,10 +239,6 @@ class Builder(BuilderBase):
             raise
         self._layout.is_finished = True
         self.dump_updatestats()
-        if self.progress_callback:
-            total_chars = len(self.model) + 1
-            self.progress_callback(len(self._layout.childs),
-                                   total_chars, total_chars)
 
     def adjust_pages(self):
         # Used here solely to update page numbers.
@@ -357,45 +370,11 @@ class MyView(WXTextView):
         self.builder.device.reset_blink()
         WXTextView.set_index(self, index, extend, update)
 
-    def print(self):
-        import printer
-        printer.show_printdlg(self.builder.layout)
-
     def iter_rows(self):
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
                 yield r1, r2, rx, ry, row
 
-    def move_down(self, shift):
-        index  = self.index
-        layout = self.layout
-        x, y   = layout.get_rect(index, 0, 0).items()[:2]
-        for r1, r2, rx, ry, row in self.iter_rows():
-            if ry > y:
-                i = row.get_index(x - rx, row.height)
-                return self.set_index(r1 + i, shift)
-
-    def move_up(self, shift):
-        index  = self.index
-        layout = self.layout
-        x, y   = layout.get_rect(index, 0, 0).items()[:2]
-        prev   = None
-        for r1, r2, rx, ry, row in self.iter_rows():
-            if ry + row.height + row.depth >= y:
-                if not prev:
-                    return
-                r1, r2, rx, ry, row = prev
-                i = row.get_index(x - rx, row.height)
-                return self.set_index(r1 + i, shift)
-            prev = r1, r2, rx, ry, row
-
-    def handle_action(self, action, shift=False):
-        if action == 'move_down':
-            self.move_down(shift)
-        elif action == 'move_up':
-            self.move_up(shift)
-        else:
-            return WXTextView.handle_action(self, action, shift)
 
 
 def show_pages(layout):
@@ -419,10 +398,6 @@ def demo_00():
     view.builder.device.zoom = 2
     frame.Show()
 
-    if 1:
-        from .inspector import Inspector
-        inspector = Inspector(view, None)
-        inspector.Show()
     if 1:
         from .wxtextview import testing
         l = locals()
