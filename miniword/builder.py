@@ -191,7 +191,8 @@ class Builder(BuilderBase):
         self.build_step()
         if self.generator is not None:
             wx.Yield()
-            wx.CallAfter(self.build_background)
+            if self.generator is not None:
+                wx.CallAfter(self.build_background)
 
     @trace
     def waitfor_finish(self, callback=NOOP):

@@ -273,7 +273,8 @@ class MainFrame(wx.Frame, ViewBase):
                 return
         builder = getattr(getattr(self, 'textview', None), 'builder', None)
         if builder is not None:
-            builder.generator = None  # stop async build loop
+            builder.generator = None
+            builder._layout.is_finished = True  # stop waitfor_y immediately
         event.Skip()
 
     def _on_new(self, event):
