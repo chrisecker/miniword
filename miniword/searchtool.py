@@ -233,17 +233,15 @@ class SearchPanel(wx.Panel, ViewBase):
         self.search_ctrl = wx.TextCtrl(search_row, style=wx.TE_PROCESS_ENTER,
                                        size=(-1, 24))
         self.search_ctrl.SetHint("Search…")
-        btn_prev = wx.Button(search_row, label="▲", size=(20, -1),
+        btn_prev = wx.Button(search_row, label="▲", size=(24, 24),
                              style=wx.BORDER_NONE)
-        btn_next = wx.Button(search_row, label="▼", size=(20, -1),
+        btn_next = wx.Button(search_row, label="▼", size=(24, 24),
                              style=wx.BORDER_NONE)
         btn_prev.SetBackgroundColour(BG_PANEL)
         btn_next.SetBackgroundColour(BG_PANEL)
-        btn_box = wx.BoxSizer(wx.VERTICAL)
-        btn_box.Add(btn_prev, 1, wx.EXPAND)
-        btn_box.Add(btn_next, 1, wx.EXPAND)
         sr.Add(self.search_ctrl, 1, wx.EXPAND)
-        sr.Add(btn_box, 0, wx.EXPAND | wx.LEFT, 2)
+        sr.Add(btn_prev, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
+        sr.Add(btn_next, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
         search_row.SetSizer(sr)
         outer.Add(search_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
 

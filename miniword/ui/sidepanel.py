@@ -164,7 +164,7 @@ class SidePanel(wx.Panel):
 # ── New-design constants ───────────────────────────────────────────────────────
 
 STRIP_W    = 52
-PANEL_W    = 264
+PANEL_W    = 360
 ICON_H     = 56
 
 BG_CANVAS  = wx.Colour(228, 228, 224)
