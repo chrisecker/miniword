@@ -94,6 +94,7 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
         self._id_export = wx.NewIdRef()
         file_menu.Append(self._id_export, "E&xport…")
+        file_menu.Append(wx.ID_PRINT, "&Print…\tCtrl+P")
         file_menu.AppendSeparator()
         file_menu.Append(wx.ID_CLOSE, "&Close Window\tCtrl+W")
         file_menu.Append(wx.ID_EXIT,  "E&xit\tCtrl+Q")
@@ -106,6 +107,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_reload,     id=self._id_reload)
         self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
         self.Bind(wx.EVT_MENU, self._on_export,     id=self._id_export)
+        self.Bind(wx.EVT_MENU, self._on_print,      id=wx.ID_PRINT)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_CLOSE)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
         self.Bind(wx.EVT_CLOSE, self._on_close)
@@ -408,6 +410,18 @@ class MainFrame(wx.Frame, ViewBase):
         self.document = doc
         self.textview.index = min(index, len(self.textview.model))
         self._update_title()
+
+    def _on_print(self, event):
+        import tempfile, os, subprocess, sys
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            path = f.name
+        self.textview.export_pdf(path)
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.run(["open", path])
+        else:
+            subprocess.run(["xdg-open", path])
 
     def _on_export_pdf(self, event):
         with wx.FileDialog(
