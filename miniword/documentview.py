@@ -298,6 +298,7 @@ class DocumentView(WXTextView):
 
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
+        self.builder.waitfor_index(index + 1)
         WXTextView.set_index(self, index, extend, update)
 
     def export_pdf(self, path):
@@ -385,6 +386,8 @@ class DocumentView(WXTextView):
             self.move_page_down(shift)
         elif action == 'move_page_up':
             self.move_page_up(shift)
+        elif action == 'move_document_end':
+            self.set_index(len(self.layout) - 1, shift)
         else:
             return WXTextView.handle_action(self, action, shift)
 
