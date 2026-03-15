@@ -108,6 +108,8 @@ class ColourButton(wx.Button):
 
     def update_bitmap(self):
         w, h = self.GetSize()
+        if w < 1 or h < 1:
+            return
         bmp = wx.Bitmap(w, h)
         dc = wx.MemoryDC(bmp)
 
