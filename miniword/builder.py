@@ -27,11 +27,13 @@ import time
 
 
 
-DEBUG = True
+DEBUG = False
 def trace(fn):
     """Decorator: print method entry, exit and duration."""
     name = fn.__qualname__
     def wrapper(*args, **kwargs):
+        if not DEBUG:
+            return fn(*args, **kwargs)
         t0 = time.perf_counter()
         print(f">>> {name}")
         try:
@@ -40,9 +42,7 @@ def trace(fn):
             dt = time.perf_counter() - t0
             print(f"<<< {name}  ({dt*1000:.1f} ms)")
     wrapper.__name__ = fn.__name__
-    if DEBUG:
-        return wrapper
-    return fn
+    return wrapper
 
 NOOP = lambda: None
 
@@ -148,7 +148,7 @@ class Builder(BuilderBase):
         self.rest_memo = irest, rest
         texel = self.model.get_xtexel()
         if self.generator is not None:
-            print("overriding old generator")
+            if DEBUG: print("overriding old generator")
         p = len(layout)
         self.generator = self.create_generator(
             texel, p, state, self.factory)
@@ -223,7 +223,7 @@ class Builder(BuilderBase):
         
     def rebuild(self):
         """Rebuild the entire layout from i=0; nothing is reused."""
-        print("rebuild")
+        if DEBUG: print("rebuild")
         self._layout = Layout([], self.factory.device)
         self.start(restartmemo_from_settings(self.settings), 0, ())
 
@@ -232,7 +232,7 @@ class Builder(BuilderBase):
         rest_i, rest = self.rest_memo
         self.nrest = len(rest)
         if rest:
-            print("finish: appending %d rest pages" % self.nrest)
+            if DEBUG: print("finish: appending %d rest pages" % self.nrest)
             for page in rest:
                 self._layout.append_page(page)
             self.rest_memo = 0, ()
@@ -352,7 +352,7 @@ class Builder(BuilderBase):
         if old_restartmemo.counters != state.counters:
             return False
 
-        print("can finish!")
+        if DEBUG: print("can finish!")
         return True
 
     def get_updatestats(self):
@@ -362,7 +362,7 @@ class Builder(BuilderBase):
         return nbefore, n - nrest - nbefore, nrest
 
     def dump_updatestats(self):
-        print("pages before %s, pages updated %s, rest %s" %
+        if DEBUG: print("pages before %s, pages updated %s, rest %s" %
               self.get_updatestats())
 
 
@@ -397,6 +397,7 @@ def show_pages(layout):
 
 
 def demo_00():
+    global DEBUG; DEBUG = True
     from einstein import get_einstein_model
     model = get_einstein_model()
 
@@ -457,6 +458,7 @@ def test_02():
 
 
 def demo_01():
+    global DEBUG; DEBUG = True
     from moby import get_moby_model
     model = get_moby_model()
 

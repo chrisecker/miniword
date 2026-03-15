@@ -69,7 +69,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_saveas,     id=wx.ID_SAVEAS)
         self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_CLOSE)
-        self.Bind(wx.EVT_MENU, lambda _: wx.GetApp().ExitMainLoop(), id=wx.ID_EXIT)
+        self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
+        self.Bind(wx.EVT_CLOSE, self._on_close)
 
         edit_menu = wx.Menu()
         self.undo_item = edit_menu.Append(wx.ID_UNDO, "&Undo\tCtrl+Z")
@@ -256,6 +257,24 @@ class MainFrame(wx.Frame, ViewBase):
         dirty = hasattr(self, 'textview') and self.textview.undocount() > 0
         suffix = ' *' if dirty else ''
         self.SetTitle("Writer — " + name + suffix)
+
+    def _on_close(self, event):
+        if hasattr(self, 'textview') and self.textview.undocount() > 0:
+            dlg = wx.MessageDialog(
+                self,
+                'There are unsaved changes. Close anyway?',
+                'Unsaved Changes',
+                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
+            )
+            result = dlg.ShowModal()
+            dlg.Destroy()
+            if result != wx.ID_YES:
+                event.Veto()
+                return
+        builder = getattr(getattr(self, 'textview', None), 'builder', None)
+        if builder is not None:
+            builder.generator = None  # stop async build loop
+        event.Skip()
 
     def _on_new(self, event):
         from .document import Document

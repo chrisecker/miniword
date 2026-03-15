@@ -2,10 +2,15 @@ import sys
 import wx
 from .document import Document
 from .mainwindow import MainFrame
+from . import builder
 
 
 def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else None
+    args = sys.argv[1:]
+    if '--debug' in args:
+        builder.DEBUG = True
+        args = [a for a in args if a != '--debug']
+    path = args[0] if args else None
 
     app = wx.App(redirect=False)
     if path:
