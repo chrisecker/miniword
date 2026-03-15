@@ -280,14 +280,14 @@ class DocumentView(WXTextView):
     def settings_changed(self, *args, **kwds):
         self.builder.settings = self.document.settings
         self.builder.rebuild()
-        self._progress_until_viewport()
+        self.ensure_viewport()
         self.refresh()
 
     @trace
     def style_removed(self, stylesheet, key):
         self.clear_caches()
         self.builder.rebuild()
-        self._progress_until_viewport()
+        self.ensure_viewport()
         self.refresh()
 
     def create_builder(self):
