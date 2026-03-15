@@ -12,7 +12,8 @@ from .wxtextview.boxes import VBox, get_text
 from .wxtextview import boxes
 from .wxtextview.rect import Rect
 
-from .pagegen import show_page, RestartMemo, generate_pages, restartmemo_from_settings
+from .pagegen import show_page, RestartMemo, generate_pages, \
+    restartmemo_from_settings
 from .styles import cm, mm, updated
 from .factory import Factory
 from .cairodevice import CairoDevice
@@ -48,12 +49,23 @@ NOOP = lambda: None
 class Layout(VBox):
     """Simple single-column layout containing pages."""
     is_finished = False
+    page_gap = 12  # visual gap between pages (screen only; PDF/print unaffected)
 
     def append_page(self, page):
+        self.height += self.page_gap  # gap before every page, including the first
         self.childs.append(page)
         self.length += len(page)
         self.width   = max(self.width, page.width)
         self.height += page.height  # assumes a specific page geometry
+
+    def iter_boxes(self, i, x, y):
+        j1 = i
+        y += self.page_gap  # initial gap before first page
+        for child in self.childs:
+            j2 = j1 + len(child)
+            yield j1, j2, x, y, child
+            y  += child.height + child.depth + self.page_gap
+            j1  = j2
 
     def from_childs(self, l):
         assert False
