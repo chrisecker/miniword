@@ -40,6 +40,10 @@ class Document(Model):
     @classmethod
     def load(cls, path):
         from . import txlio
+        from .importexport import find_import_filter
+        fn = find_import_filter(path)
+        if fn is not None:
+            return fn(path)
         return txlio.load(path)
         
     def charstyles_changed(self, *args, **kwds):

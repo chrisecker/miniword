@@ -480,11 +480,11 @@ class MainFrame(wx.Frame, ViewBase):
         index = self.textview.index
         model = self.textview.model
         try:
-            texel = _get_texel(model.get_xtexel(), index)
+            texel = _get_texel(model.get_xtexel(), index - 1)
         except (IndexError, AttributeError):
             texel = None
         if isinstance(texel, Image):
-            self.image_inspector.refresh(texel, index)
+            self.image_inspector.refresh(texel, index - 1)
             self.show_right_panel("image")
         else:
             self.image_inspector.clear()

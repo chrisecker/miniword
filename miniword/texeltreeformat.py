@@ -108,6 +108,21 @@ def serialize_texel(texel, indent=0):
             return '%sBR' % pad
 
         else:
+            from .image import Image as _Image
+            if isinstance(texel, _Image):
+                parts = {}
+                if texel.scale != 1.0:
+                    parts['scale'] = texel.scale
+                if texel.crop:
+                    parts['crop_x'] = texel.crop[0]
+                    parts['crop_y'] = texel.crop[1]
+                    parts['crop_w'] = texel.crop[2]
+                    parts['crop_h'] = texel.crop[3]
+                s = serialize_style(parts) if parts else ''
+                if s:
+                    return '%sIMG(%r, %s)' % (pad, texel.blob_id, s)
+                return '%sIMG(%r)' % (pad, texel.blob_id)
+
             s = serialize_style(texel.style) if texel.style else ''
             if s:
                 return '%sS(%r, %s)' % (pad, texel.text, s)
@@ -327,6 +342,8 @@ class _Parser:
             return self.parse_single()
         elif value == 'C':
             return self.parse_container()
+        elif value == 'IMG':
+            return self.parse_img()
         else:
             raise ParseError("Unknown texel type: %r" % value)
 
@@ -394,6 +411,22 @@ class _Parser:
         s = Single(style)
         s.text = char
         return s
+
+    def parse_img(self):
+        self.tok.consume('IDENT')  # IMG
+        self.tok.consume('LPAREN')
+        blob_id = self.parse_string()
+        scale = 1.0
+        crop = None
+        if self.tok.peek()[0] == 'COMMA':
+            self.tok.consume('COMMA')
+            d = self.parse_style()
+            scale = d.get('scale', 1.0)
+            if 'crop_w' in d:
+                crop = (d.get('crop_x', 0), d.get('crop_y', 0), d['crop_w'], d['crop_h'])
+        self.tok.consume('RPAREN')
+        from .image import Image
+        return Image(blob_id, scale, crop)
 
     def parse_container(self):
         self.tok.consume('IDENT')  # C

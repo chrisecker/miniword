@@ -10,7 +10,8 @@ Empty sections may be omitted. Comments start with `#`.
 2. **`[basestyles]`** – Named basestyles.
 3. **`[charstyles]`** – Named charstyles.
 4. **`[liststyles]`** – Named liststyles.
-5. **`[document]`** – Content stream.
+5. **`[blobs]`** – Embedded binary data (images, etc.), base64-encoded.
+6. **`[document]`** – Content stream.
 
 ---
 
@@ -25,7 +26,23 @@ Empty sections may be omitted. Comments start with `#`.
 
 ---
 
-## 3. Style System
+## 3. Blobs (`[blobs]`)
+
+Binary data (images and other media) is embedded directly in the file, base64-encoded.
+Each entry maps a blob ID (a filename string) to its data.
+
+```
+[blobs]
+"photo.jpg" = "base64encodeddata..."
+"logo.png"  = "base64encodeddata..."
+```
+
+Blob IDs are referenced by `IMG` elements in the content stream. The ID is arbitrary but
+conventionally matches the original filename.
+
+---
+
+## 4. Style System
 
 ### Properties
 
@@ -107,7 +124,7 @@ T("text", {char="highlight", bgcolor="red"}) # text override
 
 ---
 
-## 4. Content Stream
+## 5. Content Stream
 
 ### Property Block Notation
 
@@ -168,9 +185,28 @@ properties as `NL`.
 
 ---
 
+**`IMG("blob_id")`** / **`IMG("blob_id", {scale=factor})`** / **`IMG("blob_id", {crop_x=x, crop_y=y, crop_w=w, crop_h=h})`**
+
+Inline image. `blob_id` references an entry in the `[blobs]` section. The image occupies
+one character position in the paragraph (it is a Single, not a Container).
+
+| Parameter | Default | Description |
+| --------- | ------- | ----------- |
+| `scale`   | `1.0`   | Uniform scale factor applied to the source pixel dimensions |
+| `crop_x`, `crop_y` | `0` | Crop origin in source pixels (reserved, not yet rendered) |
+| `crop_w`, `crop_h` | — | Display size in pt when cropping; also serves as explicit size override |
+
+```
+IMG("photo.jpg")                                    # natural size (scale=1.0)
+IMG("photo.jpg", {scale=0.5})                       # half size
+IMG("photo.jpg", {crop_x=0, crop_y=0, crop_w=150, crop_h=200})  # 150×200 pt
+```
+
+---
+
 **`C("type", {prop=val, ...}, [slot], [slot], ...)`**
 
-Container (table, image, etc.). The property block and slots are all optional.
+Container (e.g. table). The property block and slots are all optional.
 
 - The `{…}` block carries both style properties and structural parameters.
 - Each slot is enclosed in `[…]` and contains a sequence of elements.
@@ -188,8 +224,6 @@ C("table", {ncols=3, border=1},
   [T("A")], [T("B")], [T("C")],
   [T("D")], [T("E")], [T("F")]
 )
-
-C("image", {src="photo.png", width=200}, [])
 ```
 
 ---
@@ -201,7 +235,7 @@ at the end of `[document]`.
 
 ---
 
-## 5. Full Reference Example
+## 6. Full Reference Example
 
 ```
 [metadata]
@@ -218,9 +252,15 @@ margin_left = 50.0
 [charstyles]
 "key" = {name="Keyword", bold, color="blue"}
 
+[blobs]
+"photo.jpg" = "base64encodeddata..."
+
 [document]
 T("Introduction")
 NL({base="h1"})
+
+IMG("photo.jpg", {scale=0.5})
+NL({base="body"})
 
 T("This is an ")
 T("important", {char="key"})
@@ -245,7 +285,7 @@ ENDMARK({base="body"})
 
 ---
 
-## 6. Rules for AI & Parsers
+## 7. Rules for AI & Parsers
 
 1. **ID stability:** Always reuse existing style IDs. Never invent new IDs unless adding a new style.
 2. **Minimal overrides:** Only specify properties that differ from the named style. Unspecified properties fall back to the named style, then to built-in defaults.
@@ -253,3 +293,4 @@ ENDMARK({base="body"})
 4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. It is an index, not a distance. `indent=0` corresponds to the normal text column (no extra indentation); bullet lists therefore typically use `indent=1`.
 5. **Markers:** A bullet or number is rendered on the first line of a paragraph when `paragraph_type="list"` or `"numbered"` is set — either in the referenced basestyle or as a direct override on `NL`. The marker's base font is inherited from the first `T` element of the paragraph; `marker_size` and `marker_color` are applied on top.
 6. **Unified property block:** All element parameters — structural and stylistic — go in the `{…}` block. There are no positional arguments other than the element type string and slot contents.
+7. **Singles vs. Containers:** `IMG` and other keyword elements are Singles — they behave as atomic units in the edit model (length 1, no slots). Use `C("type", …)` only when slots are needed.

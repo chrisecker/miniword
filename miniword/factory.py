@@ -24,17 +24,17 @@ class Factory(FactoryBase):
         return [ForceBreakBox(self.mk_style(texel.style), self.device)]
 
     def Image_handler(self, texel, i1, i2):
-        from .image import ImageBox, PlaceholderBox
-        blob = getattr(self, 'blobs', {}).get(texel.blob_id)
-        load_image = getattr(self.device, 'load_image', None)
-        if blob is None or load_image is None:
-            return [PlaceholderBox(50, 50, self.device)]
-        bitmap, src_w, src_h = load_image(blob)
-        if bitmap is None:
-            return [PlaceholderBox(50, 50, self.device)]
+        from .image import ImageBox
+        try:
+            blob = getattr(self, 'blobs', {})[texel.blob_id]
+            bitmap, src_w, src_h = self.device.load_image(blob)
+        except Exception:
+            bitmap, src_w, src_h = None, 0, 0
         if texel.crop:
-            _x, _y, w, h = texel.crop   # display pt; x/y offset reserved for future
-        else:
+            _x, _y, w, h = texel.crop
+        elif src_w:
             w, h = src_w * texel.scale, src_h * texel.scale
+        else:
+            w, h = 50, 50
         return [ImageBox(bitmap, w, h, self.device)]
 

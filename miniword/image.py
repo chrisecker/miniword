@@ -86,29 +86,13 @@ class ImageBox(Box):
     def draw(self, x, y, gc):
         self.device.draw_bitmap(self.bitmap, x, y, self.width, self.height, gc)
 
-    def get_index(self, x, y):
-        return 1 if x >= self.width / 2 else 0
-
-
-class PlaceholderBox(Box):
-    """Grey rectangle rendered when the blob is missing."""
-    depth = 0
-
-    def __init__(self, width=50, height=50, device=TESTDEVICE):
-        self.width  = width
-        self.height = height
-        if device is not TESTDEVICE:
-            self.device = device
-
-    def __len__(self):
-        return 1
-
-    def draw(self, x, y, gc):
-        self.device.fill_rect(x, y, self.width, self.height, 'lightgrey', gc)
-        self.device.draw_rect(x, y, self.width, self.height, gc)
+    def draw_selection(self, i1, i2, x, y, gc):
+        if i1 < 1 and i2 > 0:
+            self.device.invert_rect(x, y, self.width, self.height, gc)
 
     def get_index(self, x, y):
         return 1 if x >= self.width / 2 else 0
+
 
 
 # ---------------------------------------------------------------------------
@@ -351,8 +335,8 @@ def test_01():
 
 
 def test_02():
-    "PlaceholderBox: length and geometry"
-    box = PlaceholderBox(80, 60)
+    "ImageBox fallback: None bitmap"
+    box = ImageBox(None, 80, 60)
     assert len(box)    == 1
     assert box.width   == 80
     assert box.height  == 60
