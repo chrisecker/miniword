@@ -314,7 +314,7 @@ class Builder(BuilderBase):
         rest_i, rest = self.rest_memo
 
         k2 = len(layout)
-        if k2 >= len(self.model):
+        if k2 > len(self.model):
             return True
 
         if not rest:

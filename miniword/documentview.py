@@ -294,6 +294,7 @@ class DocumentView(WXTextView):
         factory = Factory(self.document.basestyles, device=CairoDevice())
         factory.blobs = self.document.blobs
         builder = Builder(self.model, factory)
+        builder.settings = self.document.settings
         return builder
 
     def set_index(self, index, extend=False, update=True):
