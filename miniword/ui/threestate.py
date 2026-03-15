@@ -86,6 +86,7 @@ class ColourButton(wx.Button):
         super().__init__(parent, label="", size=size)
         self._colour = None
         self.Bind(wx.EVT_BUTTON, self.on_click)
+        self.Bind(wx.EVT_SIZE, lambda e: (e.Skip(), self.update_bitmap()))
         self.update_bitmap()
 
     def on_click(self, event):
