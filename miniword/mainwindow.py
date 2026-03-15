@@ -4,7 +4,7 @@ from .inspector import InspectorPanel
 from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
 from .image import Image, ImageInspector
-from .ui.sidepanel import SidePanel, IconBar
+from .ui.sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.document = document
         wx.Frame.__init__(self, None, title="Writer", size=(1400, 700))
         ViewBase.__init__(self)
-        
+
         self.SetMinSize((800, 480))
         self._build_menu()
         self._build_layout()
@@ -50,86 +50,164 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _build_menu(self):
         bar = wx.MenuBar()
+
         file_menu = wx.Menu()
-        file_menu.Append(wx.ID_NEW,     "&New\tCtrl+N")
-        file_menu.Append(wx.ID_OPEN,    "&Open\tCtrl+O")
-        file_menu.Append(wx.ID_SAVE,    "&Save\tCtrl+S")
-        file_menu.Append(wx.ID_SAVEAS,  "Save &As…\tCtrl+Shift+S")
+        file_menu.Append(wx.ID_NEW,    "&New\tCtrl+N")
+        file_menu.Append(wx.ID_OPEN,   "&Open\tCtrl+O")
+        file_menu.Append(wx.ID_SAVE,   "&Save\tCtrl+S")
+        file_menu.Append(wx.ID_SAVEAS, "Save &As…\tCtrl+Shift+S")
         file_menu.AppendSeparator()
         self._id_export_pdf = wx.NewIdRef()
         file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
         file_menu.AppendSeparator()
-        file_menu.Append(wx.ID_EXIT,    "E&xit\tAlt+F4")
+        file_menu.Append(wx.ID_EXIT, "E&xit\tAlt+F4")
         bar.Append(file_menu, "&File")
-        self.SetMenuBar(bar)
-        self.Bind(wx.EVT_MENU, self._on_new,    id=wx.ID_NEW)
-        self.Bind(wx.EVT_MENU, self._on_open,   id=wx.ID_OPEN)
-        self.Bind(wx.EVT_MENU, self._on_save,   id=wx.ID_SAVE)
-        self.Bind(wx.EVT_MENU, self._on_saveas, id=wx.ID_SAVEAS)
+        self.Bind(wx.EVT_MENU, self._on_new,        id=wx.ID_NEW)
+        self.Bind(wx.EVT_MENU, self._on_open,       id=wx.ID_OPEN)
+        self.Bind(wx.EVT_MENU, self._on_save,       id=wx.ID_SAVE)
+        self.Bind(wx.EVT_MENU, self._on_saveas,     id=wx.ID_SAVEAS)
         self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
-        # --- Edit ---
+
         edit_menu = wx.Menu()
         self.undo_item = edit_menu.Append(wx.ID_UNDO, "&Undo\tCtrl+Z")
         self.redo_item = edit_menu.Append(wx.ID_REDO, "&Redo\tCtrl+Y")
         edit_menu.AppendSeparator()
-        edit_menu.Append(wx.ID_CUT, "Cu&t\tCtrl+X")
-        edit_menu.Append(wx.ID_COPY, "&Copy\tCtrl+C")
+        edit_menu.Append(wx.ID_CUT,   "Cu&t\tCtrl+X")
+        edit_menu.Append(wx.ID_COPY,  "&Copy\tCtrl+C")
         edit_menu.Append(wx.ID_PASTE, "&Paste\tCtrl+V")
+        edit_menu.AppendSeparator()
+        edit_menu.Append(wx.ID_FIND,    "&Find…\tCtrl+F")
+        edit_menu.Append(wx.ID_REPLACE, "&Replace…\tCtrl+H")
         bar.Append(edit_menu, "&Edit")
+        self.Bind(wx.EVT_MENU, self._on_find, id=wx.ID_FIND)
+        self.Bind(wx.EVT_MENU, self._on_find, id=wx.ID_REPLACE)
+
+        view_menu = wx.Menu()
+        view_menu.Append(wx.ID_ZOOM_IN,  "Zoom In\tCtrl++")
+        view_menu.Append(wx.ID_ZOOM_OUT, "Zoom Out\tCtrl+-")
+        view_menu.Append(wx.ID_ZOOM_100, "Actual Size\tCtrl+0")
+        view_menu.AppendSeparator()
+        self._mi_panel = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
+        bar.Append(view_menu, "&View")
+        self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
+
+        bar.Append(wx.Menu(), "&Help")
+        self.SetMenuBar(bar)
 
     def _build_layout(self):
-        root = wx.BoxSizer(wx.HORIZONTAL)
+        self._base = wx.Panel(self)
+        self._base.SetBackgroundColour(BG_CANVAS)
+        outer = wx.BoxSizer(wx.VERTICAL)
+        outer.Add(self._base, 1, wx.EXPAND)
+        self.SetSizer(outer)
 
-        # Editor
-        self.textview = DocumentView(self, self.document)
-        self.textview.SetBackgroundColour("light grey")
-        self.textview.add_view(self)   # receive undo_changed for dirty indicator
+        self.textview = DocumentView(self._base, self.document)
+        self.textview.add_view(self)
 
-        # Side panels
-        self._left_panel = SidePanel(self)
-        self._right_panel = SidePanel(self)
+        # Inspector container
+        self._inspector_book = wx.Simplebook(self._base)
+        self._inspector_book.SetBackgroundColour(BG_PANEL)
+        self._inspector_pages = {}
 
-        # Inspectors for right panel
-        self.inspector = InspectorPanel(self._right_panel, self.textview, self.document.basestyles)
-        self.document_settings = SettingsInspector(self._right_panel, self.document)
+        self.inspector = InspectorPanel(
+            self._inspector_book, self.textview, self.document.basestyles)
+        self.document_settings = SettingsInspector(
+            self._inspector_book, self.document)
         self.image_inspector = ImageInspector(
-            self._right_panel, self._on_image_insert, self._on_image_change)
+            self._inspector_book, self._on_image_insert, self._on_image_change)
         self.image_inspector.blobs = self.document.blobs
-        self._right_panel.add_page("format", self.inspector)
-        self._right_panel.add_page("settings", self.document_settings)
-        self._right_panel.add_page("image", self.image_inspector)
-
-        # Left panel example page (optional)
-        # self._left_panel.add_page("left_plugin", SomePanel(self._left_panel))
 
         from .searchtool import SearchPanel
-        self._left_panel.add_page("search", SearchPanel(self._left_panel, self.textview))
-        self._left_icon_bar = IconBar(
-            self,
-            self.show_left_panel,
-            [("search", "search.svg", "Search")],
-            side = 'left'            
-        )
-        # Icon bars
-        #self._left_icon_bar = IconBar(self, self.show_left_panel)
-        self._right_icon_bar = IconBar(
-            self,
-            self.show_right_panel,
-            [("format", "style.svg", "Paragraph format"),
-             ("settings", "settings.svg", "Document settings"),
-             ("image", "image.svg", "Image properties")],
-            side = 'right'
-        )
+        self._search_panel = SearchPanel(self._inspector_book, self.textview)
 
-        # Layout: LeftIcon | LeftPanel | Editor | RightPanel | RightIcon
-        root.Add(self._left_icon_bar, 0, wx.EXPAND)
-        root.Add(self._left_panel, 0, wx.EXPAND)
-        root.Add(self.textview, 1, wx.EXPAND)
-        root.Add(self._right_panel, 0, wx.EXPAND)
-        root.Add(self._right_icon_bar, 0, wx.EXPAND)
+        for key, panel in [
+            ("format",   self.inspector),
+            ("settings", self.document_settings),
+            ("image",    self.image_inspector),
+            ("search",   self._search_panel),
+        ]:
+            idx = self._inspector_book.GetPageCount()
+            self._inspector_book.AddPage(panel, "")
+            self._inspector_pages[key] = idx
 
-        self.SetSizer(root)
+        self._inspector_book.Hide()
+        self._panel_key = None
+
+        self._strip = RightStrip(self._base, [
+            ("format",   "Aa", "Styles"),
+            ("search",   "⌕",  "Search"),
+            ("image",    "⬜",  "Image"),
+            ("settings", "≡",  "Settings"),
+        ], self._on_panel_toggle)
+
+        self._search_bar = SearchBar(self._base, self._close_search)
+        self._search_bar.Hide()
+
+        self._base.Bind(wx.EVT_SIZE, lambda e: (e.Skip(), self._layout()))
+        wx.CallAfter(self._layout)
+
+    def _on_panel_toggle(self, key):
+        if key is None:
+            self._panel_key = None
+            self._inspector_book.Hide()
+            self._mi_panel.Check(False)
+        else:
+            self._panel_key = key
+            self._inspector_book.SetSelection(self._inspector_pages[key])
+            self._inspector_book.Show()
+            self._inspector_book.Raise()
+            self._mi_panel.Check(True)
+        self._layout()
+
+    def _on_menu_inspector(self, _):
+        if self._mi_panel.IsChecked():
+            self._panel_key = "format"
+            self._inspector_book.SetSelection(self._inspector_pages["format"])
+            self._inspector_book.Show()
+            self._inspector_book.Raise()
+            self._strip.activate("format")
+        else:
+            self._panel_key = None
+            self._inspector_book.Hide()
+            self._strip.deactivate()
+        self._layout()
+
+    def _on_find(self, _):
+        self._search_bar.Show()
+        self._layout()
+        self._search_bar.focus()
+
+    def _close_search(self):
+        self._search_bar.Hide()
+        self._layout()
+
+    def _layout(self):
+        w, h = self._base.GetClientSize()
+        if w <= 0 or h <= 0:
+            return
+        search_h = 34 if self._search_bar.IsShown() else 0
+        canvas_h = h - search_h
+        canvas_w = w - STRIP_W
+
+        self.textview.SetPosition((0, 0))
+        self.textview.SetSize((canvas_w, canvas_h))
+
+        self._strip.SetPosition((w - STRIP_W, 0))
+        self._strip.SetSize((STRIP_W, h))
+
+        if self._panel_key is not None:
+            px = canvas_w - PANEL_W
+            self._inspector_book.SetPosition((px, 0))
+            self._inspector_book.SetSize((PANEL_W, canvas_h))
+            self._inspector_book.Raise()
+
+        if self._search_bar.IsShown():
+            self._search_bar.SetPosition((0, canvas_h))
+            self._search_bar.SetSize((canvas_w, search_h))
+            self._search_bar.Raise()
+
+        self._base.Refresh()
 
     def _update_title(self):
         import os
@@ -195,9 +273,9 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _replace_document(self, doc):
         self.document = doc
-        self.textview.document = doc   # must be set before set_model → create_builder
+        self.textview.document = doc
         self.textview.set_model(doc.textmodel)
-        self.textview.index = 0        # reset cursor; old position may be out of range
+        self.textview.index = 0
         self.textview.add_model(doc.charstyles)
         self.textview.add_model(doc.liststyles)
         self.textview.add_model(doc.basestyles)
@@ -210,17 +288,15 @@ class MainFrame(wx.Frame, ViewBase):
         self.image_inspector.clear()
 
     def show_right_panel(self, key):
-        print("showing right: ", key)
-        self._right_panel.show_page(key)
-        self.Layout()
+        self._strip.activate(key)
+        self._on_panel_toggle(key)
 
     def show_left_panel(self, key):
-        print("show left:", key)
-        self._left_panel.show_page(key)
-        self.Layout()
-        
+        self.show_right_panel(key)
+
     def _update_undo_ui(self):
-        if not hasattr(self, "textview"): return
+        if not hasattr(self, "textview"):
+            return
         self.undo_item.Enable(self.textview.undocount() > 0)
         self.redo_item.Enable(self.textview.redocount() > 0)
         self._update_title()
@@ -244,8 +320,6 @@ class MainFrame(wx.Frame, ViewBase):
         if isinstance(texel, Image):
             self.image_inspector.refresh(texel, index)
             self.show_right_panel("image")
-            self._right_icon_bar._active = "image"
-            self._right_icon_bar.Refresh()
         else:
             self.image_inspector.clear()
 
@@ -296,7 +370,6 @@ class MainFrame(wx.Frame, ViewBase):
         if self._progress_dlg:
             self._progress_dlg.update(n_pages, n_chars, total_chars)
 
-        
 
 def demo_00():
     from einstein import get_einstein_model
@@ -314,14 +387,14 @@ def demo_00():
     if 1:
         view = frame.textview
         inspector = frame.inspector
-        
+
         from .wxtextview import testing
         l = locals()
         l.update(globals())
         testing.pyshell(l)
 
     app.MainLoop()
-    
+
 
 def demo_01():
     from moby import get_moby_styled
@@ -329,7 +402,6 @@ def demo_01():
     from .styles import testsheet
 
     textmodel = get_moby_styled()
-
 
     app = wx.App(True)
     doc = Document()
@@ -342,7 +414,7 @@ def demo_01():
     if 1:
         view = frame.textview
         inspector = frame.inspector
-        
+
         from .wxtextview import testing
         l = locals()
         l.update(globals())
