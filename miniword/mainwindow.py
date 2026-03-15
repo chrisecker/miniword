@@ -229,17 +229,18 @@ class MainFrame(wx.Frame, ViewBase):
         canvas_h = h - search_h
         canvas_w = w - STRIP_W
 
+        panel_w = PANEL_W if self._panel_key is not None else 0
+        text_w  = canvas_w - panel_w
+
         self.textview.SetPosition((0, 0))
-        self.textview.SetSize((canvas_w, canvas_h))
+        self.textview.SetSize((text_w, canvas_h))
 
         self._strip.SetPosition((w - STRIP_W, 0))
         self._strip.SetSize((STRIP_W, h))
 
         if self._panel_key is not None:
-            px = canvas_w - PANEL_W
-            self._inspector_book.SetPosition((px, 0))
+            self._inspector_book.SetPosition((text_w, 0))
             self._inspector_book.SetSize((PANEL_W, canvas_h))
-            self._inspector_book.Raise()
 
         if self._search_bar.IsShown():
             self._search_bar.SetPosition((0, canvas_h))
