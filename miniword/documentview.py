@@ -18,7 +18,7 @@ class DocumentView(WXTextView):
     min_zoom = 0.2
     max_zoom = 5.0
     zoom_step = 0.1
-    
+
     def __init__(self, parent, document):
         self.document = document
         super().__init__(parent)
@@ -28,12 +28,11 @@ class DocumentView(WXTextView):
         self.add_model(document.liststyles)
         self.add_model(document.basestyles)
         self.add_model(document)
-        
-    def on_char(self, event):
-        if event.GetKeyCode() == wx.WXK_RETURN and event.ShiftDown():
-            self.insert_linebreak()
-            return
-        super().on_char(event)
+
+        actions = self.actions.copy()
+        del actions[(18, True, False)]  # remove Ctrl+R → redo
+        actions[25, True, False] = 'redo' # Ctrl+Y
+        self.actions = actions
 
     def insert_linebreak(self):
         from .texels import BR
@@ -379,7 +378,11 @@ class DocumentView(WXTextView):
             prev = r1, r2, rx, ry, row
 
     def handle_action(self, action, shift=False):
-        if action == 'move_down':
+        if action == 'insert_newline' and shift:
+            self.insert_linebreak()
+        elif action == 'undo' and shift:
+            self.redo()
+        elif action == 'move_down':
             self.move_down(shift)
         elif action == 'move_up':
             self.move_up(shift)

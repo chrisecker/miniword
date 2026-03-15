@@ -88,7 +88,6 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu.Append(wx.ID_SAVEAS, "Save &As…\tCtrl+Shift+S")
         self._id_reload = wx.NewIdRef()
         self._mi_reload = file_menu.Append(self._id_reload, "&Reload\tCtrl+R")
-        self._mi_reload.Enable(False)
         file_menu.AppendSeparator()
         self._id_export_pdf = wx.NewIdRef()
         file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
