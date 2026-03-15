@@ -12,7 +12,7 @@ T('MOBY-DICK', {bold, font_size=22.0})
 NL({_style={bold, font_size=22.0}, alignment="center", base="style0"})
 T('BY', {bold, font_size=22.0})
 NL({_style={bold, font_size=22.0}, alignment="center", base="style0"})
-T('HERMAN MELVILLE,', {bold, font_size=22.0})
+T('HERMAN MELVILLE', {bold, font_size=22.0})
 NL({alignment="center", base="style0"})
 NL
 NL
