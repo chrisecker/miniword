@@ -7,7 +7,7 @@ name = "Word Count…"
 
 
 def run(app):
-    text = app.document.textmodel.get_text()[:-1]  # strip ENDMARK
+    text = app.document.textmodel.get_text()
     n_chars = len(text)
     n_words = len(text.split())
     n_lines = text.count('\n') + 1

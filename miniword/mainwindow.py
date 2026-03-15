@@ -55,23 +55,25 @@ class MainFrame(wx.Frame, ViewBase):
         import os
         plugin_dir = os.path.expanduser("~/.miniword/plugins")
         paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
-        if not paths:
-            return
-        tools_menu = wx.Menu()
-        bar = self.GetMenuBar()
-        bar.Insert(bar.GetMenuCount() - 1, tools_menu, "&Tools")
+        tools_items = []
         for path in paths:
             try:
                 spec = importlib.util.spec_from_file_location("_mw_plugin", path)
                 mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
+                spec.loader.exec_module(mod)  # side effect: registers import/export filters
             except Exception as e:
                 print(f"Plugin error ({os.path.basename(path)}): {e}")
                 continue
-            name = getattr(mod, 'name', os.path.basename(path))
-            item_id = wx.NewIdRef()
-            tools_menu.Append(item_id, name)
-            self.Bind(wx.EVT_MENU, lambda evt, m=mod: m.run(self), id=item_id)
+            if hasattr(mod, 'run'):
+                tools_items.append((getattr(mod, 'name', os.path.basename(path)), mod))
+        if tools_items:
+            tools_menu = wx.Menu()
+            bar = self.GetMenuBar()
+            bar.Insert(bar.GetMenuCount() - 1, tools_menu, "&Tools")
+            for name, mod in tools_items:
+                item_id = wx.NewIdRef()
+                tools_menu.Append(item_id, name)
+                self.Bind(wx.EVT_MENU, lambda evt, m=mod: m.run(self), id=item_id)
 
     def _build_menu(self):
         bar = wx.MenuBar()
@@ -79,20 +81,27 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu = wx.Menu()
         file_menu.Append(wx.ID_NEW,    "&New\tCtrl+N")
         file_menu.Append(wx.ID_OPEN,   "&Open\tCtrl+O")
+        self._id_import = wx.NewIdRef()
+        file_menu.Append(self._id_import, "&Import…")
+        file_menu.AppendSeparator()
         file_menu.Append(wx.ID_SAVE,   "&Save\tCtrl+S")
         file_menu.Append(wx.ID_SAVEAS, "Save &As…\tCtrl+Shift+S")
         file_menu.AppendSeparator()
         self._id_export_pdf = wx.NewIdRef()
         file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
+        self._id_export = wx.NewIdRef()
+        file_menu.Append(self._id_export, "E&xport…")
         file_menu.AppendSeparator()
         file_menu.Append(wx.ID_CLOSE, "&Close Window\tCtrl+W")
         file_menu.Append(wx.ID_EXIT,  "E&xit\tCtrl+Q")
         bar.Append(file_menu, "&File")
         self.Bind(wx.EVT_MENU, self._on_new,        id=wx.ID_NEW)
         self.Bind(wx.EVT_MENU, self._on_open,       id=wx.ID_OPEN)
+        self.Bind(wx.EVT_MENU, self._on_import,     id=self._id_import)
         self.Bind(wx.EVT_MENU, self._on_save,       id=wx.ID_SAVE)
         self.Bind(wx.EVT_MENU, self._on_saveas,     id=wx.ID_SAVEAS)
         self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
+        self.Bind(wx.EVT_MENU, self._on_export,     id=self._id_export)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_CLOSE)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
         self.Bind(wx.EVT_CLOSE, self._on_close)
@@ -322,6 +331,42 @@ class MainFrame(wx.Frame, ViewBase):
         frame._current_path = path
         frame._update_title()
         frame.Show()
+
+    def _on_import(self, event):
+        from . import importexport
+        with wx.FileDialog(
+            self, "Import",
+            wildcard=importexport.import_wildcard(),
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            path = dlg.GetPath()
+        fn = importexport.find_import_filter(path)
+        if fn is None:
+            wx.MessageBox("No import filter for this file type.",
+                          "Import", wx.OK | wx.ICON_ERROR, self)
+            return
+        doc = fn(path)
+        frame = MainFrame(doc)
+        frame.Show()
+
+    def _on_export(self, event):
+        from . import importexport
+        with wx.FileDialog(
+            self, "Export",
+            wildcard=importexport.export_wildcard(),
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            path = dlg.GetPath()
+        fn = importexport.find_export_filter(path)
+        if fn is None:
+            wx.MessageBox("No export filter for this file type.",
+                          "Export", wx.OK | wx.ICON_ERROR, self)
+            return
+        fn(self.document, path)
 
     def _on_save(self, event):
         if not getattr(self, '_current_path', None):
