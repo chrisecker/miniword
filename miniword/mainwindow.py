@@ -86,6 +86,9 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu.AppendSeparator()
         file_menu.Append(wx.ID_SAVE,   "&Save\tCtrl+S")
         file_menu.Append(wx.ID_SAVEAS, "Save &As…\tCtrl+Shift+S")
+        self._id_reload = wx.NewIdRef()
+        self._mi_reload = file_menu.Append(self._id_reload, "&Reload\tCtrl+R")
+        self._mi_reload.Enable(False)
         file_menu.AppendSeparator()
         self._id_export_pdf = wx.NewIdRef()
         file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
@@ -100,6 +103,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_import,     id=self._id_import)
         self.Bind(wx.EVT_MENU, self._on_save,       id=wx.ID_SAVE)
         self.Bind(wx.EVT_MENU, self._on_saveas,     id=wx.ID_SAVEAS)
+        self.Bind(wx.EVT_MENU, self._on_reload,     id=self._id_reload)
         self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
         self.Bind(wx.EVT_MENU, self._on_export,     id=self._id_export)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_CLOSE)
@@ -291,6 +295,8 @@ class MainFrame(wx.Frame, ViewBase):
         dirty = hasattr(self, 'textview') and self.textview.undocount() > 0
         suffix = ' *' if dirty else ''
         self.SetTitle("Writer — " + name + suffix)
+        if hasattr(self, '_mi_reload'):
+            self._mi_reload.Enable(bool(path))
 
     def _on_close(self, event):
         if hasattr(self, 'textview') and self.textview.undocount() > 0:
@@ -388,6 +394,19 @@ class MainFrame(wx.Frame, ViewBase):
         self._current_path = path
         self.document.save(path)
         self.textview.clear_undo()
+        self._update_title()
+
+    def _on_reload(self, event):
+        if self.textview.undocount() > 0:
+            wx.MessageBox("Document has been modified. Please save your changes first.",
+                          "Reload", wx.OK | wx.ICON_WARNING, self)
+            return
+        index = self.textview.index
+        from .document import Document
+        doc = Document.load(self._current_path)
+        self._replace_document(doc)
+        self.document = doc
+        self.textview.index = min(index, len(self.textview.model))
         self._update_title()
 
     def _on_export_pdf(self, event):
