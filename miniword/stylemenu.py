@@ -73,7 +73,7 @@ class StylePopup(wx.PopupWindow):
         self.triangle_hover: bool = False
 
         self.panel = wx.Panel(self)
-        self.panel.SetBackgroundColour(wx.WHITE)
+        self.panel.SetBackgroundColour(wx.Colour(245, 245, 243))
 
         self.panel.Bind(wx.EVT_PAINT,        self._on_paint)
         self.panel.Bind(wx.EVT_MOTION,       self._on_mouse_move)
@@ -133,16 +133,19 @@ class StylePopup(wx.PopupWindow):
     # ------------------------------------------------------------------
 
     def _on_paint(self, _evt):
+        BG       = wx.Colour(245, 245, 243)
+        BG_HOVER = wx.Colour(222, 222, 218)
+
         dc = wx.BufferedPaintDC(self.panel)
-        dc.SetBackground(wx.Brush(wx.WHITE))
+        dc.SetBackground(wx.Brush(BG))
         dc.Clear()
 
-        w, _ = self.panel.GetSize()
+        w, h = self.panel.GetSize()
 
         # "+" item at index 0
         plus_y, plus_h = self._item_rects[0]
         if self.hover_item == 0:
-            dc.SetBrush(wx.Brush(wx.Colour(235, 235, 235)))
+            dc.SetBrush(wx.Brush(BG_HOVER))
             dc.SetPen(wx.TRANSPARENT_PEN)
             dc.DrawRectangle(0, plus_y, w, plus_h)
         dc.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
@@ -154,7 +157,7 @@ class StylePopup(wx.PopupWindow):
             item_y, item_h = self._item_rects[i + 1]
 
             if i + 1 == self.hover_item:
-                dc.SetBrush(wx.Brush(wx.Colour(235, 235, 235)))
+                dc.SetBrush(wx.Brush(BG_HOVER))
                 dc.SetPen(wx.TRANSPARENT_PEN)
                 dc.DrawRectangle(0, item_y, w, item_h)
 
@@ -162,6 +165,11 @@ class StylePopup(wx.PopupWindow):
 
             if i + 1 == self.hover_item:
                 self._draw_triangle(dc, w, item_y, item_h)
+
+        # Thin border around the entire popup
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.SetPen(wx.Pen(wx.Colour(205, 205, 200)))
+        dc.DrawRectangle(0, 0, w, h)
 
     def _draw_triangle(self, dc: wx.DC, panel_w: int, item_y: int, item_h: int):
         color = wx.Colour(30, 30, 30)
