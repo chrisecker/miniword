@@ -14,6 +14,8 @@ class Search(ViewBase, Model):
     use_regex = False
     whole_word = False
     valide = True
+    max_results = 500
+    truncated = False  # True when result list was cut off
 
     def __init__(self, model):
         ViewBase.__init__(self)
@@ -49,6 +51,11 @@ class Search(ViewBase, Model):
             right = min(len(text), i2 + context)
             snippet = "…" + text[left:right].replace("\n", " ").strip() + "…"
             results.append((i1, i2, snippet, m.group()))
+            if len(results) >= self.max_results:
+                self.truncated = True
+                break
+        else:
+            self.truncated = False
         self._results = results
         self.valide = True
 
@@ -206,60 +213,102 @@ class SearchPanel(wx.Panel, ViewBase):
         self.search = Search(self.textmodel)
         self.set_model(self.search)
 
+        from .ui.sidepanel import BG_PANEL, COL_MUTED
+
         outer = wx.BoxSizer(wx.VERTICAL)
+        outer.AddSpacer(6)
 
-        # Search + Replace fields
-        grid = wx.FlexGridSizer(2, 2, 4, 4)
-        grid.AddGrowableCol(1)
-        grid.Add(wx.StaticText(self, label="Search:"), 0,
-                 wx.ALIGN_CENTER_VERTICAL)
-        self.search_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        # Section header
+        hdr = wx.StaticText(self, label="FIND & REPLACE")
+        hdr.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
+                            wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        hdr.SetForegroundColour(COL_MUTED)
+        outer.Add(hdr, 0, wx.LEFT | wx.TOP, 8)
+        outer.AddSpacer(3)
+
+        # Search field + ▲▼ navigation
+        search_row = wx.Panel(self)
+        search_row.SetBackgroundColour(BG_PANEL)
+        sr = wx.BoxSizer(wx.HORIZONTAL)
+        self.search_ctrl = wx.TextCtrl(search_row, style=wx.TE_PROCESS_ENTER,
+                                       size=(-1, 24))
         self.search_ctrl.SetHint("Search…")
-        grid.Add(self.search_ctrl, 0, wx.EXPAND)
-        grid.Add(wx.StaticText(self, label="Replace:"), 0,
-                 wx.ALIGN_CENTER_VERTICAL)
-        self.replace_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        btn_prev = wx.Button(search_row, label="▲", size=(20, -1),
+                             style=wx.BORDER_NONE)
+        btn_next = wx.Button(search_row, label="▼", size=(20, -1),
+                             style=wx.BORDER_NONE)
+        btn_prev.SetBackgroundColour(BG_PANEL)
+        btn_next.SetBackgroundColour(BG_PANEL)
+        btn_box = wx.BoxSizer(wx.VERTICAL)
+        btn_box.Add(btn_prev, 1, wx.EXPAND)
+        btn_box.Add(btn_next, 1, wx.EXPAND)
+        sr.Add(self.search_ctrl, 1, wx.EXPAND)
+        sr.Add(btn_box, 0, wx.EXPAND | wx.LEFT, 2)
+        search_row.SetSizer(sr)
+        outer.Add(search_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+
+        # Replace field
+        self.replace_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER,
+                                        size=(-1, 24))
         self.replace_ctrl.SetHint("Replace…")
-        grid.Add(self.replace_ctrl, 0, wx.EXPAND)
-        outer.Add(grid, 0, wx.EXPAND | wx.ALL, 8)
+        outer.Add(self.replace_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
 
-        # Nav bar: count label + buttons
-        nav = wx.BoxSizer(wx.HORIZONTAL)
+        # Options: Aa (case), .* (regex), W (whole word)
+        opts_row = wx.Panel(self)
+        opts_row.SetBackgroundColour(BG_PANEL)
+        os_ = wx.BoxSizer(wx.HORIZONTAL)
+        self.cb_case = wx.CheckBox(opts_row, label="Aa")
+        self.cb_case.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
+                                     wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.cb_case.SetToolTip("Case sensitive")
+        self.cb_regex = wx.CheckBox(opts_row, label=".*")
+        self.cb_regex.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
+                                      wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.cb_regex.SetToolTip("Regex")
+        self.cb_word = wx.CheckBox(opts_row, label="W")
+        self.cb_word.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
+                                     wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.cb_word.SetToolTip("Whole word")
+        os_.Add(self.cb_case,  0, wx.RIGHT, 10)
+        os_.Add(self.cb_regex, 0, wx.RIGHT, 10)
+        os_.Add(self.cb_word,  0)
+        opts_row.SetSizer(os_)
+        outer.Add(opts_row, 0, wx.LEFT | wx.TOP, 6)
+
+        # Replace buttons
+        btn_row = wx.Panel(self)
+        btn_row.SetBackgroundColour(BG_PANEL)
+        brs = wx.BoxSizer(wx.HORIZONTAL)
+        btn_replace = wx.Button(btn_row, label="Replace",
+                                size=(-1, 24), style=wx.BORDER_NONE)
+        btn_all = wx.Button(btn_row, label="Replace All",
+                            size=(-1, 24), style=wx.BORDER_NONE)
+        btn_replace.SetBackgroundColour(wx.Colour(235, 235, 231))
+        btn_all.SetBackgroundColour(wx.Colour(235, 235, 231))
+        brs.Add(btn_replace, 1, wx.RIGHT, 3)
+        brs.Add(btn_all, 1)
+        btn_row.SetSizer(brs)
+        outer.Add(btn_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+
+        # Separator + count label as section header above results
+        outer.AddSpacer(8)
+        outer.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 4)
+        outer.AddSpacer(4)
         self.count_label = wx.StaticText(self, label="")
-        nav.Add(self.count_label, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 4)
-        bmp_prev = wx.ArtProvider.GetBitmap(wx.ART_GO_BACK, wx.ART_BUTTON)
-        bmp_next = wx.ArtProvider.GetBitmap(wx.ART_GO_FORWARD, wx.ART_BUTTON)
-        btn_prev = wx.BitmapButton(self, bitmap=bmp_prev)
-        btn_next = wx.BitmapButton(self, bitmap=bmp_next)
-        btn_replace = wx.Button(self, label="Replace")
-        btn_all = wx.Button(self, label="All")
-        nav.Add(btn_prev, 0, wx.RIGHT, 2)
-        nav.Add(btn_next, 0, wx.RIGHT, 6)
-        nav.Add(btn_replace, 0, wx.RIGHT, 2)
-        nav.Add(btn_all, 0, wx.RIGHT, 4)
-        outer.Add(nav, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
-
-        # Options toggle + panel
-        btn_opts = wx.ToggleButton(self, label="Options")
-        outer.Add(btn_opts, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
-        opts_panel = wx.Panel(self)
-        opts = wx.BoxSizer(wx.HORIZONTAL)
-        self.cb_regex = wx.CheckBox(opts_panel, label="Regex")
-        self.cb_case = wx.CheckBox(opts_panel, label="Case sensitive")
-        self.cb_word = wx.CheckBox(opts_panel, label="Whole word")
-        opts.Add(self.cb_regex, 0, wx.RIGHT, 8)
-        opts.Add(self.cb_case, 0, wx.RIGHT, 8)
-        opts.Add(self.cb_word, 0)
-        opts_panel.SetSizer(opts)
-        opts_panel.Hide()
-        outer.Add(opts_panel, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 4)
+        self.count_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
+                                         wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+        self.count_label.SetForegroundColour(COL_MUTED)
+        outer.Add(self.count_label, 0, wx.LEFT, 8)
+        outer.AddSpacer(3)
 
         # Result list
         self.result_list = SearchResultsList(self, textview)
         self.result_list.on_select = self._on_result_selected
-        outer.Add(self.result_list, 1, wx.EXPAND | wx.ALL, 6)
+        outer.Add(self.result_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 4)
 
         self.SetSizer(outer)
+
+        self.Bind(wx.EVT_SHOW, self._on_show)
 
         # Bindings
         self.search_ctrl.Bind(wx.EVT_TEXT, self.on_text_changed)
@@ -272,9 +321,15 @@ class SearchPanel(wx.Panel, ViewBase):
         self.cb_regex.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
         self.cb_case.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
         self.cb_word.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
-        btn_opts.Bind(wx.EVT_TOGGLEBUTTON,
-                      lambda e: (opts_panel.Show(btn_opts.GetValue()),
-                                 self.Layout()))
+
+    def _on_show(self, event):
+        event.Skip()
+        if event.IsShown():
+            if not self.search.valide:
+                self.update()
+        else:
+            self.textview.highlights = []
+            self.textview.Refresh()
 
     def on_text_changed(self, event):
         self.search.search(self.search_ctrl.GetValue().strip())
@@ -282,6 +337,8 @@ class SearchPanel(wx.Panel, ViewBase):
         self.update()
 
     def results_changed(self, model):
+        if not self.IsShownOnScreen():
+            return  # search.valide is already False; update on next show
         if self._update_queued:
             return
         self._update_queued = True
@@ -307,12 +364,15 @@ class SearchPanel(wx.Panel, ViewBase):
 
     def _update_count_label(self):
         n = len(self.result_list.results)
-        if n == 0:
-            label = "No matches"
+        suffix = "+" if self.search.truncated else ""
+        if not self.search.substring:
+            label = ""
+        elif n == 0:
+            label = "NO MATCHES"
         elif self._current_idx >= 0:
-            label = "%d / %d" % (self._current_idx + 1, n)
+            label = "%d / %d%s MATCHES" % (self._current_idx + 1, n, suffix)
         else:
-            label = "%d matches" % n
+            label = "%d%s MATCHES" % (n, suffix)
         self.count_label.SetLabel(label)
 
     def _go_next(self, event=None):
