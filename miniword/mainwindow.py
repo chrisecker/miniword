@@ -44,9 +44,34 @@ class MainFrame(wx.Frame, ViewBase):
 
         self.SetMinSize((800, 480))
         self._build_menu()
+        self._load_plugins()
         self._build_layout()
         self._update_title()
         self.Centre()
+
+    def _load_plugins(self):
+        import glob
+        import importlib.util
+        import os
+        plugin_dir = os.path.expanduser("~/.miniword/plugins")
+        paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
+        if not paths:
+            return
+        tools_menu = wx.Menu()
+        bar = self.GetMenuBar()
+        bar.Insert(bar.GetMenuCount() - 1, tools_menu, "&Tools")
+        for path in paths:
+            try:
+                spec = importlib.util.spec_from_file_location("_mw_plugin", path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+            except Exception as e:
+                print(f"Plugin error ({os.path.basename(path)}): {e}")
+                continue
+            name = getattr(mod, 'name', os.path.basename(path))
+            item_id = wx.NewIdRef()
+            tools_menu.Append(item_id, name)
+            self.Bind(wx.EVT_MENU, lambda evt, m=mod: m.run(self), id=item_id)
 
     def _build_menu(self):
         bar = wx.MenuBar()
