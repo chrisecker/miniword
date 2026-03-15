@@ -404,7 +404,7 @@ class MainFrame(wx.Frame, ViewBase):
         index = self.textview.index
         from .document import Document
         doc = Document.load(self._current_path)
-        self._replace_document(doc)
+        self.replace_document(doc)
         self.document = doc
         self.textview.index = min(index, len(self.textview.model))
         self._update_title()
@@ -420,7 +420,8 @@ class MainFrame(wx.Frame, ViewBase):
             path = dlg.GetPath()
         self.textview.export_pdf(path)
 
-    def _replace_document(self, doc):
+    def replace_document(self, doc):
+        old_textmodel = self.textview.model
         self.document = doc
         self.textview.document = doc
         self.textview.set_model(doc.textmodel)
@@ -429,8 +430,11 @@ class MainFrame(wx.Frame, ViewBase):
         self.textview.add_model(doc.liststyles)
         self.textview.add_model(doc.basestyles)
         self.textview.add_model(doc)
+        self.inspector.remove_model(old_textmodel)
+        self.inspector.add_model(doc.textmodel)
         self.inspector.basestyles = doc.basestyles
         self.inspector.basestyle.set_stylesheet(doc.basestyles)
+        self.inspector.queue_update()
         self.document_settings.model = doc
         self.document_settings._refresh()
         self.image_inspector.blobs = doc.blobs
