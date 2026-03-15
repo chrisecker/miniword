@@ -25,6 +25,7 @@ modules = [
     "miniword.annotation",
     "miniword.builder",
     "miniword.documentview",
+    "miniword.importexport",
 ]
 
 total_n = 0
