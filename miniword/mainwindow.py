@@ -60,14 +60,16 @@ class MainFrame(wx.Frame, ViewBase):
         self._id_export_pdf = wx.NewIdRef()
         file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
         file_menu.AppendSeparator()
-        file_menu.Append(wx.ID_EXIT, "E&xit\tAlt+F4")
+        file_menu.Append(wx.ID_CLOSE, "&Close Window\tCtrl+W")
+        file_menu.Append(wx.ID_EXIT,  "E&xit\tCtrl+Q")
         bar.Append(file_menu, "&File")
         self.Bind(wx.EVT_MENU, self._on_new,        id=wx.ID_NEW)
         self.Bind(wx.EVT_MENU, self._on_open,       id=wx.ID_OPEN)
         self.Bind(wx.EVT_MENU, self._on_save,       id=wx.ID_SAVE)
         self.Bind(wx.EVT_MENU, self._on_saveas,     id=wx.ID_SAVEAS)
         self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
-        self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
+        self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_CLOSE)
+        self.Bind(wx.EVT_MENU, lambda _: wx.GetApp().ExitMainLoop(), id=wx.ID_EXIT)
 
         edit_menu = wx.Menu()
         self.undo_item = edit_menu.Append(wx.ID_UNDO, "&Undo\tCtrl+Z")
@@ -77,19 +79,29 @@ class MainFrame(wx.Frame, ViewBase):
         edit_menu.Append(wx.ID_COPY,  "&Copy\tCtrl+C")
         edit_menu.Append(wx.ID_PASTE, "&Paste\tCtrl+V")
         edit_menu.AppendSeparator()
-        edit_menu.Append(wx.ID_FIND,    "&Find…\tCtrl+F")
-        edit_menu.Append(wx.ID_REPLACE, "&Replace…\tCtrl+H")
+        edit_menu.Append(wx.ID_FIND,    "&Find && Replace…\tCtrl+F")
         bar.Append(edit_menu, "&Edit")
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.cut(),   id=wx.ID_CUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.copy(),  id=wx.ID_COPY)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.paste(), id=wx.ID_PASTE)
         self.Bind(wx.EVT_MENU, self._on_find, id=wx.ID_FIND)
-        self.Bind(wx.EVT_MENU, self._on_find, id=wx.ID_REPLACE)
 
+        self._id_zoom_fit_w = wx.NewIdRef()
+        self._id_zoom_fit_p = wx.NewIdRef()
         view_menu = wx.Menu()
-        view_menu.Append(wx.ID_ZOOM_IN,  "Zoom In\tCtrl++")
-        view_menu.Append(wx.ID_ZOOM_OUT, "Zoom Out\tCtrl+-")
-        view_menu.Append(wx.ID_ZOOM_100, "Actual Size\tCtrl+0")
+        view_menu.Append(wx.ID_ZOOM_IN,       "Zoom &In\tCtrl++")
+        view_menu.Append(wx.ID_ZOOM_OUT,      "Zoom &Out\tCtrl+-")
+        view_menu.Append(wx.ID_ZOOM_100,      "&Actual Size\tCtrl+0")
+        view_menu.Append(self._id_zoom_fit_w, "Fit to &Text Width\tCtrl+1")
+        view_menu.Append(self._id_zoom_fit_p, "Fit to &Page\tCtrl+2")
         view_menu.AppendSeparator()
         self._mi_panel = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
         bar.Append(view_menu, "&View")
+        self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1.15),  id=wx.ID_ZOOM_IN)
+        self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1/1.15), id=wx.ID_ZOOM_OUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.set_zoom(1.0), id=wx.ID_ZOOM_100)
+        self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_width(),  id=self._id_zoom_fit_w)
+        self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
         self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
 
         bar.Append(wx.Menu(), "&Help")
@@ -103,6 +115,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetSizer(outer)
 
         self.textview = DocumentView(self._base, self.document)
+        self.textview.SetBackgroundColour(BG_CANVAS)
         self.textview.add_view(self)
 
         # Inspector container
@@ -174,9 +187,35 @@ class MainFrame(wx.Frame, ViewBase):
         self._layout()
 
     def _on_find(self, _):
-        self._search_bar.Show()
-        self._layout()
-        self._search_bar.focus()
+        self.show_right_panel("search")
+
+    def _zoom_step(self, factor):
+        tv = self.textview
+        new_zoom = max(tv.min_zoom, min(tv.max_zoom, tv.get_zoom() * factor))
+        tv.set_zoom(new_zoom)
+
+    def _zoom_fit_width(self):
+        layout = self.textview.layout
+        cw = self.textview.GetClientSize()[0]
+        if layout.width > 0 and cw > 0:
+            self.textview.set_zoom(cw / layout.width)
+
+    def _zoom_fit_page(self):
+        tv = self.textview
+        layout = tv.layout
+        cw, ch = tv.GetClientSize()
+        if layout.width <= 0 or cw <= 0 or ch <= 0:
+            return
+        rx, ry = getattr(tv, '_scrollrate', (10, 10))
+        _, sy = tv.GetViewStart()
+        scroll_y = sy * ry / tv.get_zoom()
+        page_h = layout.height  # fallback
+        for _p1, _p2, _px, py, page in layout.iter_boxes(0, 0, 0):
+            if py + page.height + page.depth >= scroll_y:
+                page_h = page.height + page.depth
+                break
+        if page_h > 0:
+            tv.set_zoom(min(cw / layout.width, ch / page_h))
 
     def _close_search(self):
         self._search_bar.Hide()
