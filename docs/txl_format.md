@@ -86,7 +86,7 @@ Properties can be grouped and assigned a stable ID to form a named style. There 
 
 - **Basestyle** – covers all three property categories (Text, Structure, List). Referenced by `NL` and `TAB` via `base=`. A basestyle is always complete: unspecified properties fall back to built-in defaults.
 - **Charstyle** – covers Text Properties only. Referenced by `T` via `char=`.
-- **Liststyle** – covers List Properties only. Referenced by `NL` and `TAB` via `list=`.
+- **Liststyle** – covers List Properties only. (`list=` is reserved but not yet implemented; place list properties directly in the basestyle instead.)
 
 Each named style may have:
 - `name` – display name in the UI (optional)
@@ -250,5 +250,6 @@ ENDMARK({base="body"})
 1. **ID stability:** Always reuse existing style IDs. Never invent new IDs unless adding a new style.
 2. **Minimal overrides:** Only specify properties that differ from the named style. Unspecified properties fall back to the named style, then to built-in defaults.
 3. **Roles:** The `role` field enables semantic export (e.g. to Markdown or HTML). It may change without modifying the content stream.
-4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. For `paragraph_type="list"` or `"numbered"` it also activates the corresponding marker.
-5. **Unified property block:** All element parameters — structural and stylistic — go in the `{…}` block. There are no positional arguments other than the element type string and slot contents.
+4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. It is an index, not a distance. `indent=0` corresponds to the normal text column (no extra indentation); bullet lists therefore typically use `indent=1`.
+5. **Markers:** A bullet or number is rendered on the first line of a paragraph when `paragraph_type="list"` or `"numbered"` is set — either in the referenced basestyle or as a direct override on `NL`. The marker's base font is inherited from the first `T` element of the paragraph; `marker_size` and `marker_color` are applied on top.
+6. **Unified property block:** All element parameters — structural and stylistic — go in the `{…}` block. There are no positional arguments other than the element type string and slot contents.
