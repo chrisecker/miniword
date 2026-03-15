@@ -8,6 +8,7 @@
 "style1" = {name="Contents"}
 
 [document]
+PROPS({author="Hermann Melville", title="Moby-Dick"})
 T('MOBY-DICK')
 NL({base="style0"})
 T('BY')
