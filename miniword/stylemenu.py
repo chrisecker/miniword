@@ -346,8 +346,9 @@ class StyleDropdown(wx.Control, ViewBase):
         # and must not be cleared when reverting to base style.
         self.overrides  = {k for k in overrides if k not in PARAGRAPH_ONLY_KEYS}
 
-        if name is None:
-            # Ambiguous selection (multiple paragraphs with different styles).
+        if name is None or name not in self.styles:
+            # Ambiguous selection (multiple paragraphs with different styles)
+            # or style not defined in this stylesheet yet.
             self.selection = -1
             self.modified  = False
             self.Refresh()
