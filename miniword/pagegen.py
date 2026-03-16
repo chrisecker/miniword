@@ -332,10 +332,7 @@ class RestartMemo:
         return r
 
 
-PAPER_SIZES = {
-    'A4':     (210 * mm, 297 * mm),
-    'Letter': (215.9 * mm, 279.4 * mm),
-}
+from .papersizes import PAPER_SIZES
 
 
 def restartmemo_from_settings(settings):

@@ -100,7 +100,7 @@ class DocumentView(WXTextView):
             import time
             t0 = time.time()
             print("ensure_viewport")
-            self.builder.waitfor_y(y)
+            self.builder.buildto_y(y)
             print("y reached after", time.time()-t0)
 
     def on_paint(self, event):
@@ -179,14 +179,15 @@ class DocumentView(WXTextView):
         context, updates are accumulated and deferred. Otherwise, the
         update is triggered immediately. The building will happen in
         the background. To enforce visibility the caller should use
-        ensure_viewport oder builder.waitfor_*. No progress dialog is
+        ensure_viewport oder builder.buildto_*. No progress dialog is
         shown.
-        """        
+        """
         if self._inhibit_depth > 0:
             self._accumulate(i1, i2, delta)
         else:
             self.builder.rebuild_range(i1, i2, delta)
             self.ensure_viewport()
+            self.builder.build_background()
             self.refresh()
 
     @trace
@@ -195,6 +196,7 @@ class DocumentView(WXTextView):
         viewport is completed."""
         self.builder.rebuild()
         self.ensure_viewport()
+        self.builder.build_background()
         self.refresh()
 
     @contextmanager
@@ -212,36 +214,38 @@ class DocumentView(WXTextView):
             self._pending_range = None
             self._rebuild_with_progress(i1, i2, delta)
 
-    @trace
-    def _rebuild_with_progress(self, i1, i2, delta):
-        """Rebuild range and show progress dialog if viewport not yet covered."""
-        print("rebuild range=", i1, i2, delta)
-        self.builder.rebuild_range(i1, i2, delta)
+    def _wait_with_progress(self):
+        """Show progress dialog until viewport is covered."""
         layout = self.builder.layout
         y = self._viewport_bottom_y()
         index = self.index
         total = max(1, len(self.model))
         if layout.height + layout.depth >= y and index < len(layout):
-            print("conditions met, switching to background",
-                  layout.height + layout.depth, ">=", y, index ,"<", len(layout))
             self.refresh()
             return
-        print("showing progress")
-        
+        self.Freeze()
         dlg = wx.ProgressDialog(
             "Building layout", "Please wait...",
             maximum=100, parent=self,
-            style=wx.PD_AUTO_HIDE)
+            style=wx.PD_APP_MODAL)
         def tick():
-            dlg.Update(min(99, int(100 * len(layout) / total)))            
+            dlg.Update(min(99, int(100 * len(layout) / total)))
+            wx.SafeYield()
         try:
-            self.builder.waitfor_y(y, tick)
-            print("waiting for index", index)
-            self.builder.waitfor_index(index, tick)
-            print("finally reached without exception")
+            self.builder.buildto_y(y, tick)
+            self.builder.buildto_index(index, tick)
         finally:
             dlg.Destroy()
+            self.Thaw()
         self.refresh()
+
+    @trace
+    def _rebuild_with_progress(self, i1, i2, delta):
+        """Rebuild range and show progress dialog if viewport not yet covered."""
+        self.builder.rebuild_range(i1, i2, delta)
+        self._wait_with_progress()
+        if not self.builder.layout.is_finished:
+            self.builder.build_background()
 
     def _undo_stylesheet(self, name, restore_to, after_redo):
         """Undo/redo a stylesheet change.
@@ -275,19 +279,23 @@ class DocumentView(WXTextView):
         else:
             self._rebuild_with_progress(j1, j2, 0)
 
+    _LAYOUT_SETTINGS = {
+        'paper', 'paper_width', 'paper_height',
+        'margin_top', 'margin_bottom', 'margin_left', 'margin_right',
+    }
+
     @trace
-    def settings_changed(self, *args, **kwds):
+    def setting_changed(self, doc, name, old):
         self.builder.settings = self.document.settings
-        self.builder.rebuild()
-        self.ensure_viewport()
-        self.refresh()
+        if name in self._LAYOUT_SETTINGS:
+            self._rebuild_with_progress(0, len(self.model)+1, 0)
+        else:
+            self.refresh()
 
     @trace
     def style_removed(self, stylesheet, key):
         self.clear_caches()
-        self.builder.rebuild()
-        self.ensure_viewport()
-        self.refresh()
+        self.rebuild()
 
     def create_builder(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
@@ -298,12 +306,12 @@ class DocumentView(WXTextView):
 
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
-        self.builder.waitfor_index(index + 1)
+        self.builder.buildto_index(index + 1)
         WXTextView.set_index(self, index, extend, update)
 
     def export_pdf(self, path):
         import cairo
-        self.builder.waitfor_finish()
+        self.builder.buildto_finish()
         pages = self.layout.childs
         if not pages:
             return
@@ -505,7 +513,7 @@ def test_00():
         new_normal = doc.basestyles.get('normal').copy()
         new_normal['font_size'] = 8
         doc.basestyles.set('normal', new_normal)
-        view.builder.waitfor_finish()
+        view.builder.buildto_finish()
         stats = view.builder.get_updatestats()
 
     # are the styles updated?
@@ -539,7 +547,7 @@ def test_01():
         doc.textmodel = get_model()
         doc.basestyles.set('normal', dict(style_default))
         view = DocumentView(frame, doc)
-        view.builder.waitfor_finish()
+        view.builder.buildto_finish()
 
     # Pretend the viewport extends far below the built layout so the
     # dialog condition is always triggered.

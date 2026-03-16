@@ -101,7 +101,7 @@ class Builder(BuilderBase):
     The phase also ends when the end of the document is reached.
 
     Synchronous building can be forced during the background phase via
-    waitfor_height and waitfor_page, both of which can be called from
+    buildto_height and buildto_page, both of which can be called from
     Update().
     """
     _layout         = None
@@ -154,12 +154,7 @@ class Builder(BuilderBase):
             texel, p, state, self.factory)
 
         if not len(self.model):
-            # The text view is typically created with an empty model;
-            # set_model is called later. We avoid a background task at
-            # startup by finishing manually here.
-            return self.waitfor_finish()
-        else:
-            wx.CallAfter(self.build_background)
+            self.buildto_finish()
 
     def build_step(self):
         """Advance the active update task by one step.
@@ -195,28 +190,28 @@ class Builder(BuilderBase):
                 wx.CallAfter(self.build_background)
 
     @trace
-    def waitfor_finish(self, callback=NOOP):
+    def buildto_finish(self, callback=NOOP):
         layout = self._layout
         while not layout.is_finished:
             self.build_step()
             callback()
 
     @trace
-    def waitfor_index(self, i, callback=NOOP):
+    def buildto_index(self, i, callback=NOOP):
         layout = self._layout
         while len(layout) < i and not layout.is_finished:
             self.build_step()
             callback()
 
     @trace
-    def waitfor_page(self, i, callback=NOOP):
+    def buildto_page(self, i, callback=NOOP):
         layout = self._layout
         while len(layout.childs) < i + 1 and not layout.is_finished:
             self.build_step()
             callback()
 
     @trace
-    def waitfor_y(self, y, callback=NOOP):
+    def buildto_y(self, y, callback=NOOP):
         layout = self._layout
         while layout.height+layout.depth < y and not layout.is_finished:
             self.build_step()
@@ -278,7 +273,7 @@ class Builder(BuilderBase):
         if not k1:
             # k1 is either None (empty layout) or 0 (first page)
             pages_before = []
-            state = RestartMemo()
+            state = restartmemo_from_settings(self.settings)
         else:
             # Shift start left to account for spillover
             pages = layout.childs

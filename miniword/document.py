@@ -29,9 +29,18 @@ class Document(Model):
         self.settings = {}
         self.blobs = {}   # {blob_id: bytes}
 
-    def set_settings(self, settings):
-        self.settings = settings
-        self.notify_views('settings_changed')
+    def set_setting(self, name, value):
+        if name in self.settings:
+            old = self.settings[name]
+        else:
+            old = settings_default[name]
+        if value != old:
+            if settings_default[name] == value:
+                del self.settings[name]
+            else:
+                self.settings[name] = value
+            self.notify_views('setting_changed', name, old)
+        return old
 
     def save(self, path):
         from . import txlio

@@ -223,7 +223,7 @@ def justify_line(l, width):
     stretch        = width - current_width
     stretchability = sum(get_stretchability(box) for box in boxes)
     if stretchability == 0:
-        raise Exception("Box is not stretchable")
+        return boxes  # single word wider than line: leave as-is
     unit_stretch   = stretch / stretchability
 
     for box in boxes:
@@ -322,13 +322,9 @@ def test_03():
 
     textbox1 = TextBox("Hello")
     textbox2 = TextBox("world ")
-    try:
-        justify_line([textbox1, textbox2], 20)
-        ok = False
-    except:
-        # box is not scalable!
-        ok = True
-    assert ok
+    # no inter-word space: returned unchanged (graceful degradation)
+    boxes = justify_line([textbox1, textbox2], 20)
+    assert sum(box.width for box in boxes) == 11
 
     textbox1 = TextBox("Hello")
     textbox2 = TextBox("world ")

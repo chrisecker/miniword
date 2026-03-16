@@ -6,7 +6,8 @@ from .document import settings_default
 from .styles import updated
 
 
-PAPER_CHOICES = ['A4', 'Letter', 'custom']
+from .papersizes import PAPER_SIZES
+PAPER_CHOICES = list(PAPER_SIZES) + ['custom']
 
 
 class SettingsInspector(wx.Panel, ViewBase):
@@ -92,7 +93,7 @@ class SettingsInspector(wx.Panel, ViewBase):
     # ViewBase
     # ------------------------------------------------------------------
 
-    def settings_changed(self, *args, **kwds):
+    def setting_changed(self, doc, name, old):
         self._refresh()
 
     # ------------------------------------------------------------------
@@ -105,13 +106,8 @@ class SettingsInspector(wx.Panel, ViewBase):
     def _set_prop(self, **kwargs):
         if self._updating:
             return
-        props = dict(self.model.settings)
-        props.update(kwargs)
-        # Strip values equal to their default to keep the stored dict compact.
-        for k in list(props):
-            if props[k] == settings_default.get(k):
-                del props[k]
-        self.model.set_settings(props)
+        for name, value in kwargs.items():
+            self.model.set_setting(name, value)
 
     def _refresh(self):
         self._updating = True
