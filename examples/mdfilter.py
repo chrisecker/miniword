@@ -26,6 +26,7 @@ def _doc_to_md(doc):
     from miniword.textmodel.texeltree import get_text
     from miniword.textmodel.iterators import iter_leafes
     from miniword.textmodel.texeltree import NewLine
+    from miniword.tables import Table as TableTexel
 
     texel    = doc.textmodel.get_xtexel()
     parts    = []
@@ -44,12 +45,21 @@ def _doc_to_md(doc):
             close_pre()
             continue  # ENDMARK — skip
 
+        content = elems[:-1]
+        if len(content) == 1 and isinstance(content[0], TableTexel):
+            close_pre()
+            if parts:
+                parts.append('')
+            parts.extend(_table_to_md(content[0]))
+            prev_type = None
+            continue
+
         ps     = nl.parstyle
         base   = ps.get('base', 'normal')
         ptype  = ps.get('paragraph_type', 'normal')
         indent = nl.indent
 
-        inline = _elems_to_inline(elems[:-1])
+        inline = _elems_to_inline(content)
         if not inline.strip():
             continue  # empty paragraph — skip
 
@@ -88,6 +98,25 @@ def _doc_to_md(doc):
 
     close_pre()
     return '\n'.join(parts) + '\n'
+
+
+def _table_to_md(table):
+    """Render a Table texel as Markdown table lines."""
+    from miniword.textmodel.texeltree import get_text
+    n_rows, n_cols = table.n_rows, table.n_cols
+    cell_texels = table.childs[1::2]
+    grid = [[get_text(cell_texels[r * n_cols + c])
+             for c in range(n_cols)]
+            for r in range(n_rows)]
+    widths = [max(max(len(grid[r][c]) for r in range(n_rows)), 3)
+              for c in range(n_cols)]
+    def fmt(cells):
+        return '| ' + ' | '.join(c.ljust(w) for c, w in zip(cells, widths)) + ' |'
+    lines = [fmt(grid[0]),
+             '| ' + ' | '.join('-' * w for w in widths) + ' |']
+    for row in grid[1:]:
+        lines.append(fmt(row))
+    return lines
 
 
 def _elems_to_inline(elems):
@@ -148,71 +177,84 @@ _CODE_RE        = re.compile(r'`(.+?)`')
 def _load_builtin(text):
     from miniword.document import Document
     from miniword.textmodel.textmodel import TextModel
-    from miniword.styles import style_default
-
-    paragraphs = _parse_md_paragraphs(text)
 
     doc = Document()
     _register_heading_styles(doc)
+    doc.textmodel = TextModel('')
 
-    # Build raw text and collect style ranges
-    raw_chars  = []  # list of (char, parstyle_key, charprops)
-    par_ranges = []  # (start, parstyle_key, indent)
-
-    pos = 0
-    for ptype, indent, runs in paragraphs:
-        par_start = pos
-        for run_text, run_props in runs:
-            for ch in run_text:
-                raw_chars.append((ch, run_props))
-            pos += len(run_text)
-        # NL character
-        raw_chars.append(('\n', {}))
-        par_ranges.append((par_start, pos, ptype, indent))
-        pos += 1
-
-    raw_text = ''.join(ch for ch, _ in raw_chars)
-    doc.textmodel = TextModel(raw_text)
-
-    # Apply paragraph styles (walk NLs: each \n is a NL in the model)
-    nl_positions = [i for i, ch in enumerate(raw_text) if ch == '\n']
-    for (par_start, par_end, ptype, indent), nl_pos in zip(par_ranges, nl_positions):
-        base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'normal'
-        ps   = {'base': base}
-        if ptype == 'list':
-            ps['paragraph_type'] = 'list'
-        elif ptype == 'numbered':
-            ps['paragraph_type'] = 'numbered'
-        doc.textmodel.set_parstyle(nl_pos, ps)
-        if indent:
-            doc.textmodel.set_indent(nl_pos, indent)
-
-    # Apply character styles
-    i = 0
-    run_start = 0
-    while i < len(raw_chars):
-        ch, props = raw_chars[i]
-        if props:
-            j = i
-            while j < len(raw_chars) and raw_chars[j][1] == props:
-                j += 1
-            doc.textmodel.set_properties(i, j, **props)
-            i = j
+    for block in _parse_md_paragraphs(text):
+        if block[0] == 'table':
+            _, grid = block
+            _insert_table_block(doc, grid)
         else:
-            i += 1
+            ptype, indent, runs = block
+            _insert_text_block(doc, ptype, indent, runs)
 
     return doc
 
 
-def _parse_md_paragraphs(text):
-    """Parse MD text into list of (ptype, indent, runs).
+def _insert_text_block(doc, ptype, indent, runs):
+    par_text = ''.join(t for t, _ in runs) + '\n'
+    pos = len(doc.textmodel.get_text())
+    doc.textmodel.insert(pos, doc.textmodel.create_textmodel(par_text))
+    nl_pos = pos + len(par_text) - 1
+    base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'normal'
+    ps = {'base': base}
+    if ptype == 'list':
+        ps['paragraph_type'] = 'list'
+    elif ptype == 'numbered':
+        ps['paragraph_type'] = 'numbered'
+    doc.textmodel.set_parstyle(nl_pos, ps)
+    if indent:
+        doc.textmodel.set_indent(nl_pos, indent)
+    run_pos = pos
+    for run_text, run_props in runs:
+        if run_props:
+            doc.textmodel.set_properties(run_pos, run_pos + len(run_text), **run_props)
+        run_pos += len(run_text)
 
-    ptype: 'normal' | 'h1'..'h6' | 'list' | 'numbered'
+
+def _insert_table_block(doc, grid):
+    from miniword.tables import mk_table
+    tbl_model = doc.textmodel.create_textmodel()
+    tbl_model.texel = mk_table(grid)
+    pos = len(doc.textmodel.get_text())
+    doc.textmodel.insert(pos, tbl_model)
+    pos2 = len(doc.textmodel.get_text())
+    doc.textmodel.insert(pos2, doc.textmodel.create_textmodel('\n'))
+
+
+_SEP_ROW_RE = re.compile(r'^:?-+:?$')
+
+
+def _parse_table_row(line):
+    return [c.strip() for c in line.strip().strip('|').split('|')]
+
+
+def _parse_table_lines(lines):
+    grid = []
+    for line in lines:
+        cells = _parse_table_row(line)
+        if all(_SEP_ROW_RE.match(c) for c in cells if c):
+            continue  # skip separator row
+        grid.append(cells)
+    return grid
+
+
+def _parse_md_paragraphs(text):
+    """Parse MD text into list of blocks.
+
+    Each block is either:
+      (ptype, indent, runs)  — text paragraph
+      ('table', grid)        — table (2-D list of strings)
+
+    ptype: 'normal' | 'h1'..'h6' | 'list' | 'numbered' | 'pre'
     runs:  list of (text, charprops_dict)
     """
     lines = text.splitlines()
     paragraphs = []
     buf = []         # accumulated normal-paragraph lines
+    table_buf = []   # accumulated table lines
     in_fence = False
 
     def flush_buf():
@@ -221,17 +263,34 @@ def _parse_md_paragraphs(text):
             paragraphs.append(('normal', 0, _parse_inline(combined)))
             buf.clear()
 
+    def flush_table():
+        if table_buf:
+            grid = _parse_table_lines(table_buf)
+            if grid:
+                paragraphs.append(('table', grid))
+            table_buf.clear()
+
     for line in lines:
         if _FENCE_RE.match(line):
             flush_buf()
+            flush_table()
             in_fence = not in_fence
             continue
         if in_fence:
+            flush_table()
             paragraphs.append(('pre', 0, [(line or ' ', {})]))
             continue
         if _RULE_RE.match(line):
             flush_buf()
+            flush_table()
             continue
+
+        if line.startswith('|'):
+            flush_buf()
+            table_buf.append(line)
+            continue
+        else:
+            flush_table()
 
         m = _ATX_RE.match(line)
         if m:
@@ -267,6 +326,7 @@ def _parse_md_paragraphs(text):
             buf.append(line)
 
     flush_buf()
+    flush_table()
     return paragraphs
 
 
@@ -630,6 +690,37 @@ def test_11():
         assert 'code here'   in out
     finally:
         os.unlink(path)
+
+
+def test_12():
+    "table import produces Table texel with correct dimensions and cell texts"
+    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine, get_text
+    from miniword.tables import Table as TableTexel
+    md = "| A | B |\n| --- | --- |\n| C | D |\n"
+    doc = _load_builtin(md)
+    table = None
+    for i1, i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
+        content = elems[:-1]
+        if content and isinstance(content[0], TableTexel):
+            table = content[0]
+            break
+    assert table is not None
+    assert table.n_rows == 2
+    assert table.n_cols == 2
+    cells = table.childs[1::2]
+    assert [get_text(c) for c in cells] == ['A', 'B', 'C', 'D']
+
+
+def test_13():
+    "table export roundtrip preserves headers and data rows"
+    md = "| Name | City |\n| --- | --- |\n| Einstein | Ulm |\n| Darwin | Shrewsbury |\n"
+    doc = _load_builtin(md)
+    out = _doc_to_md(doc)
+    assert '| Name' in out
+    assert '| ---' in out
+    assert '| Einstein' in out
+    assert '| Darwin' in out
 
 
 if __name__ == '__main__':

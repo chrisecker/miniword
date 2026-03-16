@@ -47,14 +47,16 @@ def mk_table(texts):
 class CellBox(Box):
     # A box which has one empty index position at the end to seperate
     # the content from the following boxes.
-    def __init__(self, boxes, device=None):
+    def __init__(self, boxes, device=None, hpad=0, vpad=0):
         if device is not None:
             self.device = device
         content = self.content = Row(boxes, device=device)
         self.length = content.length+1
         m = self.device.measure("M", {})[1] # We use the capital
                                             # M as a reference
-        self.fill = max(0, m-content.height)                                            
+        self.fill = max(0, m-content.height)
+        self._lpad = hpad // 2
+        self._tpad = vpad // 2
         self.height = self.fill+content.height
         self.depth = content.depth
         self.width = content.width
@@ -63,10 +65,11 @@ class CellBox(Box):
         return self.length
 
     def get_index(self, x, y):
-        return self.content.get_index(x, max(0, y - self.fill))
+        return self.content.get_index(x - self._lpad,
+                                      max(0, y - self.fill - self._tpad))
 
     def iter_boxes(self, i, x, y):
-        yield 0, self.length-1, x, y+self.fill, self.content
+        yield 0, self.length-1, x+self._lpad, y+self.fill+self._tpad, self.content
 
         
 class TableBox(Box):
@@ -201,10 +204,42 @@ class TableBox(Box):
 
 
 # ---------------------------------------------------------------------------
+# Navigation helper
+# ---------------------------------------------------------------------------
+
+class _TableNavRow:
+    """Proxy for one row of a TableBox used by DocumentView.iter_rows.
+
+    Behaves like a row box for the purpose of up/down cursor navigation:
+    get_index returns a local index within the parent TableBox.
+    """
+    depth = 0
+
+    def __init__(self, table, r):
+        self._table = table
+        self._r     = r
+        self.height = table.row_heights[r]
+
+    def get_index(self, x, y):
+        tb = self._table
+        cx = 0
+        for c, cw in enumerate(tb.col_widths):
+            if x < cx + cw or c == tb.n_cols - 1:
+                cell = tb.cells[self._r][c]
+                return tb._offsets[(self._r, c)] + cell.get_index(x - cx, y)
+            cx += cw
+        return tb._offsets[(self._r, tb.n_cols - 1)]
+
+
+# ---------------------------------------------------------------------------
 # Build TableBox from Table texel
 # ---------------------------------------------------------------------------
 
-def build_table_box(texel, factory, col_width=120, row_height=22):
+_CELL_HPAD = 8   # horizontal padding per column
+_CELL_VPAD = 6   # vertical padding per row
+
+
+def build_table_box(texel, factory, row_height=None):
     """Build a TableBox from a Table texel using factory to create cell boxes."""
     # cells at odd positions; TAB/NL separators at even positions
     cell_texels = texel.childs[1::2]
@@ -214,10 +249,17 @@ def build_table_box(texel, factory, col_width=120, row_height=22):
         row = []
         for c in range(n_cols):
             boxes = list(factory.create_all(cell_texels[r * n_cols + c]))
-            row.append(CellBox(boxes, factory.device))
+            row.append(CellBox(boxes, factory.device,
+                               hpad=_CELL_HPAD, vpad=_CELL_VPAD))
         grid.append(row)
-    return TableBox(grid, [col_width] * n_cols, [row_height] * n_rows,
-                    device=factory.device)
+    col_widths  = [max(grid[r][c].width for r in range(n_rows)) + _CELL_HPAD
+                   for c in range(n_cols)]
+    if row_height is None:
+        row_heights = [max(grid[r][c].height + grid[r][c].depth for c in range(n_cols)) + _CELL_VPAD
+                       for r in range(n_rows)]
+    else:
+        row_heights = [row_height] * n_rows
+    return TableBox(grid, col_widths, row_heights, device=factory.device)
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +332,7 @@ def test_03():
     texts = [['Hi', 'World'], ['Foo', 'Bar']]
     table = mk_table(texts)
     factory = Factory()
-    box = build_table_box(table, factory, col_width=60, row_height=14)
+    box = build_table_box(table, factory, row_height=14)
     assert isinstance(box, TableBox)
     from .textmodel.texeltree import length
     assert len(box) == length(table)
@@ -306,7 +348,7 @@ def test_04():
     model = TextModel()
     model.texel = table
     factory = Factory()
-    box = build_table_box(table, factory, col_width=60, row_height=14)
+    box = build_table_box(table, factory, row_height=14)
 
     # Select 2×2 sub-table: cells (1,0),(1,1),(2,0),(2,1)
     i1 = box._offsets[(1, 0)]
@@ -329,7 +371,7 @@ def test_05():
     model = TextModel()
     model.texel = table
     factory = Factory()
-    box = build_table_box(table, factory, col_width=60, row_height=14)
+    box = build_table_box(table, factory, row_height=14)
 
     # Cursors land within content only (not on immutable separators)
     i1 = box._offsets[(0, 0)]
@@ -350,7 +392,7 @@ def test_06():
     model = TextModel()
     model.texel = table
     factory = Factory()
-    box = build_table_box(table, factory, col_width=60, row_height=14)
+    box = build_table_box(table, factory, row_height=14)
 
     i1 = box._offsets[(0, 0)]
     i2 = box._offsets[(1, 1)] + len(box.cells[1][1])

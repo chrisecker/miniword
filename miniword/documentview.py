@@ -346,9 +346,22 @@ class DocumentView(WXTextView):
         surface.finish()
 
     def iter_rows(self):
+        from .tables import TableBox, _TableNavRow
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
-                yield r1, r2, rx, ry, row
+                # Descend into TableBox: yield one nav entry per table row
+                tb = None
+                for ci1, ci2, cx, cy, child in row.iter_boxes(r1, rx, ry):
+                    if isinstance(child, TableBox):
+                        tb, tbx, tby = child, cx, cy
+                        break
+                if tb is not None:
+                    cy = tby
+                    for tr in range(tb.n_rows):
+                        yield r1, r2, tbx, cy, _TableNavRow(tb, tr)
+                        cy += tb.row_heights[tr]
+                else:
+                    yield r1, r2, rx, ry, row
 
     def move_down(self, shift):
         index  = self.index
