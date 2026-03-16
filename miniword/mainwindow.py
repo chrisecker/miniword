@@ -60,7 +60,7 @@ class MainFrame(wx.Frame, ViewBase):
 
     def __init__(self, document):
         self.document = document
-        wx.Frame.__init__(self, None, title="Writer", size=(1400, 700))
+        wx.Frame.__init__(self, None, title="MiniWord", size=(1400, 700))
         ViewBase.__init__(self)
 
         self.SetMinSize((800, 480))
@@ -301,7 +301,7 @@ class MainFrame(wx.Frame, ViewBase):
         name = os.path.basename(path) if path else "Untitled"
         dirty = hasattr(self, 'textview') and self.textview.undocount() > 0
         suffix = ' *' if dirty else ''
-        self.SetTitle("Writer — " + name + suffix)
+        self.SetTitle("MiniWord — " + name + suffix)
         if hasattr(self, '_mi_reload'):
             self._mi_reload.Enable(bool(path))
 
