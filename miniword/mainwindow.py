@@ -29,6 +29,27 @@ class _LayoutProgressDlg(wx.Dialog):
         self.gauge.SetValue(min(n_chars, total_chars))
 
 
+def load_plugins():
+    """Load all plugins from ~/.miniword/plugins/ and return tools list."""
+    import glob
+    import importlib.util
+    import os
+    plugin_dir = os.path.expanduser("~/.miniword/plugins")
+    paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
+    tools_items = []
+    for path in paths:
+        try:
+            spec = importlib.util.spec_from_file_location("_mw_plugin", path)
+            mod  = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        except Exception as e:
+            print(f"Plugin error ({os.path.basename(path)}): {e}")
+            continue
+        if hasattr(mod, 'run'):
+            tools_items.append((getattr(mod, 'name', os.path.basename(path)), mod))
+    return tools_items
+
+
 # ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
@@ -50,22 +71,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.Centre()
 
     def _load_plugins(self):
-        import glob
-        import importlib.util
-        import os
-        plugin_dir = os.path.expanduser("~/.miniword/plugins")
-        paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
-        tools_items = []
-        for path in paths:
-            try:
-                spec = importlib.util.spec_from_file_location("_mw_plugin", path)
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)  # side effect: registers import/export filters
-            except Exception as e:
-                print(f"Plugin error ({os.path.basename(path)}): {e}")
-                continue
-            if hasattr(mod, 'run'):
-                tools_items.append((getattr(mod, 'name', os.path.basename(path)), mod))
+        tools_items = load_plugins()
         if tools_items:
             tools_menu = wx.Menu()
             bar = self.GetMenuBar()

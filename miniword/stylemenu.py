@@ -514,7 +514,7 @@ class BasestyleDropdown(StyleDropdown):
         self.SetSelection(self.styles.index(name))
 
     def GetItemLabel(self, name: str) -> str:
-        return self.stylesheet.get(name)["name"]
+        return self.stylesheet.get(name).get("name", name)
 
     def GetItemFont(self, name: str) -> wx.Font:
         return get_font(self.stylesheet.get(name))
@@ -530,7 +530,7 @@ class BasestyleDropdown(StyleDropdown):
 
 class ListstyleDropdown(StyleDropdown):
     def GetItemLabel(self, name: str) -> str:
-        return self.stylesheet.get(name)["name"]
+        return self.stylesheet.get(name).get("name", name)
 
 
 # ---------------------------------------------------------------------------

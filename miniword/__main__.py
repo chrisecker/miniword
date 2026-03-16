@@ -13,6 +13,8 @@ def main():
     path = args[0] if args else None
 
     app = wx.App(redirect=False)
+    from .mainwindow import load_plugins
+    load_plugins()
     if path:
         doc = Document.load(path)
         frame = MainFrame(doc)
