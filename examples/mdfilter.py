@@ -228,7 +228,9 @@ _SEP_ROW_RE = re.compile(r'^:?-+:?$')
 
 
 def _parse_table_row(line):
-    return [c.strip() for c in line.strip().strip('|').split('|')]
+    # Replace escaped pipes before splitting, restore afterwards
+    line = line.strip().strip('|').replace('\\|', '\x00')
+    return [c.strip().replace('\x00', '|') for c in line.split('|')]
 
 
 def _parse_table_lines(lines):
@@ -238,6 +240,13 @@ def _parse_table_lines(lines):
         if all(_SEP_ROW_RE.match(c) for c in cells if c):
             continue  # skip separator row
         grid.append(cells)
+    if not grid:
+        return grid
+    # Normalize: all rows must have the same number of columns
+    n_cols = max(len(row) for row in grid)
+    for row in grid:
+        while len(row) < n_cols:
+            row.append('')
     return grid
 
 
