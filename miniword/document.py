@@ -27,7 +27,8 @@ class Document(Model):
         self.basestyles.set_owner(self, 'basestyles')
         self.textmodel = TextModel()
         self.settings = {}
-        self.blobs = {}   # {blob_id: bytes}
+        self.blobs = {}        # {blob_id: bytes}
+        self.home_format = 'txl'   # native format; set to ext on import
 
     def set_setting(self, name, value):
         if name in self.settings:
@@ -48,12 +49,8 @@ class Document(Model):
 
     @classmethod
     def load(cls, path):
-        from . import txlio
-        from .importexport import find_import_filter
-        fn = find_import_filter(path)
-        if fn is not None:
-            return fn(path)
-        return txlio.load(path)
+        from .importexport import open_file
+        return open_file(path)
         
     def charstyles_changed(self, *args, **kwds):
         self.notify_views('charstyles_changed')

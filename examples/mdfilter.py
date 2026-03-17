@@ -532,8 +532,51 @@ class _DocBuilder:
 # Registration
 # ---------------------------------------------------------------------------
 
-register_import("Markdown", ["md", "markdown"], _load)
-register_export("Markdown", ["md", "markdown"], _save)
+def _check_md(doc):
+    """Return list of features that cannot be represented in Markdown."""
+    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine
+    from miniword.tables import Table as TableTexel
+
+    _OK_BASES  = {'normal', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre'}
+    _OK_PTYPES = {'normal', 'list', 'numbered'}
+    _OK_PAR    = {'base', 'paragraph_type'}
+    _OK_CHAR   = {'bold', 'italic', 'font_family'}
+    _MONO      = {'courier', 'courier new', 'monospace', 'consolas',
+                  'lucida console'}
+
+    issues = set()
+    texel = doc.textmodel.get_xtexel()
+
+    for _i1, _i2, elems in iter_paragraphs(texel, 0):
+        nl = elems[-1]
+        if not isinstance(nl, NewLine):
+            continue
+        ps = nl.parstyle
+        if ps.get('base', 'normal') not in _OK_BASES:
+            issues.add("custom paragraph style")
+        if ps.get('paragraph_type', 'normal') not in _OK_PTYPES:
+            issues.add("paragraph type '%s'" % ps.get('paragraph_type'))
+        for key in ps:
+            if key not in _OK_PAR:
+                issues.add("paragraph attribute '%s'" % key)
+        for elem in elems[:-1]:
+            if isinstance(elem, TableTexel):
+                continue
+            style = getattr(elem, 'style', {})
+            for key, val in style.items():
+                if key == 'font_family':
+                    if str(val).lower() not in _MONO:
+                        issues.add("custom font")
+                elif key not in _OK_CHAR:
+                    issues.add("character attribute '%s'" % key)
+
+    return sorted(issues)
+
+
+register_import("Markdown", ["md", "markdown"], _load, lossless=False)
+register_export("Markdown", ["md", "markdown"], _save,
+                lossless=False, check_fn=_check_md)
 
 
 # ---------------------------------------------------------------------------

@@ -16,7 +16,12 @@ def main():
     from .mainwindow import load_plugins
     load_plugins()
     if path:
-        doc = Document.load(path)
+        from . import importexport
+        try:
+            doc = importexport.open_file(path)
+        except Exception as e:
+            print("Error opening '%s': %s" % (path, e))
+            return
         frame = MainFrame(doc)
         frame._current_path = path
         frame._update_title()

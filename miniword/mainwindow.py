@@ -330,16 +330,20 @@ class MainFrame(wx.Frame, ViewBase):
         frame.Show()
 
     def _on_open(self, event):
+        from . import importexport
         with wx.FileDialog(
-            self, "Open TXL file",
-            wildcard="TXL files (*.txl)|*.txl|All files (*.*)|*.*",
+            self, "Open",
+            wildcard=importexport.open_wildcard(),
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
             if dlg.ShowModal() != wx.ID_OK:
                 return
             path = dlg.GetPath()
-        from .document import Document
-        doc = Document.load(path)
+        try:
+            doc = importexport.open_file(path)
+        except Exception as e:
+            wx.MessageBox(str(e), "Open", wx.OK | wx.ICON_ERROR, self)
+            return
         frame = MainFrame(doc)
         frame._current_path = path
         frame._update_title()
@@ -355,12 +359,11 @@ class MainFrame(wx.Frame, ViewBase):
             if dlg.ShowModal() != wx.ID_OK:
                 return
             path = dlg.GetPath()
-        fn = importexport.find_import_filter(path)
-        if fn is None:
-            wx.MessageBox("No import filter for this file type.",
-                          "Import", wx.OK | wx.ICON_ERROR, self)
+        try:
+            doc = importexport.open_file(path)
+        except Exception as e:
+            wx.MessageBox(str(e), "Import", wx.OK | wx.ICON_ERROR, self)
             return
-        doc = fn(path)
         frame = MainFrame(doc)
         frame.Show()
 
@@ -379,29 +382,62 @@ class MainFrame(wx.Frame, ViewBase):
             wx.MessageBox("No export filter for this file type.",
                           "Export", wx.OK | wx.ICON_ERROR, self)
             return
+        warnings = importexport.check_export(path, self.document)
+        if warnings and not self._confirm_lossy_save(path, warnings):
+            return
         fn(self.document, path)
+        # NOTE: _current_path and home_format are NOT updated — pure export
 
     def _on_save(self, event):
         if not getattr(self, '_current_path', None):
             self._on_saveas(event)
             return
-        self.document.save(self._current_path)
-        self.textview.clear_undo()
-        self._update_title()
+        self._do_save(self._current_path)
 
     def _on_saveas(self, event):
+        from . import importexport
         with wx.FileDialog(
-            self, "Save TXL file",
-            wildcard="TXL files (*.txl)|*.txl|All files (*.*)|*.*",
+            self, "Save As",
+            wildcard=importexport.saveas_wildcard(),
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:
             if dlg.ShowModal() != wx.ID_OK:
                 return
             path = dlg.GetPath()
+        import os
+        ext = os.path.splitext(path)[1].lstrip('.').lower()
+        self.document.home_format = ext if ext != 'txl' else 'txl'
         self._current_path = path
-        self.document.save(path)
+        self._do_save(path)
+
+    def _do_save(self, path):
+        """Save to path respecting doc.home_format. Warns if lossy."""
+        from . import importexport
+        if getattr(self.document, 'home_format', 'txl') == 'txl':
+            self.document.save(path)
+        else:
+            warnings = importexport.check_export(path, self.document)
+            if warnings and not self._confirm_lossy_save(path, warnings):
+                return
+            fn = importexport.find_export_filter(path)
+            if fn is None:
+                wx.MessageBox("No export filter for this format.",
+                              "Save", wx.OK | wx.ICON_ERROR, self)
+                return
+            fn(self.document, path)
         self.textview.clear_undo()
         self._update_title()
+
+    def _confirm_lossy_save(self, path, warnings):
+        import os
+        items = '\n'.join('\u2022 ' + w for w in warnings)
+        msg = ("Saving as '%s' will lose:\n\n%s\n\nSave anyway?"
+               % (os.path.basename(path), items))
+        dlg = wx.MessageDialog(self, msg, "Format Warning",
+                               wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
+        result = dlg.ShowModal()
+        dlg.Destroy()
+        return result == wx.ID_YES
 
     def _on_reload(self, event):
         if self.textview.undocount() > 0:
