@@ -341,7 +341,7 @@ class DocumentView(WXTextView):
         ctx = cairo.Context(surface)
         for page in pages:
             page.draw_background(0, 0, ctx)
-            page.draw(0, 0, ctx)
+            page.draw_for_print(0, 0, ctx)
             ctx.show_page()
         surface.finish()
 

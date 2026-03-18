@@ -126,10 +126,13 @@ class Page(Box):
         Box.draw(self, x, y, gc)
         self.device.draw_rect(x, y, self.width, self.height, gc)
         margin = self.margin
-        self.device.set_style({}, gc)  # XXX
+        self.device.set_style({}, gc)
         self.device.draw_text(
             "Page %i" % self.pagenum,
             x + margin[3], y + self.height - margin[2], gc)
+
+    def draw_for_print(self, x, y, gc):
+        Box.draw(self, x, y, gc)
 
     def iter_boxes(self, i, x, y):
         j1 = i
