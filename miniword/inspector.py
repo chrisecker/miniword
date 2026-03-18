@@ -355,10 +355,10 @@ class InspectorPanel(wx.Panel, ViewBase):
         _ = ResetButton(panel, ['indent'])
         add_row(contentsizer, label, self.level, self.indent, _)
 
-        label = wx.StaticText(panel, label='Level policy')
-        self.policy = wx.Choice(panel, choices=["free", "fixed"])
-        self.reset_policy = ResetButton(panel, ['level_policy'])
-        self.policy.Bind(wx.EVT_CHOICE, self.on_policy)
+        label = wx.StaticText(panel, label='Fixed indent')
+        self.policy = wx.CheckBox(panel)
+        self.reset_policy = ResetButton(panel, ['fixed_indent'])
+        self.policy.Bind(wx.EVT_CHECKBOX, self.on_policy)
         add_row(contentsizer, label, self.policy, self.reset_policy)
         
         label = wx.StaticText(panel, label='Indentation')
@@ -515,9 +515,11 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.model.model.decrease_indent(s1, s2)
 
     def on_policy(self, event):
-        i = self.policy.Selection
-        value = ['free', 'fixed'][i]
-        self.set_parproperties(level_policy=value)
+        if self.policy.GetValue():
+            value = self.model.model.get_indent(self.model.index)
+        else:
+            value = None
+        self.set_parproperties(fixed_indent=value)
 
     def on_paragraph_type(self, event):
         i = self.paragraph_type.Selection
@@ -535,6 +537,9 @@ class InspectorPanel(wx.Panel, ViewBase):
         indent = model.get_indent(view.index)
         parstyle = model.get_parstyle(view.index)
         properties = self.mk_style(parstyle, {})
+        fixed = properties.get('fixed_indent')
+        if fixed is not None:
+            indent = fixed
         l = list(properties[name])
         l[indent] = value
         self.set_parproperties(**{name:tuple(l)})
@@ -863,16 +868,17 @@ class InspectorPanel(wx.Panel, ViewBase):
         x = 'first_line_indent' in overrides
         self.reset_first.set_x(x)
 
-        self.level.SetValue(str(indent+1))
-        policy = properties['level_policy']
-        i = {None:-1, 'free':0, 'fixed':1}[policy]
-        self.policy.SetSelection(i)
-        x = 'level_policy' in overrides
+        fixed = properties['fixed_indent']
+        if fixed is not None:
+            indent = fixed
+        self.level.SetValue(str(indent + 1))
+        self.policy.SetValue(fixed is not None)
+        x = 'fixed_indent' in overrides
         self.reset_policy.set_x(x)
-        state = i==0
-        if self.level.IsEnabled != state:
-            self.level.Enable(state)
-            self.indent.Enable(state)
+        free = (fixed is None)
+        if self.level.IsEnabled() != free:
+            self.level.Enable(free)
+            self.indent.Enable(free)
 
         positions = properties['indent_levels']
         if positions is None:

@@ -556,9 +556,8 @@ def generate_boxes(texel, i, factory):
         nl = l[-1]
         factory.markerstyle  = l[0].style
         factory.parstyle     = nl.parstyle
-        factory.indent_level = nl.indent  # XXX does not work for NLs
-                                          # inside containers, but is
-                                          # not needed there either.
+        fixed = factory.mk_style({}).get('fixed_indent')
+        factory.indent_level = fixed if fixed is not None else nl.indent
         for node in l:
             boxes.extend(factory.create_all(node))
         yield i1, i2, boxes

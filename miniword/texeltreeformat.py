@@ -50,7 +50,7 @@ def serialize_style(style, indent=0):
         return ''
     parts = []
     for k, v in sorted(style.items()):
-        if v is True or v == 1:
+        if v is True:
             parts.append(k)
         elif isinstance(v, str):
             parts.append('%s="%s"' % (k, v))

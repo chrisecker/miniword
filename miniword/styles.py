@@ -53,7 +53,7 @@ text_default = {
 
 structure_default = {                
     "paragraph_type":  "normal",     # normal / list / numbered
-    "level_policy":    "free",       # free / fixed
+    "fixed_indent":    None,         # None = free, 0–8 = fixed at that level
     "indent_levels":   tuple(i * cm for i in range(n_levels)),
     "first_line_indent": 0,          # hanging indent: use negative values
     "marker":          ("•", "◦") + ("–",) * 8,
