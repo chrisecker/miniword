@@ -52,17 +52,18 @@ def get_font(style: dict) -> wx.Font:
 PADDING_LEFT  = 8
 TRIANGLE_AREA = 30
 PLUS_HEIGHT   = 28
+POPUP_EXTRA_W = 40
 
 
 # ---------------------------------------------------------------------------
 # Popup panel
 # ---------------------------------------------------------------------------
 
-class StylePopup(wx.PopupWindow):
+class StylePopup(wx.PopupTransientWindow):
     """Floating list that shows all available styles."""
 
     def __init__(self, parent: "StyleDropdown"):
-        super().__init__(parent, flags=wx.BORDER_SIMPLE)
+        super().__init__(parent, wx.BORDER_NONE)
         self.dropdown = parent
 
         self.styles: tuple[str, ...] = ()
@@ -92,20 +93,18 @@ class StylePopup(wx.PopupWindow):
 
     def Popup(self):
         dd = self.dropdown
-        w  = dd.GetSize().width
-        h  = self._total_height() + 2   # +2 for border
+        w = dd.GetSize().width + POPUP_EXTRA_W
+        h = self._total_height() + 2   # +2 for border
 
         self.panel.SetSize(w, h)
         self.SetSize(w, h)
-        self.Move(dd.ClientToScreen(wx.Point(0, dd.GetSize().height)))
-        self.Show()
+        self.Move(dd.ClientToScreen(wx.Point(-POPUP_EXTRA_W, dd.GetSize().height)))
+        super().Popup()
         self.panel.SetFocus()
-        wx.GetApp().Bind(wx.EVT_LEFT_DOWN, self._on_global_click)
 
-    def Hide(self):
-        if self.IsShown():
-            wx.GetApp().Unbind(wx.EVT_LEFT_DOWN, handler=self._on_global_click)
-        super().Hide()
+    def OnDismiss(self):
+        self.dropdown._open = False
+        self.dropdown.Refresh()
 
     # ------------------------------------------------------------------
     # Layout helpers
@@ -166,9 +165,9 @@ class StylePopup(wx.PopupWindow):
             if i + 1 == self.hover_item:
                 self._draw_triangle(dc, w, item_y, item_h)
 
-        # Thin border around the entire popup
+        # Border around the entire popup
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetPen(wx.Pen(wx.Colour(205, 205, 200)))
+        dc.SetPen(wx.Pen(wx.Colour(140, 140, 135)))
         dc.DrawRectangle(0, 0, w, h)
 
     def _draw_triangle(self, dc: wx.DC, panel_w: int, item_y: int, item_h: int):
@@ -205,11 +204,6 @@ class StylePopup(wx.PopupWindow):
     # Event handlers
     # ------------------------------------------------------------------
 
-    def _on_global_click(self, evt):
-        if self.IsShown() and not self.GetScreenRect().Contains(wx.GetMousePosition()):
-            self.Hide()
-        evt.Skip()
-
     def _on_mouse_move(self, evt: wx.MouseEvent):
         x, y = evt.GetPosition()
         new_hover = self._item_at(y)
@@ -232,13 +226,13 @@ class StylePopup(wx.PopupWindow):
         idx = self._item_at(y)
         if idx == 0:
             key = self.dropdown.GetSelectedKey() or self.styles[0]
-            self.Hide()
+            self.Dismiss()
             self.dropdown.CreateNewStyle(key)
         elif idx is not None:
             if self._is_over_triangle(x):
                 return self._show_context_menu(idx - 1)
             self.dropdown.Choose(idx - 1)
-            self.Hide()
+            self.Dismiss()
 
     # ------------------------------------------------------------------
     # Context menu
@@ -271,7 +265,7 @@ class StylePopup(wx.PopupWindow):
         screen_pos = self.panel.ClientToScreen(wx.Point(w - TRIANGLE_AREA, item_y + item_h))
         self.panel.PopupMenu(menu, self.panel.ScreenToClient(screen_pos))
         menu.Destroy()
-        self.Hide()
+        self.Dismiss()
 
     def _on_menu(self, event):
         try:
@@ -313,6 +307,7 @@ class StyleDropdown(wx.Control, ViewBase):
         self.modified: bool   = False
         self._popup: Optional[StylePopup] = None
         self._hover: bool     = False
+        self._open: bool      = False
 
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.Bind(wx.EVT_PAINT,        self._on_paint)
@@ -388,9 +383,17 @@ class StyleDropdown(wx.Control, ViewBase):
         dc = wx.AutoBufferedPaintDC(self)
         w, h = self.GetClientSize()
 
-        bg = wx.Colour(240, 240, 240) if self._hover else wx.WHITE
+        if self._open:
+            bg = wx.Colour(225, 235, 252)
+            border = wx.Colour(0, 100, 200)
+        elif self._hover:
+            bg = wx.Colour(240, 240, 240)
+            border = wx.Colour(120, 120, 120)
+        else:
+            bg = wx.WHITE
+            border = wx.Colour(150, 150, 150)
         dc.SetBrush(wx.Brush(bg))
-        dc.SetPen(wx.Pen(wx.Colour(150, 150, 150)))
+        dc.SetPen(wx.Pen(border, 1 if not self._open else 2))
         dc.DrawRoundedRectangle(0, 0, w, h, 3)
 
         if self.styles and 0 <= self.selection < len(self.styles):
@@ -405,9 +408,11 @@ class StyleDropdown(wx.Control, ViewBase):
                         wx.Point(cx, cy + 3)])
 
     def _on_click(self, _evt):
-        if self._popup and self._popup.IsShown():
-            self._popup.Hide()
+        if self._open and self._popup and self._popup.IsShown():
+            self._popup.Dismiss()
             return
+        self._open = True
+        self.Refresh()
         self._popup = StylePopup(self)
         self._popup.SetStyles(self.styles)
         self._popup.Popup()
