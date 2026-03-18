@@ -182,13 +182,37 @@ def _load_builtin(text):
     _register_heading_styles(doc)
     doc.textmodel = TextModel('')
 
-    for block in _parse_md_paragraphs(text):
-        if block[0] == 'table':
+    def insert_nl():
+        pos = len(doc.textmodel.get_text())
+        doc.textmodel.insert(pos, doc.textmodel.create_textmodel('\n'))
+
+    blocks = _parse_md_paragraphs(text)
+    prev_btype = None
+
+    for i, block in enumerate(blocks):
+        btype = block[0]
+        next_btype = blocks[i + 1][0] if i + 1 < len(blocks) else None
+
+        # Blank line before table, and before the first line of a pre run
+        if btype == 'table' and prev_btype is not None:
+            insert_nl()
+        elif btype == 'pre' and prev_btype != 'pre' and prev_btype is not None:
+            insert_nl()
+
+        if btype == 'table':
             _, grid = block
             _insert_table_block(doc, grid)
         else:
             ptype, indent, runs = block
             _insert_text_block(doc, ptype, indent, runs)
+
+        # Blank line after table, and after the last line of a pre run
+        if btype == 'table' and next_btype is not None:
+            insert_nl()
+        elif btype == 'pre' and next_btype != 'pre' and next_btype is not None:
+            insert_nl()
+
+        prev_btype = btype
 
     return doc
 
@@ -441,10 +465,14 @@ class _DocBuilder:
             for item in node.get('children', []):
                 self._visit_list_item(item, ptype, 0)
         elif t == 'block_code':
+            self._start_par('normal', 0)
+            self._end_par()
             for line in node.get('raw', '').splitlines():
                 self._start_par('pre', 0)
                 self._append(line or ' ', {})
                 self._end_par()
+            self._start_par('normal', 0)
+            self._end_par()
         elif t == 'text' or t == 'raw_text':
             self._append(node.get('raw', ''), self._cur_props)
         elif t == 'strong':
@@ -773,6 +801,41 @@ def test_13():
     assert '| ---' in out
     assert '| Einstein' in out
     assert '| Darwin' in out
+
+
+def test_14():
+    "blank NL paragraphs are inserted before and after table and pre blocks"
+    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine, get_text
+    from miniword.tables import Table as TableTexel
+
+    def bases(md):
+        doc = _load_builtin(md)
+        result = []
+        for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
+            nl = elems[-1]
+            if not isinstance(nl, NewLine):
+                continue
+            content = elems[:-1]
+            if content and isinstance(content[0], TableTexel):
+                result.append('table')
+            else:
+                text = ''.join(get_text(e) for e in content)
+                result.append('blank' if not text.strip() else nl.parstyle.get('base', 'normal'))
+        return result
+
+    # table surrounded by text → blank before and after
+    bs = bases("Before.\n\n| A | B |\n| - | - |\n| C | D |\n\nAfter.\n")
+    assert 'blank' in bs
+    ti = bs.index('table')
+    assert bs[ti - 1] == 'blank'
+    assert bs[ti + 1] == 'blank'
+
+    # pre block surrounded by text → blank before and after
+    bs = bases("Before.\n\n```\ncode\n```\n\nAfter.\n")
+    pi = bs.index('pre')
+    assert bs[pi - 1] == 'blank'
+    assert bs[pi + 1] == 'blank'
 
 
 if __name__ == '__main__':
