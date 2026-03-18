@@ -166,9 +166,11 @@ def serialize_container(texel, indent=0):
         return '%sC("%s")' % (pad, ctype)
 
     leading_sep_style = slots[0][0]
-    ncols = getattr(texel, '_ncols', 1)
+    # For tables.Table use n_cols; for generic containers use _ncols
+    has_n_cols = hasattr(texel, 'n_cols')
+    ncols = texel.n_cols if has_n_cols else getattr(texel, '_ncols', 1)
     props = dict(leading_sep_style) if leading_sep_style else {}
-    if ncols != 1:
+    if ncols != 1 or has_n_cols:
         props['ncols'] = ncols
 
     lines = ['%sC("%s",' % (pad, ctype)]
@@ -465,6 +467,18 @@ class _Parser:
                 self.tok.consume('COMMA')
 
         self.tok.consume('RPAREN')
+
+        if ctype == 'Table' and not sep0_style:
+            from .tables import Table, TableSep
+            n_cells = len(slots)
+            n_rows_val = (n_cells // ncols) if ncols else 0
+            cells_2d = []
+            for r in range(n_rows_val):
+                row = []
+                for c in range(ncols):
+                    row.append(slots[r * ncols + c][1])
+                cells_2d.append(row)
+            return Table(n_rows_val, ncols, cells_2d)
 
         # Reconstruct childs: [SEP0, content0, SEP1, content1, ..., trailing_TAB]
         # SEP0.style = sep0_style

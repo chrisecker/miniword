@@ -233,6 +233,16 @@ class DraftNode:
         # Advance y for next row
         self.y += row.height + row.depth
 
+    def remaining_height(self):
+        """Free vertical space from current y to bottom margin."""
+        border_top, border_right, border_bottom, border_left = self.border
+        return self.geometry[1] - border_top - border_bottom - self.y
+
+    def available_height(self):
+        """Full usable page height (margins excluded)."""
+        border_top, _, border_bottom, _ = self.border
+        return self.geometry[1] - border_top - border_bottom
+
     def create_child(self):
         r = shallow_copy(self)
         r.parent = self
@@ -411,6 +421,24 @@ def split_at_breaks(boxlist):
     return segments
 
 
+def split_at_tables(boxlist):
+    """Split boxlist at TableBox boundaries.
+    Each TableBox becomes its own single-element segment."""
+    from .tables import TableBox
+    segments, current = [], []
+    for box in boxlist:
+        if isinstance(box, TableBox):
+            if current:
+                segments.append(current)
+                current = []
+            segments.append([box])
+        else:
+            current.append(box)
+    if current:
+        segments.append(current)
+    return segments
+
+
 import re as _re
 
 
@@ -466,6 +494,59 @@ def format_number(arr, level, style):
     return result
 
 
+def _place_table_fragments(tbox, draft, device, left=0):
+    """Place a break_level>=1 TableBox as one or more fragments onto drafts."""
+    from .tables import TableBox
+    available   = draft.remaining_height()
+    page_height = draft.available_height()
+    header_h    = sum(tbox.row_heights[:tbox.header_rows])
+    remaining   = list(range(tbox.header_rows, tbox.n_rows))
+    prev_frag   = None
+    first       = True
+    cum_offset  = 0
+
+    while remaining:
+        space = (available if first else page_height) - header_h
+        used, slice_rows = 0, []
+        for r in remaining:
+            rh = tbox.row_heights[r]
+            if used + rh > space and slice_rows:
+                break
+            slice_rows.append(r)
+            used += rh
+
+        frag_rows = list(range(tbox.header_rows)) + slice_rows if first else slice_rows
+
+        frag_cells   = [tbox.cells[r] for r in frag_rows]
+        frag_heights = [tbox.row_heights[r] for r in frag_rows]
+
+        frag = TableBox(frag_cells, tbox.col_widths, frag_heights,
+                        header_rows=tbox.header_rows if first else 0,
+                        break_level=0,
+                        device=device,
+                        is_continuation=not first)
+        frag._source    = tbox._source
+        frag._orig      = tbox
+        frag._base_offset = cum_offset
+        frag._orig_rows = frag_rows
+        frag.prev = prev_frag
+        if prev_frag is not None:
+            prev_frag.next = frag
+
+        cum_offset += len(frag)
+
+        if not first:
+            draft = draft.create_newpage()
+
+        row = Row([frag], left=left, device=device)
+        draft.add_row(row, 1.0, 0)
+        remaining  = remaining[len(slice_rows):]
+        prev_frag  = frag
+        first      = False
+
+    return draft
+
+
 def generate_boxes(texel, i, factory):
     for i1, i2, l in iter_paragraphs(texel, i):
         boxes = []
@@ -506,6 +587,7 @@ def generate_pages(texel, i, restartmemo, factory):
     page_right      = page_width - margin[1]
     container_left  = page_left  + inset_left
     container_right = page_right + inset_right
+    factory.line_width = container_right - container_left
 
     for i1, i2, boxlist in generate_boxes(texel, j, factory):
         draft = state.start_draft()
@@ -530,6 +612,45 @@ def generate_pages(texel, i, restartmemo, factory):
         line_right       = container_right
         line_width_first = line_right - line_left_first
         line_width_rest  = line_right - line_left_rest
+
+        from .tables import TableBox as _TableBox
+        all_segments = split_at_tables(boxlist)
+
+        has_longtable = any(
+            len(seg) == 1
+            and isinstance(seg[0], _TableBox)
+            and seg[0].break_level >= 1
+            for seg in all_segments
+        )
+
+        if has_longtable:
+            before = space_before
+            for seg in all_segments:
+                if (len(seg) == 1
+                        and isinstance(seg[0], _TableBox)
+                        and seg[0].break_level >= 1):
+                    draft = _place_table_fragments(seg[0], draft, device,
+                                                    left=line_left_rest)
+                else:
+                    sub_segs = split_at_breaks(seg)
+                    for sub in sub_segs:
+                        wrapped = simple_linewrap(sub, line_width_rest)
+                        for line in wrapped:
+                            row = Row(line, device=device)
+                            if not draft.can_addrow(row, line_spacing, before):
+                                draft = draft.create_newpage()
+                            row.start = (line_left_rest, 0)
+                            row.width = line_width_rest + line_left_rest
+                            draft.add_row(row, line_spacing, before)
+                            before = 0
+            pages, state = draft.fix_draft()
+            state.counters = {k: list(v) for k, v in counters.items()}
+            if pages:
+                pages[0].restartmemo = restartmemo
+                restartmemo = state.copy()
+            for page in pages:
+                yield page
+            continue
 
         segments = split_at_breaks(boxlist)
         lines = []

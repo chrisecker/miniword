@@ -1,6 +1,6 @@
 """Table: texel model + TableBox rendering for n×m grids."""
 
-from .textmodel.texeltree import Container, NL, TAB, EMPTYSTYLE as EMPTY_TEXEL_STYLE
+from .textmodel.texeltree import Container, NL, TAB, EMPTYSTYLE as EMPTY_TEXEL_STYLE, NewLine
 from .wxtextview.boxes import Box, Row, TextBox, EMPTYSTYLE
 from .wxtextview.testdevice import TESTDEVICE
 
@@ -9,21 +9,35 @@ from .wxtextview.testdevice import TESTDEVICE
 # Texel model
 # ---------------------------------------------------------------------------
 
+class TableSep(NewLine):
+    """Inter-cell separator in a Table texel.
+    Identical to NewLine but text='\\t' and NL-weight=0,
+    so get_text() stays readable and paragraph counts are unaffected.
+    """
+    weights = (0, 1, 0)
+    text = u'\t'
+
+
 class Table(Container):
     """n_rows × n_cols table texel. All children are mutable cell texels."""
     style = EMPTY_TEXEL_STYLE
+    header_rows = 0
+    break_level = 1
+    col_widths = None  # list[float|None] or None (all auto)
 
     def __init__(self, n_rows, n_cols, cells):
         self.n_rows = n_rows
         self.n_cols = n_cols
         l = []
+        l.append(TableSep())  # leading separator
         for i, row in enumerate(cells):
             assert len(row) == n_cols
-            if i == 0:
-                l.append(TAB)  # leading separator so separators are at even positions
             for j, cell in enumerate(row):
                 l.append(cell)
-                l.append(TAB if j < n_cols - 1 else NL)
+                if j < n_cols - 1:
+                    l.append(TableSep())  # inter-cell
+                else:
+                    l.append(NL)          # row-ending
         self.childs = l
         self.compute_weights()
 
@@ -45,37 +59,60 @@ def mk_table(texts):
 # ---------------------------------------------------------------------------
 
 class CellBox(Box):
-    # A box which has one empty index position at the end to seperate
-    # the content from the following boxes.
-    def __init__(self, boxes, device=None, hpad=0, vpad=0):
+    """Vertical stack of wrapped lines for a table cell."""
+    def __init__(self, rows, device=None, hpad=0, vpad=0):
         if device is not None:
             self.device = device
-        content = self.content = Row(boxes, device=device)
-        self.length = content.length+1
-        m = self.device.measure("M", {})[1] # We use the capital
-                                            # M as a reference
-        self.fill = max(0, m-content.height)
+        self._rows = rows
         self._lpad = hpad // 2
         self._tpad = vpad // 2
-        self.height = self.fill+content.height
-        self.depth = content.depth
-        self.width = content.width
+        total_h = sum(r.height + r.depth for r in rows)
+        m = self.device.measure("M", {})[1]
+        self.fill = max(0, m - total_h)
+        self.height = self.fill + total_h + vpad
+        self.depth = 0
+        self.width = (max((r.width for r in rows), default=0)
+                      if rows else 0) + hpad
+        # length = sum of row lengths + 1 for trailing separator
+        self.length = sum(len(r) for r in rows) + 1
 
     def __len__(self):
         return self.length
 
     def get_index(self, x, y):
-        return self.content.get_index(x - self._lpad,
-                                      max(0, y - self.fill - self._tpad))
+        y_rel = y - self.fill - self._tpad
+        x_rel = x - self._lpad
+        cy = 0
+        offset = 0
+        for row in self._rows:
+            if y_rel <= cy + row.height + row.depth or row is self._rows[-1]:
+                return offset + row.get_index(x_rel, y_rel - cy)
+            cy += row.height + row.depth
+            offset += len(row)
+        return self.length - 1
 
     def iter_boxes(self, i, x, y):
-        yield 0, self.length-1, x+self._lpad, y+self.fill+self._tpad, self.content
+        x0 = x + self._lpad
+        y0 = y + self.fill + self._tpad
+        j = i
+        for row in self._rows:
+            yield j, j + len(row), x0, y0, row
+            y0 += row.height + row.depth
+            j += len(row)
 
-        
+
 class TableBox(Box):
-    """A n_rows × n_cols table box with per-cell selection via get_ranges()."""
+    """A n_rows × n_cols table box."""
+    prev = None
+    next = None
+    _source = None
+    _orig = None         # full pre-split TableBox (set on fragments only)
+    _base_offset = 0     # fragment start within the original table's index space
+    _orig_rows = None    # list of original row indices stored in this fragment
 
-    def __init__(self, cells, col_widths, row_heights, device=None):
+    def __init__(self, cells, col_widths, row_heights,
+                 header_rows=0, break_level=0, device=None,
+                 is_continuation=False):
         if device is not None:
             self.device = device
         self.cells       = cells
@@ -83,11 +120,15 @@ class TableBox(Box):
         self.row_heights = row_heights
         self.n_rows      = len(cells)
         self.n_cols      = len(cells[0]) if cells else 0
+        self.header_rows = header_rows
+        self.break_level = break_level
         self.width       = sum(col_widths)
         self.height      = sum(row_heights)
         self.depth       = 0
         self._offsets = {}
-        i = 1  # offset 0 reserved for leading TAB in Table texel
+        # Continuation fragments do not own the leading separator of the
+        # Table texel (it belongs to the first fragment), so start at 0.
+        i = 0 if is_continuation else 1
         for r, row in enumerate(cells):
             for c, cell in enumerate(row):
                 self._offsets[(r, c)] = i
@@ -130,18 +171,36 @@ class TableBox(Box):
         return self.n_rows - 1, self.n_cols - 1
 
     def get_ranges(self, i1, i2):
-        ar, ac = self._find_cell(i1)
-        cr, cc = self._find_cell(max(i1, i2 - 1))
+        res = self._resolve_cell_range(i1, i2)
+        if res is None:
+            return [(i1, i2)]
+        ar, ac, cr, cc = res
+
+        # Single cell: delegate for partial selection
         if ar == cr and ac == cc:
-            ci1 = self._offsets[(ar, ac)]
-            cell = self.cells[ar][ac]
+            r_local = self._row_local(ar)
+            if r_local is None:
+                return []
+            ci1 = self._offsets[(r_local, ac)]
+            cell = self.cells[r_local][ac]
+            if self._orig is not None:
+                orig_ci1 = self._orig._offsets[(ar, ac)]
+                cell_i1 = self._base_offset + i1 - orig_ci1
+                cell_i2 = self._base_offset + i2 - orig_ci1
+            else:
+                cell_i1, cell_i2 = i1 - ci1, i2 - ci1
             return [(r1 + ci1, r2 + ci1)
-                    for r1, r2 in cell.get_ranges(i1 - ci1, i2 - ci1)]
+                    for r1, r2 in cell.get_ranges(cell_i1, cell_i2)]
+
+        # Multi-cell rectangular selection
         r1, r2 = min(ar, cr), max(ar, cr)
         c1, c2 = min(ac, cc), max(ac, cc)
-        return [(self._offsets[(r, c)],
-                 self._offsets[(r, c)] + len(self.cells[r][c]))
-                for r in range(r1, r2 + 1)
+        orig_rows = (self._orig_rows if self._orig_rows is not None
+                     else range(self.n_rows))
+        return [(self._offsets[(r_local, c)],
+                 self._offsets[(r_local, c)] + len(self.cells[r_local][c]))
+                for r_local, r_orig in enumerate(orig_rows)
+                if r1 <= r_orig <= r2
                 for c in range(c1, c2 + 1)]
 
     def get_copy(self, i1, i2, model, offset):
@@ -170,21 +229,73 @@ class TableBox(Box):
         result.texel = new_table
         return result
 
+    def _resolve_cell_range(self, i1, i2):
+        """Return (ar, ac, cr, cc) cell corners for selection [i1, i2].
+
+        For fragments (_orig is set), maps local indices to the original
+        table's coordinate space so cross-fragment column selections work.
+        For non-fragmented boxes uses local offsets directly.
+        Returns None if the selection is empty or entirely outside this box.
+        """
+        if self._orig is not None:
+            orig = self._orig
+            o1 = max(1, self._base_offset + i1)
+            o2 = max(1, min(self._base_offset + i2, len(orig)))
+            if o1 >= o2:
+                return None
+            ar, ac = orig._find_cell(o1)
+            cr, cc = orig._find_cell(o2 - 1)
+        else:
+            ar, ac = self._find_cell(i1)
+            cr, cc = self._find_cell(max(i1, i2 - 1))
+        return ar, ac, cr, cc
+
+    def _row_local(self, r_orig):
+        """Map an original row index to a local row index in this fragment.
+        Returns None when the row is not in this fragment.
+        """
+        if self._orig_rows is None:
+            return r_orig if r_orig < self.n_rows else None
+        for r_local, ro in enumerate(self._orig_rows):
+            if ro == r_orig:
+                return r_local
+        return None
+
     def draw_selection(self, i1, i2, x0, y0, dc):
-        ar, ac = self._find_cell(i1)
-        cr, cc = self._find_cell(max(i1, i2 - 1))
-        ci1 = self._offsets[(ar, ac)]
-        cell = self.cells[ar][ac]
-        if ar == cr and ac == cc and not (i1 == ci1 and i2 == ci1 + len(cell)):
-            # partial selection within a single cell: draw text-level highlight
-            Box.draw_selection(self, i1, i2, x0, y0, dc)
+        res = self._resolve_cell_range(i1, i2)
+        if res is None:
             return
-        # full-cell selection (one or more cells): invert each cell's full rect
+        ar, ac, cr, cc = res
+
+        # Single-cell partial selection?
+        if ar == cr and ac == cc:
+            r_local = self._row_local(ar)
+            if r_local is not None:
+                cell = self.cells[r_local][ac]
+                ci1 = self._offsets[(r_local, ac)]
+                ci2 = ci1 + len(cell)
+                # Convert selection to cell-local coordinates
+                if self._orig is not None:
+                    orig_ci1 = self._orig._offsets[(ar, ac)]
+                    sel_c1 = self._base_offset + i1 - orig_ci1
+                    sel_c2 = self._base_offset + i2 - orig_ci1
+                else:
+                    sel_c1, sel_c2 = i1 - ci1, i2 - ci1
+                if not (sel_c1 <= 0 and sel_c2 >= len(cell)):
+                    cx = x0 + sum(self.col_widths[:ac])
+                    cy = y0 + sum(self.row_heights[:r_local])
+                    cell.draw_selection(sel_c1, sel_c2, cx, cy, dc)
+                    return
+
+        # Full-cell rectangular selection
         r1, r2 = min(ar, cr), max(ar, cr)
         c1, c2 = min(ac, cc), max(ac, cc)
+        orig_rows = (self._orig_rows if self._orig_rows is not None
+                     else range(self.n_rows))
         cy = y0
-        for r, rh in enumerate(self.row_heights):
-            if r1 <= r <= r2:
+        for r_local, r_orig in enumerate(orig_rows):
+            rh = self.row_heights[r_local]
+            if r1 <= r_orig <= r2:
                 cx = x0
                 for c, cw in enumerate(self.col_widths):
                     if c1 <= c <= c2:
@@ -239,27 +350,78 @@ _CELL_HPAD = 8   # horizontal padding per column
 _CELL_VPAD = 6   # vertical padding per row
 
 
+def build_cell(cell_texel, sep, col_width, factory):
+    """Build a CellBox for one cell, using parstyle from the following separator."""
+    from .wxtextview.linewrap import simple_linewrap
+    from .wxtextview.boxes import NewlineBox
+    boxes = list(factory.create_all(cell_texel))
+
+    # Split at NewlineBox (NL or BR inside the cell) so each segment is
+    # wrapped independently, giving a real line break within the cell.
+    segments, current = [], []
+    for box in boxes:
+        current.append(box)
+        if isinstance(box, NewlineBox):
+            segments.append(current)
+            current = []
+    if current:
+        segments.append(current)
+
+    all_lines = []
+    for seg in segments:
+        all_lines.extend(simple_linewrap(seg, col_width))
+
+    from .pagegen import Row as PageRow
+    rows = [PageRow(line, device=factory.device) for line in all_lines]
+    return CellBox(rows, factory.device, hpad=_CELL_HPAD, vpad=_CELL_VPAD)
+
+
 def build_table_box(texel, factory, row_height=None):
     """Build a TableBox from a Table texel using factory to create cell boxes."""
-    # cells at odd positions; TAB/NL separators at even positions
-    cell_texels = texel.childs[1::2]
+    # separators at even positions; cells at odd positions
+    # childs: [TableSep, cell00, TableSep, cell01, NL, cell10, ...]
     n_rows, n_cols = texel.n_rows, texel.n_cols
+
+    # compute col_widths
+    page_width = getattr(factory, 'line_width', 400)  # fallback
+    if texel.col_widths:
+        explicit = [w for w in texel.col_widths if w is not None]
+        n_auto = sum(1 for w in texel.col_widths if w is None)
+        auto_w = ((page_width - sum(explicit)) / n_auto) if n_auto else 0
+        col_widths_px = [w if w is not None else auto_w
+                         for w in texel.col_widths]
+    else:
+        col_widths_px = [page_width / n_cols] * n_cols
+
+    cell_texels = texel.childs[1::2]   # cells at indices 1,3,5,...
+    seps        = texel.childs[2::2]   # separators at indices 2,4,6,...
+
     grid = []
     for r in range(n_rows):
         row = []
         for c in range(n_cols):
-            boxes = list(factory.create_all(cell_texels[r * n_cols + c]))
-            row.append(CellBox(boxes, factory.device,
-                               hpad=_CELL_HPAD, vpad=_CELL_VPAD))
+            idx = r * n_cols + c
+            cell_t = cell_texels[idx]
+            sep    = seps[idx]
+            cw     = col_widths_px[c]
+            row.append(build_cell(cell_t, sep, cw, factory))
         grid.append(row)
-    col_widths  = [max(grid[r][c].width for r in range(n_rows)) + _CELL_HPAD
-                   for c in range(n_cols)]
+
+    col_widths_out = [max(grid[r][c].width for r in range(n_rows))
+                      for c in range(n_cols)]
     if row_height is None:
-        row_heights = [max(grid[r][c].height + grid[r][c].depth for c in range(n_cols)) + _CELL_VPAD
+        row_heights = [max(grid[r][c].height + grid[r][c].depth
+                          for c in range(n_cols))
                        for r in range(n_rows)]
     else:
         row_heights = [row_height] * n_rows
-    return TableBox(grid, col_widths, row_heights, device=factory.device)
+
+    box = TableBox(grid, col_widths_out, row_heights,
+                   header_rows=texel.header_rows,
+                   break_level=texel.break_level,
+                   device=factory.device)
+    box._source = texel
+    return box
 
 
 # ---------------------------------------------------------------------------
@@ -269,10 +431,16 @@ def build_table_box(texel, factory, row_height=None):
 def _mk_box_table(texts, col_width=60, row_height=14, device=None):
     """Build a TableBox directly from strings (for box-level tests)."""
     dev = device or TESTDEVICE
-    style = EMPTYSTYLE
-    n_rows, n_cols = len(texts), max(len(r) for r in texts)
-    cells = [[CellBox([TextBox(text, style, dev)], dev) for text in row]
-             for row in texts]
+    from .pagegen import Row as PageRow
+    cells = []
+    for row_texts in texts:
+        row = []
+        for text in row_texts:
+            rows = [PageRow([TextBox(text, EMPTYSTYLE, dev)], device=dev)]
+            row.append(CellBox(rows, dev))
+        cells.append(row)
+    n_rows = len(cells)
+    n_cols = len(cells[0]) if cells else 0
     return TableBox(cells, [col_width] * n_cols, [row_height] * n_rows, device=dev)
 
 
@@ -322,7 +490,7 @@ def test_02():
     assert table.n_rows == 2
     assert table.n_cols == 2
     from .textmodel.texeltree import length
-    # structure: [TAB, A, TAB, B, NL, C, TAB, D, NL] → 4 cells + 5 separators = 9
+    # structure: [TableSep, A, TableSep, B, NL, C, TableSep, D, NL] → 4 cells + 5 separators = 9
     assert length(table) == 9
 
 
@@ -357,7 +525,7 @@ def test_04():
     assert isinstance(result.texel, Table)
     assert result.texel.n_rows == 2
     assert result.texel.n_cols == 2
-    # length = sum of selected cell lengths + 1 (leading TAB of new sub-table)
+    # length = sum of selected cell lengths + 1 (leading TableSep of new sub-table)
     selected = [(1,0),(1,1),(2,0),(2,1)]
     assert length(result.texel) == sum(len(box.cells[r][c]) for r,c in selected) + 1
 

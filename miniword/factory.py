@@ -40,4 +40,6 @@ class Factory(FactoryBase):
 
     def Table_handler(self, texel, i1, i2):
         from .tables import build_table_box
+        line_width = getattr(self, 'line_width', 400)
+        self.page_width = line_width
         return [build_table_box(texel, self)]
