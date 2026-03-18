@@ -248,7 +248,7 @@ class StylePopup(wx.PopupWindow):
         style = self.styles[idx]
         label = self.Parent.GetItemLabel(style)
         self._clicked_style = style
-        is_protected = (style == 'normal')
+        is_protected = style in self.Parent.protected
 
         menu = wx.Menu()
         self._menu_ids: list[int] = []
@@ -260,17 +260,11 @@ class StylePopup(wx.PopupWindow):
                 menu.Enable(item.GetId(), False)
 
         add("Create new paragraph style from selection")
-        add("Redefine style from selection")
-        add("Revert to original style")
+        add("Redefine style from selection",  not is_protected)
+        add("Revert to original style",       not is_protected)
         menu.AppendSeparator()
-        add(f"Select all uses of \"{label}\"")
-        menu.AppendSeparator()
-        add("Rename style")
-        add("Delete style", not is_protected)
-
-        role_map = {"Title": "Title", "Heading 1": "H1", "Heading 2": "H2"}
-        role = role_map.get(label, "?")
-        add(f"Assign role ({role})")
+        add("Rename style",                   not is_protected)
+        add("Delete style",                   not is_protected)
 
         w, _ = self.panel.GetSize()
         item_y, item_h = self._item_rects[idx]
@@ -288,8 +282,8 @@ class StylePopup(wx.PopupWindow):
             0: lambda: self.Parent.CreateNewStyle(self._clicked_style),
             1: lambda: self.Parent.UpdateStyle(self._clicked_style),
             2: lambda: self.Parent.RevertStyle(self._clicked_style),
-            4: lambda: self.Parent.RenameStyle(self._clicked_style),
-            5: lambda: self.Parent.DeleteStyle(self._clicked_style),
+            3: lambda: self.Parent.RenameStyle(self._clicked_style),
+            4: lambda: self.Parent.DeleteStyle(self._clicked_style),
         }
         action = actions.get(i)
         if action:
@@ -327,6 +321,7 @@ class StyleDropdown(wx.Control, ViewBase):
         self.Bind(wx.EVT_LEAVE_WINDOW, lambda _: self._set_hover(False))
 
     stylesheet = None
+    protected: frozenset = frozenset()
     on_redefine_style = None  # callable(name, new_style, overrides)
     on_create_style   = None  # callable(new_name, new_style, overrides)
     on_revert_style   = None  # callable(overrides)
@@ -473,7 +468,7 @@ class StyleDropdown(wx.Control, ViewBase):
                 self.on_rename_style(name, new_label)
 
     def DeleteStyle(self, name: str):
-        if name == 'normal':
+        if name in self.protected:
             return
         if self.on_delete_style:
             self.on_delete_style(name)
@@ -509,6 +504,8 @@ class StyleDropdown(wx.Control, ViewBase):
 # ---------------------------------------------------------------------------
 
 class BasestyleDropdown(StyleDropdown):
+    protected = frozenset({'normal'})
+
     def UpdateSelection(self):
         name = self.properties.get("base", "normal")
         self.SetSelection(self.styles.index(name))

@@ -820,7 +820,7 @@ class InspectorPanel(wx.Panel, ViewBase):
                 widget.SetValue(value)
 
         family = properties['font_family']
-        self.family.SetFontName(family)
+        self.family.SetFontName(family or '')
         x = 'font_family' in overrides
         self.reset_family.set_x(x)
         

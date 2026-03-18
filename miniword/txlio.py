@@ -42,9 +42,12 @@ def save(doc, path):
     parts = []
 
     # Stylesheet sections — only written when non-empty
+    # Built-in styles that are always present are never written.
+    _skip = {'basestyles': {'normal'}}
     for name in ('charstyles', 'basestyles', 'liststyles'):
         ss = getattr(doc, name)
-        items = ss.items()
+        skip = _skip.get(name, set())
+        items = [(k, v) for k, v in ss.items() if k not in skip]
         if items:
             parts.append('[%s]' % name)
             for key, style in items:
@@ -251,7 +254,9 @@ def test_02():
         path = f.name
     try:
         doc.save(path)
+        assert '[basestyles]' not in open(path).read()
         doc2 = Document.load(path)
-        assert doc2.basestyles.items() == []
+        assert doc2.basestyles.get('normal') is not None
+        assert len(doc2.basestyles.items()) == 1
     finally:
         os.unlink(path)

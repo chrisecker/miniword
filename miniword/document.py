@@ -2,6 +2,7 @@ from .textmodel.modelbase import Model
 from .textmodel.textmodel import TextModel
 from .stylesheet import StyleSheet
 from .units import cm, mm
+from .styles import normal as _normal_style
 
 
 settings_default = {
@@ -25,6 +26,7 @@ class Document(Model):
         self.liststyles.set_owner(self, 'liststyles')
         self.basestyles = StyleSheet()
         self.basestyles.set_owner(self, 'basestyles')
+        self.basestyles.set('normal', _normal_style)
         self.textmodel = TextModel()
         self.settings = {}
         self.blobs = {}        # {blob_id: bytes}

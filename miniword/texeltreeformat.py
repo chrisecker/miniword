@@ -87,7 +87,9 @@ def serialize_texel(texel, indent=0):
             if texel.indent:
                 parts['indent'] = texel.indent
             if texel.parstyle:
-                parts.update(texel.parstyle)
+                ps = {k: v for k, v in texel.parstyle.items()
+                      if not (k == 'base' and v == 'normal')}
+                parts.update(ps)
             if texel.style:
                 parts['_style'] = texel.style  # rare, stored separately
             s = serialize_style(parts) if parts else ''
@@ -212,7 +214,9 @@ def serialize(root, endmark=None, properties=None):
         if endmark.indent:
             parts['indent'] = endmark.indent
         if endmark.parstyle:
-            parts.update(endmark.parstyle)
+            ps = {k: v for k, v in endmark.parstyle.items()
+                  if not (k == 'base' and v == 'normal')}
+            parts.update(ps)
         s = serialize_style(parts) if parts else ''
         if s:
             lines.append('ENDMARK(%s)' % s)
