@@ -140,7 +140,7 @@ class Box:
 
     def dump_boxes(self, i, x, y, indent=0):
         """Print out a graphical representation of the tree."""
-        print(" "*indent, "[%i:%i]" % (i, i+len(self)), x, y, end=' ') 
+        print(" "*indent, "[%i:%i]" % (i, i+len(self)), "%.1f" % x, "%.1f" % y, end=' ')
         print(repr(self)[:100])
         for j1, j2, x1, y1, child in self.iter_boxes(i, x, y):
             child.dump_boxes(j1, x1, y1, indent+4)
@@ -357,7 +357,7 @@ class _TextBoxBase(Box):
         return self.device.measure_parts(text, self.style)
 
     def dump_boxes(self, i, x, y, indent=0):
-        print(" "*indent, "[%i:%i]" % (i, i+len(self)), x, y, end=' ') 
+        print(" "*indent, "[%i:%i]" % (i, i+len(self)), "%.1f" % x, "%.1f" % y, end=' ')
         print(self.__class__.__name__, repr(self.text))
 
     ### Box-Protokoll

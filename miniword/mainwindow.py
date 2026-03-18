@@ -151,6 +151,24 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
 
         bar.Append(wx.Menu(), "&Help")
+
+        from . import builder as _builder
+        if _builder.DEBUG:
+            self._id_debug_console = wx.NewIdRef()
+            self._id_debug_dump    = wx.NewIdRef()
+            debug_menu = wx.Menu()
+            self._id_debug_txl     = wx.NewIdRef()
+            self._id_debug_boxes   = wx.NewIdRef()
+            debug_menu.Append(self._id_debug_console, "Open Python console")
+            debug_menu.Append(self._id_debug_dump,    "Dump texel tree")
+            debug_menu.Append(self._id_debug_txl,     "Dump TXL")
+            debug_menu.Append(self._id_debug_boxes,   "Dump box tree")
+            bar.Append(debug_menu, "&Debug")
+            self.Bind(wx.EVT_MENU, self._on_debug_console, id=self._id_debug_console)
+            self.Bind(wx.EVT_MENU, self._on_debug_dump,    id=self._id_debug_dump)
+            self.Bind(wx.EVT_MENU, self._on_debug_txl,     id=self._id_debug_txl)
+            self.Bind(wx.EVT_MENU, self._on_debug_boxes,   id=self._id_debug_boxes)
+
         self.SetMenuBar(bar)
 
     def _build_layout(self):
@@ -577,6 +595,46 @@ class MainFrame(wx.Frame, ViewBase):
             return
         if self._progress_dlg:
             self._progress_dlg.update(n_pages, n_chars, total_chars)
+
+
+    def _get_debug_range(self):
+        if self.textview.has_selection():
+            return sorted(self.textview.selection)
+        return None
+
+    def _on_debug_console(self, _):
+        from .wxtextview import testing
+        l = locals()
+        l.update(globals())
+        testing.pyshell(l)
+
+    def _get_debug_texel(self):
+        model = self.textview.model
+        r = self._get_debug_range()
+        if r:
+            return model.copy(*r).texel
+        return model.texel
+
+    def _on_debug_dump(self, _):
+        from .textmodel.texeltree import dump
+        dump(self._get_debug_texel())
+
+    def _on_debug_txl(self, _):
+        from .texeltreeformat import serialize
+        print(serialize(self._get_debug_texel()))
+
+    def _on_debug_boxes(self, _):
+        layout = self.textview.builder.layout
+        r = self._get_debug_range()
+        if r:
+            i1, i2 = r
+            def _dump(box, i=0, x=0, y=0, indent=0):
+                for j1, j2, x1, y1, child in box.iter_boxes(i, x, y):
+                    if j2 > i1 and j1 < i2:
+                        child.dump_boxes(j1, x1, y1, indent)
+            _dump(layout)
+        else:
+            layout.dump_boxes(0, 0, 0)
 
 
 def demo_00():
