@@ -1,7 +1,7 @@
 from .textmodel.modelbase import Model
 from .textmodel.textmodel import TextModel
 from .stylesheet import StyleSheet
-from .styles import cm, mm
+from .units import cm, mm
 
 
 settings_default = {

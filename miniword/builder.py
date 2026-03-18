@@ -14,7 +14,8 @@ from .wxtextview.rect import Rect
 
 from .pagegen import show_page, RestartMemo, generate_pages, \
     restartmemo_from_settings
-from .styles import cm, mm, updated
+from .units import cm, mm
+from .styles import updated
 from .factory import Factory
 from .cairodevice import CairoDevice
 

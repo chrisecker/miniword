@@ -32,11 +32,7 @@ attribute.
 """
 
 from collections import OrderedDict
-
-pt = 1
-inch = 72 * pt  # inch
-cm = 1 / 2.54 * inch
-mm = 0.1 * cm
+from .units import pt, inch, cm, mm
 
 n_levels = 9  # 0–8, displayed as 1–9
 defaultbullets = ["•", "◦", "▪", "–"]

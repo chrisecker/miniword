@@ -4,7 +4,7 @@ import cairo
 import time
 
 
-from .styles import mm, cm, pt, inch
+from .units import mm, cm, pt, inch
 from .wxtextview.cache import LRUCache
 
 

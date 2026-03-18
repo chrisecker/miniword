@@ -19,7 +19,8 @@ from .wxtextview.builder import BuilderBase
 from .wxtextview.boxes import get_text
 from .textmodel.texeltree import length, NewLine
 from .wxtextview.linewrap import simple_linewrap
-from .styles import mm, cm, pt, updated, n_levels
+from .units import mm, cm, pt
+from .styles import updated, n_levels
 from .factory import Factory, ForceBreakBox
 from .stretchable import justify_line
 
