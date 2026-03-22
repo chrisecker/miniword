@@ -681,13 +681,16 @@ def generate_pages(texel, i, restartmemo, factory):
             elif first and r['paragraph_type'] == 'numbered':
                 ns = r['numbering_style'][indent]
                 if ns is not None:
-                    if ns not in counters:
-                        counters[ns] = [0] * n_levels
+                    ckey = r['counter']
+                    if ckey not in counters:
+                        counters[ckey] = [0] * n_levels
                     sn = r.get('start_number')
                     if sn is not None:
-                        counters[ns][indent] = sn - 1
-                    counters[ns][indent] += 1
-                    marker = format_number(counters[ns], indent, ns)
+                        counters[ckey][indent] = sn - 1
+                    counters[ckey][indent] += 1
+                    if ckey == 'section':
+                        counters['item'] = [0] * n_levels
+                    marker = format_number(counters[ckey], indent, ns)
                     style = factory.mk_style(factory.markerstyle)
                     style['font_size'] *= style['marker_size'][indent]
                     style['color']      = style['marker_color'][indent]

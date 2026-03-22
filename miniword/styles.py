@@ -63,6 +63,7 @@ structure_default = {
     "marker_color":    ("black",) * n_levels,
     "numbering_style": ("1.",) * n_levels,  # e.g. "1.", "1.1", "a."
     "start_number":    None,               # None or int (for numbered lists)
+    "counter":         "item",             # item / section
 }
 
 layout_default = {

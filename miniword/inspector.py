@@ -428,6 +428,13 @@ class InspectorPanel(wx.Panel, ViewBase):
         add_row(spanelsizer, label, self.numbering, self.reset_numbering)
         self.numbering.Bind(wx.EVT_CHOICE, self.on_numbering)
 
+        label = wx.StaticText(spanel, label="Counter")
+        self.counter = wx.Choice(spanel, choices=["Item", "Section"])
+        self.counter.SetSelection(0)
+        self.reset_counter = ResetButton(spanel, ['counter'])
+        add_row(spanelsizer, label, self.counter, self.reset_counter)
+        self.counter.Bind(wx.EVT_CHOICE, self.on_counter)
+
         self.start_check = wx.CheckBox(spanel, label="Start value")
         self.start_value = wx.TextCtrl(spanel)
         self.reset_start = ResetButton(spanel, ['--']) # as a placeholder
@@ -529,6 +536,10 @@ class InspectorPanel(wx.Panel, ViewBase):
     def on_numbering(self, event):
         fmt = _NUMBERING_FORMATS[self.numbering.Selection]
         self.set_parproperties(numbering_style=(fmt,) * n_levels)
+
+    def on_counter(self, event):
+        value = ['item', 'section'][self.counter.Selection]
+        self.set_parproperties(counter=value)
 
     def set_list_value(self, name, value):
         # Helper
@@ -946,6 +957,10 @@ class InspectorPanel(wx.Panel, ViewBase):
             self.numbering.SetSelection(0)
         x = 'numbering_style' in overrides
         self.reset_numbering.set_x(x)
+
+        counter = properties.get('counter', 'item')
+        self.counter.SetSelection(0 if counter != 'section' else 1)
+        self.reset_counter.set_x('counter' in overrides)
 
         ptype = properties['paragraph_type']
         self.marker_panel.Show(ptype in ("list", "numbered"))
