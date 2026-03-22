@@ -398,17 +398,20 @@ def _parse_inline(text):
 def _register_heading_styles(doc):
     from miniword.styles import style_default, updated
     mm = 72 / 25.4
+    n  = len(style_default['indent_levels'])
+    heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
     defs = {
-        'h1':  {'name': 'Heading 1', 'font_size': 24, 'bold': True,  'space_before': 12,      'space_after': 6,        'fixed_indent': 0},
-        'h2':  {'name': 'Heading 2', 'font_size': 18, 'bold': True,  'space_before': 5 * mm,  'space_after': 5 * mm,   'fixed_indent': 1},
-        'h3':  {'name': 'Heading 3', 'font_size': 14, 'bold': True,  'space_before': 4 * mm,  'space_after': 0.5 * mm, 'fixed_indent': 2},
-        'h4':  {'name': 'Heading 4', 'bold': True,  'italic': True,                                                     'fixed_indent': 3},
-        'h5':  {'name': 'Heading 5', 'font_size': 11, 'bold': True,                                                     'fixed_indent': 4},
-        'h6':  {'name': 'Heading 6', 'font_size': 10, 'italic': True,                                                   'fixed_indent': 5},
+        'h1':  {'name': 'Heading 1', 'font_size': 24, 'bold': True,  'space_before': 12,      'space_after': 6},
+        'h2':  {'name': 'Heading 2', 'font_size': 18, 'bold': True,  'space_before': 5 * mm,  'space_after': 5 * mm},
+        'h3':  {'name': 'Heading 3', 'font_size': 14, 'bold': True,  'space_before': 4 * mm,  'space_after': 0.5 * mm},
+        'h4':  {'name': 'Heading 4', 'bold': True,  'italic': True},
+        'h5':  {'name': 'Heading 5', 'font_size': 11, 'bold': True},
+        'h6':  {'name': 'Heading 6', 'font_size': 10, 'italic': True},
         'pre': {'name': 'Code',      'font_size': 10, 'font_family': 'Courier New'},
     }
     for name, props in defs.items():
-        style = updated(style_default, props)
+        base = heading_base if name.startswith('h') else {}
+        style = updated(style_default, base, props)
         doc.basestyles.set(name, style)
 
 

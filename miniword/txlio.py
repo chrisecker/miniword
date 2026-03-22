@@ -33,9 +33,43 @@ from .styles import style_default, updated
 
 
 def _style_diff(style):
-    """Return only entries that differ from the built-in defaults."""
-    return {k: v for k, v in style.items()
-            if k not in style_default or style_default[k] != v}
+    """Return only entries that differ from the built-in defaults.
+
+    Tuple values are trimmed: trailing elements that match the default are
+    removed so that only the meaningful prefix needs to be stored.
+    """
+    result = {}
+    for k, v in style.items():
+        if k not in style_default:
+            result[k] = v
+            continue
+        default = style_default[k]
+        if v == default:
+            continue
+        if isinstance(v, tuple) and isinstance(default, tuple) and len(v) == len(default):
+            v = _trim_tuple(v, default)
+        result[k] = v
+    return result
+
+
+def _trim_tuple(val, default):
+    """Remove trailing elements of val that equal the corresponding default."""
+    i = len(val)
+    while i > 1 and val[i - 1] == default[i - 1]:
+        i -= 1
+    return val[:i]
+
+
+def _extend_tuples(style):
+    """Extend short tuple values to the length expected by structure_default."""
+    result = {}
+    for k, v in style.items():
+        default = style_default.get(k)
+        if (isinstance(v, tuple) and isinstance(default, tuple)
+                and len(v) < len(default)):
+            v = v + default[len(v):]
+        result[k] = v
+    return result
 
 
 def save(doc, path):
@@ -140,7 +174,7 @@ def _parse_stylesheet(text):
     while not p.tok.at_end():
         key = p.parse_string()
         p.tok.consume('EQUALS')
-        styles[key] = p.parse_style()
+        styles[key] = _extend_tuples(p.parse_style())
     return styles
 
 

@@ -8,10 +8,8 @@ Empty sections may be omitted. Comments start with `#`.
 
 1. **`[metadata]`** – Document properties (paper size, margins, author).
 2. **`[basestyles]`** – Named basestyles.
-3. **`[charstyles]`** – Named charstyles.
-4. **`[liststyles]`** – Named liststyles.
-5. **`[blobs]`** – Embedded binary data (images, etc.), base64-encoded.
-6. **`[document]`** – Content stream.
+3. **`[blobs]`** – Embedded binary data (images, etc.), base64-encoded.
+4. **`[document]`** – Content stream.
 
 ---
 
@@ -76,18 +74,19 @@ Properties control text rendering and structure. There are three categories:
 Several list properties hold a list of 10 values, one per indent level (levels 0–9).
 The `indent` attribute of `NL` selects which value applies to a given paragraph.
 
-| Name              | Default                                                    | Description                                    |
-| ----------------- | ---------------------------------------------------------- | ---------------------------------------------- |
-| `paragraph_type`  | `"normal"`                                                 | `normal` / `list` / `numbered`                 |
-| `level_policy`    | `"free"`                                                   | `free` / `fixed`                               |
-| `indent_levels`   | (0cm, 1cm, 2cm, 3cm, 4cm, 5cm, 6cm, 7cm, 8cm, 9cm)        | Left indent per level                          |
-| `first_line_indent` | `0`                                                      | First-line indent in pt (negative = hanging)   |
-| `marker`          | ("•","◦","-","-","-","-","-","-","-","-")                  | Bullet symbol per level                        |
-| `marker_pos`      | (-0.5cm × 10)                                              | Marker position relative to text per level     |
-| `marker_size`     | (1 × 10)                                                   | Marker size per level                          |
-| `marker_color`    | ("black" × 10)                                             | Marker color per level                         |
-| `numbering_style` | ("1.0" × 10)                                               | Numbering format per level                     |
-| `start_number`    | `None`                                                     | Start value for numbered lists (None or int)   |
+| Name                | Default                                                    | Description                                    |
+| ------------------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| `paragraph_type`    | `"normal"`                                                 | `normal` / `list` / `numbered`                 |
+| `level_policy`      | `"free"`                                                   | `free` / `fixed`                               |
+| `indent_levels`     | (0cm, 1cm, 2cm, 3cm, 4cm, 5cm, 6cm, 7cm, 8cm, 9cm)        | Left indent per level                          |
+| `first_line_indent` | `0`                                                        | First-line indent in pt (negative = hanging)   |
+| `marker`            | ("•","◦","-","-","-","-","-","-","-","-")                  | Bullet symbol per level                        |
+| `marker_pos`        | (-0.5cm × 10)                                              | Marker position relative to text per level     |
+| `marker_size`       | (1 × 10)                                                   | Marker size per level                          |
+| `marker_color`      | ("black" × 10)                                             | Marker color per level                         |
+| `numbering_style`   | ("1." × 10)                                                | Numbering format per level                     |
+| `start_number`      | `None`                                                     | Start value for numbered lists (None or int)   |
+| `counter`           | `"item"`                                                   | Counter to use: `item` / `section`             |
 
 **Structural Parameters** – element-specific keys that appear in the property block
 alongside style properties:
@@ -97,29 +96,60 @@ alongside style properties:
 | `NL`      | `indent` | `0`     | Indent level 0–9, selects the active value from all level-indexed properties |
 | `C("table",…)` | `ncols` | —  | Number of columns; number of rows is implicit from slot count |
 
+### Level-indexed tuple properties
+
+Properties like `indent_levels`, `marker`, `numbering_style` etc. are tuples with one
+value per indent level (9 entries). When writing TXL files by hand or generating them
+programmatically, a **shorter tuple** is allowed: the loader extends it to full length
+by appending the remaining default values.
+
+When saving, the writer trims trailing elements that match the built-in default, so only
+the meaningful prefix is stored.
+
+```
+# Short form (3 entries) — levels 3–8 fall back to default:
+indent_levels=(0, 0, 0)
+
+# Equivalent full form after loading:
+indent_levels=(0, 0, 0, 3cm, 4cm, 5cm, 6cm, 7cm, 8cm)
+```
+
+A tuple must have at least one element.
+
+---
+
 ### Named Styles
 
-Properties can be grouped and assigned a stable ID to form a named style. There are three kinds:
+The only named style type is the **basestyle**. It covers all three property categories
+(Text, Structure, List). Referenced by `NL` and `TAB` via `base=`. A basestyle is always
+complete: unspecified properties fall back to built-in defaults.
 
-- **Basestyle** – covers all three property categories (Text, Structure, List). Referenced by `NL` and `TAB` via `base=`. A basestyle is always complete: unspecified properties fall back to built-in defaults.
-- **Charstyle** – covers Text Properties only. Referenced by `T` via `char=`.
-- **Liststyle** – covers List Properties only. (`list=` is reserved but not yet implemented; place list properties directly in the basestyle instead.)
-
-Each named style may have:
+Each basestyle may have:
 - `name` – display name in the UI (optional)
-
-Basestyles additionally support:
 - `role` – semantic role for exporters, e.g. `"h1"`, `"bullet"`, `"code"` (optional)
 
-**IDs are stable.** When editing a document, always reuse existing IDs. The `role` can be changed without touching the content stream.
+**IDs are stable.** When editing a document, always reuse existing IDs. The `role` can be
+changed without touching the content stream.
+
+### Counters
+
+When `paragraph_type="numbered"`, the paragraph increments a counter and renders its
+current value as a marker. The `counter` property selects which counter to use:
+
+- `"item"` – for numbered list items. Resets to 0 when a `"section"` counter increments.
+- `"section"` – for headings/sections. Resetting `"item"` on increment.
+
+Counter state is maintained by the pagebuilder and stored in `rebuild_info`. It is
+not stored in the document itself.
 
 ### Overrides
 
-Any element may specify properties directly alongside a named style reference. These override the named style's values for that element only.
+Any element may specify properties directly alongside a named style reference. These
+override the named style's values for that element only.
 
 ```
-NL({base="normal", alignment="right"})       # structure override
-T("text", {char="highlight", bgcolor="red"}) # text override
+NL({base="normal", alignment="right"})   # structure override
+T("text", {bgcolor="red"})               # text override
 ```
 
 ---
@@ -154,9 +184,9 @@ TYPE({prop=val, ...}, [slot], [slot], ...)
 
 ---
 
-**`T("text")`** / **`T("text", {char="id", prop=val, ...})`**
+**`T("text")`** / **`T("text", {prop=val, ...})`**
 
-Text content. `char` references a charstyle (optional). Additional properties are overrides.
+Text content. Additional properties are direct overrides on the character.
 
 ---
 
@@ -245,12 +275,11 @@ paper = "A4"
 margin_left = 50.0
 
 [basestyles]
-"h1"     = {name="Header 1",  role="h1", bold, font_size=18}
+"h1"     = {name="Header 1",  role="h1",     bold, font_size=18,
+            paragraph_type="numbered", counter="section"}
 "body"   = {name="Standard",  alignment="justify", line_spacing=1.2}
 "bullet" = {name="Bullet",    role="bullet", paragraph_type="list"}
-
-[charstyles]
-"key" = {name="Keyword", bold, color="blue"}
+"enum"   = {name="Numbered",  role="enum",   paragraph_type="numbered"}
 
 [blobs]
 "photo.jpg" = "base64encodeddata..."
@@ -262,15 +291,20 @@ NL({base="h1"})
 IMG("photo.jpg", {scale=0.5})
 NL({base="body"})
 
-T("This is an ")
-T("important", {char="key"})
-T(" term in the document.")
+T("This is ")
+T("important", {bold})
+T(" text in the document.")
 NL({base="body"})
 
 T("First level item.")
 NL({base="bullet"})
 T("Second level item.")
 NL({indent=1, base="bullet"})
+
+T("First numbered item.")
+NL({base="enum"})
+T("Second numbered item.")
+NL({base="enum"})
 
 C("table", {ncols=2},
   [T("Name")],
@@ -291,6 +325,6 @@ ENDMARK({base="body"})
 2. **Minimal overrides:** Only specify properties that differ from the named style. Unspecified properties fall back to the named style, then to built-in defaults.
 3. **Roles:** The `role` field enables semantic export (e.g. to Markdown or HTML). It may change without modifying the content stream.
 4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. It is an index, not a distance. `indent=0` corresponds to the normal text column (no extra indentation); bullet lists therefore typically use `indent=1`.
-5. **Markers:** A bullet or number is rendered on the first line of a paragraph when `paragraph_type="list"` or `"numbered"` is set — either in the referenced basestyle or as a direct override on `NL`. The marker's base font is inherited from the first `T` element of the paragraph; `marker_size` and `marker_color` are applied on top.
+5. **Markers:** A bullet or number is rendered on the first line of a paragraph when `paragraph_type="list"` or `"numbered"` is set. For numbered paragraphs, `counter="section"` uses the section counter (resets the item counter on increment); `counter="item"` (default) uses the item counter.
 6. **Unified property block:** All element parameters — structural and stylistic — go in the `{…}` block. There are no positional arguments other than the element type string and slot contents.
 7. **Singles vs. Containers:** `IMG` and other keyword elements are Singles — they behave as atomic units in the edit model (length 1, no slots). Use `C("type", …)` only when slots are needed.
