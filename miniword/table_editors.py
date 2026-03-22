@@ -2,7 +2,74 @@ import wx
 from .editorbase import Editor
 from .tables import Table, TableBox
 
-_HIT_RADIUS = 5   # hit detection radius in screen pixels
+_HIT_RADIUS = 5          # hit detection radius in screen pixels
+_CM         = 72.0 / 2.54  # 1 cm in pt
+
+
+def _draw_arrowhead(gc, tip_x, y, direction, length, half_h):
+    """Filled triangle arrowhead. direction: +1 = points right, -1 = points left."""
+    base_x = tip_x - direction * length
+    gc.move_to(tip_x, y)
+    gc.line_to(base_x, y - half_h)
+    gc.line_to(base_x, y + half_h)
+    gc.close_path()
+    gc.fill()
+
+
+def _draw_dimension(gc, x_left, x_right, y, width_pt, zoom):
+    """Draw  ◄── 7.2 cm ──►  dimension annotation at document y-coordinate y.
+
+    All sizes are pixel-constant (divided by zoom so Cairo's scale does the rest).
+    If the label does not fit inside the column, arrows point outward and the
+    label is placed to the right of the right edge.
+    """
+    label     = f'{width_pt / _CM:.1f} cm'
+    px        = 1.0 / zoom
+    arr_len   = 6  * px
+    arr_h     = 3  * px
+    tick_h    = 4  * px
+    font_size = 8  * px
+    gap       = 2  * px
+    span      = x_right - x_left
+
+    gc.set_source_rgba(0.0, 0.35, 0.9, 1.0)
+    gc.set_line_width(px)
+
+    # Vertical end ticks
+    for tx in (x_left, x_right):
+        gc.move_to(tx, y - tick_h)
+        gc.line_to(tx, y + tick_h)
+        gc.stroke()
+
+    # Measure label
+    gc.set_font_size(font_size)
+    te = gc.text_extents(label)
+    tw = te[4]                        # x-advance
+    # baseline offset to visually center text on y
+    text_dy = -te[1] - te[3] / 2
+
+    if span >= tw + 2 * (arr_len + gap):
+        # Label fits inside: inward arrows, line interrupted for text
+        _draw_arrowhead(gc, x_left,  y, +1, arr_len, arr_h)
+        _draw_arrowhead(gc, x_right, y, -1, arr_len, arr_h)
+        text_x = x_left + (span - tw) / 2
+        gc.move_to(x_left  + arr_len, y)
+        gc.line_to(text_x  - gap, y)
+        gc.stroke()
+        gc.move_to(text_x  + tw + gap, y)
+        gc.line_to(x_right - arr_len, y)
+        gc.stroke()
+        gc.move_to(text_x, y + text_dy)
+    else:
+        # Column too narrow: outward arrows, full line, label to the right
+        _draw_arrowhead(gc, x_left,  y, -1, arr_len, arr_h)
+        _draw_arrowhead(gc, x_right, y, +1, arr_len, arr_h)
+        gc.move_to(x_left, y)
+        gc.line_to(x_right, y)
+        gc.stroke()
+        gc.move_to(x_right + 3 * gap, y + text_dy)
+
+    gc.show_text(label)
 
 
 def _find_table_at(layout, index):
@@ -128,15 +195,18 @@ class TableEditor(Editor):
         widths = self._preview_widths if self._preview_widths is not None else tb.col_widths
         orig   = self._drag_orig_widths or tb.col_widths
         zoom   = self.view.zoom
-        gc.set_line_width(2.0 / zoom)
-        x = 0
+        x      = 0
         for c, cw in enumerate(widths):
-            x += cw
+            x_col = x
+            x    += cw
             changed = self._preview_widths is not None and widths[c] != orig[c]
+            gc.set_line_width(2.0 / zoom)
             gc.set_source_rgb(0.0, 0.4, 1.0) if changed else gc.set_source_rgb(0.45, 0.45, 0.45)
             gc.move_to(x0 + x, y0)
             gc.line_to(x0 + x, y0 + tb.height)
             gc.stroke()
+            if changed:
+                _draw_dimension(gc, x0 + x_col, x0 + x, y0 - 8 / zoom, widths[c], zoom)
 
     def commit(self):
         if self._preview_widths is not None:
