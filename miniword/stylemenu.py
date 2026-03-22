@@ -149,7 +149,12 @@ class StylePopup(wx.PopupTransientWindow):
             dc.DrawRectangle(0, plus_y, w, plus_h)
         dc.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
         dc.SetTextForeground(wx.Colour(60, 60, 60))
-        dc.DrawText("+ New Style", PADDING_LEFT, plus_y + (plus_h - dc.GetCharHeight()) // 2)
+        dc.DrawText("+ Create new style from selection",
+                    PADDING_LEFT, plus_y + (plus_h - dc.GetCharHeight()) // 2)
+
+        # Separator line below the "+" item
+        dc.SetPen(wx.Pen(wx.Colour(180, 180, 175)))
+        dc.DrawLine(0, plus_y + plus_h - 1, w, plus_y + plus_h - 1)
 
         # Style items at indices 1…n
         for i, (name, label) in enumerate(zip(self.styles, self._labels)):
@@ -178,8 +183,7 @@ class StylePopup(wx.PopupTransientWindow):
         if self.triangle_hover:
             dc.SetBrush(wx.Brush(wx.Colour(180, 210, 255)))
             dc.SetPen(wx.TRANSPARENT_PEN)
-            #dc.SetPen(wx.Pen(wx.Colour(120, 160, 220)))
-            dc.DrawCircle(cx, cy, 9)
+            dc.DrawCircle(cx, cy, min(item_h // 2 - 1, 13))
 
         pts = [wx.Point(cx - 3, cy - 5), wx.Point(cx - 3, cy + 5), wx.Point(cx + 4, cy)]
         dc.SetBrush(wx.Brush(color))
@@ -253,7 +257,6 @@ class StylePopup(wx.PopupTransientWindow):
             if not enabled:
                 menu.Enable(item.GetId(), False)
 
-        add("Create new paragraph style from selection")
         add("Redefine style from selection",  not is_protected)
         add("Revert to original style",       not is_protected)
         menu.AppendSeparator()
@@ -273,11 +276,10 @@ class StylePopup(wx.PopupTransientWindow):
         except ValueError:
             return
         actions = {
-            0: lambda: self.Parent.CreateNewStyle(self._clicked_style),
-            1: lambda: self.Parent.UpdateStyle(self._clicked_style),
-            2: lambda: self.Parent.RevertStyle(self._clicked_style),
-            3: lambda: self.Parent.RenameStyle(self._clicked_style),
-            4: lambda: self.Parent.DeleteStyle(self._clicked_style),
+            0: lambda: self.Parent.UpdateStyle(self._clicked_style),
+            1: lambda: self.Parent.RevertStyle(self._clicked_style),
+            2: lambda: self.Parent.RenameStyle(self._clicked_style),
+            3: lambda: self.Parent.DeleteStyle(self._clicked_style),
         }
         action = actions.get(i)
         if action:

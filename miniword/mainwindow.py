@@ -194,7 +194,8 @@ class MainFrame(wx.Frame, ViewBase):
             self._inspector_book, self.document)
         self.image_inspector = ImageInspector(
             self._inspector_book, self._on_image_insert, self.textview,
-            on_crop_edit=self._on_crop_edit)
+            on_crop_edit=self._on_crop_edit,
+            on_crop_dismiss=self._on_crop_dismiss)
         self.image_inspector.blobs = self.document.blobs
 
         from .searchtool import SearchPanel
@@ -536,11 +537,13 @@ class MainFrame(wx.Frame, ViewBase):
         self.show_right_panel("image")
 
     def editor_changed(self, view, editor):
+        from .image_editors import ImageCropEditor
         if editor is not None and isinstance(editor.texel, Image):
             box = getattr(editor, 'box', None)
             self.image_inspector.refresh(editor.texel, editor.index, box)
         else:
             self.image_inspector.clear()
+        self.image_inspector.set_crop_active(isinstance(editor, ImageCropEditor))
 
     def _on_image_insert(self, blob_id):
         from .textmodel.texeltree import grouped
@@ -562,6 +565,9 @@ class MainFrame(wx.Frame, ViewBase):
     def _on_crop_edit(self, index):
         from .image_editors import ImageCropEditor
         self.textview.install_editor(ImageCropEditor(), index)
+
+    def _on_crop_dismiss(self):
+        self.textview.remove_editor()
 
 
     def layout_progress_start(self, view):

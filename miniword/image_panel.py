@@ -22,11 +22,12 @@ class ImageInspector(wx.Panel):
 
     blobs = {}   # set externally: inspector.blobs = doc.blobs
 
-    def __init__(self, parent, on_insert, view, on_crop_edit=None):
+    def __init__(self, parent, on_insert, view, on_crop_edit=None, on_crop_dismiss=None):
         wx.Panel.__init__(self, parent)
-        self.on_insert     = on_insert
-        self._view         = view
-        self.on_crop_edit  = on_crop_edit
+        self.on_insert      = on_insert
+        self._view          = view
+        self.on_crop_edit   = on_crop_edit
+        self.on_crop_dismiss = on_crop_dismiss
         self._index        = None
         self._blob_id      = None
         self._current_crop = None
@@ -90,8 +91,8 @@ class ImageInspector(wx.Panel):
         sizer.AddSpacer(4)
 
         # --- Crop ---
-        self.btn_crop = wx.Button(self, label="Crop\u2026")
-        self.btn_crop.Bind(wx.EVT_BUTTON, self._on_crop_edit)
+        self.btn_crop = wx.ToggleButton(self, label="Crop")
+        self.btn_crop.Bind(wx.EVT_TOGGLEBUTTON, self._on_crop_toggle)
         sizer.Add(self.btn_crop, 0, wx.ALL | wx.EXPAND, M)
 
         self.btn_unset_crop = wx.Button(self, label="Unset Crop")
@@ -186,9 +187,17 @@ class ImageInspector(wx.Panel):
     def _on_proportional(self, event):
         self._notify()
 
-    def _on_crop_edit(self, event):
-        if self.on_crop_edit and self._index is not None:
-            self.on_crop_edit(self._index)
+    def set_crop_active(self, active):
+        """Sync toggle button state with the active editor (called from outside)."""
+        self.btn_crop.SetValue(active)
+
+    def _on_crop_toggle(self, event):
+        if self.btn_crop.GetValue():
+            if self.on_crop_edit and self._index is not None:
+                self.on_crop_edit(self._index)
+        else:
+            if self.on_crop_dismiss:
+                self.on_crop_dismiss()
 
     def _on_unset_crop(self, event):
         if self._index is None:

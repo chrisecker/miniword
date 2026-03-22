@@ -502,11 +502,14 @@ class InspectorPanel(wx.Panel, ViewBase):
         ]:
             resetter.callback = self.clear_parproperties            
 
-        passfocus(self, view)            
+        passfocus(self, view)
         self.add_model(view)
         model = view.model
         assert model is not None
         self.add_model(view.model)
+        # Refresh when the panel becomes visible again after being hidden,
+        # because queue_update() skips updates while IsShownOnScreen() is False.
+        self.Bind(wx.EVT_SHOW, self._on_show)
         self.queue_update()
 
     def on_align(self, event):
@@ -585,12 +588,22 @@ class InspectorPanel(wx.Panel, ViewBase):
         value = event.Value
         self.set_parproperties(line_spacing=value)
 
+    def _on_show(self, event):
+        event.Skip()
+        if event.IsShown():
+            self.queue_update()
+
     def model_changed(self, *args):
         self.queue_update()
 
     _update_queued = False
     def queue_update(self):
         if self._update_queued:
+            return
+        # Skip update when not visible — update() reads styles and refreshes
+        # 40+ controls, which is wasted work if the panel is hidden or collapsed.
+        # On next show the panel will call queue_update() itself.
+        if not self.IsShownOnScreen():
             return
         self._update_queued = True
         self.Bind(wx.EVT_IDLE, self.on_update)

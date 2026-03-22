@@ -373,8 +373,22 @@ class DocumentView(WXTextView):
             self._accumulate(i1, i2, delta)
         else:
             self.builder.rebuild_range(i1, i2, delta)
-            self.ensure_viewport()
-            self.builder.build_background()
+            # Note 1: ensure_viewport() is intentionally NOT called
+            # here.  on_paint() calls it before every draw, so the
+            # visible area is always covered before it is needed.
+            # Calling it here would build 1–2 pages synchronously
+            # inside the EVT_CHAR handler (via the model.insert →
+            # inserted → rebuild_range call chain), adding avoidable
+            # latency to every keystroke.
+
+            # Note 2: Do not use wx.Yield while handling a
+            # notify-message. Otherwise, additional keyboard events
+            # could "interleave" with the current handler, causing
+            # unpredictable behavior and race conditions. We use
+            # wx.CallAfter to ensure that any necessary yields occur
+            # asynchronously after the current event cycle.
+
+            wx.CallAfter(self.builder.build_background)
             self.refresh()
 
     @trace
