@@ -3,7 +3,8 @@ from .textmodel.viewbase import ViewBase
 from .inspector import InspectorPanel
 from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
-from .image import Image, ImageInspector
+from .image import Image
+from .image_panel import ImageInspector
 from .ui.sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
 
 
@@ -192,7 +193,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.document_settings = SettingsInspector(
             self._inspector_book, self.document)
         self.image_inspector = ImageInspector(
-            self._inspector_book, self._on_image_insert, self._on_image_change)
+            self._inspector_book, self._on_image_insert, self.textview,
+            on_crop_edit=self._on_crop_edit)
         self.image_inspector.blobs = self.document.blobs
 
         from .searchtool import SearchPanel
@@ -530,28 +532,18 @@ class MainFrame(wx.Frame, ViewBase):
     def undo_changed(self, *args):
         wx.CallAfter(self._update_undo_ui)
 
-    def index_changed(self, *args):
-        wx.CallAfter(self._update_image_inspector)
+    def image_dblclick(self, view, index):
+        self.show_right_panel("image")
 
-    def _update_image_inspector(self):
-        if not hasattr(self, 'textview'):
-            return
-        from .textmodel.textmodel import _get_texel
-        index = self.textview.index
-        model = self.textview.model
-        try:
-            texel = _get_texel(model.get_xtexel(), index - 1)
-        except (IndexError, AttributeError):
-            texel = None
-        if isinstance(texel, Image):
-            self.image_inspector.refresh(texel, index - 1)
-            self.show_right_panel("image")
+    def editor_changed(self, view, editor):
+        if editor is not None and isinstance(editor.texel, Image):
+            box = getattr(editor, 'box', None)
+            self.image_inspector.refresh(editor.texel, editor.index, box)
         else:
             self.image_inspector.clear()
 
     def _on_image_insert(self, blob_id):
         from .textmodel.texeltree import grouped
-        from .pagegen import restartmemo_from_settings
         model = self.textview.model
         index = self.textview.index
         scale = 1.0
@@ -559,25 +551,18 @@ class MainFrame(wx.Frame, ViewBase):
         load_image = getattr(self.textview.builder.device, 'load_image', None)
         if blob and load_image:
             _, src_w, src_h = load_image(blob)
-            if src_w > 0:
-                memo = restartmemo_from_settings(self.document.settings)
-                avail_w = memo.geometry[0] - memo.border[1] - memo.border[3]
-                if src_w > avail_w:
-                    scale = avail_w / src_w
+            avail_w = self.textview.get_rowwidth(index)
+            if src_w > 0 and avail_w and src_w > avail_w:
+                scale = avail_w / src_w
         img = Image(blob_id, scale)
         tmp = model.create_textmodel()
         tmp.texel = grouped([img])
         self.textview.insert(index, tmp)
 
-    def _on_image_change(self, index, blob_id, scale, crop):
-        from .textmodel.texeltree import grouped
-        model = self.textview.model
-        img = Image(blob_id, scale, crop)
-        tmp = model.create_textmodel()
-        tmp.texel = grouped([img])
-        with self.textview.atomic():
-            model.remove(index, index + 1)
-            model.insert(index, tmp)
+    def _on_crop_edit(self, index):
+        from .image_editors import ImageCropEditor
+        self.textview.install_editor(ImageCropEditor(), index)
+
 
     def layout_progress_start(self, view):
         if view.builder.layout.is_finished:

@@ -260,7 +260,6 @@ class WXTextView(wx.ScrolledWindow, TextView):
         if vw == w and vh == h:
             return
         self.SetVirtualSize((w, h))
-        self._scrollrate = 10, 10
         self.SetScrollRate(*self._scrollrate)
         
     def adjust_viewport(self):

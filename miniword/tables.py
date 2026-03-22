@@ -41,6 +41,12 @@ class Table(Container):
         self.childs = l
         self.compute_weights()
 
+    def set_col_widths(self, widths):
+        from copy import copy
+        clone = copy(self)
+        clone.col_widths = widths
+        return clone
+
     def __repr__(self):
         return 'Table(%d\xd7%d)' % (self.n_rows, self.n_cols)
 
@@ -407,7 +413,8 @@ def build_table_box(texel, factory, row_height=None):
             row.append(build_cell(cell_t, sep, cw, factory))
         grid.append(row)
 
-    col_widths_out = [max(grid[r][c].width for r in range(n_rows))
+    col_widths_out = [max(col_widths_px[c],
+                          max(grid[r][c].width for r in range(n_rows)))
                       for c in range(n_cols)]
     if row_height is None:
         row_heights = [max(grid[r][c].height + grid[r][c].depth

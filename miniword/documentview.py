@@ -6,8 +6,36 @@ from .builder import Factory, Builder
 from .cairodevice import CairoDevice
 from .annotation import highlight, squiggle
 from .builder import trace
+from .table_editors import TableEditor, _find_table_at
+from .image_editors import ImageSizeEditor, find_image_at, find_image_near
+from .texels import BR
+from .textmodel.texeltree import transform, iter_childs, grouped
+
 
 import wx
+
+
+def _transform_typed(texel, i, cls, fun):
+    """Walk the texel tree and apply fun to the ancestor of type cls at pos i."""
+    if isinstance(texel, cls):
+        return fun(texel)
+    if texel.is_group:
+        result = []
+        for j1, j2, child in iter_childs(texel):
+            if j1 <= i < j2:
+                result.append(_transform_typed(child, i - j1, cls, fun))
+            else:
+                result.append(child)
+        return grouped(result)
+    if texel.is_container:
+        result = []
+        for j1, j2, child in iter_childs(texel):
+            if j1 <= i < j2:
+                result.append(_transform_typed(child, i - j1, cls, fun))
+            else:
+                result.append(child)
+        return texel.set_childs(result)
+    return texel
 
 
 class DocumentView(WXTextView):
@@ -15,14 +43,22 @@ class DocumentView(WXTextView):
     highlights = []  # list of (i1, i2) or (i1, i2, color)
     squiggles  = []  # list of (i1, i2) or (i1, i2, color)
 
+    # (detect(layout, i) -> adjusted_i | None,  EditorClass)
+    _click_editors = [(find_image_near, ImageSizeEditor)]
+    # (detect(layout, i) -> truthy | None,       EditorClass)
+    _index_editors = [(_find_table_at, TableEditor)]
+
     min_zoom = 0.2
     max_zoom = 5.0
     zoom_step = 0.1
+
+    active_editor = None
 
     def __init__(self, parent, document):
         self.document = document
         super().__init__(parent)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
+        self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.set_model(document.textmodel)
         self.add_model(document.charstyles)
         self.add_model(document.liststyles)
@@ -34,15 +70,129 @@ class DocumentView(WXTextView):
         actions[25, True, False] = 'redo' # Ctrl+Y
         self.actions = actions
 
-    def insert_linebreak(self):
-        from .texels import BR
-        from .textmodel.texeltree import grouped
+    def insert_texel(self, i, texel):
+        tmp = self.model.create_textmodel(texel)
+        return self.insert(i, tmp)
+
+    def _set_texel_attributes(self, i, kwds, cls=None):
+        old = dict()
+        def fun(texel, new=kwds, old=old):
+            for key, value in new.items():
+                old[key] = getattr(texel, key)
+                setter = getattr(texel, 'set_'+key)
+                texel = setter(value)
+            return texel
         model = self.model
-        index = self.index
-        style = model.get_style(index)
-        tmp = model.create_textmodel()
-        tmp.texel = grouped([BR(style)])
-        self.insert(index, tmp)
+        if cls is not None:
+            model.texel = _transform_typed(model.texel, i, cls, fun)
+        else:
+            model.texel = transform(model.texel, i, i+1, fun, True)
+        model.notify_views('properties_changed', i, i+1)
+        return self._set_texel_attributes, i, old, cls
+
+    def set_texel_attributes(self, i, cls=None, **kwds):
+        """Set attributes on the texel at position i and record undo.
+
+        cls -- if given, find the ancestor of that type at i (needed for
+               container texels like Table that transform() would descend into).
+        """
+        info = self._set_texel_attributes(i, kwds, cls)
+        self.add_undo(info)
+
+    
+    
+
+    def get_rowwidth(self, i):
+        """Return the available content width at position i.
+
+        Traverses the layout to find the innermost Row containing i and
+        returns its content width (row.width - row.start[0]).  Works
+        recursively, so inside a table cell the column width is returned.
+        """
+        from .pagegen import Row
+        result = None
+        def search(box, i0):
+            nonlocal result
+            if isinstance(box, Row):
+                result = box.width - box.start[0]
+            for b1, b2, _, _, child in box.iter_boxes(i0, 0, 0):
+                if b1 <= i <= b2:
+                    search(child, b1)
+                    break
+        search(self.layout, 0)
+        return result
+
+    # ------------------------------------------------------------------
+    # Editor management
+    # ------------------------------------------------------------------
+
+    def install_editor(self, editor, index):
+        self.active_editor = editor
+        editor.install(self, index)
+        self.notify_views('editor_changed', editor)
+        self.refresh()
+
+    def remove_editor(self):
+        if self.active_editor:
+            self.active_editor = None
+            self.notify_views('editor_changed', None)
+            self.refresh()
+
+    def properties_changed(self, model, i1, i2):
+        super().properties_changed(model, i1, i2)
+        editor = self.active_editor
+        if editor is not None:
+            self.ensure_index()
+            editor.reinstall()
+
+    # ------------------------------------------------------------------
+    # Mouse events with editor routing
+    # ------------------------------------------------------------------
+        
+    def on_leftdown(self, event):
+        if self.active_editor:
+            if self.active_editor.on_leftdown(event):
+                self.SetFocus()
+                return
+        x, y = self._window_to_content(event.Position)
+        i = self.compute_index(x, y)
+        if i is not None and not event.ShiftDown():
+            for detect, EditorClass in self._click_editors:
+                j = detect(self.layout, i)
+                if j is not None:
+                    self.set_index(j)
+                    self.install_editor(EditorClass(), j)
+                    self.active_editor.on_leftdown(event)
+                    self.SetFocus()
+                    return
+        if i is not None:
+            self.set_index(i, extend=event.ShiftDown())
+        self.SetFocus()
+
+    def on_motion(self, event):
+        if self.active_editor and self.active_editor._drag_handle is not None:
+            self.active_editor.on_motion(event)
+            handle = self.active_editor._drag_handle
+            cursor = self.active_editor.get_cursor(handle)
+            self.SetCursor(wx.Cursor(cursor))
+            return
+        # Hover cursor shape near handles
+        if not event.LeftIsDown() and self.active_editor:
+            x, y = self.active_editor.window_to_box(event.Position)
+            hit = self.active_editor.hit_test(x, y)
+            cursor = wx.CURSOR_IBEAM if hit is None else self.active_editor.get_cursor(hit)
+            self.SetCursor(wx.Cursor(cursor))
+        if not event.LeftIsDown():
+            return event.Skip()
+        x, y = self._window_to_content(event.Position)
+        i = self.layout.get_index(x, y)
+        if i is not None:
+            self.set_index(i, extend=True)
+
+    def on_leftup(self, event):
+        if self.active_editor and self.active_editor._drag_handle is not None:
+            self.active_editor.on_leftup(event)
+            self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
 
     def on_mousewheel(self, event):
         if not event.ControlDown():
@@ -52,7 +202,7 @@ class DocumentView(WXTextView):
         new_zoom = max(0.2, min(5.0, old_zoom * factor))
 
         cw, ch = self.GetClientSize()
-        rx, ry = getattr(self, '_scrollrate', (10, 10))
+        rx, ry = self._scrollrate
         sx, sy = self.GetViewStart()
         scroll_x = sx * rx
         scroll_y = sy * ry
@@ -77,7 +227,7 @@ class DocumentView(WXTextView):
 
     def _viewport_start(self):
         """Return the text index of the first character on the currently visible page."""
-        rx, ry = getattr(self, '_scrollrate', (10, 10))
+        rx, ry = self._scrollrate
         _, sy = self.GetViewStart()
         scroll_y = sy * ry / self.zoom
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
@@ -87,7 +237,7 @@ class DocumentView(WXTextView):
 
     def _viewport_bottom_y(self):
         """Return the bottom coordinate of the currently visible viewport."""
-        rx, ry = getattr(self, '_scrollrate', (10, 10))
+        rx, ry = self._scrollrate
         _, sy  = self.GetViewStart()
         ch     = self.GetClientSize()[1]
         return (sy * ry + ch) / self.zoom
@@ -103,6 +253,17 @@ class DocumentView(WXTextView):
             self.builder.buildto_y(y)
             print("y reached after", time.time()-t0)
 
+    def ensure_index(self):
+        """Safety net: build until index covered (no dialog)."""
+        layout = self.layout
+        index = self.index
+        if len(layout) < index and not layout.is_finished:
+            import time
+            t0 = time.time()
+            print("ensure_index")
+            self.builder.buildto_index(i)
+            print("index reached after", time.time()-t0)
+        
     def on_paint(self, event):
         self.ensure_viewport()
         self._update_scroll()
@@ -153,12 +314,18 @@ class DocumentView(WXTextView):
             c = entry[2] if len(entry) > 2 else 'red'
             squiggle(painter, layout, i1, i2, x, y, c)   # 4. lines on top
 
-        if wx.Window.FindFocus() is self and self.index <= len(layout):
+        hide_cursor = self.active_editor and self.active_editor.hide_cursor
+        if wx.Window.FindFocus() is self and self.index <= len(layout) and not hide_cursor:
             layout.draw_cursor(self.index, x, y, painter,
                                self.model.defaultstyle)
         for j1, j2 in self.get_selected():
             if j1 <= len(layout):
                 layout.draw_selection(j1, min(j2, len(layout)), x, y, painter)
+        editor = self.active_editor
+        if editor:
+            box, (bx, by) = editor.find_box()
+            editor.draw_overlay(x+bx, y+by, painter)
+            editor.draw_handles(x+bx, y+by, painter)
         dc = None
         painter = None
 
@@ -327,6 +494,13 @@ class DocumentView(WXTextView):
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
         self.builder.buildto_index(index + 1)
+        for detect, EditorClass in self._index_editors:
+            if detect(self.layout, index):
+                self.install_editor(EditorClass(), index)
+                break
+        else:
+            if self.active_editor is not None and self.active_editor.index != index:
+                self.remove_editor()
         WXTextView.set_index(self, index, extend, update)
 
     def export_pdf(self, path):
@@ -418,9 +592,27 @@ class DocumentView(WXTextView):
                 return self.set_index(r1 + i, shift)
             prev = r1, r2, rx, ry, row
 
+    def on_leftdclick(self, event):
+        x, y = self._window_to_content(event.Position)
+        i = self.layout.get_index(x, y) or 0
+        img_res = find_image_at(self.layout, i)
+        if img_res is not None:
+            self.notify_views('image_dblclick', i)
+            self.SetFocus()
+            return
+        super().on_leftdclick(event)
+
+    def on_char(self, event):
+        if self.active_editor:
+            if self.active_editor.on_key(event.GetKeyCode(), event):
+                return
+        super().on_char(event)
+
     def handle_action(self, action, shift=False):
+        i = self.index
+        style = self.model.get_style(i)
         if action == 'insert_newline' and shift:
-            self.insert_linebreak()
+            self.insert_texel(i, BR(style))
         elif action == 'undo' and shift:
             self.redo()
         elif action == 'move_down':

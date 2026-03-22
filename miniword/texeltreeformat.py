@@ -113,8 +113,12 @@ def serialize_texel(texel, indent=0):
             from .image import Image as _Image
             if isinstance(texel, _Image):
                 parts = {}
-                if texel.scale != 1.0:
-                    parts['scale'] = texel.scale
+                if texel.scale_x != 1.0:
+                    parts['scale_x'] = texel.scale_x
+                if texel.scale_y != 1.0:
+                    parts['scale_y'] = texel.scale_y
+                if not texel.proportional:
+                    parts['proportional'] = False
                 if texel.crop:
                     parts['crop_x'] = texel.crop[0]
                     parts['crop_y'] = texel.crop[1]
@@ -422,17 +426,22 @@ class _Parser:
         self.tok.consume('IDENT')  # IMG
         self.tok.consume('LPAREN')
         blob_id = self.parse_string()
-        scale = 1.0
+        scale_x = 1.0
+        scale_y = 1.0
+        proportional = True
         crop = None
         if self.tok.peek()[0] == 'COMMA':
             self.tok.consume('COMMA')
             d = self.parse_style()
-            scale = d.get('scale', 1.0)
+            legacy = d.get('scale', 1.0)   # backward compat: old single scale
+            scale_x = d.get('scale_x', legacy)
+            scale_y = d.get('scale_y', legacy)
+            proportional = d.get('proportional', True)
             if 'crop_w' in d:
                 crop = (d.get('crop_x', 0), d.get('crop_y', 0), d['crop_w'], d['crop_h'])
         self.tok.consume('RPAREN')
         from .image import Image
-        return Image(blob_id, scale, crop)
+        return Image(blob_id, scale_x, scale_y, proportional, crop)
 
     def parse_container(self):
         self.tok.consume('IDENT')  # C

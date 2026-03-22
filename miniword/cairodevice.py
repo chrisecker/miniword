@@ -333,6 +333,15 @@ class CairoDevice:
         ctx.paint()
         ctx.restore()
 
+    def crop_image_surface(self, surface, cx, cy, cw, ch):
+        """Return a new ImageSurface containing only the (cx, cy, cw, ch) region."""
+        import cairo
+        dst = cairo.ImageSurface(cairo.FORMAT_ARGB32, cw, ch)
+        ctx = cairo.Context(dst)
+        ctx.set_source_surface(surface, -cx, -cy)
+        ctx.paint()
+        return dst
+
 
 def eq(a, b, delta=1e-2):
     """Check whether float values a and b are equal within delta."""

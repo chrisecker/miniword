@@ -1,0 +1,206 @@
+"""Inline editors for DocumentView elements.
+
+AUTHOR GUIDE — writing a new Editor subclass
+=============================================
+
+Registration
+------------
+Editors are registered in DocumentView via two lists:
+
+  _click_editors  [(detect(layout, i) -> adjusted_i | None, EditorClass)]
+      Activated on mouse click.  `detect` may adjust the index (e.g. snap
+      to the start of the clicked element).  Set `activate_on_click = True`.
+
+  _index_editors  [(detect(layout, i) -> truthy | None, EditorClass)]
+      Activated whenever the cursor moves to a matching position.  A fresh
+      instance is created for each new cursor position.
+
+install / reinstall
+-------------------
+`install(view, index)` is called once when the editor becomes active.
+`index` is the document cursor position at activation time.
+
+- Call `super().install(view, index)` only if `index` is guaranteed to fall
+  exactly on a texel boundary (needed to resolve `self.texel`).  If the
+  editor sits *inside* a multi-character texel (e.g. inside a table), skip
+  super and set `self._drag_handle = None`, `self.view`, `self.index` manually.
+
+`reinstall()` is called automatically after every model change
+(properties_changed).  It re-runs `install` with the same index so the
+editor can refresh its cached box/texel references against the new layout.
+
+find_box
+--------
+Must return `(box, (x0, y0))` in document coordinates, or None.
+It is called on every paint and every mouse event — never cache the result,
+always read from the current layout so scroll and relayout are handled correctly.
+
+Drag protocol
+-------------
+on_leftdown  →  hit_test(x, y)  →  start_drag(handle, x, y)
+on_motion    →  compute new preview state, call self.view.refresh()
+on_leftup    →  commit()  →  clear_drag()
+
+`handle` (= _drag_handle) can be any value, including int 0.
+Always check `_drag_handle is not None` — never use plain truthiness.
+
+draw_overlay(x0, y0, gc)
+------------------------
+`x0, y0` are absolute document coordinates, already combining scroll offset
+and box position (passed in by DocumentView.on_paint as `x + bx, y + by`).
+Use them directly for drawing — do not call find_box() again for position.
+
+Coordinates
+-----------
+All positions in Editor methods are in *document units* (pt/mm), not screen
+pixels.  Convert pixel constants with `px_value / self.view.zoom`.
+"""
+
+import wx
+from .tables import TableBox
+from .textmodel.texeltree import iter_childs
+
+_HIT_RADIUS = 5   # hit detection radius in screen pixels
+
+
+class Editor:
+    view              = None
+    index             = None
+    position          = None    # top left corner in layout coordinates
+    texel             = None    # the primary texel being edited
+    hide_cursor       = False   # True → suppress text cursor while editor is active
+    activate_on_click = False   # True → install only on mouse click, not on cursor move
+
+    _drag_handle      = None
+    _drag_start       = None    # position where drag was started (box-local)
+    _drag_last        = None    # last drag position (box-local), updated each motion event
+    _total_dx         = 0.0
+    _total_dy         = 0.0
+
+    _HANDLE_PX    = 7    # handle size in screen pixels
+    _HIT_PX       = 6    # hit radius in screen pixels
+
+    def find_box(self):
+        """Return (box, (x0, y0)) where (x0, y0) is the box position in document coords."""
+        raise NotImplementedError()
+
+    def install(self, view, index):
+        """Install or reinstall the editor."""
+        self._drag_handle = None
+        self.view  = view
+        self.index = index
+        self.texel = get_texel_at(view.model.get_xtexel(), index)
+
+    def reinstall(self):
+        """Reinstall after a model change."""
+        self.install(self.view, self.index)
+
+    def draw_handles(self, x0, y0, gc):
+        res = self.find_box()
+        if res is None:
+            return
+        zoom = self.view.zoom
+        lw = 1.0 / zoom
+        hs = self._HANDLE_PX / zoom
+        for name, hx, hy in self.get_handles():
+            ax, ay = x0 + hx - hs / 2, y0 + hy - hs / 2
+            if name == self._drag_handle:
+                gc.set_source_rgb(0.0, 0.4, 1.0)
+            else:
+                gc.set_source_rgb(1.0, 1.0, 1.0)
+            gc.rectangle(ax, ay, hs, hs)
+            gc.fill()
+            gc.set_source_rgb(0.3, 0.3, 0.3)
+            gc.set_line_width(lw)
+            gc.rectangle(ax, ay, hs, hs)
+            gc.stroke()
+
+    def start_drag(self, handle, x, y):
+        self._drag_start = x, y
+        self._drag_handle = handle
+        self.view.refresh()
+
+    def clear_drag(self):
+        self._drag_start  = None
+        self._drag_handle = None
+
+    def hit_test(self, x, y):
+        """Returns either None or a handle name. (x, y) is in box-local coordinates."""
+        hit_r = self._HIT_PX / self.view.zoom
+        for name, hx, hy in self.get_handles():
+            if abs(x - hx) <= hit_r and abs(y - hy) <= hit_r:
+                return name
+        return None
+
+    def get_cursor(self, handle_id):
+        """Return a wx cursor stock id for the given handle, or None for the default cursor."""
+        return wx.CURSOR_SIZING
+
+    ### Event handling
+
+    def window_to_box(self, pos):
+        """Convert window pixel position to box-local document coordinates."""
+        x, y = self.view._window_to_content(pos)
+        res = self.find_box()
+        if res is None:
+            return x, y
+        box, (x0, y0) = res
+        return x - x0, y - y0
+
+    def on_leftdown(self, event):
+        x, y = self.window_to_box(event.Position)
+        handle = self.hit_test(x, y)
+        if handle is None:
+            return False
+        self.start_drag(handle, x, y)
+        return True
+
+    def on_leftup(self, event):
+        if self._drag_handle is not None:
+            self.commit()
+            self.clear_drag()
+
+    def on_key(self, keycode, event):
+        if keycode == wx.WXK_ESCAPE:
+            self.view.remove_editor()
+            return True
+        return False
+
+    ### Editor specific methods which need to be implemented
+
+    def on_motion(self, event):
+        """Update the model parameters to reflect the drag."""
+        pass
+
+    def draw_overlay(self, x0, y0, gc):
+        raise NotImplementedError
+
+    def commit(self):
+        raise NotImplementedError
+
+    def get_handles(self):
+        """Yield (name, x, y), where (x, y) is in box-local coordinates."""
+        raise NotImplementedError
+        # a dummy yield to make this an iterator
+        yield 'nothing', 0, 0
+
+
+
+
+def get_texel_at(texel, i):
+    """Return the leaf texel which starts at absolute position i in
+    the texel tree. In the case of a container starting at i, we
+    return the container and not the child starting at the same
+    position.
+
+    """
+    if i == 0 and texel.is_container:
+        return texel
+    if texel.is_group or texel.is_container:
+        for i1, i2, child in iter_childs(texel):
+            if i1 <= i < i2:
+                return get_texel_at(child, i-i1)
+    else:
+        if i != 0:
+            raise IndexError(i)
+    return texel
