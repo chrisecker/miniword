@@ -24,11 +24,17 @@ class TableEditor(Editor):
 
     During drag only a preview line is drawn; the model is not touched.
     The change is committed to the texel on mouse-release.
+
+    Modifier keys during drag:
+      plain  — only the left column changes; total table width varies.
+      Shift  — left and right column exchange width; total stays constant.
+      Ctrl   — left column changes, all columns to the right scale
+               proportionally; total stays constant.
     """
 
     _drag_col         = None
     _drag_orig_widths = None
-    _preview_width    = None   # new width of dragged col while dragging
+    _preview_widths   = None   # full width list while dragging
 
     def install(self, view, index):
         self._drag_handle = None
@@ -69,16 +75,49 @@ class TableEditor(Editor):
         super().start_drag(handle, x, y)
         self._drag_col         = handle
         self._drag_orig_widths = list(self._table_box.col_widths)
-        self._preview_width    = None
+        self._preview_widths   = None
         self.view.refresh()
+
+    def _compute_preview_widths(self, dx, event):
+        orig = self._drag_orig_widths
+        col  = self._drag_col
+        n    = len(orig)
+        widths = list(orig)
+
+        if event.ShiftDown() and col + 1 < n:
+            # Shift: only left + right column change; total width stays constant.
+            max_dx = orig[col + 1] - 20   # right can shrink to min
+            min_dx = -(orig[col] - 20)    # left can shrink to min
+            delta  = max(min_dx, min(max_dx, dx))
+            widths[col]     = orig[col]     + delta
+            widths[col + 1] = orig[col + 1] - delta
+
+        elif event.ControlDown() and col + 1 < n:
+            # Ctrl: left column changes, all columns to the right scale proportionally.
+            new_left    = max(20, orig[col] + dx)
+            delta       = new_left - orig[col]
+            total_right = sum(orig[col + 1:])
+            new_total   = total_right - delta
+            min_total   = (n - col - 1) * 20
+            if new_total < min_total:
+                new_total = min_total
+                new_left  = orig[col] + (total_right - new_total)
+            widths[col] = new_left
+            factor = new_total / total_right if total_right > 0 else 1.0
+            for i in range(col + 1, n):
+                widths[i] = max(20, orig[i] * factor)
+
+        else:
+            widths[col] = max(20, orig[col] + dx)
+
+        return widths
 
     def on_motion(self, event):
         if self._drag_col is None:
             return
-        p = self.window_to_box(event.Position)
-        self._total_dx = p[0] - self._drag_start[0]
-        orig = self._drag_orig_widths
-        self._preview_width = max(20, orig[self._drag_col] + self._total_dx)
+        p  = self.window_to_box(event.Position)
+        dx = p[0] - self._drag_start[0]
+        self._preview_widths = self._compute_preview_widths(dx, event)
         self.view.refresh()
 
     def draw_overlay(self, x0, y0, gc):
@@ -86,38 +125,27 @@ class TableEditor(Editor):
         if res is None:
             return
         tb, _ = res
-        zoom = self.view.zoom
-        lw = 2.0 / zoom
-        gc.set_line_width(lw)
-        # Draw separators; replace the dragged one with its preview position.
+        widths = self._preview_widths if self._preview_widths is not None else tb.col_widths
+        orig   = self._drag_orig_widths or tb.col_widths
+        zoom   = self.view.zoom
+        gc.set_line_width(2.0 / zoom)
         x = 0
-        for c, cw in enumerate(tb.col_widths):
-            eff_w = (self._preview_width
-                     if c == self._drag_col and self._preview_width is not None
-                     else cw)
-            x += eff_w
-            draw_x = x0 + x
-            if c == self._drag_col:
-                gc.set_source_rgb(0.0, 0.4, 1.0)
-            else:
-                gc.set_source_rgb(0.45, 0.45, 0.45)
-            gc.move_to(draw_x, y0)
-            gc.line_to(draw_x, y0 + tb.height)
+        for c, cw in enumerate(widths):
+            x += cw
+            changed = self._preview_widths is not None and widths[c] != orig[c]
+            gc.set_source_rgb(0.0, 0.4, 1.0) if changed else gc.set_source_rgb(0.45, 0.45, 0.45)
+            gc.move_to(x0 + x, y0)
+            gc.line_to(x0 + x, y0 + tb.height)
             gc.stroke()
 
     def commit(self):
-        if self._preview_width is not None:
-            tb    = self._table_box
-            texel = tb._source if tb else None
-            if texel is not None:
-                widths = list(self._drag_orig_widths)
-                widths[self._drag_col] = self._preview_width
-                self.view.set_texel_attributes(self._ti1, Table, col_widths=widths)
-                self.install(self.view, self.index)
-                assert self._table_box is not None
+        if self._preview_widths is not None:
+            self.view.set_texel_attributes(self._ti1, Table, col_widths=self._preview_widths)
+            self.install(self.view, self.index)
+            assert self._table_box is not None
         self._drag_col         = None
         self._drag_orig_widths = None
-        self._preview_width    = None
+        self._preview_widths   = None
 
     def get_handles(self):
         # TableEditor uses hit_test directly; no generic handles
