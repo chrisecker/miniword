@@ -1,6 +1,10 @@
+# MiniWord
+
 A minimal word processor in python. In development but, already great.
 
 ![Screenshot](https://codeberg.org/chrisecker/miniword/raw/branch/main/screenshots/miniword_mrz26.png)
+---
+
 
 ## Features
 
