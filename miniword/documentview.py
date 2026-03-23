@@ -67,12 +67,71 @@ class DocumentView(WXTextView):
 
         actions = self.actions.copy()
         del actions[(18, True, False)]  # remove Ctrl+R → redo
-        actions[25, True, False] = 'redo' # Ctrl+Y
+        actions[25, True, False]           = 'redo'            # Ctrl+Y
+        actions[wx.WXK_LEFT,  False, True] = 'dedent_par'      # Alt+Left
+        actions[wx.WXK_RIGHT, False, True] = 'indent_par'      # Alt+Right
+        actions[wx.WXK_UP,    False, True] = 'move_par_up'     # Alt+Up
+        actions[wx.WXK_DOWN,  False, True] = 'move_par_down'   # Alt+Down
+        actions[20, True, False]           = 'cycle_list_type'  # Ctrl+T
+        actions[116, False, True]          = 'cycle_basestyle'  # Alt+T
+        actions[84,  False, True]          = 'cycle_basestyle'  # Shift+Alt+T
         self.actions = actions
 
     def insert_texel(self, i, texel):
-        tmp = self.model.create_textmodel(texel)
+        tmp = self.model.create_textmodel()
+        tmp.texel = texel
         return self.insert(i, tmp)
+
+    def indent_par(self, direction, i1, i2):
+        model = self.model
+        if direction > 0:
+            old = model.increase_indent(i1, i2)
+        else:
+            old = model.decrease_indent(i1, i2)
+        self.add_undo((self.restore_indents, i1, i2, old))
+
+    def restore_indents(self, i1, i2, indents):
+        old = self.model.set_indents(i1, i2, indents)
+        return self.restore_indents, i1, i2, old
+
+    def swap_paragraph(self, direction):
+        model = self.model
+        row, col = model.index2position(self.index)
+        other_row = row + direction
+        if other_row < 0 or other_row >= model.nlines() - 1:
+            return
+        a, b = min(row, other_row), max(row, other_row)
+        a_start = model.linestart(a)
+        a_end   = model.lineend(a) + 1
+        b_start = model.linestart(b)
+        b_end   = model.lineend(b) + 1
+        para_a = model.copy(a_start, a_end)
+        para_b = model.copy(b_start, b_end)
+        with self.atomic():
+            self.remove(b_start, b_end)
+            self.remove(a_start, a_end)
+            self.insert(a_start, para_b)
+            self.insert(a_start + len(para_b), para_a)
+        new_start = model.linestart(other_row)
+        self.set_index(min(new_start + col, model.lineend(other_row)))
+
+    def cycle_list_type(self, s1, s2):
+        types = ['normal', 'list', 'numbered']
+        current = self.model.get_parstyle(self.index).get('paragraph_type', 'normal')
+        try:
+            idx = types.index(current)
+        except ValueError:
+            idx = 0
+        self.set_parproperties(s1, s2, paragraph_type=types[(idx + 1) % len(types)])
+
+    def cycle_basestyle(self, s1, s2, reverse=False):
+        keys = self.document.basestyles.keys()
+        if not keys:
+            return
+        current = self.model.get_parstyle(self.index).get('base', 'normal')
+        idx = keys.index(current) if current in keys else 0
+        delta = -1 if reverse else 1
+        self.set_parproperties(s1, s2, base=keys[(idx + delta) % len(keys)])
 
     def _set_texel_attributes(self, i, kwds, cls=None):
         old = dict()
@@ -625,6 +684,14 @@ class DocumentView(WXTextView):
     def handle_action(self, action, shift=False):
         i = self.index
         style = self.model.get_style(i)
+        model = self.model
+        if self.has_selection():
+            s1, s2 = sorted(self.selection)
+        else:
+            s1 = s2 = i
+        row2, col2 = model.index2position(s2)
+        ps1 = model.linestart(model.index2position(s1)[0])
+        ps2 = s2 if col2 == 0 else model.lineend(row2) + 1
         if action == 'insert_newline' and shift:
             self.insert_texel(i, BR(style))
         elif action == 'undo' and shift:
@@ -639,6 +706,18 @@ class DocumentView(WXTextView):
             self.move_page_up(shift)
         elif action == 'move_document_end':
             self.set_index(len(self.layout) - 1, shift)
+        elif action == 'indent_par':
+            self.indent_par(1, ps1, ps2)
+        elif action == 'dedent_par':
+            self.indent_par(-1, ps1, ps2)
+        elif action == 'move_par_up':
+            self.swap_paragraph(-1)
+        elif action == 'move_par_down':
+            self.swap_paragraph(1)
+        elif action == 'cycle_list_type':
+            self.cycle_list_type(ps1, ps2)
+        elif action == 'cycle_basestyle':
+            self.cycle_basestyle(ps1, ps2, reverse=shift)
         else:
             return WXTextView.handle_action(self, action, shift)
 
