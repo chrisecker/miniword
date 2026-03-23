@@ -168,10 +168,6 @@ _OL_RE     = re.compile(r'^(\s*)\d+\.\s+(.*)')
 _RULE_RE   = re.compile(r'^[-*_]{3,}\s*$')
 _FENCE_RE  = re.compile(r'^```')
 
-_BOLD_ITALIC_RE = re.compile(r'\*{3}(.+?)\*{3}|_{3}(.+?)_{3}')
-_BOLD_RE        = re.compile(r'\*{2}(.+?)\*{2}|_{2}(.+?)_{2}')
-_ITALIC_RE      = re.compile(r'\*(.+?)\*|_(.+?)_')
-_CODE_RE        = re.compile(r'`(.+?)`')
 
 
 def _load_builtin(text):
@@ -179,7 +175,7 @@ def _load_builtin(text):
     from miniword.textmodel.textmodel import TextModel
 
     doc = Document()
-    _register_heading_styles(doc)
+    _register_styles(doc)
     doc.textmodel = TextModel('')
 
     def insert_nl():
@@ -222,7 +218,7 @@ def _insert_text_block(doc, ptype, indent, runs):
     pos = len(doc.textmodel.get_text())
     doc.textmodel.insert(pos, doc.textmodel.create_textmodel(par_text))
     nl_pos = pos + len(par_text) - 1
-    base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'normal'
+    base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'body'
     ps = {'base': base}
     if ptype == 'list':
         ps['paragraph_type'] = 'list'
@@ -369,12 +365,12 @@ def _parse_inline(text):
     parts = []
     pos   = 0
     pattern = re.compile(
-        r'(`[^`]+`)'              # code
-        r'|(\*{3}\S.*?\S\*{3})'  # bold+italic ***
-        r'|(\*{2}\S.*?\S\*{2})'  # bold **
-        r'|(\*\S.*?\S\*)'        # italic *
-        r'|(__\S.*?\S__)'        # bold __
-        r'|(_\S.*?\S_)',          # italic _
+        r'(`[^`]+`)'                                     # code
+        r'|(\*{3}[^\s*](?:[^*]*[^\s*])?\*{3})'         # bold+italic ***
+        r'|(\*{2}[^\s*](?:[^*]*[^\s*])?\*{2})'         # bold **
+        r'|(\*[^\s*](?:[^*]*[^\s*])?\*)'               # italic *  (single char: *a*)
+        r'|(__[^\s_](?:[^_]*[^\s_])?__)'               # bold __
+        r'|(_[^\s_](?:[^_]*[^\s_])?_)',                # italic _  (single char: _a_)
         re.DOTALL
     )
     for m in pattern.finditer(text):
@@ -395,12 +391,13 @@ def _parse_inline(text):
     return [(t, p) for t, p in parts if t]
 
 
-def _register_heading_styles(doc):
+def _register_styles(doc):
     from miniword.styles import style_default, updated
     mm = 72 / 25.4
     n  = len(style_default['indent_levels'])
     heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
     defs = {
+        'body': {'name': 'Body', 'space_after': 4},
         'h1':  {'name': 'Heading 1', 'font_size': 24, 'bold': True,  'space_before': 12,      'space_after': 6},
         'h2':  {'name': 'Heading 2', 'font_size': 18, 'bold': True,  'space_before': 5 * mm,  'space_after': 5 * mm},
         'h3':  {'name': 'Heading 3', 'font_size': 14, 'bold': True,  'space_before': 4 * mm,  'space_after': 0.5 * mm},
@@ -424,7 +421,7 @@ def _load_mistune(text):
     from miniword.textmodel.textmodel import TextModel
 
     doc = Document()
-    _register_heading_styles(doc)
+    _register_styles(doc)
 
     tokens = mistune.create_markdown(renderer='ast')(text)
     builder = _DocBuilder(doc)
@@ -544,7 +541,7 @@ class _DocBuilder:
         for start, end, ptype, indent in self.pars:
             # NL is at end-1 (the \n we appended)
             nl_pos = end - 1
-            base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'normal'
+            base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'body'
             ps   = {'base': base}
             if ptype == 'list':
                 ps['paragraph_type'] = 'list'
@@ -569,7 +566,7 @@ def _check_md(doc):
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables import Table as TableTexel
 
-    _OK_BASES  = {'normal', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre'}
+    _OK_BASES  = {'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre'}
     _OK_PTYPES = {'normal', 'list', 'numbered'}
     _OK_PAR    = {'base', 'paragraph_type'}
     _OK_CHAR   = {'bold', 'italic', 'font_family'}
@@ -648,7 +645,7 @@ def test_00():
     pars = _parse("Hello world\n")
     assert len(pars) == 1
     base, ptype, indent, runs = pars[0]
-    assert base  == 'normal'
+    assert base  == 'body'
     assert ptype == 'normal'
     assert ''.join(t for t, _ in runs) == 'Hello world'
 
@@ -669,7 +666,7 @@ def test_02():
     pars = _parse("# Title\n\nParagraph text.\n")
     assert pars[0][0] == 'h1'
     assert ''.join(t for t, _ in pars[0][3]) == 'Title'
-    assert pars[1][0] == 'normal'
+    assert pars[1][0] == 'body'
 
 
 def test_03():
@@ -685,6 +682,17 @@ def test_03():
     assert styles['bold'].get('italic') != True
     assert styles['italic'].get('italic') == True
     assert styles['italic'].get('bold') != True
+
+
+def test_03b():
+    "single-character italic and bold"
+    pars = _parse("*a* and **b**\n")
+    runs = pars[0][3]
+    styles = {t: s for t, s in runs}
+    assert 'a' in styles, f"runs: {runs}"
+    assert styles['a'].get('italic') == True
+    assert 'b' in styles
+    assert styles['b'].get('bold') == True
 
 
 def test_04():
