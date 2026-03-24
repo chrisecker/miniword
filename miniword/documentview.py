@@ -308,10 +308,8 @@ class DocumentView(WXTextView):
         if layout.height + layout.depth < y and not layout.is_finished:
             import time
             t0 = time.time()
-            print("ensure_viewport")
             self.builder.buildto_y(y)
-            print("y reached after", time.time()-t0)
-
+            
     def ensure_index(self):
         """Safety net: build until index covered (no dialog)."""
         layout = self.layout
@@ -319,9 +317,7 @@ class DocumentView(WXTextView):
         if len(layout) < index and not layout.is_finished:
             import time
             t0 = time.time()
-            print("ensure_index")
-            self.builder.buildto_index(i)
-            print("index reached after", time.time()-t0)
+            self.builder.buildto_index(index)
         
     def on_paint(self, event):
         self.ensure_viewport()
