@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: utf-8 -*-
 
 from ..textmodel.texeltree import EMPTYSTYLE
 from .testdevice import TESTDEVICE
@@ -140,7 +140,7 @@ class Box:
 
     def dump_boxes(self, i, x, y, indent=0):
         """Print out a graphical representation of the tree."""
-        print(" "*indent, "[%i:%i]" % (i, i+len(self)), x, y, end=' ') 
+        print(" "*indent, "[%i:%i]" % (i, i+len(self)), "%.1f" % x, "%.1f" % y, end=' ')
         print(repr(self)[:100])
         for j1, j2, x1, y1, child in self.iter_boxes(i, x, y):
             child.dump_boxes(j1, x1, y1, indent+4)
@@ -182,6 +182,19 @@ class Box:
         # Convience method.
         return reversed(tuple(self.iter_boxes(i, x, y)))
         
+    def get_ranges(self, i1, i2):
+        """Return selected character ranges for the interval [i1, i2].
+
+        If the selection falls entirely within one child, delegate to that
+        child (which may be a TableBox returning multiple cell ranges).
+        Otherwise return a single range via extend_range.
+        """
+        for j1, j2, x1, y1, child in self.iter_boxes(0, 0, 0):
+            if j1 <= i1 and i2 <= j2:
+                return [(r1 + j1, r2 + j1)
+                        for r1, r2 in child.get_ranges(i1 - j1, i2 - j1)]
+        return [self.extend_range(i1, i2)]
+
     def extend_range(self, i1, i2):
         """In some situations the user may not be allowed to select from $i1$
         to $i2$. We solve this by extending the selection to a
@@ -344,7 +357,7 @@ class _TextBoxBase(Box):
         return self.device.measure_parts(text, self.style)
 
     def dump_boxes(self, i, x, y, indent=0):
-        print(" "*indent, "[%i:%i]" % (i, i+len(self)), x, y, end=' ') 
+        print(" "*indent, "[%i:%i]" % (i, i+len(self)), "%.1f" % x, "%.1f" % y, end=' ')
         print(self.__class__.__name__, repr(self.text))
 
     ### Box-Protokoll
@@ -822,8 +835,8 @@ def test_06():
     import wx
     app = wx.App(redirect=False)
     device = WxDevice()
-    t1 = TextBox('Ein männlicher Briefmark erlebte', device=device)
-    t2 = TextBox('Was Schönes, bevor er klebte.', device=device)
+    t1 = TextBox('Ein mï¿½nnlicher Briefmark erlebte', device=device)
+    t2 = TextBox('Was Schï¿½nes, bevor er klebte.', device=device)
     par = VBox([t1, t2])
     assert par.height == t1.height+t1.depth+t2.height
     assert par.depth == t2.depth

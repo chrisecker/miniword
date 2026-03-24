@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: utf-8 -*-
 
 
 import wx
@@ -6,7 +6,6 @@ import string
 
 from ..textmodel import TextModel
 from ..textmodel.styles import updated_style
-from ..textmodel.viewbase import overridable_property
 from .textview import TextView
 from .wxdevice import WxDevice, defaultstyle
 from .testdevice import TESTDEVICE
@@ -18,10 +17,8 @@ import pickle
 
 
 
-
 class WXTextView(wx.ScrolledWindow, TextView):
     _scrollrate = 10, 10
-    zoom = overridable_property('zoom')
 
     def __init__(self, parent, id=-1,  
                  pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):
@@ -109,32 +106,41 @@ class WXTextView(wx.ScrolledWindow, TextView):
         keycode = event.GetKeyCode()
         ctrl = event.ControlDown()
         shift = event.ShiftDown()
-        alt = event.AltDown()        
+        alt = event.AltDown()
         action = self.actions.get((keycode, ctrl, alt))
         if action is None:
+            if ctrl or alt or keycode < 32:
+                return event.Skip()  # unhandled control key â€” let menu accelerators fire
             action = chr(keycode)
         self.handle_action(action, shift)
 
     def to_clipboard(self, textmodel):
-        text = textmodel.get_text()
-        plain = wx.TextDataObject()
-        plain.SetText(text)
-        pickled = wx.CustomDataObject("pytextmodel")
-        pickled.SetData(pickle.dumps(textmodel))
-        data = wx.DataObjectComposite()
-        data.Add(plain)
-        data.Add(pickled)
-        wx.TheClipboard.Open()
-        wx.TheClipboard.SetData(data)
-        wx.TheClipboard.Close()
+        for i in range(2):
+            # loop is a hack to make clipboard work reliable under linux
+            text = textmodel.get_text()
+            plain = wx.TextDataObject()
+            plain.SetText(text)
+            pickled = wx.CustomDataObject("pytextmodel")
+            pickled.SetData(pickle.dumps(textmodel))
+            data = wx.DataObjectComposite()
+            data.Add(pickled, preferred=True)
+            data.Add(plain)
+            
+            if wx.TheClipboard.Open():
+                wx.TheClipboard.SetData(data)
+                wx.TheClipboard.Flush()
+                wx.TheClipboard.Close()
+                self._clipboard_data = data  # prevent gc of collecting data
 
     def read_clipboard(self):
-        if wx.TheClipboard.IsOpened():  # may crash, otherwise
+        if wx.TheClipboard.IsOpened(): # may crash, otherwise
             return
+            
+        if not wx.TheClipboard.Open():
+            return None
         pickled = wx.CustomDataObject("pytextmodel")
         plain = wx.TextDataObject()
         textmodel = None
-        wx.TheClipboard.Open()
         if wx.TheClipboard.GetData(pickled):            
             textmodel = pickle.loads(pickled.GetData())
 
@@ -143,7 +149,7 @@ class WXTextView(wx.ScrolledWindow, TextView):
 
         wx.TheClipboard.Close()
         return textmodel
-
+   
     def on_paint(self, event):
         self._update_scroll()
         self.keep_cursor_on_screen()
@@ -158,66 +164,110 @@ class WXTextView(wx.ScrolledWindow, TextView):
         else:
             dc = pdc
         dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.WHITE_BRUSH)
+        dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
+        #dc.SetBackground(wx.WHITE_BRUSH)
+        
         dc.Clear()
         region = self.GetUpdateRegion()
-        x, y, w, h = region.Box
-        dc.SetClippingRegion(x-1, y-1, w+2, h+2)
-        gc = device.create_gc(dc)
+        rx, ry, rw, rh = region.Box
+        dc.SetClippingRegion(rx-1, ry-1, rw+2, rh+2)
+        painter = device.create_painter(dc)
 
         zoom = self.zoom
-        x, y = self.CalcScrolledPosition((0,0))
-        x /= zoom
-        y /= zoom
         layout = self.layout
-        layout.draw(x, y, gc)
-        
-        if wx.Window.FindFocus() is self:
-            layout.draw_cursor(self.index, x, y, gc, self.model.defaultstyle)            
-        for j1, j2 in self.get_selected():
-            layout.draw_selection(j1, j2, x, y, gc)
-        dc = None
-        gc = None
+        cw, ch = self.GetClientSize()
+        vw = int(layout.width * zoom)
+        vh = int(layout.height * zoom)
 
+        # Content origin needs to be centered when content < window
+        px, py = self.CalcScrolledPosition((0, 0))
+        if vw < cw:
+            px = (cw - vw) // 2
+        if vh < ch:
+            py = (ch - vh) // 2
+
+        x = px / zoom
+        y = py / zoom
+
+        layout.draw(x, y, painter)
+
+        if wx.Window.FindFocus() is self:
+            layout.draw_cursor(self.index, x, y, painter,
+                               self.model.defaultstyle)
+        for j1, j2 in self.get_selected():
+            layout.draw_selection(j1, j2, x, y, painter)
+        dc = None
+        painter = None
+        
     def on_size(self, event):
         self.keep_cursor_on_screen()
 
+    def _virtual_size(self):
+        return int(self.content_width * self.zoom), int(self.content_height * self.zoom)
+
+    def _window_to_content(self, pos):
+        """Calculates content coordinates from window-coordinates,
+        accounts for scroll and centering (content < window)."""
+        zoom = self.zoom
+        layout = self.layout
+        cw, ch = self.GetClientSize()
+        vw = int(layout.width * zoom)
+        vh = int(layout.height * zoom)
+        x, y = self.CalcUnscrolledPosition(pos)
+
+        if vw < cw:
+            ox = (cw - vw) // 2
+            x = x - ox
+        if vh < ch:
+            oy = (ch - vh) // 2
+            y = y - oy
+        return x / zoom, y / zoom
+    
     def on_motion(self, event):
         if not event.LeftIsDown():
             return event.Skip()
-        x, y = self.CalcUnscrolledPosition(event.Position) 
-        zoom = self.zoom
-        i = self.layout.get_index(x/zoom, y/zoom)
+        x, y = self._window_to_content(event.Position)
+        i = self.layout.get_index(x, y)
         if i is not None:
             self.set_index(i, extend=True)
 
     def on_leftdown(self, event):
-        x, y = self.CalcUnscrolledPosition(event.Position) 
-        zoom = self.zoom
-        i = self.compute_index(x/zoom, y/zoom)
+        x, y = self._window_to_content(event.Position)
+        i = self.compute_index(x, y)
         if i is not None:
             self.set_index(i, extend=event.ShiftDown())
         self.SetFocus()
 
     def on_leftdclick(self, event):
-        # Mark word
-        x, y = self.CalcUnscrolledPosition(event.Position)
-        zoom = self.zoom
-        self.select_word(x/zoom, y/zoom)
-        self.SetFocus()
+        x, y = self._window_to_content(event.Position)
+        self.select_word(x, y)
+        self.SetFocus()        
 
     ### Scroll
     def _update_scroll(self):
         layout = self.layout
         zoom = self.zoom
-        self.SetVirtualSize((int(layout.width*zoom), int(layout.height*zoom)))
-        self._scrollrate = 10, 10
+        w = int(layout.width  * zoom)
+        h = int(layout.height * zoom)
+        vw, vh = self.GetVirtualSize()
+        if vw == w and vh == h:
+            return
+        # While rebuilding, never shrink the virtual size â€” the scroll
+        # position must not be clamped before the layout catches up.
+        if not getattr(self.layout, 'is_finished', True):
+            w = max(w, vw)
+            h = max(h, vh)
+        if vw == w and vh == h:
+            return
+        self.SetVirtualSize((w, h))
         self.SetScrollRate(*self._scrollrate)
         
     def adjust_viewport(self):
         layout = self.layout
         zoom = self.zoom
 
+        if self.index > len(layout):
+            return  # layout not yet rebuilt to cursor position
         r = layout.get_rect(self.index, 0, 0)
 
         # curosr in device coordinates
@@ -252,7 +302,6 @@ class WXTextView(wx.ScrolledWindow, TextView):
             firstcol = ceil(vx / float(fh))
 
         if (firstcol, firstrow) != self.GetViewStart():
-            self.Update()
             self.Scroll(firstcol, firstrow)
 
             
@@ -269,12 +318,12 @@ class WXTextView(wx.ScrolledWindow, TextView):
         
         
 
-testtext = u"""Ein männlicher Briefmark erlebte
-Was Schönes, bevor er klebte.
+testtext = u"""Ein mï¿½nnlicher Briefmark erlebte
+Was Schï¿½nes, bevor er klebte.
 Er war von einer Prinzessin beleckt.
 Da war die Liebe in ihm geweckt.
-Er wollte sie wiederküssen,
-Da hat er verreisen müssen.
+Er wollte sie wiederkï¿½ssen,
+Da hat er verreisen mï¿½ssen.
 So liebte er sie vergebens.
 Das ist die Tragik des Lebens.
 

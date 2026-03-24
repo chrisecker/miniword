@@ -76,27 +76,36 @@ class TextView(ViewBase, Model):
                                                   # be smaller than
                                                   # i1!
     _selection = None
+    layout = overridable_property('layout')
     maxw = overridable_property('maxw')
     _maxw = 0
+    zoom = overridable_property('zoom')
+    _zoom = 1.0
     _scrollrate = 10, 10
     _TextModel = TextModel
     def __init__(self):
         ViewBase.__init__(self)
         self.clear_undo()
         self.set_model(self._TextModel(''))
+        assert self.builder is not None
         assert self.layout is not None
 
     def create_builder(self):
-        pass
+        raise NotImplementedError
+
+    def clear_caches(self):
+        self.builder.clear_caches()
 
     def set_model(self, model):
         ViewBase.set_model(self, model)
         self.builder = self.create_builder()
         self.rebuild()
 
+    def get_layout(self):
+        return self.builder.get_layout()
+    
     def rebuild(self):
         self.builder.rebuild()
-        self.layout = self.builder.get_layout()
         self.refresh()
         assert self.layout is not None
 
@@ -132,16 +141,21 @@ class TextView(ViewBase, Model):
             self.add_redo(undo(self._undoinfo[0]))
             del self._undoinfo[0]
                 
-    def add_undo(self, info, clear_redo = 1):
-        if info is not None:
-            if len(self._undoinfo):
-                joined = self.join_undo(info, self._undoinfo[0])
-                self._undoinfo = joined + self._undoinfo[1:]
-            else:
-                self._undoinfo.insert(0, info)
-            if clear_redo:
-                self._redoinfo = []
-            self.notify_views('undo_changed')
+    def add_undo(self, info, clear_redo=1):
+        if info is None:
+            return
+        if self._undo_group is not None:
+            # Grouping active: collect instead of committing immediately.
+            self._undo_group.append(info)
+            return
+        if len(self._undoinfo):
+            joined = self.join_undo(info, self._undoinfo[0])
+            self._undoinfo = joined + self._undoinfo[1:]
+        else:
+            self._undoinfo.insert(0, info)
+        if clear_redo:
+            self._redoinfo = []
+        self.notify_views('undo_changed')
 
     def redo(self):
         if len(self._redoinfo) > 0:
@@ -162,6 +176,27 @@ class TextView(ViewBase, Model):
     def clear_undo(self):
         self._undoinfo = []
         self._redoinfo = []
+        self._undo_group = None  # None = not grouping; list = collecting entries
+
+    # ------------------------------------------------------------------
+    # Undo grouping
+    # ------------------------------------------------------------------
+
+    def begin_undo_group(self):
+        """Start collecting undo entries into a single group."""
+        self._undo_group = []
+
+    def end_undo_group(self):
+        """Flush the collected group as one atomic undo entry."""
+        group = self._undo_group
+        self._undo_group = None
+        if not group:
+            return
+        entry = group[0] if len(group) == 1 else group
+        # Insert directly, bypassing join_undo (groups must not be merged).
+        self._undoinfo.insert(0, entry)
+        self._redoinfo = []
+        self.notify_views('undo_changed')
 
     def insert(self, i, textmodel):
         self.model.insert(i, textmodel)
@@ -241,15 +276,20 @@ class TextView(ViewBase, Model):
         self.rebuild()
         return self._set_texel, old
 
+    def get_zoom(self):
+        return self._zoom
+
+    def set_zoom(self, zoom):
+        self._zoom = zoom
+
     def get_maxw(self):
         return self._maxw
-    
+
     def set_maxw(self, maxw):
         if maxw == self._maxw:
             return
         self._maxw = maxw
         self.builder.set_maxw(maxw)
-        self.layout = self.builder.get_layout()
         self.Refresh()
         self.notify_views('maxw_changed')
 
@@ -325,18 +365,34 @@ class TextView(ViewBase, Model):
             return 0
         return self.layout.get_index(x, y)
 
-    def current_style(self):
-        index = self.index
-        if index == 0:
-            return self.model.get_style(index)            
-        return self.model.get_style(index-1)
+    _current_style = None
+
+    def get_current_style(self):
+        if self._current_style is None:
+            index = self.index
+            if index == 0:
+                self._current_style = dict(self.model.get_style(index))
+            else:
+                self._current_style = dict(self.model.get_style(index - 1))
+        return self._current_style
+
+    def set_current_style(self, **properties):
+        style = self.get_current_style()
+        style.update(properties)
+        self.notify_views('current_style_changed')
+
+    def clear_current_style(self, *keys):
+        style = self.get_current_style()
+        for key in keys:
+            style.pop(key, None)
+        self.notify_views('current_style_changed')
 
     def handle_action(self, action, shift=False):
         #print("action = ", action, shift)
         model = self.model
         index = self.index
         layout = self.layout
-        style = self.current_style()
+        style = self.get_current_style()
         parstyle = model.get_parstyle(index)
         row, col = self.current_position()
         rect = layout.get_rect(index, 0, 0)
@@ -420,12 +476,12 @@ class TextView(ViewBase, Model):
         elif action == 'move_line_end':
             self.set_index(model.linestart(row)+model.linelength(row)-1, shift)
         elif action == 'move_page_down':
-            width, height = self.GetClientSize()
-            i = self.compute_index(x, y+height)
-            self.set_index(i, shift)            
+            _, height = self.GetClientSize()
+            i = self.compute_index(x, y + height / self.zoom)
+            self.set_index(i, shift)
         elif action == 'move_page_up':
-            width, height = self.GetClientSize()
-            i = self.compute_index(x, y-height)
+            _, height = self.GetClientSize()
+            i = self.compute_index(x, y - height / self.zoom)
             self.set_index(i, shift)
         elif action == 'move_document_start':
             self.set_index(0, shift)
@@ -566,15 +622,16 @@ class TextView(ViewBase, Model):
         from ..textmodel.treebase import is_root_efficient
         assert is_root_efficient(self.layout)
 
+    def rebuild_range(self, i1, i2, delta):
+        self.builder.rebuild_range(i1, i2, delta)
+
     ### Signals issued by model
     def properties_changed(self, model, i1, i2):
-        self.builder.properties_changed(i1, i2)
-        self.layout = self.builder.get_layout()
+        self.rebuild_range(i1, i2, 0)
         self.refresh()
 
     def inserted(self, model, i, n):
-        self.builder.inserted(i, n)
-        self.layout = self.builder.get_layout()
+        self.rebuild_range(i, i, n)
         if debug:
             self.check()
         if i>= self.index:
@@ -589,8 +646,7 @@ class TextView(ViewBase, Model):
         self.refresh()
 
     def removed(self, model, i, text):
-        self.builder.removed(i, len(text))
-        self.layout = self.builder.get_layout()
+        self.rebuild_range(i, i, -len(text))
         n = len(text)
         i1 = i
         i2 = i+n
@@ -624,6 +680,10 @@ class TextView(ViewBase, Model):
             index = len(self.model)
         if index != self._index:
             self._index = index
+            if index == 0:
+                self._current_style = dict(self.model.get_style(0))
+            else:
+                self._current_style = dict(self.model.get_style(index - 1))
             if extend:
                 self.extend_selection()
             elif update:
@@ -675,15 +735,11 @@ class TextView(ViewBase, Model):
         return selection[0] != selection[1]
 
     def get_selected(self):
-        # Returns a list of selected regions. So far only a
-        # continguous region can be selected. In the futur this can
-        # change (for example for tables). Box.extend_selection should
-        # be renamed in Box.get_selection then.
         selection = self.selection
         if selection is None:
             return []
-        s1, s2 = sorted(self.selection)
-        return [self.layout.extend_range(s1, s2)]
+        s1, s2 = sorted(selection)
+        return self.layout.get_ranges(s1, s2)
 
     def start_selection(self):
         index = self.index

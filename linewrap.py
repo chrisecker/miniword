@@ -162,7 +162,6 @@ def test_01():
     boxes = []
     for text in "aa bb cc dd ee".split():
         boxes.append(TextBox(text))
-    print(str(simple_linewrap(boxes, 5, 3)))
     assert str(simple_linewrap(boxes, 5, 3)) == \
         "[[TB('aa'), TB('bb'), TB('c')], [TB('c'), TB('dd')], " \
         "[TB('ee')]]"

@@ -8,6 +8,7 @@ from ..textmodel.styles import EMPTYSTYLE
 from .testdevice import TESTDEVICE
 from .boxes import TextBox, NewlineBox, TabulatorBox, EmptyTextBox, \
     EndBox, check_box, Box, calc_length
+from .cache import LRUCache
 
 
 
@@ -28,6 +29,11 @@ class Factory:
 
     def __init__(self, device=TESTDEVICE):
         self.device = device
+        self.cache = LRUCache(10000)
+
+    def clear_caches(self):
+        self.cache.clear()
+        self.device.clear_caches()
 
     def get_device(self):
         return self.device
@@ -79,21 +85,16 @@ class Factory:
         return [self.TextBox(texel.text[i1:i2], self.mk_style(texel.style), 
                              self.device)]
 
-    _cache = dict()
-    _cache_keys = []
     def Text_handler(self, texel, i1, i2):
-        # cached version
+        # Caching version. It is important that dicts do not change!
         key = texel.text, id(texel.style), id(self.parstyle), i1, i2, self.device
         try:
-            return self._cache[key]
-        except: pass        
+            return self.cache.get(key)
+        except KeyError:
+            pass
         r = [self.TextBox(texel.text[i1:i2], self.mk_style(texel.style), 
                           self.device)]
-        self._cache_keys.insert(0, key)        
-        if len(self._cache_keys) > 10000:
-            _key = self._cache_keys.pop()
-            del self._cache[_key]
-        self._cache[key] = r
+        self.cache.set(key, r)
         return r
 
     def NewLine_handler(self, texel, i1, i2):
@@ -131,14 +132,7 @@ class BuilderBase:
         assert self._layout is not None
         return self._layout
 
-    ### Signal handlers
-    def properties_changed(self, i1, i2):
-        pass
-
-    def inserted(self, i, n):
-        pass
-
-    def removed(self, i, n):
+    def rebuild_range(self, i1, i2, delta):
         pass
 
 

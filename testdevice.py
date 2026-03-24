@@ -5,6 +5,9 @@ class TestDevice:
     # graphics methods.
 
     buffering = False
+    def clear_caches(self):
+        pass
+    
     def reset_blink(self):
         pass
     
