@@ -40,6 +40,14 @@ def _transform_typed(texel, i, cls, fun):
 
 class DocumentView(WXTextView):
 
+    def content_offset(self):
+        cw, ch = self.GetClientSize()
+        vw = int(self.layout.width * self.zoom)
+        vh = int(self.layout.height * self.zoom)
+        ox = (cw - vw) // 2 if vw < cw else 0
+        oy = (ch - vh) // 2 if vh < ch else 0
+        return ox, oy
+
     highlights = []  # list of (i1, i2) or (i1, i2, color)
     squiggles  = []  # list of (i1, i2) or (i1, i2, color)
 
