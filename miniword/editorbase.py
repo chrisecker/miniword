@@ -44,11 +44,11 @@ on_leftup    →  commit()  →  clear_drag()
 `handle` (= _drag_handle) can be any value, including int 0.
 Always check `_drag_handle is not None` — never use plain truthiness.
 
-draw_overlay(x0, y0, gc)
-------------------------
-`x0, y0` are absolute document coordinates, already combining scroll offset
-and box position (passed in by DocumentView.on_paint as `x + bx, y + by`).
-Use them directly for drawing — do not call find_box() again for position.
+draw_overlay(gc)
+----------------
+`gc` is a painter whose origin has already been shifted to the box position
+(scroll offset + box position applied via dc.SetDeviceOrigin before creating
+the painter). Draw in box-local coordinates — (0, 0) is the box top-left.
 
 Coordinates
 -----------
@@ -95,7 +95,7 @@ class Editor:
         """Reinstall after a model change."""
         self.install(self.view, self.index)
 
-    def draw_handles(self, x0, y0, gc):
+    def draw_handles(self, gc):
         res = self.find_box()
         if res is None:
             return
@@ -103,7 +103,7 @@ class Editor:
         lw = 1.0 / zoom
         hs = self._HANDLE_PX / zoom
         for name, hx, hy in self.get_handles():
-            ax, ay = x0 + hx - hs / 2, y0 + hy - hs / 2
+            ax, ay = hx - hs / 2, hy - hs / 2
             if name == self._drag_handle:
                 gc.set_source_rgb(0.0, 0.4, 1.0)
             else:
@@ -172,7 +172,7 @@ class Editor:
         """Update the model parameters to reflect the drag."""
         pass
 
-    def draw_overlay(self, x0, y0, gc):
+    def draw_overlay(self, gc):
         raise NotImplementedError
 
     def commit(self):

@@ -187,7 +187,7 @@ class TableEditor(Editor):
         self._preview_widths = self._compute_preview_widths(dx, event)
         self.view.refresh()
 
-    def draw_overlay(self, x0, y0, gc):
+    def draw_overlay(self, gc):
         res = self.find_box()
         if res is None:
             return
@@ -202,11 +202,11 @@ class TableEditor(Editor):
             changed = self._preview_widths is not None and widths[c] != orig[c]
             gc.set_line_width(2.0 / zoom)
             gc.set_source_rgb(0.0, 0.4, 1.0) if changed else gc.set_source_rgb(0.45, 0.45, 0.45)
-            gc.move_to(x0 + x, y0)
-            gc.line_to(x0 + x, y0 + tb.height)
+            gc.move_to(x, 0)
+            gc.line_to(x, tb.height)
             gc.stroke()
             if changed:
-                _draw_dimension(gc, x0 + x_col, x0 + x, y0 - 8 / zoom, widths[c], zoom)
+                _draw_dimension(gc, x_col, x, -8 / zoom, widths[c], zoom)
 
     def commit(self):
         if self._preview_widths is not None:

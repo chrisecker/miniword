@@ -387,8 +387,10 @@ class DocumentView(WXTextView):
         editor = self.active_editor
         if editor:
             box, (bx, by) = editor.find_box()
-            editor.draw_overlay(x+bx, y+by, painter)
-            editor.draw_handles(x+bx, y+by, painter)
+            dc.SetDeviceOrigin(int((x+bx)*zoom), int((y+by)*zoom))
+            ep = device.create_painter(dc)
+            editor.draw_overlay(ep)
+            editor.draw_handles(ep)
         dc = None
         painter = None
 
