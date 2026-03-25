@@ -156,6 +156,9 @@ class ImageSizeEditor(Editor):
         return self._CURSOR_MAP.get(handle_id, wx.CURSOR_SIZING)
 
     def draw_overlay(self, gc):
+        if self.position is None:
+            return
+        bx, by = self.position
         zoom = self.view.zoom
         lw = 1.0 / zoom
         (x, y), w, h = self.state
@@ -163,7 +166,7 @@ class ImageSizeEditor(Editor):
         # Outline at preview size
         gc.set_source_rgb(0.3, 0.3, 0.3)
         gc.set_line_width(lw)
-        gc.rectangle(x, y, w, h)
+        gc.rectangle(bx + x, by + y, w, h)
         gc.stroke()
 
     def commit(self):
@@ -205,7 +208,7 @@ class ImageCropEditor(Editor):
         if res is None:
             self.box = None
             return
-        self.box, _ = res
+        self.box, self.position = res
         self._src_w = self.box.src_w
         self._src_h = self.box.src_h
         self._preview_crop = list(self.texel.crop) if self.texel.crop else [0, 0, 0, 0]
@@ -263,7 +266,10 @@ class ImageCropEditor(Editor):
         self.view.refresh()
 
     def draw_overlay(self, gc):
+        if self.position is None:
+            return
         tb = self.box
+        bx, by = self.position
         sx, sy = self.texel.scale_x, self.texel.scale_y
         sw, sh = self._src_w, self._src_h
         zoom  = self.view.zoom
@@ -272,21 +278,20 @@ class ImageCropEditor(Editor):
 
         cl, cr, ct, cb = self._preview_crop
 
-        # orig_cl/ct: crop values at the box origin (0, 0)
         if self._drag_handle:
             orig_cl, _, orig_ct, _ = self._drag_start_crop
         else:
             orig_cl, orig_ct = cl, ct
 
-        # position of the preview crop box in box-local coords
-        cx = (cl - orig_cl) * sx
-        cy = (ct - orig_ct) * sy
+        # position of the preview crop box in doc coords
+        cx = bx + (cl - orig_cl) * sx
+        cy = by + (ct - orig_ct) * sy
         cw = (sw - cl - cr) * sx
         ch = (sh - ct - cb) * sy
 
-        # Full image position in box-local coords
-        fx = -orig_cl * sx
-        fy = -orig_ct * sy
+        # Full image position in doc coords
+        fx = bx - orig_cl * sx
+        fy = by - orig_ct * sy
         fw = sw * sx
         fh = sh * sy
 

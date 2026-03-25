@@ -111,7 +111,8 @@ class TableEditor(Editor):
         if res is None:
             self._table_box = None
             return
-        self._table_box, self._tx, self._ty, self._ti1, self._ti2 = res
+        self._table_box, tx, ty, self._ti1, self._ti2 = res
+        self.position = tx, ty
 
     def find_box(self):
         res = _find_table_at(self.view.layout, self.index)
@@ -188,10 +189,10 @@ class TableEditor(Editor):
         self.view.refresh()
 
     def draw_overlay(self, gc):
-        res = self.find_box()
-        if res is None:
+        if self._table_box is None:
             return
-        tb, _ = res
+        tb = self._table_box
+        bx, by = self.position
         widths = self._preview_widths if self._preview_widths is not None else tb.col_widths
         orig   = self._drag_orig_widths or tb.col_widths
         zoom   = self.view.zoom
@@ -202,11 +203,11 @@ class TableEditor(Editor):
             changed = self._preview_widths is not None and widths[c] != orig[c]
             gc.set_line_width(2.0 / zoom)
             gc.set_source_rgb(0.0, 0.4, 1.0) if changed else gc.set_source_rgb(0.45, 0.45, 0.45)
-            gc.move_to(x, 0)
-            gc.line_to(x, tb.height)
+            gc.move_to(bx + x, by)
+            gc.line_to(bx + x, by + tb.height)
             gc.stroke()
             if changed:
-                _draw_dimension(gc, x_col, x, -8 / zoom, widths[c], zoom)
+                _draw_dimension(gc, bx + x_col, bx + x, by - 8 / zoom, widths[c], zoom)
 
     def commit(self):
         if self._preview_widths is not None:

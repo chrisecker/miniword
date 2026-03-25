@@ -46,9 +46,23 @@ Always check `_drag_handle is not None` — never use plain truthiness.
 
 draw_overlay(gc)
 ----------------
-`gc` is a painter whose origin has already been shifted to the box position
-(scroll offset + box position applied via dc.SetDeviceOrigin before creating
-the painter). Draw in box-local coordinates — (0, 0) is the box top-left.
+`gc` is a painter whose origin is the document origin (scroll offset baked
+in via dc.SetDeviceOrigin). Call find_box() to obtain the box position
+(bx, by) and use document coordinates for all drawing.
+
+position and index
+------------------
+`self.index` is the document cursor position at activation time.
+`self.position` is the box's top-left corner in document coordinates, set
+by `install()` and updated by `reinstall()`.
+
+Both values are only valid as long as the model and layout are unchanged.
+DocumentView guarantees this by:
+- calling `reinstall()` after every `properties_changed` (style/attribute edits)
+- calling `remove_editor()` before processing `inserted` or `removed` signals
+
+Do not cache box references or positions across model changes beyond what
+`install()` already stores.
 
 Coordinates
 -----------
@@ -96,14 +110,14 @@ class Editor:
         self.install(self.view, self.index)
 
     def draw_handles(self, gc):
-        res = self.find_box()
-        if res is None:
+        if self.position is None:
             return
+        bx, by = self.position
         zoom = self.view.zoom
         lw = 1.0 / zoom
         hs = self._HANDLE_PX / zoom
         for name, hx, hy in self.get_handles():
-            ax, ay = hx - hs / 2, hy - hs / 2
+            ax, ay = bx + hx - hs / 2, by + hy - hs / 2
             if name == self._drag_handle:
                 gc.set_source_rgb(0.0, 0.4, 1.0)
             else:
@@ -140,7 +154,7 @@ class Editor:
 
     def window_to_box(self, pos):
         """Convert window pixel position to box-local document coordinates."""
-        x, y = self.view._window_to_content(pos)
+        x, y = self.view.window_to_content(pos)
         res = self.find_box()
         if res is None:
             return x, y

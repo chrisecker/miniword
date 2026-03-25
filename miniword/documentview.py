@@ -212,6 +212,16 @@ class DocumentView(WXTextView):
             self.ensure_index()
             editor.reinstall()
 
+    def inserted(self, model, i, n):
+        if self.active_editor is not None:
+            self.remove_editor()
+        super().inserted(model, i, n)
+
+    def removed(self, model, i, text):
+        if self.active_editor is not None:
+            self.remove_editor()
+        super().removed(model, i, text)
+
     # ------------------------------------------------------------------
     # Mouse events with editor routing
     # ------------------------------------------------------------------
@@ -221,7 +231,7 @@ class DocumentView(WXTextView):
             if self.active_editor.on_leftdown(event):
                 self.SetFocus()
                 return
-        x, y = self._window_to_content(event.Position)
+        x, y = self.window_to_content(event.Position)
         i = self.compute_index(x, y)
         if i is not None and not event.ShiftDown():
             for detect, EditorClass in self._click_editors:
@@ -251,7 +261,7 @@ class DocumentView(WXTextView):
             self.SetCursor(wx.Cursor(cursor))
         if not event.LeftIsDown():
             return event.Skip()
-        x, y = self._window_to_content(event.Position)
+        x, y = self.window_to_content(event.Position)
         i = self.layout.get_index(x, y)
         if i is not None:
             self.set_index(i, extend=True)
@@ -341,56 +351,48 @@ class DocumentView(WXTextView):
                 return
         else:
             dc = pdc
+
+        zoom = self.zoom
+        layout = self.layout
+
+        spx, spy = self.CalcScrolledPosition((0, 0))
+        ox, oy   = self.content_offset()
+        px, py   = spx + ox, spy + oy
+        dc.SetDeviceOrigin(px, py)
+
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
         dc.Clear()
         region = self.GetUpdateRegion()
         rx, ry, rw, rh = region.Box
-        dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
+        dc.SetClippingRegion(rx - px - 1, ry - py - 1, rw + 2, rh + 2)
         painter = device.create_painter(dc)
 
-        zoom = self.zoom
-        layout = self.layout
-        cw, ch = self.GetClientSize()
-        vw = int(layout.width * zoom)
-        vh = int(layout.height * zoom)
-
-        px, py = self.CalcScrolledPosition((0, 0))
-        if vw < cw:
-            px = (cw - vw) // 2
-        if vh < ch:
-            py = (ch - vh) // 2
-        x = px / zoom
-        y = py / zoom
-
-        layout.draw_background(x, y, painter)          # 1. white page fills
+        layout.draw_background(0, 0, painter)          # 1. white page fills
 
         for entry in self.highlights:
             i1, i2 = entry[:2]
             c = entry[2] if len(entry) > 2 else 'yellow'
-            highlight(painter, layout, i1, i2, x, y, c)  # 2. colored backgrounds
+            highlight(painter, layout, i1, i2, 0, 0, c)  # 2. colored backgrounds
 
-        layout.draw(x, y, painter)                      # 3. text on top
+        layout.draw(0, 0, painter)                      # 3. text on top
 
         for entry in self.squiggles:
             i1, i2 = entry[:2]
             c = entry[2] if len(entry) > 2 else 'red'
-            squiggle(painter, layout, i1, i2, x, y, c)   # 4. lines on top
+            squiggle(painter, layout, i1, i2, 0, 0, c)   # 4. lines on top
 
         hide_cursor = self.active_editor and self.active_editor.hide_cursor
         if wx.Window.FindFocus() is self and self.index <= len(layout) and not hide_cursor:
-            layout.draw_cursor(self.index, x, y, painter,
+            layout.draw_cursor(self.index, 0, 0, painter,
                                self.model.defaultstyle)
         for j1, j2 in self.get_selected():
             if j1 <= len(layout):
-                layout.draw_selection(j1, min(j2, len(layout)), x, y, painter)
+                layout.draw_selection(j1, min(j2, len(layout)), 0, 0, painter)
         editor = self.active_editor
         if editor:
-            box, (bx, by) = editor.find_box()
-            dc.SetDeviceOrigin(int((x+bx)*zoom), int((y+by)*zoom))
-            ep = device.create_painter(dc)
-            editor.draw_overlay(ep)
-            editor.draw_handles(ep)
+            editor.draw_overlay(painter)
+            editor.draw_handles(painter)
         dc = None
         painter = None
 
@@ -672,7 +674,7 @@ class DocumentView(WXTextView):
             prev = r1, r2, rx, ry, row
 
     def on_leftdclick(self, event):
-        x, y = self._window_to_content(event.Position)
+        x, y = self.window_to_content(event.Position)
         i = self.layout.get_index(x, y) or 0
         img_res = find_image_at(self.layout, i)
         if img_res is not None:
