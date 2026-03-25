@@ -175,19 +175,11 @@ class WXTextView(wx.ScrolledWindow, TextView):
 
         zoom = self.zoom
         layout = self.layout
-        cw, ch = self.GetClientSize()
-        vw = int(layout.width * zoom)
-        vh = int(layout.height * zoom)
 
-        # Content origin needs to be centered when content < window
         px, py = self.CalcScrolledPosition((0, 0))
-        if vw < cw:
-            px = (cw - vw) // 2
-        if vh < ch:
-            py = (ch - vh) // 2
-
-        x = px / zoom
-        y = py / zoom
+        ox, oy = self.content_offset()
+        x = (px + ox) / zoom
+        y = (py + oy) / zoom
 
         layout.draw(x, y, painter)
 
@@ -205,41 +197,34 @@ class WXTextView(wx.ScrolledWindow, TextView):
     def _virtual_size(self):
         return int(self.content_width * self.zoom), int(self.content_height * self.zoom)
 
-    def _window_to_content(self, pos):
-        """Calculates content coordinates from window-coordinates,
-        accounts for scroll and centering (content < window)."""
-        zoom = self.zoom
-        layout = self.layout
-        cw, ch = self.GetClientSize()
-        vw = int(layout.width * zoom)
-        vh = int(layout.height * zoom)
-        x, y = self.CalcUnscrolledPosition(pos)
+    def content_offset(self):
+        return 0, 0
 
-        if vw < cw:
-            ox = (cw - vw) // 2
-            x = x - ox
-        if vh < ch:
-            oy = (ch - vh) // 2
-            y = y - oy
-        return x / zoom, y / zoom
+    def window_to_content(self, pos):
+        """Calculates content coordinates from window-coordinates,
+        accounts for scroll position."""
+        zoom = self.zoom
+        x, y = self.CalcUnscrolledPosition(pos)
+        ox, oy = self.content_offset()
+        return (x - ox) / zoom, (y - oy) / zoom
     
     def on_motion(self, event):
         if not event.LeftIsDown():
             return event.Skip()
-        x, y = self._window_to_content(event.Position)
+        x, y = self.window_to_content(event.Position)
         i = self.layout.get_index(x, y)
         if i is not None:
             self.set_index(i, extend=True)
 
     def on_leftdown(self, event):
-        x, y = self._window_to_content(event.Position)
+        x, y = self.window_to_content(event.Position)
         i = self.compute_index(x, y)
         if i is not None:
             self.set_index(i, extend=event.ShiftDown())
         self.SetFocus()
 
     def on_leftdclick(self, event):
-        x, y = self._window_to_content(event.Position)
+        x, y = self.window_to_content(event.Position)
         self.select_word(x, y)
         self.SetFocus()        
 
