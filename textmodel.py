@@ -256,12 +256,13 @@ class TextModel(Model):
         return memo
 
     def clear_parproperties(self, i1, i2, *keys):
-        if not (-1 <= i1 <= i2 <= len(self)):
+        if not (-1 <= i1 <= i2 <= len(self)+1):
             raise IndexError((i1, i2))
         texel = self.get_xtexel()
         memo = get_parstyles(texel, i1, i2)
         t = grouped(
-            clear_parproperties(self.texel, i1, i2, keys))
+            clear_parproperties(texel, i1, i2, keys))
+        assert length(t) == length(texel)
         self._set_xtexel(t)
         #assert check(self.texel)
         self.notify_views('properties_changed', i1, i2)
@@ -317,6 +318,7 @@ class TextModel(Model):
         return self.set_indents(i, i2, [indent])
 
     def set_indents(self, i1, i2, indents):
+        old = self.get_indents(i1, i2)
         def fun(texel, new=list(indents)):
             if isinstance(texel, NewLine):
                 return texel.set_indent(new.pop(0))
@@ -325,6 +327,7 @@ class TextModel(Model):
         t = transform(texel, i1, i2, fun, descend_containers=False)
         self._set_xtexel(grouped(t))
         self.notify_views('properties_changed', i1, i2)
+        return old
 
     def get_indents(self, i1, i2):
         texel = self.get_xtexel()
@@ -817,18 +820,23 @@ def test_17():
 
 def test_18():
     "dump_range"
+    import io
+    from contextlib import redirect_stdout
     t = TextModel(text1+'\n'+text2)
-    dump_range(t.texel, 1, 10)
+    with redirect_stdout(io.StringIO()):
+        dump_range(t.texel, 1, 10)
 
 
 def test_19():
     "parstyle"
     model = TextModel(text1+'\n'+text2)
+    n = len(model)
     assert model.get_parstyle(1) == {}
     model.set_parproperties(0, len(model), textcolor='red')
     assert model.get_parstyle(1) == {'textcolor':'red'}
     model.clear_parproperties(0, len(model), 'textcolor')
     assert model.get_parstyle(1) == {}
+    assert n == len(model)
 
     
 def test_20():
@@ -844,6 +852,7 @@ def test_20():
     assert model.get_indents(0, n) == [1, 1, 0, 0, 0, 0, 0]
     model.decrease_indent(0, n)
     assert model.get_indents(0, n) == [0, 0, 0, 0, 0, 0, 0]
+    assert len(model) == n
     
 
 __all__ = ['TextModel']

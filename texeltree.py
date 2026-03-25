@@ -1107,7 +1107,6 @@ def test_11():
     s2 = as_style(dict(base='h2'))
     nl1 = NL.set_parstyle(s1)
     nl2 = NL.set_parstyle(s2)
-    print(NL.parstyle)
     assert NL.parstyle == dict()
     assert nl1.parstyle == dict(base='h1')
     assert nl2.parstyle == dict(base='h2')
