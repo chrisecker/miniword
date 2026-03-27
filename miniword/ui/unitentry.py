@@ -39,13 +39,14 @@ class UnitInput(wx.Panel):
 
         self.text = wx.TextCtrl(self, value=f"10 {self.display_unit}",
                                 style=wx.TE_PROCESS_ENTER | wx.TE_RIGHT)
+        self.text.SetMinSize((100, -1))
         btn_up = muted_button(self, "▲", size=(14, -1))
         btn_dn = muted_button(self, "▼", size=(14, -1))
         btn_up.SetMinSize((14, -1))
         btn_dn.SetMinSize((14, -1))
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        btn_sizer.Add(btn_up, 0, wx.EXPAND|wx.LEFT, 5)
+        btn_sizer.Add(btn_up, 0, wx.EXPAND|wx.LEFT, 10)
         btn_sizer.Add(btn_dn, 0, wx.EXPAND)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
