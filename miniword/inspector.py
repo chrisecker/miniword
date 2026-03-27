@@ -156,11 +156,15 @@ def add_section(label, panel, sizer):
 
 ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
     
+SPACER = (0, 0)
 def add_row(sizer, *widgets):
     # Helper: add a row of widgets    
     rowsizer = wx.BoxSizer(wx.HORIZONTAL)
 
     for i, widget in enumerate(widgets):
+        if isinstance(widget, tuple):
+            w, h = widget
+            widget = wx.Size(w, h)
         if i==0:
             rowsizer.Add(widget, 1, ALL_CENTER, 5)
         else:            
@@ -188,7 +192,6 @@ class InspectorPanel(wx.Panel, ViewBase):
         ViewBase.__init__(self)
         wx.Panel.__init__(self, parent, *args, **kwds)
         self.basestyles = basestyles
-        # XXX restliche stylesheets
         
         mainsizer = wx.BoxSizer( wx.VERTICAL )
 
@@ -300,33 +303,38 @@ class InspectorPanel(wx.Panel, ViewBase):
         add_section("Space", panel, contentsizer)
         
         # - Abstand vor Absatz        
-        label = wx.StaticText(panel, label='Space before')
+        label = wx.StaticText(panel, label='Before paragraph')
+        add_row(contentsizer, label)
+        
         self.space_before = UnitInput(panel, 'mm')
         self.reset_space_before = ResetButton(panel, ['space_before'])
-        add_row(contentsizer, label, self.space_before, self.reset_space_before)
+        add_row(contentsizer, (0,0), self.space_before, self.reset_space_before)
         self.space_before.Bind(EVT_UNIT_CHANGED, self.on_space_before)
         
         # - Abstand nach Absatz
-        label = wx.StaticText(panel, label='Space after')
+        label = wx.StaticText(panel, label='After paragraph')
+        add_row(contentsizer, label)
         self.space_after = UnitInput(panel, 'mm')
         self.reset_space_after = ResetButton(panel, ['space_after'])
-        add_row(contentsizer, label, self.space_after, self.reset_space_after)
+        add_row(contentsizer, (0,0), self.space_after, self.reset_space_after)
         self.space_after.Bind(EVT_UNIT_CHANGED, self.on_space_after)
         
         # - Zeilenabstand einfach, mehrfach, exakt, Mindestzeilenhöhe (optional)
-        label = wx.StaticText(panel, label='Line spacing')
+        label = wx.StaticText(panel, label='Between lines')
+        add_row(contentsizer, label)
         self.line_spacing = SpinCtrl3(
             panel, min=1.0, max=10.0, inc=0.1, initial=1.0, digits=1)
         self.line_spacing.Bind(EVT_SPIN_VALUE, self.on_line_spacing)
         self.reset_line_spacing = ResetButton(panel, ['line_spacing'])
-        add_row(contentsizer, label, self.line_spacing, self.reset_line_spacing)
+        add_row(contentsizer, (0,0), self.line_spacing, self.reset_line_spacing)
 
-        add_section("Other", panel, contentsizer)
+        add_section("Indentation", panel, contentsizer)
         
-        label = wx.StaticText(panel, label='First line offset')
+        label = wx.StaticText(panel, label='First line')
+        add_row(contentsizer, label)
         self.indent_first = UnitInput(panel, 'mm')
         self.reset_first = ResetButton(panel, ['first_line_indent'])
-        add_row(contentsizer, label, self.indent_first, self.reset_first)
+        add_row(contentsizer, (0,0), self.indent_first, self.reset_first)
         self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
 
         # - Absatz nicht umbrechen (Keep together / Keep with next - optional)
