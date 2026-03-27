@@ -909,18 +909,13 @@ def test_01():
 
 
 def demo_00():
-    from einstein import get_einstein_model
-    from .styles import testsheet
-    model = get_einstein_model()
+    from .document import Document
 
-    model.set_properties(0, 15, color='red')
-    model.set_parproperties(0, 1000, paragraph_type='list')
     app   = wx.App(redirect=True)
     frame = wx.Frame(None)
-    view  = DocumentView(frame, -1)
-    view.model = model
-    view.builder.device.zoom = 2
-    testsheet.add_view(view)
+    doc   = Document()
+    doc.textmodel.insert_text(0, "Hello, World!\n")
+    view  = DocumentView(frame, doc)
     frame.Show()
 
     if 1:

@@ -174,7 +174,7 @@ class Inspector(wx.Frame):
         wx.Frame.__init__(self, parent, *args, title='Format',
                           style=wx.DEFAULT_FRAME_STYLE|wx.FRAME_FLOAT_ON_PARENT
                           |wx.FRAME_TOOL_WINDOW, **kwds)
-        self.panel = InspectorPanel(self, view)
+        self.panel = InspectorPanel(self, view, view.document.basestyles)
         framesizer = wx.BoxSizer( wx.VERTICAL )
         framesizer.Add(self.panel, 1, wx.EXPAND, 0)
         self.SetSizer(framesizer)
