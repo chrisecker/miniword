@@ -5,6 +5,7 @@ from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
 from .image import Image
 from .image_panel import ImageInspector
+from .table_panel import TablePanel
 from .ui.sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
 
 
@@ -194,6 +195,8 @@ class MainFrame(wx.Frame, ViewBase):
             self._inspector_book, self.document)
         self.image_inspector = ImageInspector(
             self._inspector_book, self.textview)
+        self.table_panel = TablePanel(
+            self._inspector_book, self.textview)
 
         from .searchtool import SearchPanel
         self._search_panel = SearchPanel(self._inspector_book, self.textview)
@@ -202,6 +205,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("format",   self.inspector),
             ("settings", self.document_settings),
             ("image",    self.image_inspector),
+            ("table",    self.table_panel),
             ("search",   self._search_panel),
         ]:
             idx = self._inspector_book.GetPageCount()
@@ -215,6 +219,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("format",   "Aa", "Styles"),
             ("search",   "⌕",  "Search"),
             ("image",    "⬜",  "Image"),
+            ("table",    "⊞",  "Table"),
             ("settings", "≡",  "Settings"),
         ], self._on_panel_toggle)
 
