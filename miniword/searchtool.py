@@ -213,8 +213,9 @@ class SearchPanel(wx.Panel, ViewBase):
         self.search = Search(self.textmodel)
         self.set_model(self.search)
 
-        from .ui.sidepanel import BG_PANEL, COL_MUTED
+        from .ui.design import BAR_BG, TEXT_MUTED, muted_button, flat_button
 
+        self.SetBackgroundColour(BAR_BG)
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.AddSpacer(6)
 
@@ -222,28 +223,23 @@ class SearchPanel(wx.Panel, ViewBase):
         hdr = wx.StaticText(self, label="FIND & REPLACE")
         hdr.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
                             wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        hdr.SetForegroundColour(COL_MUTED)
+        hdr.SetForegroundColour(TEXT_MUTED)
         outer.Add(hdr, 0, wx.LEFT | wx.TOP, 8)
         outer.AddSpacer(3)
 
         # Search field + ▲▼ navigation
-        search_row = wx.Panel(self)
-        search_row.SetBackgroundColour(BG_PANEL)
         sr = wx.BoxSizer(wx.HORIZONTAL)
-        self.search_ctrl = wx.TextCtrl(search_row, style=wx.TE_PROCESS_ENTER,
+        self.search_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER,
                                        size=(-1, 24))
         self.search_ctrl.SetHint("Search…")
-        btn_prev = wx.Button(search_row, label="▲", size=(24, 24),
-                             style=wx.BORDER_NONE)
-        btn_next = wx.Button(search_row, label="▼", size=(24, 24),
-                             style=wx.BORDER_NONE)
-        btn_prev.SetBackgroundColour(BG_PANEL)
-        btn_next.SetBackgroundColour(BG_PANEL)
+        btn_prev = muted_button(self, "▲", size=(20, -1))
+        btn_next = muted_button(self, "▼", size=(20, -1))
+        btn_prev.SetMinSize((20, -1))
+        btn_next.SetMinSize((20, -1))
         sr.Add(self.search_ctrl, 1, wx.EXPAND)
-        sr.Add(btn_prev, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
-        sr.Add(btn_next, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 2)
-        search_row.SetSizer(sr)
-        outer.Add(search_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+        sr.Add(btn_prev, 0, wx.EXPAND | wx.LEFT, 2)
+        sr.Add(btn_next, 0, wx.EXPAND | wx.LEFT, 2)
+        outer.Add(sr, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
 
         # Replace field
         self.replace_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER,
@@ -252,41 +248,31 @@ class SearchPanel(wx.Panel, ViewBase):
         outer.Add(self.replace_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
 
         # Options: Aa (case), .* (regex), W (whole word)
-        opts_row = wx.Panel(self)
-        opts_row.SetBackgroundColour(BG_PANEL)
         os_ = wx.BoxSizer(wx.HORIZONTAL)
-        self.cb_case = wx.CheckBox(opts_row, label="Aa")
+        self.cb_case = wx.CheckBox(self, label="Aa")
         self.cb_case.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
                                      wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         self.cb_case.SetToolTip("Case sensitive")
-        self.cb_regex = wx.CheckBox(opts_row, label=".*")
+        self.cb_regex = wx.CheckBox(self, label=".*")
         self.cb_regex.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
                                       wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         self.cb_regex.SetToolTip("Regex")
-        self.cb_word = wx.CheckBox(opts_row, label="W")
+        self.cb_word = wx.CheckBox(self, label="W")
         self.cb_word.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
                                      wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         self.cb_word.SetToolTip("Whole word")
         os_.Add(self.cb_case,  0, wx.RIGHT, 10)
         os_.Add(self.cb_regex, 0, wx.RIGHT, 10)
         os_.Add(self.cb_word,  0)
-        opts_row.SetSizer(os_)
-        outer.Add(opts_row, 0, wx.LEFT | wx.TOP, 6)
+        outer.Add(os_, 0, wx.LEFT | wx.TOP, 6)
 
         # Replace buttons
-        btn_row = wx.Panel(self)
-        btn_row.SetBackgroundColour(BG_PANEL)
         brs = wx.BoxSizer(wx.HORIZONTAL)
-        btn_replace = wx.Button(btn_row, label="Replace",
-                                size=(-1, 24), style=wx.BORDER_NONE)
-        btn_all = wx.Button(btn_row, label="Replace All",
-                            size=(-1, 24), style=wx.BORDER_NONE)
-        btn_replace.SetBackgroundColour(wx.Colour(235, 235, 231))
-        btn_all.SetBackgroundColour(wx.Colour(235, 235, 231))
+        btn_replace = flat_button(self, "Replace",     size=(-1, 24))
+        btn_all     = flat_button(self, "Replace All", size=(-1, 24))
         brs.Add(btn_replace, 1, wx.RIGHT, 3)
         brs.Add(btn_all, 1)
-        btn_row.SetSizer(brs)
-        outer.Add(btn_row, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+        outer.Add(brs, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
 
         # Separator + count label as section header above results
         outer.AddSpacer(8)
@@ -295,7 +281,7 @@ class SearchPanel(wx.Panel, ViewBase):
         self.count_label = wx.StaticText(self, label="")
         self.count_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
                                          wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        self.count_label.SetForegroundColour(COL_MUTED)
+        self.count_label.SetForegroundColour(TEXT_MUTED)
         outer.Add(self.count_label, 0, wx.LEFT, 8)
         outer.AddSpacer(3)
 
