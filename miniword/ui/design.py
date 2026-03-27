@@ -4,6 +4,7 @@ from .flatbutton import FlatButton
 BAR_BG     = wx.Colour(245, 245, 245)
 BUTTON_BG  = wx.Colour(235, 235, 231)
 TEXT       = wx.Colour(38, 38, 36)
+TEXT_MUTED = wx.Colour(160, 160, 156)
 TEXT_HIGH  = wx.Colour(233, 84, 32, 255)
 
 
@@ -16,6 +17,16 @@ def flat_button(parent, label, size):
         'normal': (bg, TEXT),
         'hover':  (bg_hover, TEXT),
         'press':  (bg_hover, TEXT_HIGH)
+    }
+    return b
+
+def muted_button(parent, label, size):
+    b = FlatButton(parent, label, size)
+    bg = BAR_BG
+    b.colors = {
+        'normal': (bg, TEXT_MUTED),
+        'hover':  (bg, TEXT_HIGH),
+        'press':  (bg, TEXT_HIGH.ChangeLightness(150)),
     }
     return b
 

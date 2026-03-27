@@ -1,129 +1,137 @@
 import re
 import wx
 from wx.lib.newevent import NewEvent
+from .design import muted_button
 
 
 UnitChangedEvent, EVT_UNIT_CHANGED = NewEvent()
 
 
-UNIT_TO_PT = {
-    "pt": 1.0,
-    "mm": 72.0 / 25.4,
-    "cm": 72.0 / 2.54,
-    "inch": 72.0,
-    "in": 72.0,
-}
-
-UNIT_PATTERN = re.compile(
-    r"""
-    ^\s*
-    (?P<value>[+-]?\d+(?:\.\d+)?)
-    \s*
-    (?P<unit>pt|mm|cm|inch|in)?
-    \s*$
-    """,
-    re.VERBOSE | re.IGNORECASE
-)
-
-
-def parse_measure(text, default_unit="pt"):
-    m = UNIT_PATTERN.match(text)
+def _parse(text, units, display_unit):
+    """Parse 'value [unit]' string. Returns canonical value or raises ValueError."""
+    m = re.match(r'^([+-]?\d+(?:\.\d+)?)\s*(\S+)?$', text.strip())
     if not m:
-        raise ValueError("Ungültiges Maß")
-    value = float(m.group("value"))
-    unit = (m.group("unit") or default_unit).lower()
-    return value * UNIT_TO_PT[unit]
+        raise ValueError
+    unit = (m.group(2) or display_unit).lower()
+    if unit not in units:
+        raise ValueError(f"Unknown unit: {unit!r}")
+    return float(m.group(1)) * units[unit]
 
 
 class UnitInput(wx.Panel):
-    _last_pt = None
-    def __init__(self, parent, default_unit="mm"):
+    """Base class for unit-aware spin inputs.
+
+    Subclasses define:
+        units        — {unit_name: factor}  where canonical = display_value * factor.
+                       The internal (canonical) unit has factor 1.0 implicitly.
+        display_unit — preferred display unit; user-changeable in the future.
+
+    SetValue/GetValue and event.value are always in canonical units.
+    """
+    units = {}
+    display_unit = ""
+
+    def __init__(self, parent, display_unit=None):
         super().__init__(parent)
+        if display_unit is not None:
+            self.display_unit = display_unit
+        self._last = None
 
-        self.default_unit = default_unit
+        self.text = wx.TextCtrl(self, value=f"10 {self.display_unit}",
+                                style=wx.TE_PROCESS_ENTER | wx.TE_RIGHT)
+        btn_up = muted_button(self, "▲", size=(14, -1))
+        btn_dn = muted_button(self, "▼", size=(14, -1))
+        btn_up.SetMinSize((14, -1))
+        btn_dn.SetMinSize((14, -1))
 
-        self.text = wx.TextCtrl(self, value=f"10 {default_unit}",
-                                style=wx.TE_PROCESS_ENTER)
-        self.spin = wx.SpinButton(self, style=wx.SP_VERTICAL)
-
-        self.spin.SetRange(-100000, 100000)
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        btn_sizer.Add(btn_up, 0, wx.EXPAND|wx.LEFT, 5)
+        btn_sizer.Add(btn_dn, 0, wx.EXPAND)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.text, 1, wx.EXPAND)
-        sizer.Add(self.spin, 0)
+        sizer.Add(btn_sizer, 0, wx.EXPAND)
         self.SetSizer(sizer)
 
-        self.spin.Bind(wx.EVT_SPIN_UP, self.on_up)
-        self.spin.Bind(wx.EVT_SPIN_DOWN, self.on_down)
+        btn_up.Bind(wx.EVT_BUTTON, self._on_up)
+        btn_dn.Bind(wx.EVT_BUTTON, self._on_down)
+        self.text.Bind(wx.EVT_TEXT_ENTER, self._on_commit)
+        self.text.Bind(wx.EVT_KILL_FOCUS,  self._on_commit)
 
-        self.text.Bind(wx.EVT_TEXT_ENTER, self.on_commit)
-        self.text.Bind(wx.EVT_KILL_FOCUS, self.on_commit)
+    def _parse(self, text):
+        return _parse(text, self.units, self.display_unit)
 
-    def commit(self):
+    def _format(self, canonical):
+        factor = self.units[self.display_unit]
+        return f"{canonical / factor:g} {self.display_unit}"
+
+    def _commit(self):
         text = self.text.GetValue()
         if not text:
             return
         try:
-            pt = parse_measure(text, self.default_unit)
+            v = self._parse(text)
         except ValueError:
             wx.Bell()
+            return
+        if v != self._last:
+            self._last = v
+            wx.PostEvent(self, UnitChangedEvent(value=v, text=text, source=self))
 
-        if pt != self._last_pt:
-            self._last_pt = pt
-            evt = UnitChangedEvent(
-                value_pt=pt,
-                text=text,
-                source=self
-            )
-            wx.PostEvent(self, evt)
-            self._last_pt = pt
-
-    def on_commit(self, event):
-        self.commit()
+    def _on_commit(self, event):
+        self._commit()
         event.Skip()
 
-    def on_up(self, event):
+    def _on_up(self, event):
         self._change_value(+1)
 
-    def on_down(self, event):
+    def _on_down(self, event):
         self._change_value(-1)
 
     def _change_value(self, delta):
         text = self.text.GetValue().strip()
-        if not text:
-            pt = 0
-        else:
-            try:
-                pt = parse_measure(text, self.default_unit)
-            except ValueError:
-                return
-
-        factor = UNIT_TO_PT[self.default_unit]
-        value = pt / factor + delta
-
-        self.text.SetValue(f"{value:g} {self.default_unit}")
-        self.commit()
+        factor = self.units[self.display_unit]
+        try:
+            canonical = self._parse(text) if text else 0.0
+        except ValueError:
+            return
+        canonical += delta * factor
+        self.text.SetValue(self._format(canonical))
+        self._commit()
 
     def SetValue(self, value):
         if value is None:
             self.text.SetValue("")
-            self._last_pt = None
+            self._last = None
             return
-        factor = UNIT_TO_PT[self.default_unit]
-        self._last_pt = value
-        self.text.SetValue(f"{value / factor:g} {self.default_unit}")
+        self._last = value
+        self.text.SetValue(self._format(value))
 
     def GetValue(self):
-        return self._last_pt
+        return self._last
+
+
+class LengthInput(UnitInput):
+    """UnitInput for physical lengths. Canonical unit: pt (factor 1.0)."""
+    units = {"pt": 1.0, "mm": 72.0 / 25.4, "cm": 72.0 / 2.54, "inch": 72.0, "in": 72.0}
+    display_unit = "mm"
+
+
+class FractionInput(UnitInput):
+    """UnitInput for ratios expressed as percent. Canonical unit: ratio (1.0 = 100%)."""
+    units = {"%": 0.01}
+    display_unit = "%"
 
 
 def demo_00():
-    app = wx.App(redirect=False)
-    frame = wx.Frame(None, title="Unit Input")
+    app = wx.App()
+    frame = wx.Frame(None, title="UnitInput Demo", size=(300, 120))
     panel = wx.Panel(frame)
-    unit_input = UnitInput(panel, default_unit="mm")
+    length = LengthInput(panel, display_unit="mm")
+    fraction = FractionInput(panel)
     sizer = wx.BoxSizer(wx.VERTICAL)
-    sizer.Add(unit_input, 0, wx.ALL | wx.EXPAND, 10)
+    sizer.Add(length,   0, wx.ALL | wx.EXPAND, 10)
+    sizer.Add(fraction, 0, wx.ALL | wx.EXPAND, 10)
     panel.SetSizer(sizer)
     frame.Show()
     app.MainLoop()

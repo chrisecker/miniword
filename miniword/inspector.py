@@ -2,6 +2,7 @@
 
 
 import wx
+from .ui.design import BAR_BG
 from .textmodel.textmodel import TextModel
 from .textmodel.viewbase import ViewBase
 from .textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
@@ -10,7 +11,7 @@ from .textmodel.iterators import iter_newlines
 from .textmodel.styles import create_style, updated_style
 from .wxtextview.wxdevice import defaultstyle
 
-from .ui.unitentry import UnitInput, EVT_UNIT_CHANGED
+from .ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from .ui.threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
 from .ui.buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
 from .styles import defaultbullets, n_levels, style_default
@@ -191,6 +192,7 @@ class InspectorPanel(wx.Panel, ViewBase):
     def __init__(self, parent, view, basestyles, *args, **kwds):
         ViewBase.__init__(self)
         wx.Panel.__init__(self, parent, *args, **kwds)
+        self.SetBackgroundColour(BAR_BG)
         self.basestyles = basestyles
         
         mainsizer = wx.BoxSizer( wx.VERTICAL )
@@ -290,7 +292,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         panel = self.panel = wx.Panel(notebook)
         panelsizer = wx.BoxSizer(wx.VERTICAL)        
         notebook.AddPage(panel, 'Layout')
-        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        panel.SetBackgroundColour(BAR_BG)
         contentsizer = wx.BoxSizer(wx.VERTICAL)
 
         add_section("Alignment", panel, contentsizer)
@@ -306,7 +308,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         label = wx.StaticText(panel, label='Before paragraph')
         add_row(contentsizer, label)
         
-        self.space_before = UnitInput(panel, 'mm')
+        self.space_before = LengthInput(panel, 'mm')
         self.reset_space_before = ResetButton(panel, ['space_before'])
         add_row(contentsizer, (0,0), self.space_before, self.reset_space_before)
         self.space_before.Bind(EVT_UNIT_CHANGED, self.on_space_before)
@@ -314,7 +316,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         # - Abstand nach Absatz
         label = wx.StaticText(panel, label='After paragraph')
         add_row(contentsizer, label)
-        self.space_after = UnitInput(panel, 'mm')
+        self.space_after = LengthInput(panel, 'mm')
         self.reset_space_after = ResetButton(panel, ['space_after'])
         add_row(contentsizer, (0,0), self.space_after, self.reset_space_after)
         self.space_after.Bind(EVT_UNIT_CHANGED, self.on_space_after)
@@ -322,9 +324,8 @@ class InspectorPanel(wx.Panel, ViewBase):
         # - Zeilenabstand einfach, mehrfach, exakt, Mindestzeilenhöhe (optional)
         label = wx.StaticText(panel, label='Between lines')
         add_row(contentsizer, label)
-        self.line_spacing = SpinCtrl3(
-            panel, min=1.0, max=10.0, inc=0.1, initial=1.0, digits=1)
-        self.line_spacing.Bind(EVT_SPIN_VALUE, self.on_line_spacing)
+        self.line_spacing = FractionInput(panel)
+        self.line_spacing.Bind(EVT_UNIT_CHANGED, self.on_line_spacing)
         self.reset_line_spacing = ResetButton(panel, ['line_spacing'])
         add_row(contentsizer, (0,0), self.line_spacing, self.reset_line_spacing)
 
@@ -332,7 +333,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         
         label = wx.StaticText(panel, label='First line')
         add_row(contentsizer, label)
-        self.indent_first = UnitInput(panel, 'mm')
+        self.indent_first = LengthInput(panel, 'mm')
         self.reset_first = ResetButton(panel, ['first_line_indent'])
         add_row(contentsizer, (0,0), self.indent_first, self.reset_first)
         self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
@@ -349,7 +350,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         panel = self.panel = wx.Panel(notebook)
         panelsizer = wx.BoxSizer(wx.VERTICAL)        
         notebook.AddPage(panel, 'Structure')
-        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        panel.SetBackgroundColour(BAR_BG)
         contentsizer = wx.BoxSizer(wx.VERTICAL)
         # ...
         add_section("Indentation", panel, contentsizer)
@@ -370,7 +371,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         add_row(contentsizer, label, self.policy, self.reset_policy)
         
         label = wx.StaticText(panel, label='Indentation')
-        self.indent_position = UnitInput(panel, 'mm')
+        self.indent_position = LengthInput(panel, 'mm')
         self.reset_indent = ResetButton(panel, ['indent_levels'])
         self.indent_position.Bind(EVT_UNIT_CHANGED, self.on_indent_position)
         add_row(contentsizer, label, self.indent_position, self.reset_indent)
@@ -389,7 +390,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         add_section("Marker options", spanel, spanelsizer)
         
         label = wx.StaticText(spanel, label="Offset")
-        self.marker_pos = UnitInput(spanel, 'mm')
+        self.marker_pos = LengthInput(spanel, 'mm')
         self.reset_marker_pos = ResetButton(spanel, ['marker_pos'])
         self.marker_pos.Bind(EVT_UNIT_CHANGED, self.on_marker_pos)        
         add_row(spanelsizer, label, self.marker_pos, self.reset_marker_pos)
@@ -462,7 +463,7 @@ class InspectorPanel(wx.Panel, ViewBase):
         panel = self.panel = wx.Panel(notebook)
         panelsizer = wx.BoxSizer(wx.VERTICAL)
         notebook.AddPage(panel, 'Other')
-        panel.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        panel.SetBackgroundColour(BAR_BG)
         contentsizer = wx.BoxSizer(wx.VERTICAL)
 
         self.page_break_before = wx.CheckBox(panel, -1, "Page break before",
@@ -575,26 +576,25 @@ class InspectorPanel(wx.Panel, ViewBase):
         self.set_list_value('marker_size', value)
                                 
     def on_marker_pos(self, event):
-        self.set_list_value('marker_pos', event.value_pt)
+        self.set_list_value('marker_pos', event.value)
         
     def on_indent_position(self, event):
-        self.set_list_value('indent_levels', event.value_pt)
+        self.set_list_value('indent_levels', event.value)
 
     def on_indent_first(self, event):
-        value = event.value_pt
+        value = event.value
         self.set_parproperties(first_line_indent=value)
 
     def on_space_before(self, event):
-        value = event.value_pt
+        value = event.value
         self.set_parproperties(space_before=value)
 
     def on_space_after(self, event):
-        value = event.value_pt
+        value = event.value
         self.set_parproperties(space_after=value)
 
     def on_line_spacing(self, event):
-        value = event.Value
-        self.set_parproperties(line_spacing=value)
+        self.set_parproperties(line_spacing=event.value)
 
     def _on_show(self, event):
         event.Skip()

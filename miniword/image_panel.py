@@ -4,7 +4,7 @@ from .image import Image
 from .image_editors import ImageCropEditor
 from .textmodel.texeltree import grouped
 from .textmodel.viewbase import ViewBase
-from .ui.unitentry import UnitInput, EVT_UNIT_CHANGED
+from .ui.unitentry import LengthInput, EVT_UNIT_CHANGED
 
 
 class ImageInspector(wx.Panel, ViewBase):
@@ -54,10 +54,10 @@ class ImageInspector(wx.Panel, ViewBase):
 
         grid.Add(wx.StaticText(self, label="Size"),
                  0, wx.ALIGN_CENTER_VERTICAL)
-        self.txt_size_x = UnitInput(self, default_unit="mm")
+        self.txt_size_x = LengthInput(self, display_unit="mm")
         self.txt_size_x.Bind(EVT_UNIT_CHANGED, self._on_size)
         grid.Add(self.txt_size_x, 0, wx.EXPAND)
-        self.txt_size_y = UnitInput(self, default_unit="mm")
+        self.txt_size_y = LengthInput(self, display_unit="mm")
         self.txt_size_y.Bind(EVT_UNIT_CHANGED, self._on_size)
         grid.Add(self.txt_size_y, 0, wx.EXPAND)
 
