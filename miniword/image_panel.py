@@ -1,33 +1,27 @@
 import os
 import wx
 from .image import Image
+from .image_editors import ImageCropEditor
+from .textmodel.texeltree import grouped
+from .textmodel.viewbase import ViewBase
 from .ui.unitentry import UnitInput, EVT_UNIT_CHANGED
 
 
-class ImageInspector(wx.Panel):
+class ImageInspector(wx.Panel, ViewBase):
     """Image Tool: insert new images and inspect/edit existing ones.
 
     Top section (always active):   insert a new image from a file.
     Bottom section (active only when cursor is on an Image texel):
         replace, resize, and crop the image.
 
-    The owner must:
-    - set inspector.blobs = doc.blobs (mutable dict shared with the document)
-    - call refresh(image, index, box) when cursor moves onto an Image texel
-    - call clear() when cursor leaves an Image texel
-    - provide on_insert(blob_id) to insert a new Image texel at cursor
-    - provide view (DocumentView) so the inspector can apply edits directly
-    - provide on_crop_edit(index) to open the crop editor
+    Registers itself on the DocumentView to receive editor_changed signals.
     """
 
-    blobs = {}   # set externally: inspector.blobs = doc.blobs
-
-    def __init__(self, parent, on_insert, view, on_crop_edit=None, on_crop_dismiss=None):
+    def __init__(self, parent, view):
         wx.Panel.__init__(self, parent)
-        self.on_insert      = on_insert
-        self._view          = view
-        self.on_crop_edit   = on_crop_edit
-        self.on_crop_dismiss = on_crop_dismiss
+        ViewBase.__init__(self)
+        self._view = view
+        self.add_model(view)
         self._index        = None
         self._blob_id      = None
         self._current_crop = None
@@ -187,17 +181,19 @@ class ImageInspector(wx.Panel):
     def _on_proportional(self, event):
         self._notify()
 
-    def set_crop_active(self, active):
-        """Sync toggle button state with the active editor (called from outside)."""
-        self.btn_crop.SetValue(active)
+    def editor_changed(self, view, editor):
+        if editor is not None and isinstance(editor.texel, Image):
+            self.refresh(editor.texel, editor.index, getattr(editor, 'box', None))
+        else:
+            self.clear()
+        self.btn_crop.SetValue(isinstance(editor, ImageCropEditor))
 
     def _on_crop_toggle(self, event):
         if self.btn_crop.GetValue():
-            if self.on_crop_edit and self._index is not None:
-                self.on_crop_edit(self._index)
+            if self._index is not None:
+                self._view.install_editor(ImageCropEditor(), self._index)
         else:
-            if self.on_crop_dismiss:
-                self.on_crop_dismiss()
+            self._view.remove_editor()
 
     def _on_unset_crop(self, event):
         if self._index is None:
@@ -219,7 +215,7 @@ class ImageInspector(wx.Panel):
         blob_id = os.path.basename(path)
         base, ext = os.path.splitext(blob_id)
         n = 1
-        while blob_id in self.blobs:
+        while blob_id in self._view.document.blobs:
             blob_id = '%s_%d%s' % (base, n, ext)
             n += 1
         with open(path, 'rb') as f:
@@ -230,8 +226,16 @@ class ImageInspector(wx.Panel):
         blob_id, data = self._load_image_file()
         if blob_id is None:
             return
-        self.blobs[blob_id] = data
-        self.on_insert(blob_id)
+        self._view.document.blobs[blob_id] = data
+        index = self._view.index
+        scale = 1.0
+        load_image = getattr(self._view.builder.device, 'load_image', None)
+        if load_image:
+            _, src_w, _ = load_image(data)
+            avail_w = self._view.get_rowwidth(index)
+            if src_w > 0 and avail_w and src_w > avail_w:
+                scale = avail_w / src_w
+        self._view.insert_texel(index, grouped([Image(blob_id, scale)]))
 
     def _on_replace(self, event):
         if self._index is None:
@@ -239,6 +243,38 @@ class ImageInspector(wx.Panel):
         blob_id, data = self._load_image_file()
         if blob_id is None:
             return
-        self.blobs[blob_id] = data
+        self._view.document.blobs[blob_id] = data
         self._blob_id = blob_id
         self._notify()
+
+
+def demo_00():
+    """Show ImageInspector with a simulated active image selection."""
+    app = wx.App()
+    frame = wx.Frame(None, title="ImageInspector Demo", size=(260, 400))
+
+    class _FakeDoc:
+        blobs = {}
+
+    class _FakeView:
+        index    = 0
+        document = _FakeDoc()
+        def add_view(self, v): pass
+        def set_texel_attributes(self, *a, **kw): pass
+        def get_rowwidth(self, i): return 400
+        def insert_texel(self, i, t): pass
+        def install_editor(self, e, i): pass
+        def remove_editor(self): pass
+
+    panel = ImageInspector(frame, view=_FakeView())
+
+    # Simulate cursor on an image texel
+    img = Image("photo.jpg", scale_x=1.5, scale_y=1.5)
+    panel.refresh(img, index=5)
+
+    frame.Show()
+    app.MainLoop()
+
+
+if __name__ == '__main__':
+    demo_00()

@@ -193,10 +193,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.document_settings = SettingsInspector(
             self._inspector_book, self.document)
         self.image_inspector = ImageInspector(
-            self._inspector_book, self._on_image_insert, self.textview,
-            on_crop_edit=self._on_crop_edit,
-            on_crop_dismiss=self._on_crop_dismiss)
-        self.image_inspector.blobs = self.document.blobs
+            self._inspector_book, self.textview)
 
         from .searchtool import SearchPanel
         self._search_panel = SearchPanel(self._inspector_book, self.textview)
@@ -536,38 +533,6 @@ class MainFrame(wx.Frame, ViewBase):
     def image_dblclick(self, view, index):
         self.show_right_panel("image")
 
-    def editor_changed(self, view, editor):
-        from .image_editors import ImageCropEditor
-        if editor is not None and isinstance(editor.texel, Image):
-            box = getattr(editor, 'box', None)
-            self.image_inspector.refresh(editor.texel, editor.index, box)
-        else:
-            self.image_inspector.clear()
-        self.image_inspector.set_crop_active(isinstance(editor, ImageCropEditor))
-
-    def _on_image_insert(self, blob_id):
-        from .textmodel.texeltree import grouped
-        model = self.textview.model
-        index = self.textview.index
-        scale = 1.0
-        blob = self.document.blobs.get(blob_id)
-        load_image = getattr(self.textview.builder.device, 'load_image', None)
-        if blob and load_image:
-            _, src_w, src_h = load_image(blob)
-            avail_w = self.textview.get_rowwidth(index)
-            if src_w > 0 and avail_w and src_w > avail_w:
-                scale = avail_w / src_w
-        img = Image(blob_id, scale)
-        tmp = model.create_textmodel()
-        tmp.texel = grouped([img])
-        self.textview.insert(index, tmp)
-
-    def _on_crop_edit(self, index):
-        from .image_editors import ImageCropEditor
-        self.textview.install_editor(ImageCropEditor(), index)
-
-    def _on_crop_dismiss(self):
-        self.textview.remove_editor()
 
 
     def layout_progress_start(self, view):
