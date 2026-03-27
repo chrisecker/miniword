@@ -4,7 +4,9 @@ from .image import Image
 from .image_editors import ImageCropEditor
 from .textmodel.texeltree import grouped
 from .textmodel.viewbase import ViewBase
-from .ui.unitentry import LengthInput, EVT_UNIT_CHANGED
+from .ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
+from .ui.design import BAR_BG, TEXT_MUTED, flat_button, muted_button
+from .inspector import add_section, add_row
 
 
 class ImageInspector(wx.Panel, ViewBase):
@@ -20,6 +22,7 @@ class ImageInspector(wx.Panel, ViewBase):
     def __init__(self, parent, view):
         wx.Panel.__init__(self, parent)
         ViewBase.__init__(self)
+        self.SetBackgroundColour(BAR_BG)
         self._view = view
         self.add_model(view)
         self._index        = None
@@ -28,72 +31,74 @@ class ImageInspector(wx.Panel, ViewBase):
         self._natural_w    = 1.0
         self._natural_h    = 1.0
         self._updating     = False
-
-        M = 5   # margin
+        self._crop_active  = False
 
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        # --- Insert (always active) ---
-        btn_insert = wx.Button(self, label="Insert Image\u2026")
-        btn_insert.Bind(wx.EVT_BUTTON, self._on_insert)
-        sizer.Add(btn_insert, 0, wx.ALL | wx.EXPAND, M)
+        # --- Header ---
+        hdr = wx.StaticText(self, label="IMAGE")
+        hdr.SetForegroundColour(TEXT_MUTED)
+        sizer.Add(hdr, 0, wx.LEFT | wx.TOP, 10)
 
-        sizer.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, M)
+        # --- Insert (always active) ---
+        add_section("Insert", self, sizer)
+        btn_insert = flat_button(self, "Insert Image\u2026", size=(-1, 28))
+        btn_insert.Bind(wx.EVT_BUTTON, self._on_insert)
+        sizer.Add(btn_insert, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
         # --- Replace ---
-        self.btn_replace = wx.Button(self, label="Replace Image\u2026")
+        self.btn_replace = flat_button(self, "Replace Image\u2026", size=(-1, 28))
         self.btn_replace.Bind(wx.EVT_BUTTON, self._on_replace)
-        sizer.Add(self.btn_replace, 0, wx.ALL | wx.EXPAND, M)
+        sizer.Add(self.btn_replace, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        sizer.AddSpacer(4)
+        # --- Size ---
+        add_section("Size", self, sizer)
 
-        # --- Size / Scale grid ---
-        grid = wx.FlexGridSizer(rows=2, cols=3, hgap=4, vgap=4)
-        grid.AddGrowableCol(1)
-        grid.AddGrowableCol(2)
-
-        grid.Add(wx.StaticText(self, label="Size"),
-                 0, wx.ALIGN_CENTER_VERTICAL)
         self.txt_size_x = LengthInput(self, display_unit="mm")
         self.txt_size_x.Bind(EVT_UNIT_CHANGED, self._on_size)
-        grid.Add(self.txt_size_x, 0, wx.EXPAND)
+        btn_reset_w = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_w.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_x())
+        add_row(sizer, wx.StaticText(self, label="Width"), self.txt_size_x, btn_reset_w)
+
         self.txt_size_y = LengthInput(self, display_unit="mm")
         self.txt_size_y.Bind(EVT_UNIT_CHANGED, self._on_size)
-        grid.Add(self.txt_size_y, 0, wx.EXPAND)
-
-        grid.Add(wx.StaticText(self, label="Scale"),
-                 0, wx.ALIGN_CENTER_VERTICAL)
-        self.txt_scale_x = wx.TextCtrl(self, value="1.0",
-                                       style=wx.TE_PROCESS_ENTER)
-        self.txt_scale_x.Bind(wx.EVT_TEXT_ENTER, self._on_scale)
-        self.txt_scale_x.Bind(wx.EVT_KILL_FOCUS,  self._on_scale)
-        grid.Add(self.txt_scale_x, 0, wx.EXPAND)
-        self.txt_scale_y = wx.TextCtrl(self, value="1.0",
-                                       style=wx.TE_PROCESS_ENTER)
-        self.txt_scale_y.Bind(wx.EVT_TEXT_ENTER, self._on_scale)
-        self.txt_scale_y.Bind(wx.EVT_KILL_FOCUS,  self._on_scale)
-        grid.Add(self.txt_scale_y, 0, wx.EXPAND)
-
-        sizer.Add(grid, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, M)
-
-        sizer.AddSpacer(4)
+        btn_reset_h = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_h.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_y())
+        add_row(sizer, wx.StaticText(self, label="Height"), self.txt_size_y, btn_reset_h)
 
         self.chk_proportional = wx.CheckBox(self, label="Proportional")
         self.chk_proportional.Bind(wx.EVT_CHECKBOX, self._on_proportional)
-        sizer.Add(self.chk_proportional, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, M)
+        sizer.Add(self.chk_proportional, 0, wx.LEFT | wx.TOP, 28)
 
-        sizer.AddSpacer(4)
+        # --- Scale ---
+        add_section("Scale", self, sizer)
+
+        self.txt_scale_x = FractionInput(self)
+        self.txt_scale_x.Bind(EVT_UNIT_CHANGED, self._on_scale)
+        btn_reset_sx = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_sx.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_x())
+        add_row(sizer, wx.StaticText(self, label="X"), self.txt_scale_x, btn_reset_sx)
+
+        self.txt_scale_y = FractionInput(self)
+        self.txt_scale_y.Bind(EVT_UNIT_CHANGED, self._on_scale)
+        btn_reset_sy = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_sy.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_y())
+        add_row(sizer, wx.StaticText(self, label="Y"), self.txt_scale_y, btn_reset_sy)
 
         # --- Crop ---
-        self.btn_crop = wx.ToggleButton(self, label="Crop")
-        self.btn_crop.Bind(wx.EVT_TOGGLEBUTTON, self._on_crop_toggle)
-        sizer.Add(self.btn_crop, 0, wx.ALL | wx.EXPAND, M)
+        add_section("Crop", self, sizer)
 
-        self.btn_unset_crop = wx.Button(self, label="Unset Crop")
+        self.btn_crop = flat_button(self, "Edit Crop", size=(-1, 28))
+        self.btn_crop.Bind(wx.EVT_BUTTON, self._on_crop_toggle)
+        sizer.Add(self.btn_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+
+        self.btn_unset_crop = flat_button(self, "Unset Crop", size=(-1, 28))
         self.btn_unset_crop.Bind(wx.EVT_BUTTON, self._on_unset_crop)
-        sizer.Add(self.btn_unset_crop, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, M)
+        sizer.Add(self.btn_unset_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        self.SetSizer(sizer)
+        padded = wx.BoxSizer(wx.VERTICAL)
+        padded.Add(sizer, 1, wx.EXPAND | wx.ALL, 8)
+        self.SetSizer(padded)
         self._set_inspector_enabled(False)
 
     # ------------------------------------------------------------------
@@ -101,7 +106,7 @@ class ImageInspector(wx.Panel, ViewBase):
     def _set_inspector_enabled(self, enabled, has_crop=False):
         for w in (self.btn_replace, self.txt_size_x, self.txt_size_y,
                   self.txt_scale_x, self.txt_scale_y,
-                  self.chk_proportional, self.btn_crop):
+                  self.chk_proportional, self.btn_crop, self.btn_unset_crop):
             w.Enable(enabled)
         self.btn_unset_crop.Enable(enabled and has_crop)
 
@@ -116,8 +121,8 @@ class ImageInspector(wx.Panel, ViewBase):
             self._natural_h = box.height / (image.scale_y or 1.0)
         self.txt_size_x.SetValue(self._natural_w * image.scale_x)
         self.txt_size_y.SetValue(self._natural_h * image.scale_y)
-        self.txt_scale_x.SetValue(f'{image.scale_x:g}')
-        self.txt_scale_y.SetValue(f'{image.scale_y:g}')
+        self.txt_scale_x.SetValue(image.scale_x)
+        self.txt_scale_y.SetValue(image.scale_y)
         self.chk_proportional.SetValue(image.proportional)
         self._set_inspector_enabled(True, has_crop=image.crop is not None)
         self._updating = False
@@ -133,14 +138,8 @@ class ImageInspector(wx.Panel, ViewBase):
     def _notify(self):
         if self._updating or self._index is None:
             return
-        try:
-            scale_x = float(self.txt_scale_x.GetValue())
-        except ValueError:
-            scale_x = 1.0
-        try:
-            scale_y = float(self.txt_scale_y.GetValue())
-        except ValueError:
-            scale_y = 1.0
+        scale_x = self.txt_scale_x.GetValue() or 1.0
+        scale_y = self.txt_scale_y.GetValue() or 1.0
         self._view.set_texel_attributes(
             self._index, Image,
             blob_id=self._blob_id, scale_x=scale_x, scale_y=scale_y,
@@ -157,26 +156,41 @@ class ImageInspector(wx.Panel, ViewBase):
         scale_x = sx_pt / self._natural_w if self._natural_w else 1.0
         scale_y = sy_pt / self._natural_h if self._natural_h else 1.0
         self._updating = True
-        self.txt_scale_x.SetValue(f'{scale_x:g}')
-        self.txt_scale_y.SetValue(f'{scale_y:g}')
+        self.txt_scale_x.SetValue(scale_x)
+        self.txt_scale_y.SetValue(scale_y)
         self._updating = False
         self._notify()
 
     def _on_scale(self, event):
         if self._updating or self._index is None:
             return
-        try:
-            scale_x = float(self.txt_scale_x.GetValue())
-            scale_y = float(self.txt_scale_y.GetValue())
-        except ValueError:
-            event.Skip()
+        scale_x = self.txt_scale_x.GetValue()
+        scale_y = self.txt_scale_y.GetValue()
+        if scale_x is None or scale_y is None:
             return
         self._updating = True
         self.txt_size_x.SetValue(scale_x * self._natural_w)
         self.txt_size_y.SetValue(scale_y * self._natural_h)
         self._updating = False
         self._notify()
-        event.Skip()
+
+    def _reset_size_x(self):
+        if self._natural_w:
+            self.txt_size_x.SetValue(self._natural_w)
+            self._on_size(None)
+
+    def _reset_size_y(self):
+        if self._natural_h:
+            self.txt_size_y.SetValue(self._natural_h)
+            self._on_size(None)
+
+    def _reset_scale_x(self):
+        self.txt_scale_x.SetValue(1.0)
+        self._on_scale(None)
+
+    def _reset_scale_y(self):
+        self.txt_scale_y.SetValue(1.0)
+        self._on_scale(None)
 
     def _on_proportional(self, event):
         self._notify()
@@ -186,10 +200,10 @@ class ImageInspector(wx.Panel, ViewBase):
             self.refresh(editor.texel, editor.index, getattr(editor, 'box', None))
         else:
             self.clear()
-        self.btn_crop.SetValue(isinstance(editor, ImageCropEditor))
+        self._crop_active = isinstance(editor, ImageCropEditor)
 
     def _on_crop_toggle(self, event):
-        if self.btn_crop.GetValue():
+        if not self._crop_active:
             if self._index is not None:
                 self._view.install_editor(ImageCropEditor(), self._index)
         else:
