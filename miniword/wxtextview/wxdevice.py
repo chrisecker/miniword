@@ -168,8 +168,16 @@ class WxDevice:
         """
         brush = gc.CreateBrush(wx.Brush(wx.Colour(color)))
         gc.SetBrush(brush)
-        gc.SetPen(wx.TRANSPARENT_PEN)        
+        gc.SetPen(wx.TRANSPARENT_PEN)
         gc.DrawRectangle(x, y, w, h)
+
+    def draw_line(self, x1, y1, x2, y2, width, gc):
+        """
+        Draw a line from (x1,y1) to (x2,y2) with given width in PT coordinates.
+        """
+        pen = gc.CreatePen(wx.GraphicsPenInfo(wx.BLACK).Width(width))
+        gc.SetPen(pen)
+        gc.StrokeLine(x1, y1, x2, y2)
 
 
         

@@ -15,27 +15,18 @@ from .textmodel.texeltree import transform, iter_childs, grouped
 import wx
 
 
-def _transform_typed(texel, i, cls, fun):
-    """Walk the texel tree and apply fun to the ancestor of type cls at pos i."""
-    if isinstance(texel, cls):
-        return fun(texel)
+def transform_texel(texel, i, fun):
+    """Apply fun to the non-group texel at position i. Only Groups are walked;
+    singles, text, and containers are treated as atomic."""
     if texel.is_group:
         result = []
         for j1, j2, child in iter_childs(texel):
             if j1 <= i < j2:
-                result.append(_transform_typed(child, i - j1, cls, fun))
+                result.append(transform_texel(child, i - j1, fun))
             else:
                 result.append(child)
         return grouped(result)
-    if texel.is_container:
-        result = []
-        for j1, j2, child in iter_childs(texel):
-            if j1 <= i < j2:
-                result.append(_transform_typed(child, i - j1, cls, fun))
-            else:
-                result.append(child)
-        return texel.set_childs(result)
-    return texel
+    return fun(texel)
 
 
 class DocumentView(WXTextView):
@@ -151,7 +142,7 @@ class DocumentView(WXTextView):
             return texel
         model = self.model
         if cls is not None:
-            model.texel = _transform_typed(model.texel, i, cls, fun)
+            model.texel = transform_texel(model.texel, i, fun)
         else:
             model.texel = transform(model.texel, i, i+1, fun, True)
         model.notify_views('properties_changed', i, i+1)
@@ -601,7 +592,7 @@ class DocumentView(WXTextView):
         surface.finish()
 
     def iter_rows(self):
-        from .tables import TableBox, _TableNavRow
+        from .table_boxes import TableBox, TableNavRow as _TableNavRow
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
                 # Descend into TableBox: yield one nav entry per table row

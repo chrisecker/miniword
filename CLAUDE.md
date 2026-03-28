@@ -10,7 +10,7 @@ System Instructions / Guidelines
 
 * Case: Use snake_case (lowercase with underscores) for all variables and methods.
 * Pattern: Name functions and methods using the two part "verb_noun" pattern (e.g., get_data, render_tree).
-* Private: use _underscore for attributes and methods which should not be accessed from the outside. Avoid them otherwise.  
+* Private: Avoid _underscore - it is hard to read and ugle. It is only necessary, when direct access if dangerous.  
 
 3. Architecture & Constraints
 

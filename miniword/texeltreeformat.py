@@ -150,12 +150,53 @@ def _serialize_slot(content, slot_style, indent):
     return '%s[%s]' % (pad, ', '.join(parts))
 
 
+_CELL_ATTRS = ('border_left', 'border_right', 'border_top', 'border_bottom',
+               'cell_halign', 'cell_valign', 'cell_bgcolor')
+_CELL_DEFAULTS = {'border_left': 'thin', 'border_right': 'thin',
+                  'border_top': 'thin', 'border_bottom': 'thin',
+                  'cell_halign': None, 'cell_valign': 'top', 'cell_bgcolor': None}
+
+
+def _sep_slot_style(sep):
+    """Build slot_style dict from separator, including cell-style attrs."""
+    base = dict(sep.style) if hasattr(sep, 'style') and sep.style else {}
+    for attr in _CELL_ATTRS:
+        val = getattr(sep, attr, _CELL_DEFAULTS[attr])
+        if val != _CELL_DEFAULTS[attr]:
+            base[attr] = val
+    return base
+
+
 def serialize_container(texel, indent=0):
     """Serialize a Container with hidden separators."""
     pad = '  ' * indent
     inner = '  ' * (indent + 1)
 
     ctype = texel.__class__.__name__
+
+    # Table: each slot carries its own trailing separator's cell-style attrs.
+    # This avoids the "last sep lost" problem of the generic preceding-sep convention.
+    from .tables import Table as _Table
+    if isinstance(texel, _Table):
+        has_n_cols = True
+        ncols = texel.n_cols
+        props = {'ncols': ncols}
+        if getattr(texel, 'header_rows', 0) != 0:
+            props['header_rows'] = texel.header_rows
+        if getattr(texel, 'break_level', 1) != 1:
+            props['break_level'] = texel.break_level
+        if getattr(texel, 'col_widths', None) is not None:
+            props['col_widths'] = tuple(texel.col_widths)
+        cells = texel.childs[1::2]
+        lines = ['%sC("Table",' % pad, '%s%s,' % (inner, serialize_style(props))]
+        for i, cell in enumerate(cells):
+            trailing_sep = texel.childs[2 * i + 2]
+            slot_style = _sep_slot_style(trailing_sep)
+            is_last = (i == len(cells) - 1)
+            comma = '' if is_last else ','
+            lines.append(_serialize_slot(cell, slot_style, indent + 1) + comma)
+        lines.append('%s)' % pad)
+        return '\n'.join(lines)
 
     mutable = texel.get_mutability()
     slots = []
@@ -172,7 +213,6 @@ def serialize_container(texel, indent=0):
         return '%sC("%s")' % (pad, ctype)
 
     leading_sep_style = slots[0][0]
-    # For tables.Table use n_cols; for generic containers use _ncols
     has_n_cols = hasattr(texel, 'n_cols')
     ncols = texel.n_cols if has_n_cols else getattr(texel, '_ncols', 1)
     props = dict(leading_sep_style) if leading_sep_style else {}
@@ -186,7 +226,6 @@ def serialize_container(texel, indent=0):
     for i, (sep_s, content) in enumerate(slots):
         is_last = (i == len(slots) - 1)
         comma = '' if is_last else ','
-        # slot 0 has no trailing style (leading sep handled above)
         slot_style = sep_s if i > 0 else EMPTYSTYLE
         lines.append(_serialize_slot(content, slot_style, indent + 1) + comma)
 
@@ -452,8 +491,10 @@ class _Parser:
         # Optional property block: {ncols=N, style...}
         sep0_style = EMPTYSTYLE
         ncols = 1
+        has_ncols = False
         if self.tok.peek()[0] == 'LBRACE':
             d = self.parse_style()
+            has_ncols = 'ncols' in d
             ncols = d.pop('ncols', 1)
             sep0_style = as_style(d) if d else EMPTYSTYLE
             if self.tok.peek()[0] == 'COMMA':
@@ -481,8 +522,14 @@ class _Parser:
 
         self.tok.consume('RPAREN')
 
-        if ctype == 'Table' and not sep0_style:
-            from .tables import Table, TableSep
+        if ctype == 'Table' and has_ncols:
+            from .tables import Table, TableSep, TableNL, set_sep_attrs
+            from copy import copy
+            d = dict(sep0_style) if sep0_style else {}
+            header_rows = d.pop('header_rows', 0)
+            break_level = d.pop('break_level', 1)
+            col_widths = d.pop('col_widths', None)
+
             n_cells = len(slots)
             n_rows_val = (n_cells // ncols) if ncols else 0
             cells_2d = []
@@ -491,7 +538,28 @@ class _Parser:
                 for c in range(ncols):
                     row.append(slots[r * ncols + c][1])
                 cells_2d.append(row)
-            return Table(n_rows_val, ncols, cells_2d)
+            table = Table(n_rows_val, ncols, cells_2d)
+
+            # Apply table-level attrs
+            if header_rows:
+                table.header_rows = header_rows
+            if break_level != 1:
+                table.break_level = break_level
+            if col_widths is not None:
+                table.col_widths = list(col_widths)
+
+            # Each slot's style is the trailing sep of that cell (index 2*i+2).
+            childs = list(table.childs)
+            for i in range(n_cells):
+                slot_s = slots[i][0]
+                if slot_s:
+                    cell_attrs = {k: v for k, v in slot_s.items() if k in _CELL_ATTRS}
+                    if cell_attrs:
+                        sep_idx = 2 * i + 2  # trailing sep of cell i
+                        childs[sep_idx] = set_sep_attrs(childs[sep_idx], **cell_attrs)
+            table.childs = childs
+            table.compute_weights()
+            return table
 
         # Reconstruct childs: [SEP0, content0, SEP1, content1, ..., trailing_TAB]
         # SEP0.style = sep0_style
@@ -728,5 +796,25 @@ def test_07():
     assert 'BR' in out
     root2, _, _ = parse(out)
     assert get_text(root2) == 'line1\x0b\n'
+
+
+def test_08():
+    "Roundtrip: Table with cell attrs and header_rows"
+    from .tables import mk_table, set_table_borders, TableSep, TableNL
+    from .textmodel.texeltree import Group, get_text
+    table = mk_table([['A', 'B'], ['C', 'D']])
+    table = set_table_borders(table, 0, 0, 1, 1, border_left='none')
+    table.header_rows = 1
+    root = Group([table])
+    out = serialize(root)
+    assert 'header_rows=1' in out
+    assert 'border_left="none"' in out
+    root2, _, _ = parse(out)
+    t2 = list(_flatten(root2))[0]
+    assert t2.n_rows == 2
+    assert t2.n_cols == 2
+    assert t2.header_rows == 1
+    # sep at idx 2 (cell[0][0] → slot 1) should have border_left=none
+    assert getattr(t2.childs[2], 'border_left', 'thin') == 'none'
 
 

@@ -71,7 +71,7 @@ pixels.  Convert pixel constants with `px_value / self.view.zoom`.
 """
 
 import wx
-from .tables import TableBox
+from .table_boxes import TableBox
 from .textmodel.texeltree import iter_childs
 
 _HIT_RADIUS = 5   # hit detection radius in screen pixels

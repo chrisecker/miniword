@@ -242,19 +242,41 @@ Container (e.g. table). The property block and slots are all optional.
 - Each slot is enclosed in `[…]` and contains a sequence of elements.
 - The number of rows in a table is implicit from the slot count and `ncols`.
 
-```
-C("table", {ncols=2},
-  [T("Cell 1.1")],
-  [T("Cell 1.2")],
-  [T("Cell 2.1")],
-  [T("Cell 2.2")]
-)
+### `C("Table", …)` — Table cells
 
-C("table", {ncols=3, border=1},
-  [T("A")], [T("B")], [T("C")],
-  [T("D")], [T("E")], [T("F")]
+`Table` uses `C` with `ctype="Table"`. The container `{…}` block carries
+table-level parameters (`ncols`, `header_rows`, `break_level`, `col_widths`).
+Each slot corresponds to one cell; slots are ordered row by row.
+
+Every slot may carry an optional `{…}` block with **cell-style attributes**.
+This dict is the trailing separator of that cell — analogous to how `NL`
+carries the paragraph style of the text before it. The dict is omitted when
+all cell attributes are at their defaults.
+
+| Cell attribute  | Default  | Description                                      |
+| --------------- | -------- | ------------------------------------------------ |
+| `border_left`   | `"thin"` | Left border                                      |
+| `border_right`  | `"thin"` | Right border                                     |
+| `border_top`    | `"thin"` | Top border                                       |
+| `border_bottom` | `"thin"` | Bottom border                                    |
+| `cell_halign`   | `None`   | Horizontal alignment (`left`/`center`/`right`/`justify`); `None` = from paragraph style |
+| `cell_valign`   | `"top"`  | Vertical alignment (`top`/`middle`/`bottom`)     |
+| `cell_bgcolor`  | `None`   | Background colour; `None` = transparent          |
+
+Border values are strings: `"none"`, `"thin"`, `"thick"`, `"double"`.
+
+Example — 2×1 table, first cell with a thick bottom border:
+
+```
+C("Table",
+  {ncols=1},
+  [T("Hello"), {border_bottom="thick"}],
+  [T("World")]
 )
 ```
+
+At shared cell edges both neighbours may define the same border. The
+**right/bottom** cell takes precedence.
 
 ---
 

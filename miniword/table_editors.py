@@ -1,6 +1,7 @@
 import wx
 from .editorbase import Editor
-from .tables import Table, TableBox
+from .tables import Table
+from .table_boxes import TableBox
 
 _HIT_RADIUS = 5          # hit detection radius in screen pixels
 _CM         = 72.0 / 2.54  # 1 cm in pt
@@ -225,7 +226,6 @@ class TableEditor(Editor):
 
 def demo_00():
     """TableEditor demo: drag column separators to resize columns."""
-    import wx
     from .tables import mk_table
     from .document import Document
     from .documentview import DocumentView

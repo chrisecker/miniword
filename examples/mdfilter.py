@@ -236,8 +236,13 @@ def _insert_text_block(doc, ptype, indent, runs):
 
 def _insert_table_block(doc, grid):
     from miniword.tables import mk_table
+    from copy import copy
     tbl_model = doc.textmodel.create_textmodel()
-    tbl_model.texel = mk_table(grid)
+    table = mk_table(grid)
+    table = copy(table)
+    table.header_rows = 1
+    table.break_level = 1
+    tbl_model.texel = table
     pos = len(doc.textmodel.get_text())
     doc.textmodel.insert(pos, tbl_model)
     pos2 = len(doc.textmodel.get_text())

@@ -255,6 +255,13 @@ class CairoDevice:
         ctx.rectangle(x, y, w, h)
         ctx.fill()
 
+    def draw_line(self, x1, y1, x2, y2, width, ctx):
+        ctx.set_source_rgb(0, 0, 0)
+        ctx.set_line_width(width / self.zoom)
+        ctx.move_to(x1, y1)
+        ctx.line_to(x2, y2)
+        ctx.stroke()
+
     def draw_blinkingrect(self, x, y, w, h, ctx):
         elapsed = time.time() - self._blink_reference_time
         if not int(elapsed * 2) % 2:

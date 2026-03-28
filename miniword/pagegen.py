@@ -17,7 +17,7 @@ from .wxtextview.boxes import Box, VBox, TextBox, select_i_by_x, \
 from .wxtextview.testdevice import TESTDEVICE
 from .wxtextview.builder import BuilderBase
 from .wxtextview.boxes import get_text
-from .textmodel.texeltree import length, NewLine
+from .textmodel.texeltree import length, NewLine, EMPTYSTYLE
 from .wxtextview.linewrap import simple_linewrap
 from .units import mm, cm, pt
 from .styles import updated, n_levels
@@ -425,7 +425,7 @@ def split_at_breaks(boxlist):
 def split_at_tables(boxlist):
     """Split boxlist at TableBox boundaries.
     Each TableBox becomes its own single-element segment."""
-    from .tables import TableBox
+    from .table_boxes import TableBox
     segments, current = [], []
     for box in boxlist:
         if isinstance(box, TableBox):
@@ -497,7 +497,7 @@ def format_number(arr, level, style):
 
 def _place_table_fragments(tbox, draft, device, left=0):
     """Place a break_level>=1 TableBox as one or more fragments onto drafts."""
-    from .tables import TableBox
+    from .table_boxes import TableBox
     available   = draft.remaining_height()
     page_height = draft.available_height()
     header_h    = sum(tbox.row_heights[:tbox.header_rows])
@@ -526,10 +526,10 @@ def _place_table_fragments(tbox, draft, device, left=0):
                         break_level=0,
                         device=device,
                         is_continuation=not first)
-        frag._source    = tbox._source
-        frag._orig      = tbox
-        frag._base_offset = cum_offset
-        frag._orig_rows = frag_rows
+        frag.texel      = tbox.texel
+        frag.orig       = tbox
+        frag.base_offset = cum_offset
+        frag.orig_rows  = frag_rows
         frag.prev = prev_frag
         if prev_frag is not None:
             prev_frag.next = frag
@@ -554,7 +554,7 @@ def generate_boxes(texel, i, factory):
         # Iterating groups in reverse (the usual trick) is prevented
         # by the generator, so we set parstyle directly instead.
         nl = l[-1]
-        factory.markerstyle  = l[0].style
+        factory.markerstyle  = getattr(l[0], 'style', EMPTYSTYLE)
         factory.parstyle     = nl.parstyle
         fixed = factory.mk_style({}).get('fixed_indent')
         factory.indent_level = fixed if fixed is not None else nl.indent
@@ -613,7 +613,7 @@ def generate_pages(texel, i, restartmemo, factory):
         line_width_first = line_right - line_left_first
         line_width_rest  = line_right - line_left_rest
 
-        from .tables import TableBox as _TableBox
+        from .table_boxes import TableBox as _TableBox
         all_segments = split_at_tables(boxlist)
 
         has_longtable = any(

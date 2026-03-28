@@ -1,7 +1,14 @@
 import wx
 from wx.lib.newevent import NewEvent
+
 from .textmodel.viewbase import ViewBase
+from .textmodel.texeltree import iter_childs, length
 from .inspector import add_section
+from .ui.threestate import ColourButton
+from .icons import icon
+from .tables import Table, empty_table
+from .table_editors import _find_table_at
+from .documentview import transform_texel
 
 TableCreatedEvent, EVT_TABLE_CREATED = NewEvent()
 
@@ -240,6 +247,24 @@ class TableCreatorButton(wx.Button):
                 wx.PostEvent(self, TableCreatedEvent(cols=dlg.cols, rows=dlg.rows))
 
 
+# ---------------------------------------------------------------------------
+# Border preset definitions
+# ---------------------------------------------------------------------------
+
+_BORDER_PRESETS = [
+    ('border_none',    'none'),
+    ('border_all',     'all'),
+    ('border_outer',   'outer'),
+    ('border_inner',   'inner'),
+    ('border_inner_h', 'inner_h'),
+    ('border_inner_v', 'inner_v'),
+    ('border_left',    'left'),
+    ('border_right',   'right'),
+    ('border_top',     'top'),
+    ('border_bottom',  'bottom'),
+]
+
+
 class TablePanel(wx.Panel, ViewBase):
     """Inspector panel for inserting and editing tables."""
 
@@ -248,6 +273,8 @@ class TablePanel(wx.Panel, ViewBase):
         ViewBase.__init__(self)
         self.SetBackgroundColour(COL_BG)
         self._view = view
+        self._table_index = None
+        self._table_box = None
         self.add_model(view)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -256,10 +283,57 @@ class TablePanel(wx.Panel, ViewBase):
         hdr.SetForegroundColour(COL_MUTED)
         sizer.Add(hdr, 0, wx.LEFT | wx.TOP, 10)
 
+        # --- Section: Einfügen ---
         add_section("Einfügen", self, sizer)
         btn = TableCreatorButton(self)
         btn.Bind(EVT_TABLE_CREATED, self._on_insert)
         sizer.Add(btn, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+
+        # --- Section: Rahmen ---
+        add_section("Rahmen", self, sizer)
+        self._line_style = wx.Choice(self, choices=['thin', 'thick', 'double', 'none'])
+        self._line_style.SetSelection(0)
+        sizer.Add(self._line_style, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+
+        grid_sizer = wx.GridSizer(rows=2, cols=5, hgap=2, vgap=2)
+        self._border_btns = []
+        for icon_name, key in _BORDER_PRESETS:
+            btn = wx.BitmapButton(self, bitmap=icon(icon_name + '.svg', (24, 24)),
+                                  size=(32, 32))
+            btn.preset_key = key
+            btn.Bind(wx.EVT_BUTTON, self._on_border_preset)
+            grid_sizer.Add(btn, 0, wx.EXPAND)
+            self._border_btns.append(btn)
+        sizer.Add(grid_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+
+        # --- Section: Zeilen & Spalten ---
+        add_section("Zeilen & Spalten", self, sizer)
+        row_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self._btn_row = wx.Button(self, label="Zeile ▾")
+        self._btn_col = wx.Button(self, label="Spalte ▾")
+        self._btn_row.Bind(wx.EVT_BUTTON, self._on_row_menu)
+        self._btn_col.Bind(wx.EVT_BUTTON, self._on_col_menu)
+        row_sizer.Add(self._btn_row, 1, wx.RIGHT, 4)
+        row_sizer.Add(self._btn_col, 1)
+        sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+
+        # --- Section: Zelle ---
+        add_section("Zelle", self, sizer)
+        cell_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=4, vgap=4)
+        cell_sizer.AddGrowableCol(1)
+
+        cell_sizer.Add(wx.StaticText(self, label="Hintergrund"), 0, wx.ALIGN_CENTER_VERTICAL)
+        self._bgcolor_btn = ColourButton(self)
+        self._bgcolor_btn.callback = self._on_bgcolor
+        cell_sizer.Add(self._bgcolor_btn, 0, wx.EXPAND)
+
+        cell_sizer.Add(wx.StaticText(self, label="V-Ausricht."), 0, wx.ALIGN_CENTER_VERTICAL)
+        self._valign = wx.Choice(self, choices=['top', 'middle', 'bottom'])
+        self._valign.SetSelection(0)
+        self._valign.Bind(wx.EVT_CHOICE, self._on_valign)
+        cell_sizer.Add(self._valign, 0, wx.EXPAND)
+
+        sizer.Add(cell_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
         padded = wx.BoxSizer(wx.VERTICAL)
         padded.Add(sizer, 1, wx.EXPAND | wx.ALL, 8)
@@ -268,18 +342,276 @@ class TablePanel(wx.Panel, ViewBase):
     def _on_insert(self, event):
         if event.cols == 0:
             return  # custom dialog was cancelled
-        from .tables import mk_table
-        from .textmodel.texeltree import grouped
-        table = mk_table([[''] * event.cols for _ in range(event.rows)])
-        self._view.insert_texel(self._view.index, grouped([table]))
+        table = empty_table(event.rows, event.cols)
+        self._view.insert_texel(self._view.index, table)
 
     def editor_changed(self, view, editor):
         pass
 
+    def index_changed(self, model):
+        self._update_cell_inspector()
+
+    def selection_changed(self, model):
+        self._update_cell_inspector()
+
+    def properties_changed(self, model, *args, **kwargs):
+        self._update_cell_inspector()
+
+    def _update_cell_inspector(self):
+        table_box, ci1 = self._find_table()
+        if table_box is None:
+            return
+        table, _ = self._get_table_texel()
+        if table is None:
+            return
+        r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
+        cells = table.get_cells()
+
+        def unique(attr):
+            vals = {cells[r][c].get_attr(attr)
+                    for r in range(r1, r2 + 1)
+                    for c in range(c1, c2 + 1)}
+            return vals.pop() if len(vals) == 1 else None
+
+        bg = unique('cell_bgcolor')
+        self._bgcolor_btn.set_colour(wx.Colour(bg) if bg is not None else None)
+
+        valign_choices = ['top', 'middle', 'bottom']
+        va = unique('valign')
+        self._valign.Unbind(wx.EVT_CHOICE)
+        self._valign.SetSelection(valign_choices.index(va) if va in valign_choices else 0)
+        self._valign.Bind(wx.EVT_CHOICE, self._on_valign)
+
+    # --- helpers to find current table ---
+
+    def _find_table(self):
+        view = self._view
+        if not hasattr(view, 'layout') or view.layout is None:
+            return None, None
+        index = view.index
+        res = _find_table_at(view.layout, index)
+        if res is None:
+            return None, None
+        table_box, cx, cy, ci1, ci2 = res
+        # ci1 is the absolute offset of the TableBox in the model
+        return table_box, ci1
+
+    def _get_table_texel(self):
+        _, ci1 = self._find_table()
+        if ci1 is None:
+            return None, None
+        model = self._view.model
+        # Walk the texel tree to find the Table at ci1
+        def find_table(texel, offset=0):
+            if isinstance(texel, Table):
+                return texel, offset
+            if texel.is_group or texel.is_container:
+                for j1, j2, child in iter_childs(texel):
+                    if j1 <= ci1 - offset < j2:
+                        return find_table(child, offset + j1)
+            return None, None
+        return find_table(model.texel)
+
+    def _selected_cell_range(self, table, ci1):
+        """Return (r1, c1, r2, c2) for current selection, clamped to table."""
+        view = self._view
+        if view.has_selection():
+            s1, s2 = sorted(view.selection)
+        else:
+            s1 = s2 = view.index
+        n = length(table)
+        i1 = max(1, min(s1 - ci1, n - 1))
+        i2 = max(1, min(s2 - ci1, n - 1))
+        r1, c1 = table.get_coord(i1)
+        r2, c2 = table.get_coord(max(i1, i2 - 1))
+        return min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2)
+
+    def _apply_to_table(self, fn):
+        """Find table, apply fn(table, r1, c1, r2, c2) → new_table, commit."""
+        table_box, ci1 = self._find_table()
+        if table_box is None:
+            return
+        table, t_offset = self._get_table_texel()
+        if table is None:
+            return
+        r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
+        new_table = fn(table, r1, c1, r2, c2)
+        if new_table is table:
+            return
+        model = self._view.model
+        model.texel = transform_texel(model.texel, t_offset,
+                                       lambda t: new_table)
+        model.notify_views('properties_changed', t_offset, t_offset + 1)
+
+    def _apply_table_replace(self, new_table_fn):
+        """Find table, replace it with new_table_fn(table) → new_table."""
+        table_box, ci1 = self._find_table()
+        if table_box is None:
+            return
+        table, t_offset = self._get_table_texel()
+        if table is None:
+            return
+        new_table = new_table_fn(table)
+        if new_table is table:
+            return
+        model = self._view.model
+        model.texel = transform_texel(model.texel, t_offset,
+                                       lambda t: new_table)
+        model.notify_views('properties_changed', t_offset, t_offset + 1)
+
+    # --- border preset ---
+
+    def _on_border_preset(self, event):
+        btn = event.GetEventObject()
+        key = btn.preset_key
+        line = self._line_style.GetStringSelection()
+
+        def apply(table, r1, c1, r2, c2):
+            if key == 'none':
+                return table.set_cellattr(r1, c1, r2, c2,
+                                          border_left='none', border_right='none',
+                                          border_top='none', border_bottom='none')
+            elif key == 'all':
+                return table.set_cellattr(r1, c1, r2, c2,
+                                          border_left=line, border_right=line,
+                                          border_top=line, border_bottom=line)
+            elif key == 'outer':
+                t = table.set_cellattr(r1, c1, r2, c2,
+                                       border_left='none', border_right='none',
+                                       border_top='none', border_bottom='none')
+                for r in range(r1, r2 + 1):
+                    for c in range(c1, c2 + 1):
+                        kwargs = {}
+                        if r == r1:  kwargs['border_top'] = line
+                        if r == r2:  kwargs['border_bottom'] = line
+                        if c == c1:  kwargs['border_left'] = line
+                        if c == c2:  kwargs['border_right'] = line
+                        if kwargs:
+                            t = t.set_cellattr(r, c, r, c, **kwargs)
+                return t
+            elif key == 'inner':
+                t = table
+                for r in range(r1, r2 + 1):
+                    for c in range(c1, c2 + 1):
+                        kwargs = {}
+                        if r1 < r:   kwargs['border_top'] = line
+                        if r < r2:   kwargs['border_bottom'] = line
+                        if c1 < c:   kwargs['border_left'] = line
+                        if c < c2:   kwargs['border_right'] = line
+                        if kwargs:
+                            t = t.set_cellattr(r, c, r, c, **kwargs)
+                return t
+            elif key == 'inner_h':
+                t = table
+                for r in range(r1 + 1, r2 + 1):
+                    t = t.set_cellattr(r, c1, r, c2, border_top=line)
+                return t
+            elif key == 'inner_v':
+                t = table
+                for c in range(c1 + 1, c2 + 1):
+                    t = t.set_cellattr(r1, c, r2, c, border_left=line)
+                return t
+            elif key == 'left':
+                return table.set_cellattr(r1, c1, r2, c2, border_left=line)
+            elif key == 'right':
+                return table.set_cellattr(r1, c1, r2, c2, border_right=line)
+            elif key == 'top':
+                return table.set_cellattr(r1, c1, r2, c2, border_top=line)
+            elif key == 'bottom':
+                return table.set_cellattr(r1, c1, r2, c2, border_bottom=line)
+            return table
+
+        self._apply_to_table(apply)
+
+    # --- row/column operations ---
+
+    def _on_row_menu(self, event):
+        menu = wx.Menu()
+        menu.Append(1, "Zeile darunter einfügen")
+        menu.Append(2, "Zeile darüber einfügen")
+        menu.Append(3, "Zeile löschen")
+        self.Bind(wx.EVT_MENU, self._on_row_action, id=1)
+        self.Bind(wx.EVT_MENU, self._on_row_action, id=2)
+        self.Bind(wx.EVT_MENU, self._on_row_action, id=3)
+        self._btn_row.PopupMenu(menu)
+        menu.Destroy()
+
+    def _on_col_menu(self, event):
+        menu = wx.Menu()
+        menu.Append(4, "Spalte rechts einfügen")
+        menu.Append(5, "Spalte links einfügen")
+        menu.Append(6, "Spalte löschen")
+        self.Bind(wx.EVT_MENU, self._on_col_action, id=4)
+        self.Bind(wx.EVT_MENU, self._on_col_action, id=5)
+        self.Bind(wx.EVT_MENU, self._on_col_action, id=6)
+        self._btn_col.PopupMenu(menu)
+        menu.Destroy()
+
+    def _current_cell(self):
+        table_box, ci1 = self._find_table()
+        if table_box is None:
+            return None, None, None, None
+        table, _ = self._get_table_texel()
+        if table is None:
+            return None, None, None, None
+        r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
+        return table_box, ci1, r1, c1
+
+    def _on_row_action(self, event):
+        eid = event.GetId()
+        table_box, ci1, r, c = self._current_cell()
+        if table_box is None:
+            return
+        if eid == 1:
+            self._apply_table_replace(lambda t: t.insert_rows(r + 1, 1))
+        elif eid == 2:
+            self._apply_table_replace(lambda t: t.insert_rows(r, 1))
+        elif eid == 3:
+            self._apply_table_replace(lambda t: t.remove_rows(r, 1))
+
+    def _on_col_action(self, event):
+        eid = event.GetId()
+        table_box, ci1, r, c = self._current_cell()
+        if table_box is None:
+            return
+        if eid == 4:
+            self._apply_table_replace(lambda t: t.insert_cols(c + 1, 1))
+        elif eid == 5:
+            self._apply_table_replace(lambda t: t.insert_cols(c, 1))
+        elif eid == 6:
+            self._apply_table_replace(lambda t: t.remove_cols(c, 1))
+
+    # --- cell style ---
+
+    def _on_bgcolor(self):
+        colour = self._bgcolor_btn._colour
+        if colour is not None:
+            self._set_cell_attr('cell_bgcolor',
+                                wx.Colour(colour).GetAsString(wx.C2S_HTML_SYNTAX))
+
+    def _on_valign(self, event):
+        choices = ['top', 'middle', 'bottom']
+        val = choices[self._valign.GetSelection()]
+        self._set_cell_attr('valign', val)
+
+    def _set_cell_attr(self, attr, value):
+        table_box, ci1 = self._find_table()
+        if table_box is None:
+            return
+        table, t_offset = self._get_table_texel()
+        if table is None:
+            return
+        r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
+        new_table = table.set_cellattr(r1, c1, r2, c2, **{attr: value})
+        model = self._view.model
+        model.texel = transform_texel(model.texel, t_offset,
+                                       lambda t: new_table)
+        model.notify_views('properties_changed', t_offset, t_offset + 1)
+
 
 def demo_00():
     app = wx.App()
-    frame = wx.Frame(None, title="TablePanel Demo", size=(300, 300))
+    frame = wx.Frame(None, title="TablePanel Demo", size=(300, 500))
 
     class _FakeView:
         def add_view(self, v): pass
