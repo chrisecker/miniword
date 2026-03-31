@@ -26,6 +26,9 @@ modules = [
     "miniword.builder",
     "miniword.documentview",
     "miniword.importexport",
+    "miniword.tables",
+    "miniword.table_boxes",
+    "miniword.image",    
 ]
 
 total_n = 0
