@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#2B7CD3"/>
+      <stop offset="100%" stop-color="#1A4F9C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rectangle with rounded corners -->
+  <rect x="2" y="2" width="44" height="44" rx="6" ry="6" fill="url(#bg)"/>
+
+  <!-- Stylised "M": two overlapping triangular strokes like Word's W but mirrored -->
+  <!-- Left leg -->
+  <polygon points="8,36  8,12  16,12  24,28  32,12  40,12  40,36  34,36  34,22  27,36  21,36  14,22  14,36"
+           fill="white"/>
+</svg>
