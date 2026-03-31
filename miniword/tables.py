@@ -165,6 +165,18 @@ class Table(Container):
                 col = cell_idx % self.ncols
                 return row, col
 
+    def get_rect(self, i1, i2):
+        """Returns r1, c1, r2, c2 where (r1, c1) is the top left
+        coord and (r2, c2) the bottom right coordinate of the
+        rectangle connecting the cells described by i1 and i2).
+
+        When bot indices are in the same cell, (r2, c2) == (r1, c1).
+        """
+        r1, c1 = self.get_coord(i1)
+        r2, c2 = self.get_coord(i2)
+        r1, r2 = sorted([r1, r2])
+        c1, c2 = sorted([c1, c2])
+        return r1, c1, r2, c2
     
     def set_cellattr(self, r1, c1, r2, c2, **kwds):
         r1, r2 = sorted([r1, r2])
@@ -372,4 +384,15 @@ def test_07():
     assert length(cells[2][0].content) == 0
     assert _text(cells[3][0]) == 'c'
 
+def test_08():
+    """get_rect"""
+    t = from_strings([["a", "b"], ["c", "d"]])
+    assert t.get_rect(1, 1) == (0, 0, 0, 0)
+    assert t.get_rect(1, 2) == (0, 0, 0, 0)
+    assert t.get_rect(2, 2) == (0, 0, 0, 0)
+    assert t.get_rect(2, 3) == (0, 0, 0, 1)
+    assert t.get_rect(2, 4) == (0, 0, 0, 1)
+    assert t.get_rect(2, 5) == (0, 0, 1, 0)
+    assert t.get_rect(2, 6) == (0, 0, 1, 0)
+    assert t.get_rect(2, 7) == (0, 0, 1, 1)
 
