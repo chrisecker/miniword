@@ -6,8 +6,7 @@ from .builder import Factory, Builder
 from .cairodevice import CairoDevice
 from .annotation import highlight, squiggle
 from .builder import trace
-from .table_editors import CursorEditor, MatrixEditor, _find_table_at
-from .textmodel.texeltree import length as texel_length
+from .table_editors import CursorEditor, MatrixEditor
 from .image_editors import ImageSizeEditor, find_image_at
 from .texels import BR
 from .textmodel.texeltree import transform, iter_childs, grouped
@@ -43,7 +42,8 @@ class DocumentView(WXTextView):
     highlights = []  # list of (i1, i2) or (i1, i2, color)
     squiggles  = []  # list of (i1, i2) or (i1, i2, color)
 
-    editor_registry = [ImageSizeEditor]
+    # auto_installable editors listed in priority order (first match wins)
+    editor_registry = [CursorEditor, MatrixEditor, ImageSizeEditor]
 
     min_zoom = 0.2
     max_zoom = 5.0
@@ -571,65 +571,31 @@ class DocumentView(WXTextView):
         self.builder.buildto_index(index + 1)
         # Selection must be updated before checking editor mode.
         WXTextView.set_index(self, index, extend, update)
-        # Remove non-table editors when the cursor moves away.
+        # Remove click editors when the cursor moves away.
         editor = self.active_editor
-        if editor is not None and not isinstance(editor, (CursorEditor, MatrixEditor)):
+        if editor is not None and not editor.auto_installable:
             if editor.index != index:
                 self.remove_editor()
-        self._update_table_editor(index)
+        self.update_editor(index)
 
-    def _update_table_editor(self, index):
-        """Install, switch, or remove the table editor based on current selection."""
-        res = _find_table_at(self.layout, index)
-        if res is None:
-            if isinstance(self.active_editor, (CursorEditor, MatrixEditor)):
-                self.remove_editor()
-            return
-
-        tb, cx, cy, ci1, ci2 = res
-        sel = self.selection
-
-        if sel is None:
-            if not isinstance(self.active_editor, (CursorEditor, MatrixEditor)):
-                self.install_editor(CursorEditor(), index)
-            return
-
-        abs_s1, abs_s2 = sorted(sel)
-        # Box-local coordinates (relative to the TableBox start in the layout).
-        i1_box = abs_s1 - ci1
-        i2_box = abs_s2 - ci1
-        texel = tb.texel
-        n = texel_length(texel)
-        # Texel-local: correct for continuation fragments via base_offset.
-        i1c = max(1, min(i1_box + tb.base_offset, n - 1))
-        i2c = max(1, min(i2_box + tb.base_offset - 1, n - 1))
-
-        try:
-            r1, c1 = texel.get_coord(i1c)
-            r2, c2 = texel.get_coord(i2c)
-        except (IndexError, TypeError):
-            if not isinstance(self.active_editor, CursorEditor):
-                self.install_editor(CursorEditor(), index)
-            return
-
-        if r1 != r2 or c1 != c2:
-            # Multi-cell selection → switch to MatrixEditor.
-            if not isinstance(self.active_editor, MatrixEditor):
-                self.install_editor(MatrixEditor(), index)
-            return
-
-        # Single cell: distinguish partial vs full selection.
-        if (r1, c1) in tb.offsets:
-            cell_off = tb.offsets[(r1, c1)]
-            cell_end = cell_off + len(tb.cells[r1][c1]) - 1  # last content pos
-            is_partial = not (i1_box <= cell_off and i2_box >= cell_end)
-            if is_partial:
-                if not isinstance(self.active_editor, CursorEditor):
-                    self.install_editor(CursorEditor(), index)
+    def update_editor(self, index):
+        """Install, switch, or remove the auto editor based on current conditions."""
+        editor = self.active_editor
+        # 1. Current auto editor still valid?
+        if editor is not None and editor.auto_installable:
+            if editor.condition(self, None, None):
                 return
-        # Full cell or indeterminate → no forced switch; ensure an editor is active.
-        if not isinstance(self.active_editor, (CursorEditor, MatrixEditor)):
-            self.install_editor(CursorEditor(), index)
+        # 2. First matching auto editor from registry wins.
+        for cls in self.editor_registry:
+            if not cls.auto_installable:
+                continue
+            if cls.condition(self, None, None):
+                if not isinstance(editor, cls):
+                    self.install_editor(cls(), index)
+                return
+        # 3. No match — remove any active auto editor.
+        if editor is not None and editor.auto_installable:
+            self.remove_editor()
 
     def export_pdf(self, path):
         import cairo

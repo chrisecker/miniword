@@ -18,12 +18,7 @@ def _draw_arrowhead(gc, tip_x, y, direction, length, half_h):
 
 
 def _draw_dimension(gc, x_left, x_right, y, width_pt, zoom):
-    """Draw  ◄── 7.2 cm ──►  dimension annotation at document y-coordinate y.
-
-    All sizes are pixel-constant (divided by zoom so Cairo's scale does the rest).
-    If the label does not fit inside the column, arrows point outward and the
-    label is placed to the right of the right edge.
-    """
+    """Draw  ◄── 7.2 cm ──►  dimension annotation at document y-coordinate y."""
     label     = f'{width_pt / _CM:.1f} cm'
     px        = 1.0 / zoom
     arr_len   = 6  * px
@@ -36,21 +31,17 @@ def _draw_dimension(gc, x_left, x_right, y, width_pt, zoom):
     gc.set_source_rgba(0.0, 0.35, 0.9, 1.0)
     gc.set_line_width(px)
 
-    # Vertical end ticks
     for tx in (x_left, x_right):
         gc.move_to(tx, y - tick_h)
         gc.line_to(tx, y + tick_h)
         gc.stroke()
 
-    # Measure label
     gc.set_font_size(font_size)
     te = gc.text_extents(label)
-    tw = te[4]                        # x-advance
-    # baseline offset to visually center text on y
+    tw = te[4]
     text_dy = -te[1] - te[3] / 2
 
     if span >= tw + 2 * (arr_len + gap):
-        # Label fits inside: inward arrows, line interrupted for text
         _draw_arrowhead(gc, x_left,  y, +1, arr_len, arr_h)
         _draw_arrowhead(gc, x_right, y, -1, arr_len, arr_h)
         text_x = x_left + (span - tw) / 2
@@ -62,7 +53,6 @@ def _draw_dimension(gc, x_left, x_right, y, width_pt, zoom):
         gc.stroke()
         gc.move_to(text_x, y + text_dy)
     else:
-        # Column too narrow: outward arrows, full line, label to the right
         _draw_arrowhead(gc, x_left,  y, -1, arr_len, arr_h)
         _draw_arrowhead(gc, x_right, y, +1, arr_len, arr_h)
         gc.move_to(x_left, y)
@@ -87,22 +77,24 @@ def _find_table_at(layout, index):
     return None
 
 
-class TableEditor(Editor):
-    """Resize table columns by dragging column separators.
+def is_multi_cell(texel, i1, i2):
+    """Return True if the range [i1, i2) spans more than one cell.
 
-    During drag only a preview line is drawn; the model is not touched.
-    The change is committed to the texel on mouse-release.
-
-    Modifier keys during drag:
-      plain  — only the left column changes; total table width varies.
-      Shift  — left and right column exchange width; total stays constant.
-      Ctrl   — left column changes, all columns to the right scale
-               proportionally; total stays constant.
+    i1 and i2 are texel-local indices.
     """
+    try:
+        r1, c1, r2, c2 = texel.get_rect(i1, i2)
+    except (IndexError, TypeError):
+        return False
+    return r1 != r2 or c1 != c2
+
+
+class TableEditorBase(Editor):
+    """Base class for table editors. Provides column-resize drag for both modes."""
 
     _drag_col         = None
     _drag_orig_widths = None
-    _preview_widths   = None   # full width list while dragging
+    _preview_widths   = None
 
     def install(self, view, index):
         self._drag_handle = None
@@ -113,6 +105,8 @@ class TableEditor(Editor):
             self._table_box = None
             return
         self._table_box, tx, ty, self._ti1, self._ti2 = res
+        self.box_index   = self._ti1
+        self.texel_index = self._ti1 - self._table_box.base_offset
         self.position = tx, ty
 
     def find_box(self):
@@ -126,7 +120,6 @@ class TableEditor(Editor):
         return wx.CURSOR_SIZEWE
 
     def hit_test(self, x, y):
-        """(x, y) in box-local coords (relative to table top-left)."""
         tb = self._table_box
         if tb is None:
             return None
@@ -154,15 +147,13 @@ class TableEditor(Editor):
         widths = list(orig)
 
         if event.ShiftDown() and col + 1 < n:
-            # Shift: only left + right column change; total width stays constant.
-            max_dx = orig[col + 1] - 20   # right can shrink to min
-            min_dx = -(orig[col] - 20)    # left can shrink to min
+            max_dx = orig[col + 1] - 20
+            min_dx = -(orig[col] - 20)
             delta  = max(min_dx, min(max_dx, dx))
             widths[col]     = orig[col]     + delta
             widths[col + 1] = orig[col + 1] - delta
 
         elif event.ControlDown() and col + 1 < n:
-            # Ctrl: left column changes, all columns to the right scale proportionally.
             new_left    = max(20, orig[col] + dx)
             delta       = new_left - orig[col]
             total_right = sum(orig[col + 1:])
@@ -203,7 +194,10 @@ class TableEditor(Editor):
             x    += cw
             changed = self._preview_widths is not None and widths[c] != orig[c]
             gc.set_line_width(2.0 / zoom)
-            gc.set_source_rgb(0.0, 0.4, 1.0) if changed else gc.set_source_rgb(0.45, 0.45, 0.45)
+            if changed:
+                gc.set_source_rgb(0.0, 0.4, 1.0)
+            else:
+                gc.set_source_rgb(0.45, 0.45, 0.45)
             gc.move_to(bx + x, by)
             gc.line_to(bx + x, by + tb.height)
             gc.stroke()
@@ -220,24 +214,77 @@ class TableEditor(Editor):
         self._preview_widths   = None
 
     def get_handles(self):
-        # TableEditor uses hit_test directly; no generic handles
         return iter([])
 
 
+class CursorEditor(TableEditorBase):
+    """Active while cursor is inside a table cell (text-editing mode).
+
+    Uses default draw() — cursor + selection + column-separator overlay.
+    """
+
+    @staticmethod
+    def condition(view, index_texels, sel_texels):
+        res = _find_table_at(view.layout, view.index)
+        if res is None:
+            return False
+        sel = view.selection
+        if sel is None:
+            return True
+        tb, cx, cy, ci1, ci2 = res
+        texel_index = ci1 - tb.base_offset
+        abs_s1, abs_s2 = sorted(sel)
+        return not is_multi_cell(tb.texel, abs_s1 - texel_index, abs_s2 - texel_index)
+
+
+class MatrixEditor(TableEditorBase):
+    """Active when the selection spans multiple table cells (structure mode).
+
+    Overrides draw() to suppress the text cursor and render rectangular
+    cell-block highlights; column-resize drag is inherited from TableEditorBase.
+    """
+
+    @staticmethod
+    def condition(view, index_texels, sel_texels):
+        res = _find_table_at(view.layout, view.index)
+        if res is None:
+            return False
+        sel = view.selection
+        if sel is None:
+            return False
+        tb, cx, cy, ci1, ci2 = res
+        texel_index = ci1 - tb.base_offset
+        abs_s1, abs_s2 = sorted(sel)
+        return is_multi_cell(tb.texel, abs_s1 - texel_index, abs_s2 - texel_index)
+
+    def draw(self, gc):
+        """No text cursor; rectangular cell-block selection + column-separator overlay."""
+        res = _find_table_at(self.view.layout, self.index)
+        if res is None:
+            return
+        tb, bx, by, ci1, ci2 = res
+        sel = self.view.selection
+        if sel is not None:
+            abs_s1, abs_s2 = sorted(sel)
+            tb.draw_matrix_selection(abs_s1 - ci1, abs_s2 - ci1, bx, by, gc)
+        self.draw_overlay(gc)
+        self.draw_handles(gc)
+
+
 def demo_00():
-    """TableEditor demo: drag column separators to resize columns."""
-    from .tables import mk_table
+    """CursorEditor demo: drag column separators to resize columns."""
+    from .tables import from_strings
     from .document import Document
     from .documentview import DocumentView
 
     doc = Document()
-    doc.textmodel.texel = mk_table([['Name',     'City',       'Country'],
-                                    ['Einstein', 'Ulm',        'Germany'],
-                                    ['Darwin',   'Shrewsbury', 'England']])
+    doc.textmodel.texel = from_strings([['Name',     'City',       'Country'],
+                                        ['Einstein', 'Ulm',        'Germany'],
+                                        ['Darwin',   'Shrewsbury', 'England']])
 
     app   = wx.App(False)
-    frame = wx.Frame(None, title='TableEditor demo', size=(420, 300))
+    frame = wx.Frame(None, title='CursorEditor demo', size=(420, 300))
     view  = DocumentView(frame, doc)
-    view.install_editor(TableEditor(), 1)
+    view.install_editor(CursorEditor(), 1)
     frame.Show()
     app.MainLoop()

@@ -84,6 +84,10 @@ class Editor:
     auto_installable   = True    # managed by update_editor() / condition()
     click_installable  = False   # activated by mouse click via detect()
 
+    box_index          = None    # document start position of the box
+    texel_index        = None    # document start position of the texel
+                                 # (differs from box_index for table fragments)
+
     _drag_handle      = None
     _drag_start       = None    # position where drag was started (box-local)
     _drag_last        = None    # last drag position (box-local), updated each motion event

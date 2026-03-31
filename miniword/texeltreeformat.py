@@ -159,10 +159,15 @@ _CELL_DEFAULTS = {'border_left': 'thin', 'border_right': 'thin',
 
 def _sep_slot_style(sep):
     """Build slot_style dict from separator, including cell-style attrs."""
+    # New API: cell attrs live in sep.parstyle
+    if hasattr(sep, 'parstyle') and sep.parstyle:
+        return {k: v for k, v in sep.parstyle.items()
+                if k in _CELL_ATTRS and v != _CELL_DEFAULTS.get(k)}
+    # Old API fallback: attrs as properties on the separator
     base = dict(sep.style) if hasattr(sep, 'style') and sep.style else {}
     for attr in _CELL_ATTRS:
-        val = getattr(sep, attr, _CELL_DEFAULTS[attr])
-        if val != _CELL_DEFAULTS[attr]:
+        val = getattr(sep, attr, _CELL_DEFAULTS.get(attr))
+        if val != _CELL_DEFAULTS.get(attr):
             base[attr] = val
     return base
 
@@ -179,12 +184,12 @@ def serialize_container(texel, indent=0):
     from .tables import Table as _Table
     if isinstance(texel, _Table):
         has_n_cols = True
-        ncols = texel.n_cols
+        ncols = texel.ncols
         props = {'ncols': ncols}
-        if getattr(texel, 'header_rows', 0) != 0:
-            props['header_rows'] = texel.header_rows
-        if getattr(texel, 'break_level', 1) != 1:
-            props['break_level'] = texel.break_level
+        if getattr(texel, 'nheader', 0) != 0:
+            props['nheader'] = texel.nheader
+        if getattr(texel, 'breaklevel', 1) != 1:
+            props['breaklevel'] = texel.breaklevel
         if getattr(texel, 'col_widths', None) is not None:
             props['col_widths'] = tuple(texel.col_widths)
         cells = texel.childs[1::2]
@@ -523,42 +528,20 @@ class _Parser:
         self.tok.consume('RPAREN')
 
         if ctype == 'Table' and has_ncols:
-            from .tables import Table, TableSep, TableNL, set_sep_attrs
-            from copy import copy
+            from .tables import Table
             d = dict(sep0_style) if sep0_style else {}
-            header_rows = d.pop('header_rows', 0)
-            break_level = d.pop('break_level', 1)
+            # support both old (header_rows/break_level) and new (nheader/breaklevel) keys
+            nheader = d.pop('nheader', d.pop('header_rows', 0))
+            breaklevel = d.pop('breaklevel', d.pop('break_level', 1))
             col_widths = d.pop('col_widths', None)
 
-            n_cells = len(slots)
-            n_rows_val = (n_cells // ncols) if ncols else 0
-            cells_2d = []
-            for r in range(n_rows_val):
-                row = []
-                for c in range(ncols):
-                    row.append(slots[r * ncols + c][1])
-                cells_2d.append(row)
-            table = Table(n_rows_val, ncols, cells_2d)
-
-            # Apply table-level attrs
-            if header_rows:
-                table.header_rows = header_rows
-            if break_level != 1:
-                table.break_level = break_level
-            if col_widths is not None:
-                table.col_widths = list(col_widths)
-
-            # Each slot's style is the trailing sep of that cell (index 2*i+2).
-            childs = list(table.childs)
-            for i in range(n_cells):
-                slot_s = slots[i][0]
-                if slot_s:
-                    cell_attrs = {k: v for k, v in slot_s.items() if k in _CELL_ATTRS}
-                    if cell_attrs:
-                        sep_idx = 2 * i + 2  # trailing sep of cell i
-                        childs[sep_idx] = set_sep_attrs(childs[sep_idx], **cell_attrs)
-            table.childs = childs
-            table.compute_weights()
+            entries = []
+            for slot_s, content in slots:
+                cell_attrs = {k: v for k, v in slot_s.items() if k in _CELL_ATTRS} if slot_s else {}
+                entries.append((content, as_style(cell_attrs)))
+            table = Table(*entries, ncols=ncols,
+                          nheader=nheader, breaklevel=breaklevel,
+                          col_widths=list(col_widths) if col_widths is not None else None)
             return table
 
         # Reconstruct childs: [SEP0, content0, SEP1, content1, ..., trailing_TAB]
@@ -799,22 +782,22 @@ def test_07():
 
 
 def test_08():
-    "Roundtrip: Table with cell attrs and header_rows"
-    from .tables import mk_table, set_table_borders, TableSep, TableNL
-    from .textmodel.texeltree import Group, get_text
-    table = mk_table([['A', 'B'], ['C', 'D']])
-    table = set_table_borders(table, 0, 0, 1, 1, border_left='none')
-    table.header_rows = 1
+    "Roundtrip: Table with cell attrs and nheader"
+    from .tables import from_strings
+    from .textmodel.texeltree import Group
+    table = from_strings([['A', 'B'], ['C', 'D']])
+    table = table.set_cellattr(0, 0, 0, 0, border_left='none')
+    table = table.set_nheader(1)
     root = Group([table])
     out = serialize(root)
-    assert 'header_rows=1' in out
+    assert 'nheader=1' in out
     assert 'border_left="none"' in out
     root2, _, _ = parse(out)
     t2 = list(_flatten(root2))[0]
-    assert t2.n_rows == 2
-    assert t2.n_cols == 2
-    assert t2.header_rows == 1
-    # sep at idx 2 (cell[0][0] → slot 1) should have border_left=none
-    assert getattr(t2.childs[2], 'border_left', 'thin') == 'none'
+    assert t2.nrows == 2
+    assert t2.ncols == 2
+    assert t2.nheader == 1
+    cells = t2.get_cells()
+    assert cells[0][0].get_attr('border_left') == 'none'
 
 
