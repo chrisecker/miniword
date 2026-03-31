@@ -3,7 +3,7 @@ from .textmodel.viewbase import ViewBase
 from .inspector import InspectorPanel
 from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
-from .image import Image
+from .images import Image
 from .image_panel import ImageInspector
 from .table_panel import TablePanel
 from .ui.sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL

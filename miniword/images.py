@@ -15,7 +15,7 @@ TXL format:
 Factory.Image_handler() sketch (to be added to factory.py):
 
     def Image_handler(self, texel, i1, i2):
-        from .image import ImageBox, PlaceholderBox
+        from .images import ImageBox, PlaceholderBox
         blob = self.blobs.get(texel.blob_id)
         if blob is None:
             return [PlaceholderBox(50, 50, self.device)]

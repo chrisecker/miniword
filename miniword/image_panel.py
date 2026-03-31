@@ -1,6 +1,6 @@
 import os
 import wx
-from .image import Image
+from .images import Image
 from .image_editors import ImageCropEditor
 from .textmodel.texeltree import grouped
 from .textmodel.viewbase import ViewBase

@@ -24,7 +24,7 @@ class Factory(FactoryBase):
         return [ForceBreakBox(self.mk_style(texel.style), self.device)]
 
     def Image_handler(self, texel, i1, i2):
-        from .image import ImageBox
+        from .images import ImageBox
         try:
             blob = getattr(self, 'blobs', {})[texel.blob_id]
             bitmap, src_w, src_h = self.device.load_image(blob)

@@ -1,6 +1,6 @@
 import wx
 from .editorbase import Editor
-from .image import Image, ImageBox
+from .images import Image, ImageBox
 
 
 def find_image_at(layout, index):
@@ -355,7 +355,7 @@ class ImageCropEditor(Editor):
 def _setup_demo():
     import os
     import wx
-    from .image import Image
+    from .images import Image
     from .textmodel.texeltree import grouped, Text, NL
     from .document import Document
     from .documentview import DocumentView
