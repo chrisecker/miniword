@@ -55,11 +55,19 @@ class ImageSizeEditor(Editor):
     """
 
     hide_cursor       = True
-    activate_on_click = True
+    auto_installable  = False
+    click_installable = True
 
     _state = None
 
+    @staticmethod
+    def condition(view, index_texels, sel_texels):
+        return find_image_near(view.layout, view.index) is not None
+
     def install(self, view, index):
+        adj = find_image_near(view.layout, index)
+        if adj is not None:
+            index = adj
         super().install(view, index)
         res = find_image_at(view.layout, index)
         if res is None:
@@ -189,7 +197,8 @@ class ImageCropEditor(Editor):
     """
 
     hide_cursor       = True
-    activate_on_click = True
+    auto_installable  = False
+    click_installable = False
     _HIT_PX           = 8
 
     _preview_crop = None   # [left, right, top, bottom] while editing

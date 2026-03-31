@@ -739,7 +739,7 @@ class TextView(ViewBase, Model):
         if selection is None:
             return []
         s1, s2 = sorted(selection)
-        return self.layout.get_ranges(s1, s2)
+        return [(s1, s2)]
 
     def start_selection(self):
         index = self.index

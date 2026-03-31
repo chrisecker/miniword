@@ -6,8 +6,9 @@ from .builder import Factory, Builder
 from .cairodevice import CairoDevice
 from .annotation import highlight, squiggle
 from .builder import trace
-from .table_editors import TableEditor, _find_table_at
-from .image_editors import ImageSizeEditor, find_image_at, find_image_near
+from .table_editors import CursorEditor, MatrixEditor, _find_table_at
+from .textmodel.texeltree import length as texel_length
+from .image_editors import ImageSizeEditor, find_image_at
 from .texels import BR
 from .textmodel.texeltree import transform, iter_childs, grouped
 
@@ -42,10 +43,7 @@ class DocumentView(WXTextView):
     highlights = []  # list of (i1, i2) or (i1, i2, color)
     squiggles  = []  # list of (i1, i2) or (i1, i2, color)
 
-    # (detect(layout, i) -> adjusted_i | None,  EditorClass)
-    _click_editors = [(find_image_near, ImageSizeEditor)]
-    # (detect(layout, i) -> truthy | None,       EditorClass)
-    _index_editors = [(_find_table_at, TableEditor)]
+    editor_registry = [ImageSizeEditor]
 
     min_zoom = 0.2
     max_zoom = 5.0
@@ -200,7 +198,7 @@ class DocumentView(WXTextView):
         super().properties_changed(model, i1, i2)
         editor = self.active_editor
         if editor is not None:
-            self.ensure_index()
+            self.builder.buildto_index(editor.index + 1)
             editor.reinstall()
 
     def inserted(self, model, i, n):
@@ -224,12 +222,11 @@ class DocumentView(WXTextView):
                 return
         x, y = self.window_to_content(event.Position)
         i = self.compute_index(x, y)
-        if i is not None and not event.ShiftDown():
-            for detect, EditorClass in self._click_editors:
-                j = detect(self.layout, i)
-                if j is not None:
-                    self.set_index(j)
-                    self.install_editor(EditorClass(), j)
+        if i is not None and not event.ShiftDown() and self.active_editor is None:
+            self.set_index(i)
+            for EditorClass in self.editor_registry:
+                if EditorClass.click_installable and EditorClass.condition(self, None, None):
+                    self.install_editor(EditorClass(), i)
                     self.active_editor.on_leftdown(event)
                     self.SetFocus()
                     return
@@ -373,19 +370,25 @@ class DocumentView(WXTextView):
             c = entry[2] if len(entry) > 2 else 'red'
             squiggle(painter, layout, i1, i2, 0, 0, c)   # 4. lines on top
 
-        hide_cursor = self.active_editor and self.active_editor.hide_cursor
-        if wx.Window.FindFocus() is self and self.index <= len(layout) and not hide_cursor:
-            layout.draw_cursor(self.index, 0, 0, painter,
-                               self.model.defaultstyle)
-        for j1, j2 in self.get_selected():
-            if j1 <= len(layout):
-                layout.draw_selection(j1, min(j2, len(layout)), 0, 0, painter)
         editor = self.active_editor
         if editor:
-            editor.draw_overlay(painter)
-            editor.draw_handles(painter)
+            editor.draw(painter)
+        else:
+            self.draw_cursor(painter)
+            self.draw_selection(painter)
         dc = None
         painter = None
+
+    def draw_cursor(self, gc):
+        layout = self.layout
+        if wx.Window.FindFocus() is self and self.index <= len(layout):
+            layout.draw_cursor(self.index, 0, 0, gc, self.model.defaultstyle)
+
+    def draw_selection(self, gc):
+        layout = self.layout
+        for j1, j2 in self.get_selected():
+            if j1 <= len(layout):
+                layout.draw_selection(j1, min(j2, len(layout)), 0, 0, gc)
 
     # ------------------------------------------------------------------
     # Copy / paste
@@ -566,14 +569,67 @@ class DocumentView(WXTextView):
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
         self.builder.buildto_index(index + 1)
-        for detect, EditorClass in self._index_editors:
-            if detect(self.layout, index):
-                self.install_editor(EditorClass(), index)
-                break
-        else:
-            if self.active_editor is not None and self.active_editor.index != index:
-                self.remove_editor()
+        # Selection must be updated before checking editor mode.
         WXTextView.set_index(self, index, extend, update)
+        # Remove non-table editors when the cursor moves away.
+        editor = self.active_editor
+        if editor is not None and not isinstance(editor, (CursorEditor, MatrixEditor)):
+            if editor.index != index:
+                self.remove_editor()
+        self._update_table_editor(index)
+
+    def _update_table_editor(self, index):
+        """Install, switch, or remove the table editor based on current selection."""
+        res = _find_table_at(self.layout, index)
+        if res is None:
+            if isinstance(self.active_editor, (CursorEditor, MatrixEditor)):
+                self.remove_editor()
+            return
+
+        tb, cx, cy, ci1, ci2 = res
+        sel = self.selection
+
+        if sel is None:
+            if not isinstance(self.active_editor, (CursorEditor, MatrixEditor)):
+                self.install_editor(CursorEditor(), index)
+            return
+
+        abs_s1, abs_s2 = sorted(sel)
+        # Box-local coordinates (relative to the TableBox start in the layout).
+        i1_box = abs_s1 - ci1
+        i2_box = abs_s2 - ci1
+        texel = tb.texel
+        n = texel_length(texel)
+        # Texel-local: correct for continuation fragments via base_offset.
+        i1c = max(1, min(i1_box + tb.base_offset, n - 1))
+        i2c = max(1, min(i2_box + tb.base_offset - 1, n - 1))
+
+        try:
+            r1, c1 = texel.get_coord(i1c)
+            r2, c2 = texel.get_coord(i2c)
+        except (IndexError, TypeError):
+            if not isinstance(self.active_editor, CursorEditor):
+                self.install_editor(CursorEditor(), index)
+            return
+
+        if r1 != r2 or c1 != c2:
+            # Multi-cell selection → switch to MatrixEditor.
+            if not isinstance(self.active_editor, MatrixEditor):
+                self.install_editor(MatrixEditor(), index)
+            return
+
+        # Single cell: distinguish partial vs full selection.
+        if (r1, c1) in tb.offsets:
+            cell_off = tb.offsets[(r1, c1)]
+            cell_end = cell_off + len(tb.cells[r1][c1]) - 1  # last content pos
+            is_partial = not (i1_box <= cell_off and i2_box >= cell_end)
+            if is_partial:
+                if not isinstance(self.active_editor, CursorEditor):
+                    self.install_editor(CursorEditor(), index)
+                return
+        # Full cell or indeterminate → no forced switch; ensure an editor is active.
+        if not isinstance(self.active_editor, (CursorEditor, MatrixEditor)):
+            self.install_editor(CursorEditor(), index)
 
     def export_pdf(self, path):
         import cairo
@@ -717,6 +773,8 @@ class DocumentView(WXTextView):
             self.cycle_list_type(ps1, ps2)
         elif action == 'cycle_basestyle':
             self.cycle_basestyle(ps1, ps2, reverse=shift)
+        elif action in ('copy', 'cut', 'paste') and self.active_editor:
+            getattr(self.active_editor, action)()
         else:
             return WXTextView.handle_action(self, action, shift)
 

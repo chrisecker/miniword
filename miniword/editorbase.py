@@ -5,15 +5,13 @@ AUTHOR GUIDE — writing a new Editor subclass
 
 Registration
 ------------
-Editors are registered in DocumentView via two lists:
+Editors are registered in DocumentView.editor_registry (a flat list of
+editor classes).  Two flags on the class control when an editor is activated:
 
-  _click_editors  [(detect(layout, i) -> adjusted_i | None, EditorClass)]
-      Activated on mouse click.  `detect` may adjust the index (e.g. snap
-      to the start of the clicked element).  Set `activate_on_click = True`.
-
-  _index_editors  [(detect(layout, i) -> truthy | None, EditorClass)]
-      Activated whenever the cursor moves to a matching position.  A fresh
-      instance is created for each new cursor position.
+  auto_installable  = True   Managed by update_editor(); installed when
+                             condition() returns True after a cursor move.
+  click_installable = True   Activated on mouse click.  The class must
+                             provide detect(layout, i) -> adjusted_i | None.
 
 install / reinstall
 -------------------
@@ -82,8 +80,9 @@ class Editor:
     index             = None
     position          = None    # top left corner in layout coordinates
     texel             = None    # the primary texel being edited
-    hide_cursor       = False   # True → suppress text cursor while editor is active
-    activate_on_click = False   # True → install only on mouse click, not on cursor move
+    hide_cursor        = False   # if True, default draw() skips draw_cursor
+    auto_installable   = True    # managed by update_editor() / condition()
+    click_installable  = False   # activated by mouse click via detect()
 
     _drag_handle      = None
     _drag_start       = None    # position where drag was started (box-local)
@@ -108,6 +107,21 @@ class Editor:
     def reinstall(self):
         """Reinstall after a model change."""
         self.install(self.view, self.index)
+
+    def draw(self, gc):
+        """Draw cursor, selection, overlay, and handles.
+
+        Override in subclasses that need full control (e.g. MatrixEditor).
+        The default calls view.draw_cursor / view.draw_selection, then the
+        editor-specific overlay and handles.  hide_cursor is honoured for
+        backwards compatibility with editors that set it as a class attribute.
+        """
+        view = self.view
+        if not self.hide_cursor:
+            view.draw_cursor(gc)
+        view.draw_selection(gc)
+        self.draw_overlay(gc)
+        self.draw_handles(gc)
 
     def draw_handles(self, gc):
         if self.position is None:
@@ -173,6 +187,15 @@ class Editor:
         if self._drag_handle is not None:
             self.commit()
             self.clear_drag()
+
+    def copy(self):
+        self.view.copy()
+
+    def cut(self):
+        self.view.cut()
+
+    def paste(self):
+        self.view.paste()
 
     def on_key(self, keycode, event):
         if keycode == wx.WXK_ESCAPE:
