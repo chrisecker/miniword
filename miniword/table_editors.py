@@ -1,5 +1,5 @@
 import wx
-from .editorbase import Editor
+from .editorbase import TexelEditor
 from .tables import Table
 from .table_boxes import TableBox
 
@@ -24,7 +24,7 @@ def _draw_dimension(gc, x_left, x_right, y, width_pt, zoom):
     arr_len   = 6  * px
     arr_h     = 3  * px
     tick_h    = 4  * px
-    font_size = 8  * px
+    font_size = 12  * px
     gap       = 2  * px
     span      = x_right - x_left
 
@@ -63,18 +63,6 @@ def _draw_dimension(gc, x_left, x_right, y, width_pt, zoom):
     gc.show_text(label)
 
 
-def _find_table_at(layout, index):
-    """Return (TableBox, cx, cy, ci1, ci2) for the box containing index, or None."""
-    for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
-        if not (p1 <= index < p2):
-            continue
-        for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
-            if not (r1 <= index < r2):
-                continue
-            for ci1, ci2, cx, cy, child in row.iter_boxes(r1, rx, ry):
-                if isinstance(child, TableBox) and ci1 < index < ci2:
-                    return child, cx, cy, ci1, ci2
-    return None
 
 
 def is_multi_cell(texel, i1, i2):
@@ -89,43 +77,41 @@ def is_multi_cell(texel, i1, i2):
     return r1 != r2 or c1 != c2
 
 
-class TableEditorBase(Editor):
-    """Base class for table editors. Provides column-resize drag for both modes."""
+class TableEditorBase(TexelEditor):
+    """Base class for table editors. """
 
-    _drag_col         = None
     _drag_orig_widths = None
     _preview_widths   = None
 
-    def install(self, view, index):
-        self._drag_handle = None
-        self.view  = view
-        self.index = index
-        res = _find_table_at(view.layout, index)
-        if res is None:
-            self._table_box = None
-            return
-        self._table_box, tx, ty, self._ti1, self._ti2 = res
-        self.box_index   = self._ti1
-        self.texel_index = self._ti1 - self._table_box.base_offset
-        self.position = tx, ty
-
     def find_box(self):
-        res = _find_table_at(self.view.layout, self.index)
-        if res is None:
-            return None
-        tb, cx, cy, ci1, ci2 = res
-        return tb, (cx, cy)
+        """
+        Return (TableBox, cx, cy, ci1, ci2) for the box containing index.
+        
+        Raises: IndexError when no Box is found.
+        """
+        layout = self.docview.layout
+        index =  self.docview.index
+        for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
+            if not (p1 <= index < p2):
+                continue
+            for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
+                if not (r1 <= index < r2):
+                    continue
+                for ci1, ci2, cx, cy, child in row.iter_boxes(r1, rx, ry):
+                    if isinstance(child, TableBox) and ci1 <= index < ci2:
+                        return ci1, (cx, cy), child
+        raise IndexError(index)
 
     def get_cursor(self, handle_id):
         return wx.CURSOR_SIZEWE
 
     def hit_test(self, x, y):
-        tb = self._table_box
+        tb = self.box
         if tb is None:
             return None
         if not (0 <= y <= tb.height):
             return None
-        hit_r = _HIT_RADIUS / self.view.zoom
+        hit_r = _HIT_RADIUS / self.docview.zoom
         sep_x = 0
         for col, cw in enumerate(tb.col_widths):
             sep_x += cw
@@ -134,26 +120,29 @@ class TableEditorBase(Editor):
         return None
 
     def start_drag(self, handle, x, y):
-        super().start_drag(handle, x, y)
-        self._drag_col         = handle
-        self._drag_orig_widths = list(self._table_box.col_widths)
+        self._drag_orig_widths = list(self.box.col_widths)
         self._preview_widths   = None
-        self.view.refresh()
+        super().start_drag(handle, x, y)
 
-    def _compute_preview_widths(self, dx, event):
+    def clear_drag(self):
+        super().clear_drag()
+        self._drag_orig_widths = None
+        self._preview_widths   = None
+
+    def _compute_preview_widths(self, dx, shift, ctrl):
         orig = self._drag_orig_widths
-        col  = self._drag_col
+        col  = self._drag_handle
         n    = len(orig)
         widths = list(orig)
 
-        if event.ShiftDown() and col + 1 < n:
+        if shift and col + 1 < n:
             max_dx = orig[col + 1] - 20
             min_dx = -(orig[col] - 20)
             delta  = max(min_dx, min(max_dx, dx))
             widths[col]     = orig[col]     + delta
             widths[col + 1] = orig[col + 1] - delta
 
-        elif event.ControlDown() and col + 1 < n:
+        elif ctrl and col + 1 < n:
             new_left    = max(20, orig[col] + dx)
             delta       = new_left - orig[col]
             total_right = sum(orig[col + 1:])
@@ -172,22 +161,16 @@ class TableEditorBase(Editor):
 
         return widths
 
-    def on_motion(self, event):
-        if self._drag_col is None:
-            return
-        p  = self.window_to_box(event.Position)
-        dx = p[0] - self._drag_start[0]
-        self._preview_widths = self._compute_preview_widths(dx, event)
-        self.view.refresh()
+    def drag_handle(self, handle, dx, dy, shift, ctrl):
+        self._preview_widths = self._compute_preview_widths(dx, shift, ctrl)
 
     def draw_overlay(self, gc):
-        if self._table_box is None:
-            return
-        tb = self._table_box
-        bx, by = self.position
-        widths = self._preview_widths if self._preview_widths is not None else tb.col_widths
+        tb = self.box
+        bx, by = self.box_origin
+        widths = self._preview_widths if self._preview_widths is not None else \
+            tb.col_widths
         orig   = self._drag_orig_widths or tb.col_widths
-        zoom   = self.view.zoom
+        zoom   = self.docview.zoom
         x      = 0
         for c, cw in enumerate(widths):
             x_col = x
@@ -202,89 +185,232 @@ class TableEditorBase(Editor):
             gc.line_to(bx + x, by + tb.height)
             gc.stroke()
             if changed:
-                _draw_dimension(gc, bx + x_col, bx + x, by - 8 / zoom, widths[c], zoom)
+                _draw_dimension(gc, bx+x_col, bx+x, by-8/zoom, widths[c], zoom)
 
     def commit(self):
-        if self._preview_widths is not None:
-            self.view.set_texel_attributes(self._ti1, Table, col_widths=self._preview_widths)
-            self.install(self.view, self.index)
-            assert self._table_box is not None
-        self._drag_col         = None
-        self._drag_orig_widths = None
-        self._preview_widths   = None
+        widths = self._preview_widths
+        if widths is not None:
+            self.docview.set_texel_attributes(
+                self.i1, self.texel, col_widths=widths)
 
     def get_handles(self):
         return iter([])
 
 
 class CursorEditor(TableEditorBase):
-    """Active while cursor is inside a table cell (text-editing mode).
+    """
+    Active while cursor is inside a table cell (text-editing mode).
 
     Uses default draw() — cursor + selection + column-separator overlay.
     """
 
     @staticmethod
-    def condition(view, index_texels, sel_texels):
-        res = _find_table_at(view.layout, view.index)
-        if res is None:
-            return False
-        sel = view.selection
-        if sel is None:
-            return True
-        tb, cx, cy, ci1, ci2 = res
-        texel_index = ci1 - tb.base_offset
-        abs_s1, abs_s2 = sorted(sel)
-        return not is_multi_cell(tb.texel, abs_s1 - texel_index, abs_s2 - texel_index)
+    def match(view, path):
+        result = None
+        for depth, (i1, i2, texel) in enumerate(path):
+            if isinstance(texel, Table):
+                sel = view.selection
+                if sel is None:
+                    result = i1, i2, depth, texel
+                else:
+                    s1, s2 = sorted(sel)
+                    if not is_multi_cell(texel, s1 - i1, s2 - i1):
+                        result = i1, i2, depth, texel
+        return result
 
 
 class MatrixEditor(TableEditorBase):
-    """Active when the selection spans multiple table cells (structure mode).
+    """
+    Active when the selection spans multiple table cells (structure mode).
 
-    Overrides draw() to suppress the text cursor and render rectangular
-    cell-block highlights; column-resize drag is inherited from TableEditorBase.
+    Overrides draw() to suppress the text cursor and render
+    rectangular cell-block highlights; column-resize drag is inherited
+    from TableEditorBase.
     """
 
     @staticmethod
-    def condition(view, index_texels, sel_texels):
-        res = _find_table_at(view.layout, view.index)
-        if res is None:
-            return False
-        sel = view.selection
-        if sel is None:
-            return False
-        tb, cx, cy, ci1, ci2 = res
-        texel_index = ci1 - tb.base_offset
-        abs_s1, abs_s2 = sorted(sel)
-        return is_multi_cell(tb.texel, abs_s1 - texel_index, abs_s2 - texel_index)
+    def match(view, path):
+        result = None
+        for depth, (i1, i2, texel) in enumerate(path):
+            if isinstance(texel, Table):
+                sel = view.selection
+                if sel is None:
+                    return None
+                s1, s2 = sorted(sel)
+                if is_multi_cell(texel, s1 - i1, s2 - i1):
+                    result = i1, i2, depth, texel
+        return result
 
-    def draw(self, gc):
-        """No text cursor; rectangular cell-block selection + column-separator overlay."""
-        res = _find_table_at(self.view.layout, self.index)
-        if res is None:
+    def draw_selection(self, gc):
+        """Highlight the rectangular cell block covered by the selection."""
+        sel = self.docview.selection
+        if sel is None:
             return
-        tb, bx, by, ci1, ci2 = res
-        sel = self.view.selection
-        if sel is not None:
-            abs_s1, abs_s2 = sorted(sel)
-            tb.draw_matrix_selection(abs_s1 - ci1, abs_s2 - ci1, bx, by, gc)
-        self.draw_overlay(gc)
-        self.draw_handles(gc)
+        s1, s2 = sorted(sel)
+        try:
+            ar, ac = self.texel.get_coord(s1 - self.i1)
+            cr, cc = self.texel.get_coord(s2 - self.i1)
+        except (IndexError, TypeError):
+            return
+        r1, r2 = sorted([ar, cr])
+        c1, c2 = sorted([ac, cc])
+
+        # Walk to the first fragment, then forward through the chain.
+        # _origin is only set on fragments that were drawn in this paint
+        # cycle (i.e. currently visible) — skip the rest.
+        frag = self.box
+        while frag.prev is not None:
+            frag = frag.prev
+        while frag is not None:
+            origin = getattr(frag, '_origin', None)
+            if origin is not None:
+                self._draw_frag_selection(frag, r1, r2, c1, c2, origin, gc)
+            frag = frag.next
+
+    def _draw_frag_selection(self, frag, r1, r2, c1, c2, origin, gc):
+        bx, by    = origin
+        device    = frag.device
+        row_indices = frag.orig_rows if frag.orig_rows is not None \
+            else range(frag.n_rows)
+        cy = by
+        for r_local, r_orig in enumerate(row_indices):
+            rh = frag.row_heights[r_local]
+            if r1 <= r_orig <= r2:
+                cx = bx
+                for c, cw in enumerate(frag.col_widths):
+                    if c1 <= c <= c2:
+                        device.invert_rect(cx, cy, cw, rh, gc)
+                        device.draw_line(cx, cy, cx+cw, cy+rh, 2, gc)  # XXX
+                    cx += cw
+            cy += rh
+
+    def copy(self):
+        """Rectangular cell copy for multi-cell selections."""
+        sel = self.docview.selection
+        if sel is None:
+            return
+        abs_s1, abs_s2 = sorted(sel)
+        tb = self.box
+        if tb is None:
+            return
+        ci1   = self.i0_box
+        model = self.docview.model
+        i1, i2 = abs_s1 - ci1, abs_s2 - ci1
+
+        ar, ac = self.texel.get_coord(i1)
+        cr, cc = self.texel.get_coord(max(i1, i2 - 1))
+        if ar == cr and ac == cc:
+            part = model.copy(ci1 + i1, ci1 + i2)
+            self.docview.to_clipboard(part)
+            return
+
+        r1, r2 = min(ar, cr), max(ar, cr)
+        c1, c2 = min(ac, cc), max(ac, cc)
+        grid = []
+        for r in range(r1, r2 + 1):
+            row = []
+            for c in range(c1, c2 + 1):
+                cell_i1 = tb.offsets[(r, c)]
+                cell_i2 = cell_i1 + len(tb.cells[r][c]) - 1
+                row.append(model.copy(ci1 + cell_i1, ci1 + cell_i2).texel)
+            grid.append(row)
+        entries = [(t, {}) for row in grid for t in row]
+        new_table = Table(*entries, ncols=c2 - c1 + 1)
+        result = model.create_textmodel()
+        result.texel = new_table
+        self.docview.to_clipboard(result)
+
+
+### Register Editors
+
+from .documentview import DocumentView
+DocumentView.editor_registry.append(CursorEditor)
+DocumentView.editor_registry.append(MatrixEditor)
+
+
+def test_00():
+    "_draw_frag_selection calls invert_rect once per selected cell"
+    from .table_boxes import mk_box_table
+    from .wxtextview.testdevice import TestDevice
+    calls = []
+    class CountingDevice(TestDevice):
+        def invert_rect(self, x, y, w, h, dc):
+            calls.append((x, y, w, h))
+
+    table = mk_box_table([['A', 'B', 'C'],
+                          ['D', 'E', 'F'],
+                          ['G', 'H', 'I']], device=CountingDevice())
+    editor = MatrixEditor(None, 0, 0, 0)
+
+    # rows 0-1, cols 0-1 → 4 cells
+    editor._draw_frag_selection(table, 0, 1, 0, 1, (0, 0), None)
+    assert len(calls) == 4
+
+    calls.clear()
+    # single cell (1,2)
+    editor._draw_frag_selection(table, 1, 1, 2, 2, (0, 0), None)
+    assert len(calls) == 1
+
+
+def test_04():
+    "MatrixEditor.copy"
+    from .table_boxes import build_table_box
+    from .tables import from_strings, Table
+    from .textmodel.textmodel import TextModel
+    from .textmodel.texeltree import length as texel_length
+    from .wxtextview.builder import Factory
+
+    texts = [['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']]
+    table = from_strings(texts)
+    model = TextModel()
+    model.texel = table
+    factory = Factory()
+    box = build_table_box(table, factory, row_height=14)
+
+    copied_model = []
+    class FakeView:
+        layout    = None
+        selection = None
+        def to_clipboard(self, m):
+            copied_model.append(m)
+        def copy(self): pass
+
+    fake_view = FakeView()
+    fake_view.model = model
+
+    editor = MatrixEditor(fake_view, 0, texel_length(table), 0)
+    editor.box    = box
+    editor.i0_box = 0
+    editor.texel  = table
+
+    s1 = box.offsets[(1, 0)]
+    s2 = box.offsets[(2, 1)] + len(box.cells[2][1]) - 1
+    editor.docview.selection = (s1, s2)
+
+    editor.copy()
+    assert len(copied_model) == 1
+    result = copied_model[0]
+    assert isinstance(result.texel, Table)
+    assert result.texel.nrows == 2
+    assert result.texel.ncols == 2
 
 
 def demo_00():
     """CursorEditor demo: drag column separators to resize columns."""
     from .tables import from_strings
     from .document import Document
-    from .documentview import DocumentView
+    from .documentview import DocumentView, get_path
 
     doc = Document()
     doc.textmodel.texel = from_strings([['Name',     'City',       'Country'],
                                         ['Einstein', 'Ulm',        'Germany'],
                                         ['Darwin',   'Shrewsbury', 'England']])
 
-    app   = wx.App(False)
+    doc.textmodel.insert_text(0, "\n"*36)
+    app   = wx.App(True)
     frame = wx.Frame(None, title='CursorEditor demo', size=(420, 300))
     view  = DocumentView(frame, doc)
-    view.install_editor(CursorEditor(), 1)
     frame.Show()
+    view.set_index(36)   # cursor inside table → auto-installs CursorEditor
+    assert view.active_editor is not None
     app.MainLoop()

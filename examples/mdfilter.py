@@ -235,7 +235,7 @@ def _insert_text_block(doc, ptype, indent, runs):
 
 
 def _insert_table_block(doc, grid):
-    from miniword.tables import mk_table
+    from miniword.tables import from_strings as mk_table
     from copy import copy
     tbl_model = doc.textmodel.create_textmodel()
     table = mk_table(grid)

@@ -8,6 +8,9 @@ from .image_panel import ImageInspector
 from .table_panel import TablePanel
 from .ui.sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
 
+from . import image_editors, table_editors # registers editors
+
+
 
 # ---------------------------------------------------------------------------
 # Progress dialog
@@ -534,11 +537,6 @@ class MainFrame(wx.Frame, ViewBase):
 
     def undo_changed(self, *args):
         wx.CallAfter(self._update_undo_ui)
-
-    def image_dblclick(self, view, index):
-        self.show_right_panel("image")
-
-
 
     def layout_progress_start(self, view):
         if view.builder.layout.is_finished:

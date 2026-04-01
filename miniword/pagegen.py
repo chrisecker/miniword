@@ -504,7 +504,6 @@ def _place_table_fragments(tbox, draft, device, left=0):
     remaining   = list(range(tbox.header_rows, tbox.n_rows))
     prev_frag   = None
     first       = True
-    cum_offset  = 0
 
     while remaining:
         space = (available if first else page_height) - header_h
@@ -516,8 +515,7 @@ def _place_table_fragments(tbox, draft, device, left=0):
             slice_rows.append(r)
             used += rh
 
-        frag_rows = list(range(tbox.header_rows)) + slice_rows if first else slice_rows
-
+        frag_rows    = list(range(tbox.header_rows)) + slice_rows if first else slice_rows
         frag_cells   = [tbox.cells[r] for r in frag_rows]
         frag_heights = [tbox.row_heights[r] for r in frag_rows]
 
@@ -526,24 +524,19 @@ def _place_table_fragments(tbox, draft, device, left=0):
                         break_level=0,
                         device=device,
                         is_continuation=not first)
-        frag.texel      = tbox.texel
-        frag.orig       = tbox
-        frag.base_offset = cum_offset
-        frag.orig_rows  = frag_rows
+        frag.orig_rows = frag_rows
         frag.prev = prev_frag
         if prev_frag is not None:
             prev_frag.next = frag
-
-        cum_offset += len(frag)
 
         if not first:
             draft = draft.create_newpage()
 
         row = Row([frag], left=left, device=device)
         draft.add_row(row, 1.0, 0)
-        remaining  = remaining[len(slice_rows):]
-        prev_frag  = frag
-        first      = False
+        remaining = remaining[len(slice_rows):]
+        prev_frag = frag
+        first     = False
 
     return draft
 

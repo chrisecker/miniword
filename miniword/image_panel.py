@@ -197,7 +197,7 @@ class ImageInspector(wx.Panel, ViewBase):
 
     def editor_changed(self, view, editor):
         if editor is not None and isinstance(editor.texel, Image):
-            self.refresh(editor.texel, editor.index, getattr(editor, 'box', None))
+            self.refresh(editor.texel, editor.i0_box, getattr(editor, 'box', None))
         else:
             self.clear()
         self._crop_active = isinstance(editor, ImageCropEditor)

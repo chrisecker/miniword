@@ -2,13 +2,12 @@ import wx
 from wx.lib.newevent import NewEvent
 
 from .textmodel.viewbase import ViewBase
-from .textmodel.texeltree import iter_childs, length
+from .textmodel.texeltree import length
 from .inspector import add_section
 from .ui.threestate import ColourButton
 from .icons import icon
 from .tables import Table, empty_table
-from .table_editors import _find_table_at
-from .documentview import transform_texel
+from .documentview import find_texel, transform, get_path
 
 TableCreatedEvent, EVT_TABLE_CREATED = NewEvent()
 
@@ -358,10 +357,7 @@ class TablePanel(wx.Panel, ViewBase):
         self._update_cell_inspector()
 
     def _update_cell_inspector(self):
-        table_box, ci1 = self._find_table()
-        if table_box is None:
-            return
-        table, _ = self._get_table_texel()
+        table, ci1 = self._find_table_texel()
         if table is None:
             return
         r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
@@ -384,33 +380,15 @@ class TablePanel(wx.Panel, ViewBase):
 
     # --- helpers to find current table ---
 
-    def _find_table(self):
-        view = self._view
-        if not hasattr(view, 'layout') or view.layout is None:
-            return None, None
-        index = view.index
-        res = _find_table_at(view.layout, index)
-        if res is None:
-            return None, None
-        table_box, cx, cy, ci1, ci2 = res
-        # ci1 is the absolute offset of the TableBox in the model
-        return table_box, ci1
-
-    def _get_table_texel(self):
-        _, ci1 = self._find_table()
-        if ci1 is None:
-            return None, None
-        model = self._view.model
-        # Walk the texel tree to find the Table at ci1
-        def find_table(texel, offset=0):
-            if isinstance(texel, Table):
-                return texel, offset
-            if texel.is_group or texel.is_container:
-                for j1, j2, child in iter_childs(texel):
-                    if j1 <= ci1 - offset < j2:
-                        return find_table(child, offset + j1)
-            return None, None
-        return find_table(model.texel)
+    def _find_table_texel(self):
+        """Return (table_texel, offset) for the innermost Table at the cursor,
+        or (None, None) if the cursor is not inside a table."""
+        index = self._view.index
+        result = None
+        for abs_i1, abs_i2, node in get_path(self._view.model.texel, index):
+            if isinstance(node, Table):
+                result = node, abs_i1
+        return result or (None, None)
 
     def _selected_cell_range(self, table, ci1):
         """Return (r1, c1, r2, c2) for current selection, clamped to table."""
@@ -428,36 +406,30 @@ class TablePanel(wx.Panel, ViewBase):
 
     def _apply_to_table(self, fn):
         """Find table, apply fn(table, r1, c1, r2, c2) → new_table, commit."""
-        table_box, ci1 = self._find_table()
-        if table_box is None:
-            return
-        table, t_offset = self._get_table_texel()
+        table, offset = self._find_table_texel()
         if table is None:
             return
-        r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
+        r1, c1, r2, c2 = self._selected_cell_range(table, offset)
         new_table = fn(table, r1, c1, r2, c2)
         if new_table is table:
             return
         model = self._view.model
-        model.texel = transform_texel(model.texel, t_offset,
-                                       lambda t: new_table)
-        model.notify_views('properties_changed', t_offset, t_offset + 1)
+        _, _, depth = find_texel(model.texel, table, offset)
+        model.texel = transform(model.texel, offset, depth, lambda t: new_table)
+        model.notify_views('properties_changed', offset, offset + 1)
 
     def _apply_table_replace(self, new_table_fn):
         """Find table, replace it with new_table_fn(table) → new_table."""
-        table_box, ci1 = self._find_table()
-        if table_box is None:
-            return
-        table, t_offset = self._get_table_texel()
+        table, offset = self._find_table_texel()
         if table is None:
             return
         new_table = new_table_fn(table)
         if new_table is table:
             return
         model = self._view.model
-        model.texel = transform_texel(model.texel, t_offset,
-                                       lambda t: new_table)
-        model.notify_views('properties_changed', t_offset, t_offset + 1)
+        _, _, depth = find_texel(model.texel, table, offset)
+        model.texel = transform(model.texel, offset, depth, lambda t: new_table)
+        model.notify_views('properties_changed', offset, offset + 1)
 
     # --- border preset ---
 
@@ -548,19 +520,16 @@ class TablePanel(wx.Panel, ViewBase):
         menu.Destroy()
 
     def _current_cell(self):
-        table_box, ci1 = self._find_table()
-        if table_box is None:
-            return None, None, None, None
-        table, _ = self._get_table_texel()
+        table, ci1 = self._find_table_texel()
         if table is None:
             return None, None, None, None
         r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
-        return table_box, ci1, r1, c1
+        return table, ci1, r1, c1
 
     def _on_row_action(self, event):
         eid = event.GetId()
-        table_box, ci1, r, c = self._current_cell()
-        if table_box is None:
+        table, ci1, r, c = self._current_cell()
+        if table is None:
             return
         if eid == 1:
             self._apply_table_replace(lambda t: t.insert_rows(r + 1, 1))
@@ -571,8 +540,8 @@ class TablePanel(wx.Panel, ViewBase):
 
     def _on_col_action(self, event):
         eid = event.GetId()
-        table_box, ci1, r, c = self._current_cell()
-        if table_box is None:
+        table, ci1, r, c = self._current_cell()
+        if table is None:
             return
         if eid == 4:
             self._apply_table_replace(lambda t: t.insert_cols(c + 1, 1))
@@ -595,18 +564,15 @@ class TablePanel(wx.Panel, ViewBase):
         self._set_cell_attr('valign', val)
 
     def _set_cell_attr(self, attr, value):
-        table_box, ci1 = self._find_table()
-        if table_box is None:
-            return
-        table, t_offset = self._get_table_texel()
+        table, offset = self._find_table_texel()
         if table is None:
             return
-        r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
+        r1, c1, r2, c2 = self._selected_cell_range(table, offset)
         new_table = table.set_cellattr(r1, c1, r2, c2, **{attr: value})
         model = self._view.model
-        model.texel = transform_texel(model.texel, t_offset,
-                                       lambda t: new_table)
-        model.notify_views('properties_changed', t_offset, t_offset + 1)
+        _, _, depth = find_texel(model.texel, table, offset)
+        model.texel = transform(model.texel, offset, depth, lambda t: new_table)
+        model.notify_views('properties_changed', offset, offset + 1)
 
 
 def demo_00():

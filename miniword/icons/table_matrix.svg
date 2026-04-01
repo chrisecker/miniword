@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg height="24px" viewBox="0 0 24 24" width="24px" fill="#1f1f1f" xmlns="http://www.w3.org/2000/svg">
+  <path d="M0 0h24v24H0z" fill="none"/>
+  <!-- Table grid (borders + left column holes) -->
+  <path d="M20 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 16H5v-5h7v5zm0-7H5V7h7v5zm8 7h-7v-5h7v5zm0-7h-7V7h7v5z"/>
+  <!-- Selected cells: right column filled -->
+  <rect x="13" y="7" width="7" height="5"/>
+  <rect x="13" y="14" width="7" height="5"/>
+</svg>

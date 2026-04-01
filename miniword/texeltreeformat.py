@@ -110,7 +110,7 @@ def serialize_texel(texel, indent=0):
             return '%sBR' % pad
 
         else:
-            from .image import Image as _Image
+            from .images import Image as _Image
             if isinstance(texel, _Image):
                 parts = {}
                 if texel.scale_x != 1.0:
@@ -484,7 +484,7 @@ class _Parser:
             if 'crop_w' in d:
                 crop = (d.get('crop_x', 0), d.get('crop_y', 0), d['crop_w'], d['crop_h'])
         self.tok.consume('RPAREN')
-        from .image import Image
+        from .images import Image
         return Image(blob_id, scale_x, scale_y, proportional, crop)
 
     def parse_container(self):

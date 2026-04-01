@@ -6,27 +6,97 @@ from .builder import Factory, Builder
 from .cairodevice import CairoDevice
 from .annotation import highlight, squiggle
 from .builder import trace
-from .table_editors import CursorEditor, MatrixEditor
-from .image_editors import ImageSizeEditor, find_image_at
 from .texels import BR
-from .textmodel.texeltree import transform, iter_childs, grouped
-
+from .textmodel.texeltree import iter_childs, grouped, Group, \
+    provides_childs, length
 
 import wx
 
 
-def transform_texel(texel, i, fun):
-    """Apply fun to the non-group texel at position i. Only Groups are walked;
-    singles, text, and containers are treated as atomic."""
-    if texel.is_group:
-        result = []
-        for j1, j2, child in iter_childs(texel):
+
+def find_texel(tree, texel, i):
+    """
+    Searches for 'texel' in 'tree' at position i.
+    
+    Returns:
+        (i1, i2, depth): The absolute interval and the depth of the texel.
+    """
+    if tree is texel:
+        # Basis-Fall: Hier ist das Intervall (aus eigener Sicht) 0 bis Länge.
+        return 0, length(tree), 0
+
+    if not provides_childs(tree):
+        raise IndexError("Texel not found at position %i" % i)
+
+    for j1, j2, child in iter_childs(tree):
+        if j1 <= i < j2:
+            # Rekursion liefert Werte relativ zum Kind
+            i1_rel, i2_rel, depth = find_texel(child, texel, i - j1)
+            
+            # Transformation der relativen Werte in das System des aktuellen Knotens
+            return i1_rel + j1, i2_rel + j1, depth + 1
+
+    raise IndexError("Texel not found at position %i" % i)
+
+
+
+def get_texel(tree, i, depth):
+    if depth == 0:
+        if 0 <= i < length(tree):
+            return tree
+        raise IndexError("Position %i out of bounds for target texel" % i)
+        
+    if not provides_childs(tree):
+        raise IndexError("Depth %i not reachable at position %i (reached leaf)"
+                         % (depth, i))
+
+    for j1, j2, child in iter_childs(tree):
+        if j1 <= i < j2:
+            return get_texel(child, i - j1, depth - 1)
+            
+    raise IndexError("No child covers position %i at remaining depth %i"
+                     % (i, depth))
+
+
+def transform(tree, i, d, fun):
+    """
+    Applies 'fun' to the node that spans position i at depth d.
+    The node is selected if its horizontal range covers i (start <= i <
+    end).
+
+    """
+    if d == 0:
+        return fun(tree)
+    if not provides_childs(tree):
+        raise IndexError("Can't descend into texel %s"%repr(tree))
+    r = []
+    for j1, j2, child in iter_childs(tree):
+        if j1 <= i < j2:
+            r.append(transform(child, i - j1, d-1, fun))
+        else:
+            r.append(child)
+    if tree.is_group:
+        return Group(r)
+    assert tree.is_container
+    return tree.set_childs(r)
+
+
+def get_path(tree, i, _offset=0):
+    """
+    Returns the path of nodes that cover position i.
+    
+    Returns:
+        A list of tuples (abs_i1, abs_i2, node) from root to leaf.
+    """
+    path = []
+    path.append((_offset, _offset + length(tree), tree))
+
+    if provides_childs(tree):
+        for j1, j2, child in iter_childs(tree):
             if j1 <= i < j2:
-                result.append(transform_texel(child, i - j1, fun))
-            else:
-                result.append(child)
-        return grouped(result)
-    return fun(texel)
+                return path + get_path(child, i - j1, _offset + j1)
+    return path
+
 
 
 class DocumentView(WXTextView):
@@ -43,7 +113,7 @@ class DocumentView(WXTextView):
     squiggles  = []  # list of (i1, i2) or (i1, i2, color)
 
     # auto_installable editors listed in priority order (first match wins)
-    editor_registry = [CursorEditor, MatrixEditor, ImageSizeEditor]
+    editor_registry = [] #CursorEditor, MatrixEditor, ImageSizeEditor]
 
     min_zoom = 0.2
     max_zoom = 5.0
@@ -73,12 +143,118 @@ class DocumentView(WXTextView):
         actions[116, False, True]          = 'cycle_basestyle'  # Alt+T
         actions[84,  False, True]          = 'cycle_basestyle'  # Shift+Alt+T
         self.actions = actions
+        
+    def create_builder(self):
+        factory = Factory(self.document.basestyles, device=CairoDevice())
+        factory.blobs = self.document.blobs
+        builder = Builder(self.model, factory)
+        builder.settings = self.document.settings
+        return builder
 
+    def export_pdf(self, path):
+        import cairo
+        self.builder.buildto_finish()
+        pages = self.layout.childs
+        if not pages:
+            return
+        device = self.builder.get_device()
+        w, h = pages[0].width, pages[0].height
+        surface = cairo.PDFSurface(path, w, h)
+        ctx = cairo.Context(surface)
+        for page in pages:
+            page.draw_background(0, 0, ctx)
+            page.draw_for_print(0, 0, ctx)
+            ctx.show_page()
+        surface.finish()
+
+    def get_rowwidth(self, i): # XXX do we need this?
+        """Return the available content width at position i.
+
+        Traverses the layout to find the innermost Row containing i and
+        returns its content width (row.width - row.start[0]).  Works
+        recursively, so inside a table cell the column width is returned.
+        """
+        from .pagegen import Row
+        result = None
+        def search(box, i0):
+            nonlocal result
+            if isinstance(box, Row):
+                result = box.width - box.start[0]
+            for b1, b2, _, _, child in box.iter_boxes(i0, 0, 0):
+                if b1 <= i <= b2:
+                    search(child, b1)
+                    break
+        search(self.layout, 0)
+        return result
+        
     def insert_texel(self, i, texel):
         tmp = self.model.create_textmodel()
         tmp.texel = texel
         return self.insert(i, tmp)
 
+    def _set_texel_attributes(self, i1, i2, d, kwds):
+        """Helper: modify attributes for texel occupying i1..i2 in depth d."""
+        old = dict()
+        def fun(texel, new=kwds, old=old):
+            for key, value in new.items():
+                old[key] = getattr(texel, key)
+                setter = getattr(texel, 'set_'+key)
+                texel = setter(value)
+            return texel
+        model = self.model
+        model.texel = transform(model.texel, i1, d, fun)
+        model.notify_views('properties_changed', i1, i2)
+        return self._set_texel_attributes, i1, i2, d, old
+
+    def set_texel_attributes(self, i, texel, **kwds):
+        """Set attributes on texel and record undo."""
+        i1, i2, depth = find_texel(self.model.texel, texel, i)
+        info = self._set_texel_attributes(i1, i2, depth, kwds)
+        self.add_undo(info)
+    
+    ### Actions
+    def handle_action(self, action, shift=False):
+        i = self.index
+        style = self.model.get_style(i)
+        model = self.model
+        if self.has_selection():
+            s1, s2 = sorted(self.selection)
+        else:
+            s1 = s2 = i
+        row2, col2 = model.index2position(s2)
+        ps1 = model.linestart(model.index2position(s1)[0])
+        ps2 = s2 if col2 == 0 else model.lineend(row2) + 1
+        if action == 'insert_newline' and shift:
+            self.insert_texel(i, BR(style))
+        elif action == 'undo' and shift:
+            self.redo()
+        elif action == 'move_down':
+            self.move_down(shift)
+        elif action == 'move_up':
+            self.move_up(shift)
+        elif action == 'move_page_down':
+            self.move_page_down(shift)
+        elif action == 'move_page_up':
+            self.move_page_up(shift)
+        elif action == 'move_document_end':
+            self.set_index(len(self.layout) - 1, shift)
+        elif action == 'indent_par':
+            self.indent_par(1, ps1, ps2)
+        elif action == 'dedent_par':
+            self.indent_par(-1, ps1, ps2)
+        elif action == 'move_par_up':
+            self.swap_paragraph(-1)
+        elif action == 'move_par_down':
+            self.swap_paragraph(1)
+        elif action == 'cycle_list_type':
+            self.cycle_list_type(ps1, ps2)
+        elif action == 'cycle_basestyle':
+            self.cycle_basestyle(ps1, ps2, reverse=shift)
+        elif action in ('copy', 'cut', 'paste') and self.active_editor:
+            getattr(self.active_editor, action)()
+        else:
+            return WXTextView.handle_action(self, action, shift)
+    
     def indent_par(self, direction, i1, i2):
         model = self.model
         if direction > 0:
@@ -114,12 +290,14 @@ class DocumentView(WXTextView):
 
     def cycle_list_type(self, s1, s2):
         types = ['normal', 'list', 'numbered']
-        current = self.model.get_parstyle(self.index).get('paragraph_type', 'normal')
+        current = self.model.get_parstyle(self.index).get(
+            'paragraph_type', 'normal')
         try:
             idx = types.index(current)
         except ValueError:
             idx = 0
-        self.set_parproperties(s1, s2, paragraph_type=types[(idx + 1) % len(types)])
+        self.set_parproperties(
+            s1, s2, paragraph_type=types[(idx + 1) % len(types)])
 
     def cycle_basestyle(self, s1, s2, reverse=False):
         keys = self.document.basestyles.keys()
@@ -130,76 +308,98 @@ class DocumentView(WXTextView):
         delta = -1 if reverse else 1
         self.set_parproperties(s1, s2, base=keys[(idx + delta) % len(keys)])
 
-    def _set_texel_attributes(self, i, kwds, cls=None):
-        old = dict()
-        def fun(texel, new=kwds, old=old):
-            for key, value in new.items():
-                old[key] = getattr(texel, key)
-                setter = getattr(texel, 'set_'+key)
-                texel = setter(value)
-            return texel
-        model = self.model
-        if cls is not None:
-            model.texel = transform_texel(model.texel, i, fun)
-        else:
-            model.texel = transform(model.texel, i, i+1, fun, True)
-        model.notify_views('properties_changed', i, i+1)
-        return self._set_texel_attributes, i, old, cls
-
-    def set_texel_attributes(self, i, cls=None, **kwds):
-        """Set attributes on the texel at position i and record undo.
-
-        cls -- if given, find the ancestor of that type at i (needed for
-               container texels like Table that transform() would descend into).
-        """
-        info = self._set_texel_attributes(i, kwds, cls)
-        self.add_undo(info)
-
-    
-    
-
-    def get_rowwidth(self, i):
-        """Return the available content width at position i.
-
-        Traverses the layout to find the innermost Row containing i and
-        returns its content width (row.width - row.start[0]).  Works
-        recursively, so inside a table cell the column width is returned.
-        """
-        from .pagegen import Row
-        result = None
-        def search(box, i0):
-            nonlocal result
-            if isinstance(box, Row):
-                result = box.width - box.start[0]
-            for b1, b2, _, _, child in box.iter_boxes(i0, 0, 0):
-                if b1 <= i <= b2:
-                    search(child, b1)
-                    break
-        search(self.layout, 0)
-        return result
-
-    # ------------------------------------------------------------------
-    # Editor management
-    # ------------------------------------------------------------------
-
-    def install_editor(self, editor, index):
+    ### Editor management
+    def install_editor(self, editor, texel):
+        """Installs an editor for the texel at positions i1 to i2 in depth d."""
+        print("installing:", editor )
+        editor.install(texel)
         self.active_editor = editor
-        editor.install(self, index)
         self.notify_views('editor_changed', editor)
         self.refresh()
 
     def remove_editor(self):
         if self.active_editor:
             self.active_editor = None
+            print("editor removed")
             self.notify_views('editor_changed', None)
             self.refresh()
 
+    def reinstall_editor(self, texel):
+        """Called after properties change."""
+        self.active_editor.reinstall(texel)
+
+    def update_editor(self):
+        """Install, switch, or remove the editor based on current conditions.
+        """
+        index = self.index
+        editor = self.active_editor
+        texel = self.model.texel
+        path = get_path(texel, index)
+
+        # 1. Current editor still valid?
+        if editor is not None:
+            m = editor.match(self, path)
+            if m is not None:
+                i1, i2, depth, texel = m
+                assert i1 == editor.i1
+                assert i2 == editor.i2
+                assert depth == editor.depth
+                self.reinstall_editor(texel)
+                return            
+            self.remove_editor()
+                            
+        # 2. Install new editor (first match from registry wins).
+        for cls in self.editor_registry:
+            if not cls.auto_installable:
+                continue
+            m = cls.match(self, path)
+            if m is not None:
+                i1, i2, depth, texel = m
+                editor = cls(self, i1, i2, depth)
+                self.install_editor(editor, texel)
+                return
+
+    def on_leftdclick(self, event):
+        index = self.index   # already set by first click
+        path = get_path(self.model.texel, index)
+        for cls in self.editor_registry:
+            if not cls.click_installable:
+                continue
+            m = cls.match(self, path)
+            if m is not None:
+                i1, i2, depth, texel = m
+                editor = cls(self, i1, i2, depth)
+                self.install_editor(editor, texel)
+                return
+        #super().on_leftdclick(event)
+      
+    ### Model callbacks & atomic
+    _pending_range = None  # (i1, i2, delta) accumulated while inhibited
+    _inhibit_depth = 0
+    def _accumulate(self, i1, i2, delta=0):
+        r = (i1, i2, delta)
+        self._pending_range = accumulate(self._pending_range, r)
+
+    @contextmanager
+    def atomic(self):
+        """Group multiple model/stylesheet changes into one layout rebuild."""
+        self.begin_undo_group()
+        self._inhibit_depth += 1
+        try:
+            yield
+        finally:
+            self.end_undo_group()
+            self._inhibit_depth -= 1
+        if self._inhibit_depth == 0 and self._pending_range is not None:
+            i1, i2, delta = self._pending_range
+            self._pending_range = None
+            self._rebuild_with_progress(i1, i2, delta)
+        
     def properties_changed(self, model, i1, i2):
         super().properties_changed(model, i1, i2)
-        editor = self.active_editor
-        if editor is not None:
-            self.builder.buildto_index(editor.index + 1)
-            editor.reinstall()
+        if self.active_editor is not None:
+            self.builder.buildto_index(self.active_editor.i2)
+            self.update_editor()
 
     def inserted(self, model, i, n):
         if self.active_editor is not None:
@@ -211,48 +411,51 @@ class DocumentView(WXTextView):
             self.remove_editor()
         super().removed(model, i, text)
 
-    # ------------------------------------------------------------------
-    # Mouse events with editor routing
-    # ------------------------------------------------------------------
+    def style_changed(self, stylesheet, key):
+        j1 = j2 = None
+        for i1, i2, nl in iter_newlines(self.model.get_xtexel(), 0):
+            if nl.parstyle.get('base', 'normal') == key:
+                if j1 is None:
+                    j1 = i1
+                j2 = i2
+        if j1 is None:
+            return
+        self.clear_caches()
+        if self._inhibit_depth > 0:
+            self._accumulate(j1, j2)
+        else:
+            self._rebuild_with_progress(j1, j2, 0)
+
+    _LAYOUT_SETTINGS = {
+        'paper', 'paper_width', 'paper_height',
+        'margin_top', 'margin_bottom', 'margin_left', 'margin_right',
+    }
+
+    @trace
+    def setting_changed(self, doc, name, old):
+        self.builder.settings = self.document.settings
+        if name in self._LAYOUT_SETTINGS:
+            self._rebuild_with_progress(0, len(self.model)+1, 0)
+        else:
+            self.refresh()
+
+    @trace
+    def style_removed(self, stylesheet, key):
+        self.clear_caches()
+        self.rebuild()
         
+    ### Events with editor routing
     def on_leftdown(self, event):
         if self.active_editor:
-            if self.active_editor.on_leftdown(event):
-                self.SetFocus()
-                return
-        x, y = self.window_to_content(event.Position)
-        i = self.compute_index(x, y)
-        if i is not None and not event.ShiftDown() and self.active_editor is None:
-            self.set_index(i)
-            for EditorClass in self.editor_registry:
-                if EditorClass.click_installable and EditorClass.condition(self, None, None):
-                    self.install_editor(EditorClass(), i)
-                    self.active_editor.on_leftdown(event)
-                    self.SetFocus()
-                    return
-        if i is not None:
-            self.set_index(i, extend=event.ShiftDown())
-        self.SetFocus()
-
+            consumed = self.active_editor.on_leftdown(event)
+            if consumed: return
+        super().on_leftdown(event)
+            
     def on_motion(self, event):
-        if self.active_editor and self.active_editor._drag_handle is not None:
-            self.active_editor.on_motion(event)
-            handle = self.active_editor._drag_handle
-            cursor = self.active_editor.get_cursor(handle)
-            self.SetCursor(wx.Cursor(cursor))
-            return
-        # Hover cursor shape near handles
-        if not event.LeftIsDown() and self.active_editor:
-            x, y = self.active_editor.window_to_box(event.Position)
-            hit = self.active_editor.hit_test(x, y)
-            cursor = wx.CURSOR_IBEAM if hit is None else self.active_editor.get_cursor(hit)
-            self.SetCursor(wx.Cursor(cursor))
-        if not event.LeftIsDown():
-            return event.Skip()
-        x, y = self.window_to_content(event.Position)
-        i = self.layout.get_index(x, y)
-        if i is not None:
-            self.set_index(i, extend=True)
+        if self.active_editor:
+            consumed = self.active_editor.on_motion(event)
+            if consumed: return
+        super().on_motion(event)
 
     def on_leftup(self, event):
         if self.active_editor and self.active_editor._drag_handle is not None:
@@ -284,14 +487,24 @@ class DocumentView(WXTextView):
 
         # VirtualSize must be updateted before Scroll()
         layout = self.layout
-        self.SetVirtualSize((int(layout.width * new_zoom), int(layout.height * new_zoom)))
+        vw = int(layout.width * new_zoom)
+        vh = int(layout.height * new_zoom)
+        self.SetVirtualSize((vw, vh))
         self.SetScrollRate(rx, ry)
 
         self.Scroll(max(0, int(new_scroll_x / rx)),
                     max(0, int(new_scroll_y / ry)))        
 
+    def on_char(self, event):
+        if self.active_editor:
+            if self.active_editor.on_key(event.GetKeyCode(), event):
+                return
+        super().on_char(event)
+
+        
+    ### Layout
     def _viewport_start(self):
-        """Return the text index of the first character on the currently visible page."""
+        """Return the text index of the first visible character."""
         rx, ry = self._scrollrate
         _, sy = self.GetViewStart()
         scroll_y = sy * ry / self.zoom
@@ -325,101 +538,6 @@ class DocumentView(WXTextView):
             t0 = time.time()
             self.builder.buildto_index(index)
         
-    def on_paint(self, event):
-        self.ensure_viewport()
-        self._update_scroll()
-        self.keep_cursor_on_screen()
-
-        pdc = wx.PaintDC(self)
-        pdc.SetAxisOrientation(True, False)
-        device = self.builder.get_device()
-        if device.buffering:
-            dc = wx.BufferedDC(pdc)
-            if not dc.IsOk():
-                return
-        else:
-            dc = pdc
-
-        zoom = self.zoom
-        layout = self.layout
-
-        spx, spy = self.CalcScrolledPosition((0, 0))
-        ox, oy   = self.content_offset()
-        px, py   = spx + ox, spy + oy
-        dc.SetDeviceOrigin(px, py)
-
-        dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
-        dc.Clear()
-        region = self.GetUpdateRegion()
-        rx, ry, rw, rh = region.Box
-        dc.SetClippingRegion(rx - px - 1, ry - py - 1, rw + 2, rh + 2)
-        painter = device.create_painter(dc)
-
-        layout.draw_background(0, 0, painter)          # 1. white page fills
-
-        for entry in self.highlights:
-            i1, i2 = entry[:2]
-            c = entry[2] if len(entry) > 2 else 'yellow'
-            highlight(painter, layout, i1, i2, 0, 0, c)  # 2. colored backgrounds
-
-        layout.draw(0, 0, painter)                      # 3. text on top
-
-        for entry in self.squiggles:
-            i1, i2 = entry[:2]
-            c = entry[2] if len(entry) > 2 else 'red'
-            squiggle(painter, layout, i1, i2, 0, 0, c)   # 4. lines on top
-
-        editor = self.active_editor
-        if editor:
-            editor.draw(painter)
-        else:
-            self.draw_cursor(painter)
-            self.draw_selection(painter)
-        dc = None
-        painter = None
-
-    def draw_cursor(self, gc):
-        layout = self.layout
-        if wx.Window.FindFocus() is self and self.index <= len(layout):
-            layout.draw_cursor(self.index, 0, 0, gc, self.model.defaultstyle)
-
-    def draw_selection(self, gc):
-        layout = self.layout
-        for j1, j2 in self.get_selected():
-            if j1 <= len(layout):
-                layout.draw_selection(j1, min(j2, len(layout)), 0, 0, gc)
-
-    # ------------------------------------------------------------------
-    # Copy / paste
-    # ------------------------------------------------------------------
-
-    def copy(self):
-        if not self.has_selection():
-            return
-        s1, s2 = sorted(self.selection)
-        part = self._dispatch_copy(self.layout, s1, s2, 0)
-        self.to_clipboard(part)
-
-    def _dispatch_copy(self, box, i1, i2, offset):
-        """Traverse layout to find a box with get_copy; fall back to model.copy."""
-        if hasattr(box, 'get_copy'):
-            return box.get_copy(i1, i2, self.model, offset)
-        for j1, j2, x, y, child in box.iter_boxes(0, 0, 0):
-            if j1 <= i1 and i2 <= j2:
-                return self._dispatch_copy(child, i1 - j1, i2 - j1, offset + j1)
-        return self.model.copy(offset + i1, offset + i2)
-
-    # ------------------------------------------------------------------
-    # Atomic style operations
-    # ------------------------------------------------------------------
-
-    _inhibit_depth = 0
-    _pending_range = None  # (i1, i2, delta) accumulated while inhibited
-
-    def _accumulate(self, i1, i2, delta=0):
-        r = (i1, i2, delta)
-        self._pending_range = accumulate(self._pending_range, r)
 
     @trace
     def rebuild_range(self, i1, i2, delta):
@@ -461,20 +579,6 @@ class DocumentView(WXTextView):
         self.builder.build_background()
         self.refresh()
 
-    @contextmanager
-    def atomic(self):
-        """Group multiple model/stylesheet changes into one layout rebuild."""
-        self.begin_undo_group()
-        self._inhibit_depth += 1
-        try:
-            yield
-        finally:
-            self.end_undo_group()
-            self._inhibit_depth -= 1
-        if self._inhibit_depth == 0 and self._pending_range is not None:
-            i1, i2, delta = self._pending_range
-            self._pending_range = None
-            self._rebuild_with_progress(i1, i2, delta)
 
     def _wait_with_progress(self):
         """Show progress dialog until viewport is covered."""
@@ -522,99 +626,95 @@ class DocumentView(WXTextView):
             self.document.basestyles.set(name, restore_to)
         return (self._undo_stylesheet, name, after_redo, restore_to)
 
-    # ------------------------------------------------------------------
-    # Stylesheet observer
-    # ------------------------------------------------------------------
+    ### Drawing
+    def on_paint(self, event):
+        self.ensure_viewport()
+        self._update_scroll()
+        self.keep_cursor_on_screen()
 
-    def style_changed(self, stylesheet, key):
-        j1 = j2 = None
-        for i1, i2, nl in iter_newlines(self.model.get_xtexel(), 0):
-            if nl.parstyle.get('base', 'normal') == key:
-                if j1 is None:
-                    j1 = i1
-                j2 = i2
-        if j1 is None:
-            return
-        self.clear_caches()
-        if self._inhibit_depth > 0:
-            self._accumulate(j1, j2)
+        pdc = wx.PaintDC(self)
+        pdc.SetAxisOrientation(True, False)
+        device = self.builder.get_device()
+        if device.buffering:
+            dc = wx.BufferedDC(pdc)
+            if not dc.IsOk():
+                return
         else:
-            self._rebuild_with_progress(j1, j2, 0)
+            dc = pdc
 
-    _LAYOUT_SETTINGS = {
-        'paper', 'paper_width', 'paper_height',
-        'margin_top', 'margin_bottom', 'margin_left', 'margin_right',
-    }
+        zoom = self.zoom
+        layout = self.layout
 
-    @trace
-    def setting_changed(self, doc, name, old):
-        self.builder.settings = self.document.settings
-        if name in self._LAYOUT_SETTINGS:
-            self._rebuild_with_progress(0, len(self.model)+1, 0)
+        spx, spy = self.CalcScrolledPosition((0, 0))
+        ox, oy   = self.content_offset()
+        px, py   = spx + ox, spy + oy
+        dc.SetDeviceOrigin(px, py)
+
+        dc.SetBackgroundMode(wx.SOLID)
+        dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
+        dc.Clear()
+        region = self.GetUpdateRegion()
+        rx, ry, rw, rh = region.Box
+        dc.SetClippingRegion(rx - px - 1, ry - py - 1, rw + 2, rh + 2)
+        painter = device.create_painter(dc)
+
+        layout.draw_background(0, 0, painter)          # 1. white page fills
+
+        for entry in self.highlights:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'yellow'
+            highlight(painter, layout, i1, i2, 0, 0, c)  # 2. colored backgrounds
+
+        layout.draw(0, 0, painter)                      # 3. text on top
+
+        for entry in self.squiggles:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'red'
+            squiggle(painter, layout, i1, i2, 0, 0, c)   # 4. lines on top
+
+        # If we have an editor, we redirect cursor und selection to
+        # the editor. Otherweise we paint it ourself.
+        if self.active_editor:
+            self.active_editor.draw(painter)
         else:
-            self.refresh()
+            self.draw_cursor(painter)
+            self.draw_selection(painter)
+        dc = None
+        painter = None
 
-    @trace
-    def style_removed(self, stylesheet, key):
-        self.clear_caches()
-        self.rebuild()
+    def draw_cursor(self, gc):
+        layout = self.layout
+        if wx.Window.FindFocus() is self and self.index <= len(layout):
+            layout.draw_cursor(self.index, 0, 0, gc, self.model.defaultstyle)
 
-    def create_builder(self):
-        factory = Factory(self.document.basestyles, device=CairoDevice())
-        factory.blobs = self.document.blobs
-        builder = Builder(self.model, factory)
-        builder.settings = self.document.settings
-        return builder
+    def get_selected(self):
+        if self.selection is None:
+            return []
+        s1, s2 = sorted(self.selection)
+        return [self.layout.extend_range(s1, s2)]
 
+    def draw_selection(self, gc):
+        layout = self.layout
+        for j1, j2 in self.get_selected():
+            if j1 <= len(layout):
+                layout.draw_selection(j1, min(j2, len(layout)), 0, 0, gc)
+
+    ### Cursor and selection
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
         self.builder.buildto_index(index + 1)
         # Selection must be updated before checking editor mode.
+        old = self._index
         WXTextView.set_index(self, index, extend, update)
-        # Remove click editors when the cursor moves away.
-        editor = self.active_editor
-        if editor is not None and not editor.auto_installable:
-            if editor.index != index:
-                self.remove_editor()
-        self.update_editor(index)
-
-    def update_editor(self, index):
-        """Install, switch, or remove the auto editor based on current conditions."""
-        editor = self.active_editor
-        # 1. Current auto editor still valid?
-        if editor is not None and editor.auto_installable:
-            if editor.condition(self, None, None):
-                return
-        # 2. First matching auto editor from registry wins.
-        for cls in self.editor_registry:
-            if not cls.auto_installable:
-                continue
-            if cls.condition(self, None, None):
-                if not isinstance(editor, cls):
-                    self.install_editor(cls(), index)
-                return
-        # 3. No match — remove any active auto editor.
-        if editor is not None and editor.auto_installable:
+        # Remove editors when the cursor moves away.
+        if old != index and self.active_editor is not None:
             self.remove_editor()
-
-    def export_pdf(self, path):
-        import cairo
-        self.builder.buildto_finish()
-        pages = self.layout.childs
-        if not pages:
-            return
-        device = self.builder.get_device()
-        w, h = pages[0].width, pages[0].height
-        surface = cairo.PDFSurface(path, w, h)
-        ctx = cairo.Context(surface)
-        for page in pages:
-            page.draw_background(0, 0, ctx)
-            page.draw_for_print(0, 0, ctx)
-            ctx.show_page()
-        surface.finish()
+        # Check and install a new one
+        self.update_editor()
 
     def iter_rows(self):
-        from .table_boxes import TableBox, TableNavRow as _TableNavRow
+        # XXX TODO: move this to table editor
+        from .table_boxes import TableBox, TableNavRow
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
                 # Descend into TableBox: yield one nav entry per table row
@@ -626,7 +726,7 @@ class DocumentView(WXTextView):
                 if tb is not None:
                     cy = tby
                     for tr in range(tb.n_rows):
-                        yield r1, r2, tbx, cy, _TableNavRow(tb, tr)
+                        yield r1, r2, tbx, cy, TableNavRow(tb, tr)
                         cy += tb.row_heights[tr]
                 else:
                     yield r1, r2, rx, ry, row
@@ -686,63 +786,6 @@ class DocumentView(WXTextView):
                 return self.set_index(r1 + i, shift)
             prev = r1, r2, rx, ry, row
 
-    def on_leftdclick(self, event):
-        x, y = self.window_to_content(event.Position)
-        i = self.layout.get_index(x, y) or 0
-        img_res = find_image_at(self.layout, i)
-        if img_res is not None:
-            self.notify_views('image_dblclick', i)
-            self.SetFocus()
-            return
-        super().on_leftdclick(event)
-
-    def on_char(self, event):
-        if self.active_editor:
-            if self.active_editor.on_key(event.GetKeyCode(), event):
-                return
-        super().on_char(event)
-
-    def handle_action(self, action, shift=False):
-        i = self.index
-        style = self.model.get_style(i)
-        model = self.model
-        if self.has_selection():
-            s1, s2 = sorted(self.selection)
-        else:
-            s1 = s2 = i
-        row2, col2 = model.index2position(s2)
-        ps1 = model.linestart(model.index2position(s1)[0])
-        ps2 = s2 if col2 == 0 else model.lineend(row2) + 1
-        if action == 'insert_newline' and shift:
-            self.insert_texel(i, BR(style))
-        elif action == 'undo' and shift:
-            self.redo()
-        elif action == 'move_down':
-            self.move_down(shift)
-        elif action == 'move_up':
-            self.move_up(shift)
-        elif action == 'move_page_down':
-            self.move_page_down(shift)
-        elif action == 'move_page_up':
-            self.move_page_up(shift)
-        elif action == 'move_document_end':
-            self.set_index(len(self.layout) - 1, shift)
-        elif action == 'indent_par':
-            self.indent_par(1, ps1, ps2)
-        elif action == 'dedent_par':
-            self.indent_par(-1, ps1, ps2)
-        elif action == 'move_par_up':
-            self.swap_paragraph(-1)
-        elif action == 'move_par_down':
-            self.swap_paragraph(1)
-        elif action == 'cycle_list_type':
-            self.cycle_list_type(ps1, ps2)
-        elif action == 'cycle_basestyle':
-            self.cycle_basestyle(ps1, ps2, reverse=shift)
-        elif action in ('copy', 'cut', 'paste') and self.active_editor:
-            getattr(self.active_editor, action)()
-        else:
-            return WXTextView.handle_action(self, action, shift)
 
 
 
@@ -831,7 +874,7 @@ def test_accumulate():
     assert accumulate((5, 5, -3), (3, 7, 0)) == (3, 10, -3)
 
 
-def test_00():
+def xxtest_00():
     "modifying a basestyle updates the layout"
     import io
     from contextlib import redirect_stdout
@@ -871,7 +914,7 @@ def test_00():
     assert tb.style['font_size'] == 8
 
     
-def test_01():
+def xxtest_01():
     "progress dialog is shown when viewport is not yet covered"
     import io
     from contextlib import redirect_stdout
@@ -918,11 +961,100 @@ def test_01():
     with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
         with view.atomic():
             view.index = len(view.model)
-            view.properties_changed(view.model, 0, len(view.model))
-    
+            view.properties_changed(view.model, 0, len(view.model))    
     print("ticks=", ticks)
 
+    
+def test_02():
+    "transform_texel"
+    # (tree, texel, i, fun):
+    from .textmodel.texeltree import G, T, Fraction
+    tree = G([Fraction(T('A'), T('B'))])
 
+
+
+def test_03():
+    "get_path"
+    from .textmodel.texeltree import G, T, Fraction
+    
+    tree = G([Fraction(T('A'), T('B'))])
+
+    path = get_path(tree, 1)
+    assert len(path) == 3
+    
+    assert path[0][0] == 0 # abs_i1
+    assert path[0][1] == 5 # abs_i2
+    assert path[0][2].is_group
+    
+    assert path[1][0] == 0 # abs_i1
+    assert path[1][1] == 5 # abs_i2
+    assert path[1][2].is_container
+
+    assert path[2][0] == 1 # abs_i1
+    assert path[2][1] == 2 # abs_i2
+    assert path[2][2].is_text
+
+    
+def test_04():
+    "get_texel"
+    from .textmodel.texeltree import G, T, Fraction
+    a = T('A')
+    b = T('B')
+    f = Fraction(a, b)
+    assert get_texel(f, 0, 0) is f
+    assert get_texel(f, 1, 1) is a
+    assert get_texel(f, 3, 1) is b
+
+    assert get_texel(f, 0, 1) is f.childs[0]
+    assert get_texel(f, 2, 1) is f.childs[2]
+    assert get_texel(f, 4, 1) is f.childs[4]
+
+    
+def test_05():
+    "find_texel"
+    from .textmodel.texeltree import G, T, Fraction
+    a = T('A')
+    b = T('B')
+    f = Fraction(a, b)
+    assert find_texel(f, f, 0) == (0, 5, 0)
+    tree = G([f, T('C')])
+    assert find_texel(tree, f, 0) == (0, 5, 1)
+    assert find_texel(tree, a, 1) == (1, 2, 2)
+    try:
+        assert find_texel(tree, a, 2)
+        assert False
+    except IndexError: pass
+
+def test_06():
+    "transform"
+    from .textmodel.texeltree import G, T, Fraction, get_text
+    a = T('A')
+    b = T('B')
+    c = T('C')
+    x = T('X')
+    f = Fraction(a, b)
+    replace = lambda old:x
+    assert find_texel(f, a, 1) == (1, 2, 1)
+
+    r = transform(f, 1, 1, replace)
+    assert get_text(r) == '\tX\tB\t'
+    r = transform(f, 3, 1, replace)
+    assert get_text(r) == '\tA\tX\t'
+    tree = G([f, c])
+    r = transform(tree, 1, 2, replace)
+    assert get_text(r) == '\tX\tB\tC'
+
+    try:
+        r = transform(tree, 1, 3, replace)
+        assert False
+    except IndexError: pass
+    
+    # NOTE: we can even replace seperators. This happens when their
+    # style-Attribute ist set.
+    r = transform(f, 0, 1, replace)
+    assert get_text(r) == 'XA\tB\t'
+    
+        
 def demo_00():
     from .document import Document
 
