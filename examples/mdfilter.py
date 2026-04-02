@@ -191,10 +191,12 @@ def _load_builtin(text):
         btype = block[0]
         next_btype = blocks[i + 1][0] if i + 1 < len(blocks) else None
 
-        # Blank line before table, and before the first line of a pre run
+        # Blank line before table, pre run, and quote run
         if btype == 'table' and prev_btype is not None:
             insert_nl()
         elif btype == 'pre' and prev_btype != 'pre' and prev_btype is not None:
+            insert_nl()
+        elif btype == 'quote' and prev_btype != 'quote' and prev_btype is not None:
             insert_nl()
 
         if btype == 'table':
@@ -204,10 +206,12 @@ def _load_builtin(text):
             ptype, indent, runs = block
             _insert_text_block(doc, ptype, indent, runs)
 
-        # Blank line after table, and after the last line of a pre run
+        # Blank line after table, pre run, and quote run
         if btype == 'table' and next_btype is not None:
             insert_nl()
         elif btype == 'pre' and next_btype != 'pre' and next_btype is not None:
+            insert_nl()
+        elif btype == 'quote' and next_btype != 'quote' and next_btype is not None:
             insert_nl()
 
         prev_btype = btype
@@ -420,10 +424,10 @@ def _register_styles(doc):
         'h5':  {'name': 'Heading 5', 'font_size': 11, 'bold': True},
         'h6':  {'name': 'Heading 6', 'font_size': 10, 'italic': True},
         'pre':      {'name': 'Code',     'font_size': 10, 'font_family': 'Courier New',
-                     'block_color': '#EFE8E8', 'block_padding': 2*mm},
+                     'block_color': '#F6F8FA', 'block_padding': 2*mm},
         'list':     {'name': 'List',     'space_after': 0, 'paragraph_type': 'list'},
         'numbered': {'name': 'Numbered', 'space_after': 0, 'paragraph_type': 'numbered'},
-        'quote':    {'name': 'Quote',    'block_color': '#E8EEF4', 'block_padding': 2*mm},
+        'quote':    {'name': 'Quote',    'block_color': '#F0F0F0', 'block_padding': 2*mm},
     }
     for name, props in defs.items():
         base = heading_base if name.startswith('h') else {}
@@ -886,6 +890,29 @@ def test_15():
     # consecutive quotes — no blank line between them
     lines = [l for l in out.splitlines() if l.startswith('>')]
     assert len(lines) == 2
+
+
+def test_16():
+    "blank NL paragraphs are inserted before and after quote blocks"
+    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine, get_text
+
+    def bases(md):
+        doc = _load_builtin(md)
+        result = []
+        for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
+            nl = elems[-1]
+            if not isinstance(nl, NewLine):
+                continue
+            text = ''.join(get_text(e) for e in elems[:-1])
+            base = nl.parstyle.get('base', 'normal')
+            result.append('blank' if not text.strip() else base)
+        return result
+
+    bs = bases("Before.\n\n> Quote line\n\nAfter.\n")
+    qi = bs.index('quote')
+    assert bs[qi - 1] == 'blank'
+    assert bs[qi + 1] == 'blank'
 
 
 if __name__ == '__main__':
