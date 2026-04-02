@@ -409,7 +409,8 @@ def _register_styles(doc):
         'h4':  {'name': 'Heading 4', 'bold': True,  'italic': True},
         'h5':  {'name': 'Heading 5', 'font_size': 11, 'bold': True},
         'h6':  {'name': 'Heading 6', 'font_size': 10, 'italic': True},
-        'pre': {'name': 'Code',      'font_size': 10, 'font_family': 'Courier New'},
+        'pre': {'name': 'Code',      'font_size': 10, 'font_family': 'Courier New',
+                'block_color': '#EFE8E8',  'block_padding': 2*mm},
     }
     for name, props in defs.items():
         base = heading_base if name.startswith('h') else {}
