@@ -29,9 +29,9 @@ def _doc_to_md(doc):
     from miniword.tables import Table as TableTexel
 
     texel    = doc.textmodel.get_xtexel()
-    parts    = []
-    prev_type = None
-    in_pre   = False
+    parts          = []
+    prev_block_key = None
+    in_pre         = False
 
     def close_pre():
         nonlocal in_pre
@@ -51,7 +51,7 @@ def _doc_to_md(doc):
             if parts:
                 parts.append('')
             parts.extend(_table_to_md(content[0]))
-            prev_type = None
+            prev_block_key = None
             continue
 
         ps     = nl.parstyle
@@ -70,21 +70,22 @@ def _doc_to_md(doc):
                 parts.append('```')
                 in_pre = True
             parts.append(inline)
-            prev_type = ('pre', 0)
+            prev_block_key = 'pre'
             continue
 
         close_pre()
 
-        # Blank line between block elements, but not between consecutive list items
-        same_list = (prev_type is not None
-                     and prev_type[0] == ptype
-                     and ptype in ('list', 'numbered'))
-        if parts and not same_list:
+        # Blank line between block elements, but not between consecutive same-type blocks
+        block_key = base if base == 'quote' else (ptype if ptype in ('list', 'numbered') else None)
+        same_block = block_key is not None and prev_block_key == block_key
+        if parts and not same_block:
             parts.append('')
 
         if base in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
             level = int(base[1])
             parts.append('#' * level + ' ' + inline)
+        elif base == 'quote':
+            parts.append('> ' + inline)
         elif ptype == 'list':
             prefix = '  ' * max(0, indent - 1) + '- '
             parts.append(prefix + inline)
@@ -94,7 +95,7 @@ def _doc_to_md(doc):
         else:
             parts.append(inline)
 
-        prev_type = (ptype, indent) if ptype != 'normal' else None
+        prev_block_key = block_key
 
     close_pre()
     return '\n'.join(parts) + '\n'
@@ -165,6 +166,7 @@ import re
 _ATX_RE    = re.compile(r'^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
 _UL_RE     = re.compile(r'^(\s*)[-*+]\s+(.*)')
 _OL_RE     = re.compile(r'^(\s*)\d+\.\s+(.*)')
+_QUOTE_RE  = re.compile(r'^>\s?(.*)')
 _RULE_RE   = re.compile(r'^[-*_]{3,}\s*$')
 _FENCE_RE  = re.compile(r'^```')
 
@@ -218,12 +220,13 @@ def _insert_text_block(doc, ptype, indent, runs):
     pos = len(doc.textmodel.get_text())
     doc.textmodel.insert(pos, doc.textmodel.create_textmodel(par_text))
     nl_pos = pos + len(par_text) - 1
-    base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'body'
+    if ptype.startswith('h') or ptype in ('pre', 'list', 'numbered', 'quote'):
+        base = ptype
+    else:
+        base = 'body'
     ps = {'base': base}
-    if ptype == 'list':
-        ps['paragraph_type'] = 'list'
-    elif ptype == 'numbered':
-        ps['paragraph_type'] = 'numbered'
+    if ptype in ('list', 'numbered'):
+        ps['paragraph_type'] = ptype
     doc.textmodel.set_parstyle(nl_pos, ps)
     if indent:
         doc.textmodel.set_indent(nl_pos, indent)
@@ -347,6 +350,13 @@ def _parse_md_paragraphs(text):
             paragraphs.append(('numbered', indent, _parse_inline(m.group(2))))
             continue
 
+        m = _QUOTE_RE.match(line)
+        if m:
+            flush_buf()
+            flush_table()
+            paragraphs.append(('quote', 0, _parse_inline(m.group(1))))
+            continue
+
         if line.strip() == '':
             flush_buf()
         elif (line.startswith(' ') and not _UL_RE.match(line)
@@ -409,8 +419,11 @@ def _register_styles(doc):
         'h4':  {'name': 'Heading 4', 'bold': True,  'italic': True},
         'h5':  {'name': 'Heading 5', 'font_size': 11, 'bold': True},
         'h6':  {'name': 'Heading 6', 'font_size': 10, 'italic': True},
-        'pre': {'name': 'Code',      'font_size': 10, 'font_family': 'Courier New',
-                'block_color': '#EFE8E8',  'block_padding': 2*mm},
+        'pre':      {'name': 'Code',     'font_size': 10, 'font_family': 'Courier New',
+                     'block_color': '#EFE8E8', 'block_padding': 2*mm},
+        'list':     {'name': 'List',     'space_after': 0, 'paragraph_type': 'list'},
+        'numbered': {'name': 'Numbered', 'space_after': 0, 'paragraph_type': 'numbered'},
+        'quote':    {'name': 'Quote',    'block_color': '#E8EEF4', 'block_padding': 2*mm},
     }
     for name, props in defs.items():
         base = heading_base if name.startswith('h') else {}
@@ -547,12 +560,13 @@ class _DocBuilder:
         for start, end, ptype, indent in self.pars:
             # NL is at end-1 (the \n we appended)
             nl_pos = end - 1
-            base = ptype if (ptype.startswith('h') or ptype == 'pre') else 'body'
-            ps   = {'base': base}
-            if ptype == 'list':
-                ps['paragraph_type'] = 'list'
-            elif ptype == 'numbered':
-                ps['paragraph_type'] = 'numbered'
+            if ptype.startswith('h') or ptype in ('pre', 'list', 'numbered', 'quote'):
+                base = ptype
+            else:
+                base = 'body'
+            ps = {'base': base}
+            if ptype in ('list', 'numbered'):
+                ps['paragraph_type'] = ptype
             doc.textmodel.set_parstyle(nl_pos, ps)
             if indent:
                 doc.textmodel.set_parproperties(
@@ -572,7 +586,8 @@ def _check_md(doc):
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables import Table as TableTexel
 
-    _OK_BASES  = {'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre'}
+    _OK_BASES  = {'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                  'pre', 'list', 'numbered', 'quote'}
     _OK_PTYPES = {'normal', 'list', 'numbered'}
     _OK_PAR    = {'base', 'paragraph_type'}
     _OK_CHAR   = {'bold', 'italic', 'font_family'}
@@ -853,6 +868,24 @@ def test_14():
     pi = bs.index('pre')
     assert bs[pi - 1] == 'blank'
     assert bs[pi + 1] == 'blank'
+
+
+def test_15():
+    "blockquote import and export roundtrip"
+    pars = _parse("> First line\n> Second line\n")
+    assert len(pars) == 2
+    for base, ptype, indent, runs in pars:
+        assert base == 'quote'
+    assert ''.join(t for t, _ in pars[0][3]) == 'First line'
+    assert ''.join(t for t, _ in pars[1][3]) == 'Second line'
+
+    doc = _load_builtin("> Hello\n> World\n")
+    out = _doc_to_md(doc)
+    assert '> Hello' in out
+    assert '> World' in out
+    # consecutive quotes — no blank line between them
+    lines = [l for l in out.splitlines() if l.startswith('>')]
+    assert len(lines) == 2
 
 
 if __name__ == '__main__':

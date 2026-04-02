@@ -35,7 +35,7 @@ from collections import OrderedDict
 from .units import pt, inch, cm, mm
 
 n_levels = 9  # 0–8, displayed as 1–9
-defaultbullets = ["•", "◦", "▪", "–"]
+defaultbullets = ("▪", "•", "◦", "–")
 
 
 text_default = {
@@ -56,7 +56,7 @@ structure_default = {
     "fixed_indent":    None,         # None = free, 0–8 = fixed at that level
     "indent_levels":   tuple(i * cm for i in range(n_levels)),
     "first_line_indent": 0,          # hanging indent: use negative values
-    "marker":          ("•", "◦") + ("–",) * 8,
+    "marker":          defaultbullets + ("–",) * (n_levels-len(defaultbullets)),
     "marker_pos":      (-0.8 * cm,) * n_levels,
     # "marker_alignment": ('right',) * n_levels,
     "marker_size":     (1,) * n_levels,
