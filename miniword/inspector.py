@@ -479,6 +479,22 @@ class InspectorPanel(wx.Panel, ViewBase):
             lambda e: self.set_parproperties(
                 page_break_before=self.page_break_before.GetValue()))
 
+        label = wx.StaticText(panel, label="Block color")
+        self.block_color = ColourButton(panel)
+        self.reset_block_color = ResetButton(panel, ['block_color'])
+        add_row(contentsizer, label, self.block_color, self.reset_block_color)
+        self.block_color.callback = lambda: self.set_parproperties(
+            block_color=self.block_color.get_colour())
+
+        self.block_padding = LengthInput(panel, 'mm')
+        self.reset_block_padding = ResetButton(panel, ['block_padding'])
+        add_row2('Padding', panel, contentsizer, self.block_padding,
+                 self.reset_block_padding)
+        self.block_padding.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(
+                block_padding=self.block_padding.GetValue()))
+
         panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
         panel.SetSizer(panelsizer)
         panel.Layout()
@@ -512,6 +528,8 @@ class InspectorPanel(wx.Panel, ViewBase):
                 self.reset_bullet,
                 self.reset_numbering,
                 self.reset_page_break_before,
+                self.reset_block_color,
+                self.reset_block_padding,
         ]:
             resetter.callback = self.clear_parproperties            
 
@@ -999,6 +1017,12 @@ class InspectorPanel(wx.Panel, ViewBase):
             self.page_break_before.SetValue(value)
         x = 'page_break_before' in overrides
         self.reset_page_break_before.set_x(x)
+
+        self.block_color.set_colour(properties['block_color'])
+        self.reset_block_color.set_x('block_color' in overrides)
+
+        self.block_padding.SetValue(properties['block_padding'])
+        self.reset_block_padding.set_x('block_padding' in overrides)
 
         self.Layout()
         

@@ -57,7 +57,7 @@ structure_default = {
     "indent_levels":   tuple(i * cm for i in range(n_levels)),
     "first_line_indent": 0,          # hanging indent: use negative values
     "marker":          ("•", "◦") + ("–",) * 8,
-    "marker_pos":      (-0.5 * cm,) * n_levels,
+    "marker_pos":      (-0.8 * cm,) * n_levels,
     # "marker_alignment": ('right',) * n_levels,
     "marker_size":     (1,) * n_levels,
     "marker_color":    ("black",) * n_levels,
@@ -82,7 +82,8 @@ layout_default = {
     # "orphan_control":       True,  # avoid orphans
     # "border_top":           None,  # top border
     # "border_bottom":        None,  # bottom border
-    # "background_color":     None,  # background color
+    "block_color":          None,   # paragraph background color
+    "block_padding":        0,      # padding around block_color rect
 }
 
 other_default = {

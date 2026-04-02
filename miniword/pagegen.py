@@ -91,11 +91,12 @@ class Row(Box):
 
 
 class Page(Box):
-    pagenum    = 0
-    margin     = (2 * cm,) * 4  # XXX
-    page       = 0
-    height     = 0
-    restartmemo = None
+    pagenum      = 0
+    margin       = (2 * cm,) * 4  # XXX
+    page         = 0
+    height       = 0
+    decorations  = ()
+    restartmemo  = None
 
     def __init__(self, rowdata, geometry, device=TESTDEVICE):
         if device is not None:
@@ -122,6 +123,11 @@ class Page(Box):
     def draw_background(self, x, y, gc):
         """Fill the page with its background color."""
         self.device.fill_rect(x, y, self.width, self.height, 'white', gc)
+        self.draw_decorations(x, y, gc)
+
+    def draw_decorations(self, x, y, gc):
+        for dx, dy, dw, dh, color in self.decorations:
+            self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
 
     def draw(self, x, y, gc):
         Box.draw(self, x, y, gc)
@@ -173,11 +179,12 @@ class DraftNode:
     - hit-testing and selection work on box geometry
     """
 
-    rows      = ()
-    footnotes = ()
-    floats    = ()
-    parent    = None
-    startspage = True
+    rows        = ()
+    decorations = ()
+    footnotes   = ()
+    floats      = ()
+    parent      = None
+    startspage  = True
     geometry   = A4
     border     = 2 * cm, 2 * cm, 2 * cm, 2 * cm
     x = y = None
@@ -253,9 +260,10 @@ class DraftNode:
         draft = self.create_child()
         draft.startspage = True
         draft.init_xy()
-        draft.rows      = ()
-        draft.floats    = ()
-        draft.footnotes = ()
+        draft.rows        = ()
+        draft.decorations = ()
+        draft.floats      = ()
+        draft.footnotes   = ()
         return draft
 
     def fix_draft(self):
@@ -280,25 +288,29 @@ class DraftNode:
                 if i > 0:
                     # XXX where to get device from?
                     page = Page(rows, self.geometry, rows[0][-1].device)
+                    page.decorations = decorations
                     pages.append(page)
-                rows      = ()
-                floats    = ()
-                footnotes = ()
-                geometry  = node.geometry
-                border    = node.border
-            rows      += node.rows
-            floats    += node.floats
-            footnotes += node.footnotes
+                rows        = ()
+                decorations = ()
+                floats      = ()
+                footnotes   = ()
+                geometry    = node.geometry
+                border      = node.border
+            rows        += node.rows
+            decorations += node.decorations
+            floats      += node.floats
+            footnotes   += node.footnotes
             x = node.x
             y = node.y
 
         # Page is not yet complete — convert to a RestartMemo.
-        info           = RestartMemo()
-        info.geometry  = geometry
-        info.border    = border
-        info.rows      = rows
-        info.floats    = floats
-        info.footnotes = footnotes
+        info             = RestartMemo()
+        info.geometry    = geometry
+        info.border      = border
+        info.rows        = rows
+        info.decorations = decorations
+        info.floats      = floats
+        info.footnotes   = footnotes
         info.x         = x
         info.y         = y
         return pages, info
@@ -310,14 +322,15 @@ class RestartMemo:
     Also used as the return value of fix_draft() to describe spillover
     content that did not fit on the last completed page.
     """
-    rows      = ()
-    footnotes = ()
-    floats    = ()
-    parent    = None
-    geometry  = 210 * mm, 297 * mm  # A4
-    border    = 2 * cm, 2 * cm, 2 * cm, 2 * cm
-    y         = None
-    counters  = {}   # dict: numbering_style -> list[int] of length n_levels
+    rows        = ()
+    decorations = ()
+    footnotes   = ()
+    floats      = ()
+    parent      = None
+    geometry    = 210 * mm, 297 * mm  # A4
+    border      = 2 * cm, 2 * cm, 2 * cm, 2 * cm
+    y           = None
+    counters    = {}   # dict: numbering_style -> list[int] of length n_levels
 
     def get_length(self):
         n = 0
@@ -326,12 +339,13 @@ class RestartMemo:
         return n
 
     def start_draft(self):
-        node           = DraftNode()
-        node.rows      = self.rows
-        node.floats    = self.floats
-        node.footnotes = self.footnotes
-        node.geometry  = self.geometry
-        node.border    = self.border
+        node             = DraftNode()
+        node.rows        = self.rows
+        node.decorations = self.decorations
+        node.floats      = self.floats
+        node.footnotes   = self.footnotes
+        node.geometry    = self.geometry
+        node.border      = self.border
         node.init_xy()
         # x is not needed in the minimal model
         if self.y is not None:
@@ -634,7 +648,15 @@ def generate_pages(texel, i, restartmemo, factory):
                                 draft = draft.create_newpage()
                             row.start = (line_left_rest, 0)
                             row.width = line_width_rest + line_left_rest
+                            y_before  = draft.y
                             draft.add_row(row, line_spacing, before)
+                            if r.get('block_color'):
+                                pad = r.get('block_padding') or 0
+                                draft.decorations += ((
+                                    container_left - pad, y_before - pad,
+                                    container_right - container_left + 2 * pad,
+                                    row.height + row.depth + 2 * pad,
+                                    r['block_color']),)
                             before = 0
             pages, state = draft.fix_draft()
             state.counters = {k: list(v) for k, v in counters.items()}
@@ -706,7 +728,15 @@ def generate_pages(texel, i, restartmemo, factory):
 
             row.start  = (x, 0)
             row.width  = line_width + x
+            y_before   = draft.y
             draft.add_row(row, line_spacing, before)
+            if r.get('block_color'):
+                pad = r.get('block_padding') or 0
+                draft.decorations += ((
+                    container_left - pad, y_before - pad,
+                    container_right - container_left + 2 * pad,
+                    row.height + row.depth + 2 * pad,
+                    r['block_color']),)
             line_width = line_width_rest
             line_left  = line_left_rest
             first      = False
