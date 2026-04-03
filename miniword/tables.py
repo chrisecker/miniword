@@ -178,6 +178,21 @@ class Table(Container):
         c1, c2 = sorted([c1, c2])
         return r1, c1, r2, c2
     
+    def get_cell_range(self, r1, c1, r2, c2):
+        """Return (i_start, i_end) covering all cells in the rectangle
+        (r1, c1)..(r2, c2), relative to the start of this Table texel."""
+        start_idx = r1 * self.ncols + c1
+        end_idx   = r2 * self.ncols + c2
+        cum = 0
+        i_start = i_end = None
+        for k, child in enumerate(self.childs):
+            if k == 2 * start_idx + 1:
+                i_start = cum
+            cum += length(child)
+            if k == 2 * end_idx + 2:
+                i_end = cum
+        return i_start, i_end
+
     def set_cellattr(self, r1, c1, r2, c2, **kwds):
         r1, r2 = sorted([r1, r2])
         c1, c2 = sorted([c1, c2])
@@ -395,4 +410,19 @@ def test_08():
     assert t.get_rect(2, 5) == (0, 0, 1, 0)
     assert t.get_rect(2, 6) == (0, 0, 1, 0)
     assert t.get_rect(2, 7) == (0, 0, 1, 1)
+
+
+def test_09():
+    """get_cell_range"""
+    # 2x2 table: childs = [sep0, a, sep, b, sep, c, sep, d, sep]
+    #            indices:   0    1   2   3   4   5   6   7   8
+    t = from_strings([["a", "b"], ["c", "d"]])
+    # single cell (0,0): content starts at 1, ends after sep at 3
+    assert t.get_cell_range(0, 0, 0, 0) == (1, 3)
+    # single cell (0,1)
+    assert t.get_cell_range(0, 1, 0, 1) == (3, 5)
+    # full first row (0,0)..(0,1)
+    assert t.get_cell_range(0, 0, 0, 1) == (1, 5)
+    # full table (0,0)..(1,1)
+    assert t.get_cell_range(0, 0, 1, 1) == (1, 9)
 

@@ -690,6 +690,11 @@ class DocumentView(WXTextView):
     def get_selected(self):
         if self.selection is None:
             return []
+        editor = self.active_editor
+        if editor is not None and hasattr(editor, 'get_selected'):
+            r = editor.get_selected()
+            print("editor returned", r)
+            return r
         s1, s2 = sorted(self.selection)
         return [self.layout.extend_range(s1, s2)]
 

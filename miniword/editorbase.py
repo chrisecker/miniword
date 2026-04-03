@@ -276,3 +276,15 @@ class TexelEditor:
         """Delegate paste to the document view (subclasses may override)."""
         self.docview.paste()
 
+    # ------------------------------------------------------------------
+    # Optional protocol — implement in subclasses where needed
+
+    # get_selected(self) -> list[tuple[int, int]]
+    #
+    #   If defined, DocumentView.get_selected() delegates to this method
+    #   instead of using layout.extend_range().  The return value is a
+    #   list of (i1, i2) ranges that precisely cover the logical selection
+    #   of this editor (e.g. complete table cells for MatrixEditor).
+    #   This ensures that style changes and clipboard operations act on
+    #   exactly the region that is visually highlighted.
+

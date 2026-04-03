@@ -1,3 +1,16 @@
+"""We define two Editors for tables. Default is CursorEditor, which is
+only valid when the selection is inside one table cell. When several
+cells are included in the selection, docview changes to MatrixEditor.
+
+When the Selection is inside one Cell both Editors match. This
+ambiguity is solved by the preference (CursorEditor registers first
+and therefore has the heigher priority) or by the User (there will be
+a selection-button in the editor panel. The selected editor remains as
+long as it matches.
+
+"""
+
+
 import wx
 from .editorbase import TexelEditor
 from .tables import Table
@@ -199,9 +212,7 @@ class TableEditorBase(TexelEditor):
 
 class CursorEditor(TableEditorBase):
     """
-    Active while cursor is inside a table cell (text-editing mode).
-
-    Uses default draw() — cursor + selection + column-separator overlay.
+    Editor for selections inside a cell. 
     """
 
     @staticmethod
@@ -221,11 +232,7 @@ class CursorEditor(TableEditorBase):
 
 class MatrixEditor(TableEditorBase):
     """
-    Active when the selection spans multiple table cells (structure mode).
-
-    Overrides draw() to suppress the text cursor and render
-    rectangular cell-block highlights; column-resize drag is inherited
-    from TableEditorBase.
+    Editor for matrix like selections which can span several cells. 
     """
 
     @staticmethod
@@ -240,6 +247,10 @@ class MatrixEditor(TableEditorBase):
                 if is_multi_cell(texel, s1 - i1, s2 - i1):
                     result = i1, i2, depth, texel
         return result
+
+    def draw_cursor(self, gc):
+        # Do not draw the cursor!
+        pass
 
     def draw_selection(self, gc):
         """Highlight the rectangular cell block covered by the selection."""
@@ -283,6 +294,18 @@ class MatrixEditor(TableEditorBase):
                         device.draw_line(cx, cy, cx+cw, cy+rh, 2, gc)  # XXX
                     cx += cw
             cy += rh
+
+    def get_selected(self):
+        sel = self.docview.selection
+        if sel is None:
+            return []
+        s1, s2 = sorted(sel)
+        try:
+            r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
+            i1, i2 = self.texel.get_cell_range(r1, c1, r2, c2)
+        except (IndexError, TypeError):
+            return [(s1, s2)]
+        return [(self.i1 + i1, self.i1 + i2)]
 
     def copy(self):
         """Rectangular cell copy for multi-cell selections."""
