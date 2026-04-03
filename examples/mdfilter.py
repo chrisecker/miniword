@@ -104,7 +104,7 @@ def _doc_to_md(doc):
 def _table_to_md(table):
     """Render a Table texel as Markdown table lines."""
     from miniword.textmodel.texeltree import get_text
-    n_rows, n_cols = table.n_rows, table.n_cols
+    n_rows, n_cols = table.nrows, table.ncols
     cell_texels = table.childs[1::2]
     grid = [[get_text(cell_texels[r * n_cols + c])
              for c in range(n_cols)]
@@ -822,8 +822,8 @@ def test_12():
             table = content[0]
             break
     assert table is not None
-    assert table.n_rows == 2
-    assert table.n_cols == 2
+    assert table.nrows == 2
+    assert table.ncols == 2
     cells = table.childs[1::2]
     assert [get_text(c) for c in cells] == ['A', 'B', 'C', 'D']
 

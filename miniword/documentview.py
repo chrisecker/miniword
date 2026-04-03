@@ -879,7 +879,17 @@ def test_accumulate():
     assert accumulate((5, 5, -3), (3, 7, 0)) == (3, 10, -3)
 
 
-def xxtest_00():
+_test_app = None   # module-level ref keeps wx.App alive across tests
+
+
+def _get_test_app():
+    global _test_app
+    if _test_app is None:
+        _test_app = wx.GetApp() or wx.App(redirect=False)
+    return _test_app
+
+
+def test_00():
     "modifying a basestyle updates the layout"
     import io
     from contextlib import redirect_stdout
@@ -893,7 +903,7 @@ def xxtest_00():
     doc.basestyles.set('normal', dict(style_default))
 
     with redirect_stdout(io.StringIO()):
-        app   = wx.App(redirect=False)
+        app   = _get_test_app()
         frame = wx.Frame(None)
         view  = DocumentView(frame, doc)
         view.builder.nbefore = 0
@@ -917,20 +927,22 @@ def xxtest_00():
     row = view.layout.childs[0].rows[0][-1]
     tb = row.childs[0]
     assert tb.style['font_size'] == 8
+    frame.Destroy()
 
-    
-def xxtest_01():
+
+def long_test_01():
     "progress dialog is shown when viewport is not yet covered"
+    # NOTE: tests takes about 20s -> we renamed so that is not
+    # executed in test_all.
     import io
     from contextlib import redirect_stdout
     from unittest.mock import patch
-    #from einstein import get_einstein_model as get_model
     from moby import get_moby_model as get_model
     from .document import Document
     from .styles import style_default
 
     with redirect_stdout(io.StringIO()):
-        app  = wx.App(redirect=False)
+        app  = _get_test_app()
         frame = wx.Frame(None)
         doc  = Document()
         doc.textmodel = get_model()
@@ -944,14 +956,14 @@ def xxtest_01():
 
     dialogs = []
     ticks = []
-    class TrackingDialog(wx.ProgressDialog):
+    class TrackingDialog:
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
             dialogs.append(self)
         def Update(self, x):
-            super().Update(x)
             ticks.append(x)
             return True, False
+        def Destroy(self):
+            pass
 
     with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
         with view.atomic():

@@ -28,7 +28,9 @@ modules = [
     "miniword.importexport",
     "miniword.tables",
     "miniword.table_boxes",
-    "miniword.image",    
+    "miniword.table_editors",
+    "miniword.images",
+    "examples.mdfilter",
 ]
 
 total_n = 0
