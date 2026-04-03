@@ -20,7 +20,7 @@ modules = [
     "miniword.txlio",
     "miniword.pagegen",
     "miniword.stylemenu",
-    "miniword.inspector",
+    "miniword.styleinspector",
     "miniword.searchtool",
     "miniword.annotation",
     "miniword.builder",

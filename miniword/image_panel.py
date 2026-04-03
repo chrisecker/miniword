@@ -7,7 +7,7 @@ from .textmodel.texeltree import grouped
 from .textmodel.viewbase import ViewBase
 from .ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from .ui.design import BAR_BG, TEXT_MUTED, flat_button, muted_button
-from .inspector import add_section, add_row
+from .styleinspector import add_section, add_row
 
 
 class ImageInspector(wx.Panel, ViewBase):
@@ -101,6 +101,12 @@ class ImageInspector(wx.Panel, ViewBase):
         padded.Add(sizer, 1, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(padded)
         self._set_inspector_enabled(False)
+        self.Bind(wx.EVT_SHOW, self.on_show)
+
+    def on_show(self, event):
+        event.Skip()
+        if event.IsShown():
+            self.index_changed(None)
 
     # ------------------------------------------------------------------
 

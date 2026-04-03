@@ -1,6 +1,6 @@
 import wx
 from .textmodel.viewbase import ViewBase
-from .inspector import InspectorPanel
+from .styleinspector import StyleInspector
 from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
 from .images import Image
@@ -192,7 +192,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._inspector_book.SetBackgroundColour(BG_PANEL)
         self._inspector_pages = {}
 
-        self.inspector = InspectorPanel(
+        self.inspector = StyleInspector(
             self._inspector_book, self.textview, self.document.basestyles)
         self.document_settings = SettingsInspector(
             self._inspector_book, self.document)

@@ -1083,7 +1083,7 @@ def demo_00():
     frame.Show()
 
     if 1:
-        from .inspector import Inspector
+        from .styleinspector import Inspector
         inspector = Inspector(view, None)
         inspector.Show()
     if 1:

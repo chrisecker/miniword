@@ -3,7 +3,7 @@ from wx.lib.newevent import NewEvent
 
 from .textmodel.viewbase import ViewBase
 from .textmodel.texeltree import length
-from .inspector import add_section
+from .styleinspector import add_section
 from .ui.threestate import ColourButton
 from .icons import icon
 from .tables import Table, empty_table
@@ -337,6 +337,12 @@ class TablePanel(wx.Panel, ViewBase):
         padded = wx.BoxSizer(wx.VERTICAL)
         padded.Add(sizer, 1, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(padded)
+        self.Bind(wx.EVT_SHOW, self.on_show)
+
+    def on_show(self, event):
+        event.Skip()
+        if event.IsShown():
+            self._update_cell_inspector()
 
     def _on_insert(self, event):
         if event.cols == 0:
@@ -427,9 +433,9 @@ class TablePanel(wx.Panel, ViewBase):
         if new_table is table:
             return
         model = self._view.model
-        _, _, depth = find_texel(model.texel, table, offset)
-        model.texel = transform(model.texel, offset, depth, lambda t: new_table)
-        model.notify_views('properties_changed', offset, offset + 1)
+        with self._view.atomic():
+            model.remove(offset, offset + length(table))
+            self._view.insert_texel(offset, new_table)
 
     # --- border preset ---
 
