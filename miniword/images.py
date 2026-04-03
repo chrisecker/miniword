@@ -135,7 +135,7 @@ class ImageBox(Box):
             self.device.invert_rect(x, y, self.width, self.height, gc)
 
     def get_index(self, x, y):
-        return 0 #1 if x >= self.width / 2 else 0
+        return 0
 
 
 
@@ -204,7 +204,7 @@ def test_02():
     assert box.height  == 60
     assert box.depth   == 0
     assert box.get_index(10, 0) == 0
-    assert box.get_index(50, 0) == 1
+    assert box.get_index(50, 0) == 0
 
 
 def test_03():

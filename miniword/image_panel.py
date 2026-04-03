@@ -1,6 +1,7 @@
 import os
 import wx
 from .images import Image
+from .documentview import get_path
 from .image_editors import ImageCropEditor
 from .textmodel.texeltree import grouped
 from .textmodel.viewbase import ViewBase
@@ -25,7 +26,7 @@ class ImageInspector(wx.Panel, ViewBase):
         self.SetBackgroundColour(BAR_BG)
         self._view = view
         self.add_model(view)
-        self._index        = None
+        self.add_model(view.model)
         self._blob_id      = None
         self._current_crop = None
         self._natural_w    = 1.0
@@ -55,13 +56,13 @@ class ImageInspector(wx.Panel, ViewBase):
         add_section("Size", self, sizer)
 
         self.txt_size_x = LengthInput(self, display_unit="mm")
-        self.txt_size_x.Bind(EVT_UNIT_CHANGED, self._on_size)
+        self.txt_size_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('x'))
         btn_reset_w = muted_button(self, "\u00d7", size=(20, -1))
         btn_reset_w.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_x())
         add_row(sizer, wx.StaticText(self, label="Width"), self.txt_size_x, btn_reset_w)
 
         self.txt_size_y = LengthInput(self, display_unit="mm")
-        self.txt_size_y.Bind(EVT_UNIT_CHANGED, self._on_size)
+        self.txt_size_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('y'))
         btn_reset_h = muted_button(self, "\u00d7", size=(20, -1))
         btn_reset_h.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_y())
         add_row(sizer, wx.StaticText(self, label="Height"), self.txt_size_y, btn_reset_h)
@@ -74,13 +75,13 @@ class ImageInspector(wx.Panel, ViewBase):
         add_section("Scale", self, sizer)
 
         self.txt_scale_x = FractionInput(self)
-        self.txt_scale_x.Bind(EVT_UNIT_CHANGED, self._on_scale)
+        self.txt_scale_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('x'))
         btn_reset_sx = muted_button(self, "\u00d7", size=(20, -1))
         btn_reset_sx.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_x())
         add_row(sizer, wx.StaticText(self, label="X"), self.txt_scale_x, btn_reset_sx)
 
         self.txt_scale_y = FractionInput(self)
-        self.txt_scale_y.Bind(EVT_UNIT_CHANGED, self._on_scale)
+        self.txt_scale_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('y'))
         btn_reset_sy = muted_button(self, "\u00d7", size=(20, -1))
         btn_reset_sy.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_y())
         add_row(sizer, wx.StaticText(self, label="Y"), self.txt_scale_y, btn_reset_sy)
@@ -110,10 +111,9 @@ class ImageInspector(wx.Panel, ViewBase):
             w.Enable(enabled)
         self.btn_unset_crop.Enable(enabled and has_crop)
 
-    def refresh(self, image, index, box=None):
+    def refresh(self, image, box=None):
         """Enable inspector and fill values from the Image texel."""
         self._updating     = True
-        self._index        = index
         self._blob_id      = image.blob_id
         self._current_crop = image.crop
         if box is not None:
@@ -129,46 +129,65 @@ class ImageInspector(wx.Panel, ViewBase):
 
     def clear(self):
         """Disable inspector section (cursor is not on an Image texel)."""
-        self._index   = None
         self._blob_id = None
         self._set_inspector_enabled(False)
 
     # ------------------------------------------------------------------
 
     def _notify(self):
-        if self._updating or self._index is None:
+        if self._updating or self._blob_id is None:
+            return
+        index = self._view.index
+        texel = next((t for _, _, t in get_path(self._view.model.texel, index)
+                      if isinstance(t, Image)), None)
+        if texel is None:
             return
         scale_x = self.txt_scale_x.GetValue() or 1.0
         scale_y = self.txt_scale_y.GetValue() or 1.0
         self._view.set_texel_attributes(
-            self._index, Image,
+            index, texel,
             blob_id=self._blob_id, scale_x=scale_x, scale_y=scale_y,
             proportional=self.chk_proportional.GetValue(),
             crop=self._current_crop)
 
-    def _on_size(self, event):
-        if self._updating or self._index is None:
+    def _on_size(self, changed):
+        if self._updating or self._blob_id is None:
             return
-        sx_pt = self.txt_size_x.GetValue()
-        sy_pt = self.txt_size_y.GetValue()
-        if sx_pt is None or sy_pt is None:
+        proportional = self.chk_proportional.GetValue()
+        if changed == 'x':
+            v = self.txt_size_x.GetValue()
+            if v is None:
+                return
+            scale_x = v / self._natural_w if self._natural_w else 1.0
+            scale_y = scale_x if proportional else (self.txt_scale_y.GetValue() or 1.0)
+        else:
+            v = self.txt_size_y.GetValue()
+            if v is None:
+                return
+            scale_y = v / self._natural_h if self._natural_h else 1.0
+            scale_x = scale_y if proportional else (self.txt_scale_x.GetValue() or 1.0)
+        self._update_fields(scale_x, scale_y)
+
+    def _on_scale(self, changed):
+        if self._updating or self._blob_id is None:
             return
-        scale_x = sx_pt / self._natural_w if self._natural_w else 1.0
-        scale_y = sy_pt / self._natural_h if self._natural_h else 1.0
+        proportional = self.chk_proportional.GetValue()
+        if changed == 'x':
+            scale_x = self.txt_scale_x.GetValue()
+            if scale_x is None:
+                return
+            scale_y = scale_x if proportional else (self.txt_scale_y.GetValue() or 1.0)
+        else:
+            scale_y = self.txt_scale_y.GetValue()
+            if scale_y is None:
+                return
+            scale_x = scale_y if proportional else (self.txt_scale_x.GetValue() or 1.0)
+        self._update_fields(scale_x, scale_y)
+
+    def _update_fields(self, scale_x, scale_y):
         self._updating = True
         self.txt_scale_x.SetValue(scale_x)
         self.txt_scale_y.SetValue(scale_y)
-        self._updating = False
-        self._notify()
-
-    def _on_scale(self, event):
-        if self._updating or self._index is None:
-            return
-        scale_x = self.txt_scale_x.GetValue()
-        scale_y = self.txt_scale_y.GetValue()
-        if scale_x is None or scale_y is None:
-            return
-        self._updating = True
         self.txt_size_x.SetValue(scale_x * self._natural_w)
         self.txt_size_y.SetValue(scale_y * self._natural_h)
         self._updating = False
@@ -177,40 +196,57 @@ class ImageInspector(wx.Panel, ViewBase):
     def _reset_size_x(self):
         if self._natural_w:
             self.txt_size_x.SetValue(self._natural_w)
-            self._on_size(None)
+            self._on_size('x')
 
     def _reset_size_y(self):
         if self._natural_h:
             self.txt_size_y.SetValue(self._natural_h)
-            self._on_size(None)
+            self._on_size('y')
 
     def _reset_scale_x(self):
         self.txt_scale_x.SetValue(1.0)
-        self._on_scale(None)
+        self._on_scale('x')
 
     def _reset_scale_y(self):
         self.txt_scale_y.SetValue(1.0)
-        self._on_scale(None)
+        self._on_scale('y')
 
     def _on_proportional(self, event):
         self._notify()
 
-    def editor_changed(self, view, editor):
-        if editor is not None and isinstance(editor.texel, Image):
-            self.refresh(editor.texel, editor.i0_box, getattr(editor, 'box', None))
+    def _get_image_texel(self):
+        """Return the Image texel at the current cursor position, or None."""
+        return next((t for _, _, t in get_path(self._view.model.texel, self._view.index)
+                     if isinstance(t, Image)), None)
+
+    def index_changed(self, view):
+        texel = self._get_image_texel()
+        if texel is not None:
+            self.refresh(texel)
         else:
             self.clear()
-        self._crop_active = isinstance(editor, ImageCropEditor)
+
+    def properties_changed(self, model, i1, i2):
+        if self._blob_id is not None:
+            texel = self._get_image_texel()
+            if texel is not None:
+                self.refresh(texel)
 
     def _on_crop_toggle(self, event):
         if not self._crop_active:
-            if self._index is not None:
-                self._view.install_editor(ImageCropEditor(), self._index)
+            if self._blob_id is not None:
+                index = self._view.index
+                path = get_path(self._view.model.texel, index)
+                for depth, (i1, i2, texel) in enumerate(path):
+                    if isinstance(texel, Image):
+                        editor = ImageCropEditor(self._view, i1, i2, depth)
+                        self._view.install_editor(editor, texel)
+                        break
         else:
             self._view.remove_editor()
 
     def _on_unset_crop(self, event):
-        if self._index is None:
+        if self._blob_id is None:
             return
         self._current_crop = None
         self._notify()
@@ -242,17 +278,17 @@ class ImageInspector(wx.Panel, ViewBase):
             return
         self._view.document.blobs[blob_id] = data
         index = self._view.index
-        scale = 1.0
+        scale_x = scale_y = 1.0
         load_image = getattr(self._view.builder.device, 'load_image', None)
         if load_image:
-            _, src_w, _ = load_image(data)
+            _, src_w, src_h = load_image(data)
             avail_w = self._view.get_rowwidth(index)
             if src_w > 0 and avail_w and src_w > avail_w:
-                scale = avail_w / src_w
-        self._view.insert_texel(index, grouped([Image(blob_id, scale)]))
+                scale_x = scale_y = avail_w / src_w
+        self._view.insert_texel(index, grouped([Image(blob_id, scale_x, scale_y)]))
 
     def _on_replace(self, event):
-        if self._index is None:
+        if self._blob_id is None:
             return
         blob_id, data = self._load_image_file()
         if blob_id is None:

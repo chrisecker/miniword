@@ -290,8 +290,7 @@ class MatrixEditor(TableEditorBase):
                 cx = bx
                 for c, cw in enumerate(frag.col_widths):
                     if c1 <= c <= c2:
-                        device.invert_rect(cx, cy, cw, rh, gc)
-                        device.draw_line(cx, cy, cx+cw, cy+rh, 2, gc)  # XXX
+                        device.invert_rect(cx, cy, cw, rh, gc)                        
                     cx += cw
             cy += rh
 
