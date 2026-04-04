@@ -1,6 +1,8 @@
+# XXX TODO: rewrite this
+
 """TableBox rendering for Table texels."""
 
-from .wxtextview.boxes import Box, TextBox, NewlineBox, EMPTYSTYLE
+from .wxtextview.boxes import Box, TextBox, EmptyTextBox, NewlineBox, EMPTYSTYLE
 from .wxtextview.linewrap import simple_linewrap
 from .wxtextview.testdevice import TESTDEVICE
 from .textmodel.texeltree import length as texel_length
@@ -21,8 +23,8 @@ class CellBox(Box):
         self._lpad = hpad // 2
         self._tpad = vpad // 2
         total_h = sum(r.height + r.depth for r in rows)
-        m = self.device.measure("M", {})[1]
-        self.fill = max(0, m - total_h)
+        w, h, d = self.device.measure("M", self.style)
+        self.fill = max(0, h + d - total_h)
         self.height = self.fill + total_h + vpad
         self.depth = 0
         self.width = (max((r.width for r in rows), default=0)
@@ -251,7 +253,13 @@ CELL_VPAD = 6   # vertical padding per row
 
 def build_cell(cell_texel, sep, col_width, factory):
     """Build a CellBox for one cell; cell style comes from the following separator."""
-    boxes = list(factory.create_all(cell_texel))
+    if texel_length(cell_texel) == 0:
+        line = EmptyTextBox(style=factory.mk_style({}), device=factory.device)
+        return CellBox([line], factory.device, hpad=CELL_HPAD, vpad=CELL_VPAD,
+                   style=getattr(sep, 'parstyle', {}))
+
+    else:
+        boxes = list(factory.create_all(cell_texel))
 
     # Split at NewlineBox (NL or BR inside the cell) so each segment is
     # wrapped independently, giving a real line break within the cell.
@@ -267,8 +275,11 @@ def build_cell(cell_texel, sep, col_width, factory):
     all_lines = []
     for seg in segments:
         all_lines.extend(simple_linewrap(seg, col_width))
+    print("all_lines:", all_lines)
 
     from .pagegen import Row as PageRow
+    for line in all_lines:
+        print(line, [x.depth for x in line])
     rows = [PageRow(line, device=factory.device) for line in all_lines]
     return CellBox(rows, factory.device, hpad=CELL_HPAD, vpad=CELL_VPAD,
                    style=getattr(sep, 'parstyle', {}))
@@ -427,12 +438,13 @@ def demo_00():
     TEXTS = [['Name',     'City',       'Country'],
              ['Einstein', 'Ulm',        'Germany'],
              ['Darwin',   'Shrewsbury', 'England'],
-             ['Curie',    'Warsaw',     'Poland']]
+             ['Curie',    'Warsaw',     'Poland'],
+             ['', '', '']] # empty last row!
 
     doc = Document()
     doc.textmodel.texel = from_strings(TEXTS)
 
-    app   = wx.App(redirect=True)
+    app   = wx.App(redirect=False)
     frame = wx.Frame(None, title='Table demo', size=(420, 420))
     view  = DocumentView(frame, doc)
     frame.Show()
