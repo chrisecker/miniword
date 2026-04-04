@@ -8,7 +8,7 @@
 #
 # Without mistune a built-in parser handles the common MD subset.
 
-from miniword.importexport import register_import, register_export
+from miniword.io.importexport import register_import, register_export
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ _FENCE_RE  = re.compile(r'^```')
 
 
 def _load_builtin(text):
-    from miniword.document import Document
+    from miniword.core.document import Document
     from miniword.textmodel.textmodel import TextModel
 
     doc = Document()
@@ -242,7 +242,7 @@ def _insert_text_block(doc, ptype, indent, runs):
 
 
 def _insert_table_block(doc, grid):
-    from miniword.tables import from_strings as mk_table
+    from miniword.tables.tables import from_strings as mk_table
     from copy import copy
     tbl_model = doc.textmodel.create_textmodel()
     table = mk_table(grid)
@@ -411,7 +411,7 @@ def _parse_inline(text):
 
 
 def _register_styles(doc):
-    from miniword.styles import style_default, updated
+    from miniword.core.styles import style_default, updated
     mm = 72 / 25.4
     n  = len(style_default['indent_levels'])
     heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
@@ -440,7 +440,7 @@ def _register_styles(doc):
 def _load_mistune(text):
     """Import using mistune for more accurate MD parsing."""
     import mistune
-    from miniword.document import Document
+    from miniword.core.document import Document
     from miniword.textmodel.textmodel import TextModel
 
     doc = Document()
@@ -588,7 +588,7 @@ def _check_md(doc):
     """Return list of features that cannot be represented in Markdown."""
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine
-    from miniword.tables import Table as TableTexel
+    from miniword.tables.tables import Table as TableTexel
 
     _OK_BASES  = {'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
                   'pre', 'list', 'numbered', 'quote'}

@@ -1,8 +1,8 @@
 import sys
 import wx
-from .document import Document
-from .mainwindow import MainFrame
-from . import builder
+from .core.document import Document
+from .ui.mainwindow import MainFrame
+from .layout import builder
 
 
 def main():
@@ -13,10 +13,10 @@ def main():
     path = args[0] if args else None
 
     app = wx.App(redirect=False)
-    from .mainwindow import load_plugins
+    from .ui.mainwindow import load_plugins
     load_plugins()
     if path:
-        from . import importexport
+        from .io import importexport
         try:
             doc = importexport.open_file(path)
         except Exception as e:
