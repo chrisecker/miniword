@@ -11,6 +11,9 @@ class TestDevice:
     def reset_blink(self):
         pass
     
+    def set_style(self, style, dc):
+        pass
+    
     def measure(self, text, style):
         return len(text), 1, 0 # Dummy for testing
 
