@@ -27,6 +27,7 @@ def _doc_to_md(doc):
     from miniword.textmodel.iterators import iter_leafes
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables import Table as TableTexel
+    from miniword.core.styles import style_default, updated
 
     texel    = doc.textmodel.get_xtexel()
     parts          = []
@@ -54,7 +55,8 @@ def _doc_to_md(doc):
             prev_block_key = None
             continue
 
-        ps     = nl.parstyle
+        basestyle = doc.basestyles.get(nl.parstyle.get('base', 'normal')) or style_default
+        ps     = updated(basestyle, nl.parstyle)
         base   = ps.get('base', 'normal')
         ptype  = ps.get('paragraph_type', 'normal')
         indent = nl.indent
@@ -647,13 +649,15 @@ def _parse(md):
     """
     from miniword.textmodel.iterators import iter_paragraphs, iter_leafes
     from miniword.textmodel.texeltree import NewLine, get_text
+    from miniword.core.styles import style_default, updated
     doc = _load_builtin(md)
     result = []
     for i1, i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
         nl = elems[-1]
         if not isinstance(nl, NewLine):
             continue
-        ps     = nl.parstyle
+        basestyle = doc.basestyles.get(nl.parstyle.get('base', 'normal')) or style_default
+        ps     = updated(basestyle, nl.parstyle)
         base   = ps.get('base', 'normal')
         ptype  = ps.get('paragraph_type', 'normal')
         indent = nl.indent
