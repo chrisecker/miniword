@@ -489,7 +489,8 @@ class DocumentView(WXTextView):
                     max(0, int(new_scroll_y / ry)))        
 
     def on_char(self, event):
-        if self.editor.on_key(event.GetKeyCode(), event): return
+        if self.editor.on_key(event.GetKeyCode(), event):
+            return
         super().on_char(event)
 
         
