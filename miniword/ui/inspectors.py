@@ -39,6 +39,9 @@ class InspectorBase(wx.Panel, ViewBase):
     def update(self):
         pass
 
+    def queue_update(self):
+        self._needs_update = True
+
     def inserted(self, model, i, n):          self._needs_update = True
     def removed(self, model, i, text):        self._needs_update = True
     def properties_changed(self, model, *a):  self._needs_update = True
