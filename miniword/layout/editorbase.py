@@ -30,9 +30,42 @@ import wx
 from ..textmodel.texeltree import iter_childs
 
 
+class NullEditor:
+    """Null-object editor active when no real editor is installed.
+
+    Implements the full editor protocol with harmless defaults so that
+    DocumentView can always call editor methods unconditionally.
+    """
+    is_null = True
+
+    def __init__(self, docview):
+        self.docview = docview
+
+    # Events — always return False (not consumed)
+    def on_leftdown(self, event):  return False
+    def on_motion(self, event):    return False
+    def on_leftup(self, event):    return False
+    def on_key(self, key, event):  return False
+
+    # Draw — default cursor + selection
+    def draw(self, painter):
+        self.docview.draw_cursor(painter)
+        self.docview.draw_selection(painter)
+
+    # Queries — None means "use DocumentView default"
+    def selected(self, i1, i2):    return None
+    def adjust_viewport(self):     return None
+
+    # Clipboard — delegate to docview
+    def copy(self):  self.docview.copy()
+    def cut(self):   self.docview.cut()
+    def paste(self): self.docview.paste()
+
+
 class TexelEditor:
     """Base class for all texel editors.
     """
+    is_null            = False
     auto_installable   = True    # managed by update_editor() / condition()
     click_installable  = False   # activated by mouse click
 
@@ -277,14 +310,23 @@ class TexelEditor:
         self.docview.paste()
 
     # ------------------------------------------------------------------
-    # Optional protocol — implement in subclasses where needed
+    # Queries — return None to fall back to DocumentView default
 
-    # get_selected(self) -> list[tuple[int, int]]
-    #
-    #   If defined, DocumentView.get_selected() delegates to this method
-    #   instead of using layout.extend_range().  The return value is a
-    #   list of (i1, i2) ranges that precisely cover the logical selection
-    #   of this editor (e.g. complete table cells for MatrixEditor).
-    #   This ensures that style changes and clipboard operations act on
-    #   exactly the region that is visually highlighted.
+    def selected(self, i1, i2):
+        """Return list of (i1, i2) ranges for the logical selection, or None.
+
+        None → DocumentView uses layout.extend_range(i1, i2).
+        Override in editors that need non-default selection semantics
+        (e.g. MatrixEditor returns complete table cells).
+        """
+        return None
+
+    def adjust_viewport(self):
+        """Return a scroll target (x, y) in document coordinates, or None.
+
+        None → DocumentView uses its default cursor-follow behaviour.
+        Override when the editing location differs from the cursor position
+        (e.g. FootnoteEditor scrolls to the footnote area, not the anchor).
+        """
+        return None
 

@@ -434,5 +434,5 @@ def demo_00():
     view  = DocumentView(frame, doc)
     frame.Show()
     view.set_index(36)   # cursor inside table → auto-installs CursorEditor
-    assert view.active_editor is not None
+    assert not view.editor.is_null
     app.MainLoop()

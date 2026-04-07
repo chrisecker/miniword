@@ -275,11 +275,8 @@ def build_cell(cell_texel, sep, col_width, factory):
     all_lines = []
     for seg in segments:
         all_lines.extend(simple_linewrap(seg, col_width))
-    print("all_lines:", all_lines)
 
     from ..layout.pagegen import Row as PageRow
-    for line in all_lines:
-        print(line, [x.depth for x in line])
     rows = [PageRow(line, device=factory.device) for line in all_lines]
     return CellBox(rows, factory.device, hpad=CELL_HPAD, vpad=CELL_VPAD,
                    style=getattr(sep, 'parstyle', {}))

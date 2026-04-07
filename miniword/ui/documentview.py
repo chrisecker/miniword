@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from ..wxtextview.wxtextview import WXTextView
 from ..textmodel.iterators import iter_newlines
 from ..layout.builder import Factory, Builder
+from ..layout.editorbase import NullEditor
 from ..layout.cairodevice import CairoDevice
 from ..layout.annotation import highlight, squiggle
 from ..layout.builder import trace
@@ -119,11 +120,10 @@ class DocumentView(WXTextView):
     max_zoom = 5.0
     zoom_step = 0.1
 
-    active_editor = None
-
     def __init__(self, parent, document):
         self.document = document
         super().__init__(parent)
+        self.editor = NullEditor(self)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.set_model(document.textmodel)
@@ -250,8 +250,8 @@ class DocumentView(WXTextView):
             self.cycle_list_type(ps1, ps2)
         elif action == 'cycle_basestyle':
             self.cycle_basestyle(ps1, ps2, reverse=shift)
-        elif action in ('copy', 'cut', 'paste') and self.active_editor:
-            getattr(self.active_editor, action)()
+        elif action in ('copy', 'cut', 'paste'):
+            getattr(self.editor, action)()
         else:
             return WXTextView.handle_action(self, action, shift)
     
@@ -311,33 +311,31 @@ class DocumentView(WXTextView):
     ### Editor management
     def install_editor(self, editor, texel):
         """Installs an editor for the texel at positions i1 to i2 in depth d."""
-        print("installing:", editor )
         editor.install(texel)
-        self.active_editor = editor
+        self.editor = editor
         self.notify_views('editor_changed', editor)
         self.refresh()
 
     def remove_editor(self):
-        if self.active_editor:
-            self.active_editor = None
-            print("editor removed")
+        if not self.editor.is_null:
+            self.editor = NullEditor(self)
             self.notify_views('editor_changed', None)
             self.refresh()
 
     def reinstall_editor(self, texel):
         """Called after properties change."""
-        self.active_editor.reinstall(texel)
+        self.editor.reinstall(texel)
 
     def update_editor(self):
         """Install, switch, or remove the editor based on current conditions.
         """
         index = self.index
-        editor = self.active_editor
+        editor = self.editor
         texel = self.model.texel
         path = get_path(texel, index)
 
         # 1. Current editor still valid?
-        if editor is not None:
+        if not editor.is_null:
             m = editor.match(self, path)
             if m is not None:
                 i1, i2, depth, texel = m
@@ -371,7 +369,7 @@ class DocumentView(WXTextView):
                 editor = cls(self, i1, i2, depth)
                 self.install_editor(editor, texel)
                 return
-        #super().on_leftdclick(event)
+        super().on_leftdclick(event)
       
     ### Model callbacks & atomic
     _pending_range = None  # (i1, i2, delta) accumulated while inhibited
@@ -397,17 +395,17 @@ class DocumentView(WXTextView):
         
     def properties_changed(self, model, i1, i2):
         super().properties_changed(model, i1, i2)
-        if self.active_editor is not None:
-            self.builder.buildto_index(self.active_editor.i2)
+        if not self.editor.is_null:
+            self.builder.buildto_index(self.editor.i2)
             self.update_editor()
 
     def inserted(self, model, i, n):
-        if self.active_editor is not None:
+        if not self.editor.is_null:
             self.remove_editor()
         super().inserted(model, i, n)
 
     def removed(self, model, i, text):
-        if self.active_editor is not None:
+        if not self.editor.is_null:
             self.remove_editor()
         super().removed(model, i, text)
 
@@ -446,20 +444,15 @@ class DocumentView(WXTextView):
         
     ### Events with editor routing
     def on_leftdown(self, event):
-        if self.active_editor:
-            consumed = self.active_editor.on_leftdown(event)
-            if consumed: return
+        if self.editor.on_leftdown(event): return
         super().on_leftdown(event)
-            
+
     def on_motion(self, event):
-        if self.active_editor:
-            consumed = self.active_editor.on_motion(event)
-            if consumed: return
+        if self.editor.on_motion(event): return
         super().on_motion(event)
 
     def on_leftup(self, event):
-        if self.active_editor and self.active_editor._drag_handle is not None:
-            self.active_editor.on_leftup(event)
+        if self.editor.on_leftup(event):
             self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
 
     def on_mousewheel(self, event):
@@ -496,9 +489,7 @@ class DocumentView(WXTextView):
                     max(0, int(new_scroll_y / ry)))        
 
     def on_char(self, event):
-        if self.active_editor:
-            if self.active_editor.on_key(event.GetKeyCode(), event):
-                return
+        if self.editor.on_key(event.GetKeyCode(), event): return
         super().on_char(event)
 
         
@@ -672,13 +663,7 @@ class DocumentView(WXTextView):
             c = entry[2] if len(entry) > 2 else 'red'
             squiggle(painter, layout, i1, i2, 0, 0, c)   # 4. lines on top
 
-        # If we have an editor, we redirect cursor und selection to
-        # the editor. Otherweise we paint it ourself.
-        if self.active_editor:
-            self.active_editor.draw(painter)
-        else:
-            self.draw_cursor(painter)
-            self.draw_selection(painter)
+        self.editor.draw(painter)
         dc = None
         painter = None
 
@@ -690,12 +675,10 @@ class DocumentView(WXTextView):
     def get_selected(self):
         if self.selection is None:
             return []
-        editor = self.active_editor
-        if editor is not None and hasattr(editor, 'get_selected'):
-            r = editor.get_selected()
-            print("editor returned", r)
-            return r
         s1, s2 = sorted(self.selection)
+        result = self.editor.selected(s1, s2)
+        if result is not None:
+            return result
         return [self.layout.extend_range(s1, s2)]
 
     def draw_selection(self, gc):
@@ -712,7 +695,7 @@ class DocumentView(WXTextView):
         old = self._index
         WXTextView.set_index(self, index, extend, update)
         # Remove editors when the cursor moves away.
-        if old != index and self.active_editor is not None:
+        if old != index and not self.editor.is_null:
             self.remove_editor()
         # Check and install a new one
         self.update_editor()
