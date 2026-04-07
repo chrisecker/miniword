@@ -593,7 +593,7 @@ class DocumentView(WXTextView):
             layout.draw_cursor(self.index, 0, 0, gc, self.model.defaultstyle)
 
     def get_selected(self):
-        if self.selection is None:
+        if not self.has_selection():
             return []
         s1, s2 = sorted(self.selection)
         result = self.editor.selected(s1, s2)

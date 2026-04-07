@@ -539,12 +539,14 @@ class StyleInspector(InspectorBase):
         self.set_parproperties(alignment=variant)
         
     def on_indent(self, event):
-        s1, s2 = self.get_parrange()
-        self.model.model.increase_indent(s1, s2)
+        with self.model.atomic():
+            for s1, s2 in self.get_parrange():
+                self.model.model.increase_indent(s1, s2)
 
     def on_dedent(self, event):
-        s1, s2 = self.get_parrange()
-        self.model.model.decrease_indent(s1, s2)
+        with self.model.atomic():
+            for s1, s2 in self.get_parrange():
+                self.model.model.decrease_indent(s1, s2)
 
     def on_policy(self, event):
         if self.policy.GetValue():
@@ -613,38 +615,46 @@ class StyleInspector(InspectorBase):
         self._needs_update = True
         
     def set_properties(self, **properties):
-        i1, i2 = self.get_range()
-        self.model.set_properties(i1, i2, **properties)
+        with self.model.atomic():
+            for i1, i2 in self.get_range():
+                self.model.set_properties(i1, i2, **properties)
 
     def clear_properties(self, *keys):
-        i1, i2 = self.get_range()
-        self.model.clear_properties(i1, i2, *keys)
+        with self.model.atomic():
+            for i1, i2 in self.get_range():
+                self.model.clear_properties(i1, i2, *keys)
 
     def set_char_properties(self, **properties):
         """Apply character properties: to the selection, or to the input
         style when there is no selection."""
-        i1, i2 = self.get_range()
-        if i1 == i2:
+        ranges = self.get_range()
+        if ranges == [(self.model.index, self.model.index)]:
             self.model.set_current_style(**properties)
         else:
-            self.model.set_properties(i1, i2, **properties)
+            with self.model.atomic():
+                for i1, i2 in ranges:
+                    self.model.set_properties(i1, i2, **properties)
 
     def clear_char_properties(self, *keys):
         """Clear character properties: from the selection, or from the
         input style when there is no selection."""
-        i1, i2 = self.get_range()
-        if i1 == i2:
+        ranges = self.get_range()
+        if ranges == [(self.model.index, self.model.index)]:
             self.model.clear_current_style(*keys)
         else:
-            self.model.clear_properties(i1, i2, *keys)
-    
+            with self.model.atomic():
+                for i1, i2 in ranges:
+                    self.model.clear_properties(i1, i2, *keys)
+
     def set_parproperties(self, **properties):
-        i1, i2 = self.get_parrange()
-        self.model.set_parproperties(i1, i2, **properties)
+        with self.model.atomic():
+            for i1, i2 in self.get_parrange():
+                self.model.set_parproperties(i1, i2, **properties)
 
     def clear_parproperties(self, *keys):
-        i1, i2 = self.get_parrange()
-        self.model.clear_parproperties(i1, i2, *keys)
+        with self.model.atomic():
+            for i1, i2 in self.get_parrange():
+                self.model.clear_parproperties(i1, i2, *keys)
 
     def on_size(self, event=None):
         try:
@@ -770,30 +780,35 @@ class StyleInspector(InspectorBase):
         return r
 
     def get_range(self):
-        textview = self.model
-        textmodel = textview.model
-        if not textview.has_selection():
-            i1 = i2 = textview.index
-        else:
-            i1, i2  = sorted(textview.selection)
-        return i1, i2
+        """Return list of (i1, i2) ranges for the current selection.
+
+        Returns [(index, index)] when there is no selection (cursor only).
+        """
+        selected = self.model.get_selected()
+        if not selected:
+            i = self.model.index
+            return [(i, i)]
+        return selected
 
     def get_parrange(self):
-        # get range / selection and extend it to the right such that a
-        # NL is the last included position.
+        """Return list of (i1, i2) ranges extended to include the NL of each paragraph."""
         view = self.model
         model = view.model
-        if view.has_selection():
-            s1, s2 = sorted(view.selection)
-            row, col = model.index2position(s2)
-            if col == 0:
-                return s1, s2
-            j = model.lineend(row)
-            return s1, j+1
+        selected = view.get_selected()
+        if selected:
+            ranges = []
+            for s1, s2 in selected:
+                row, col = model.index2position(s2)
+                if col == 0:
+                    ranges.append((s1, s2))
+                else:
+                    j = model.lineend(row)
+                    ranges.append((s1, j + 1))
+            return ranges
         index = view.index
         row, col = model.index2position(index)
         j = model.lineend(row)
-        return index, j+1
+        return [(index, j + 1)]
 
     _stylenames = ()
     _state = None
@@ -809,11 +824,19 @@ class StyleInspector(InspectorBase):
         index_indent = textmodel.get_indent(index)
 
 
-        if textview.has_selection():
-            s1, s2 = sorted(textview.selection)
+        selected = textview.get_selected()
+        if selected:
             properties, overrides = collect_properties(
-                textmodel, s1, s2, self.mk_style)
-            indent = min(textmodel.get_indents(s1, s2)+[index_indent])
+                textmodel, *selected[0], self.mk_style)
+            indent = min(textmodel.get_indents(*selected[0]) + [index_indent])
+            for s1, s2 in selected[1:]:
+                p2, o2 = collect_properties(textmodel, s1, s2, self.mk_style)
+                overrides |= o2
+                for key in set(properties) | set(p2):
+                    v1 = properties.get(key)
+                    v2 = p2.get(key)
+                    properties[key] = v1 if v1 == v2 else None
+                indent = min(textmodel.get_indents(s1, s2) + [indent])
         else:
             current_style = textview.get_current_style()
             properties = self.mk_style(index_parstyle, current_style)
