@@ -739,6 +739,8 @@ class TextView(ViewBase, Model):
         if selection is None:
             return []
         s1, s2 = sorted(selection)
+        if s1 == s2:
+            return []
         return [(s1, s2)]
 
     def start_selection(self):
