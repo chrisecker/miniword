@@ -294,11 +294,7 @@ class MatrixEditor(TableEditorBase):
                     cx += cw
             cy += rh
 
-    def get_selected(self):
-        sel = self.docview.selection
-        if sel is None:
-            return []
-        s1, s2 = sorted(sel)
+    def selected(self, s1, s2):
         try:
             r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
             i1, i2 = self.texel.get_cell_range(r1, c1, r2, c2)

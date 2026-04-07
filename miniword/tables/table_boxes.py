@@ -124,24 +124,6 @@ class TableBox(Box):
         else:
             Box.draw_selection(self, i1, i2, x, y, dc)
 
-    def extend_range(self, i1, i2):
-        # A table is atomic at its outer boundary: if the range touches
-        # the leading separator (i1 < first cell offset) or overshoots,
-        # snap to the full table so it is always deleted/selected as a unit.
-        box = self
-        j1 = 0
-        while box.prev is not None:
-            box = box.prev
-            j1 -= len(box)
-        box = self
-        j2 = len(self)
-        while box.next is not None:
-            box = box.next
-            j2 += len(box)        
-        if i1 <= j1 or i2 >= j2:
-            return min(i1, j1), max(j2, i2)
-        return super().extend_range(i1, i2)
-
     def draw(self, x, y, dc):
         # _origin is used by MatrixEditor.draw_selection to locate this fragment
         # on screen. It is set here because draw() is the only moment a box

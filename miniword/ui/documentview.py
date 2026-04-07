@@ -1,4 +1,3 @@
-from contextlib import contextmanager
 
 from ..wxtextview.wxtextview import WXTextView
 from ..textmodel.iterators import iter_newlines
@@ -10,93 +9,13 @@ from ..layout.builder import trace
 from ..core.texels import BR
 from ..textmodel.texeltree import iter_childs, grouped, Group, \
     provides_childs, length
+from ..core.utils import find_texel, transform, get_path, \
+    expand_selection
+
+from contextlib import contextmanager
 
 import wx
 
-
-
-def find_texel(tree, texel, i):
-    """
-    Searches for 'texel' in 'tree' at position i.
-    
-    Returns:
-        (i1, i2, depth): The absolute interval and the depth of the texel.
-    """
-    if tree is texel:
-        # Basis-Fall: Hier ist das Intervall (aus eigener Sicht) 0 bis Länge.
-        return 0, length(tree), 0
-
-    if not provides_childs(tree):
-        raise IndexError("Texel not found at position %i" % i)
-
-    for j1, j2, child in iter_childs(tree):
-        if j1 <= i < j2:
-            # Rekursion liefert Werte relativ zum Kind
-            i1_rel, i2_rel, depth = find_texel(child, texel, i - j1)
-            
-            # Transformation der relativen Werte in das System des aktuellen Knotens
-            return i1_rel + j1, i2_rel + j1, depth + 1
-
-    raise IndexError("Texel not found at position %i" % i)
-
-
-
-def get_texel(tree, i, depth):
-    if depth == 0:
-        if 0 <= i < length(tree):
-            return tree
-        raise IndexError("Position %i out of bounds for target texel" % i)
-        
-    if not provides_childs(tree):
-        raise IndexError("Depth %i not reachable at position %i (reached leaf)"
-                         % (depth, i))
-
-    for j1, j2, child in iter_childs(tree):
-        if j1 <= i < j2:
-            return get_texel(child, i - j1, depth - 1)
-            
-    raise IndexError("No child covers position %i at remaining depth %i"
-                     % (i, depth))
-
-
-def transform(tree, i, d, fun):
-    """
-    Applies 'fun' to the node that spans position i at depth d.
-    The node is selected if its horizontal range covers i (start <= i <
-    end).
-
-    """
-    if d == 0:
-        return fun(tree)
-    if not provides_childs(tree):
-        raise IndexError("Can't descend into texel %s"%repr(tree))
-    r = []
-    for j1, j2, child in iter_childs(tree):
-        if j1 <= i < j2:
-            r.append(transform(child, i - j1, d-1, fun))
-        else:
-            r.append(child)
-    if tree.is_group:
-        return Group(r)
-    assert tree.is_container
-    return tree.set_childs(r)
-
-
-def get_path(tree, i, _offset=0):
-    """
-    Returns the path of nodes that cover position i.
-    
-    Returns:
-        A list of tuples (abs_i1, abs_i2, node) from root to leaf.
-    """
-    path = []
-    path.append((_offset, _offset + length(tree), tree))
-
-    if provides_childs(tree):
-        for j1, j2, child in iter_childs(tree):
-            if j1 <= i < j2:
-                return path + get_path(child, i - j1, _offset + j1)
-    return path
 
 
 
@@ -680,7 +599,7 @@ class DocumentView(WXTextView):
         result = self.editor.selected(s1, s2)
         if result is not None:
             return result
-        return [self.layout.extend_range(s1, s2)]
+        return [expand_selection(self.model.texel, s1, s2)]
 
     def draw_selection(self, gc):
         layout = self.layout
@@ -966,96 +885,6 @@ def long_test_01():
     print("ticks=", ticks)
 
     
-def test_02():
-    "transform_texel"
-    # (tree, texel, i, fun):
-    from ..textmodel.texeltree import G, T, Fraction
-    tree = G([Fraction(T('A'), T('B'))])
-
-
-
-def test_03():
-    "get_path"
-    from ..textmodel.texeltree import G, T, Fraction
-    
-    tree = G([Fraction(T('A'), T('B'))])
-
-    path = get_path(tree, 1)
-    assert len(path) == 3
-    
-    assert path[0][0] == 0 # abs_i1
-    assert path[0][1] == 5 # abs_i2
-    assert path[0][2].is_group
-    
-    assert path[1][0] == 0 # abs_i1
-    assert path[1][1] == 5 # abs_i2
-    assert path[1][2].is_container
-
-    assert path[2][0] == 1 # abs_i1
-    assert path[2][1] == 2 # abs_i2
-    assert path[2][2].is_text
-
-    
-def test_04():
-    "get_texel"
-    from ..textmodel.texeltree import G, T, Fraction
-    a = T('A')
-    b = T('B')
-    f = Fraction(a, b)
-    assert get_texel(f, 0, 0) is f
-    assert get_texel(f, 1, 1) is a
-    assert get_texel(f, 3, 1) is b
-
-    assert get_texel(f, 0, 1) is f.childs[0]
-    assert get_texel(f, 2, 1) is f.childs[2]
-    assert get_texel(f, 4, 1) is f.childs[4]
-
-    
-def test_05():
-    "find_texel"
-    from ..textmodel.texeltree import G, T, Fraction
-    a = T('A')
-    b = T('B')
-    f = Fraction(a, b)
-    assert find_texel(f, f, 0) == (0, 5, 0)
-    tree = G([f, T('C')])
-    assert find_texel(tree, f, 0) == (0, 5, 1)
-    assert find_texel(tree, a, 1) == (1, 2, 2)
-    try:
-        assert find_texel(tree, a, 2)
-        assert False
-    except IndexError: pass
-
-def test_06():
-    "transform"
-    from ..textmodel.texeltree import G, T, Fraction, get_text
-    a = T('A')
-    b = T('B')
-    c = T('C')
-    x = T('X')
-    f = Fraction(a, b)
-    replace = lambda old:x
-    assert find_texel(f, a, 1) == (1, 2, 1)
-
-    r = transform(f, 1, 1, replace)
-    assert get_text(r) == '\tX\tB\t'
-    r = transform(f, 3, 1, replace)
-    assert get_text(r) == '\tA\tX\t'
-    tree = G([f, c])
-    r = transform(tree, 1, 2, replace)
-    assert get_text(r) == '\tX\tB\tC'
-
-    try:
-        r = transform(tree, 1, 3, replace)
-        assert False
-    except IndexError: pass
-    
-    # NOTE: we can even replace seperators. This happens when their
-    # style-Attribute ist set.
-    r = transform(f, 0, 1, replace)
-    assert get_text(r) == 'XA\tB\t'
-    
-        
 def demo_00():
     from ..core.document import Document
 
