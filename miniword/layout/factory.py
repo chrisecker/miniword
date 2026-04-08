@@ -1,19 +1,30 @@
 from ..wxtextview.builder import Factory as FactoryBase
 from ..wxtextview.testdevice import TESTDEVICE
 from ..wxtextview.boxes import NewlineBox
+from ..textmodel.iterators import iter_paragraphs
+from ..textmodel.texeltree import EMPTYSTYLE
 from ..core.styles import updated, style_default
 
+from copy import copy as shallow_copy
 
-class ForceBreakBox(NewlineBox):
-    """Sentinel box for a forced line break (BR texel)."""
+
 
 
 class Factory(FactoryBase):
+    # The following attributes are set by pagegen. It can always be
+    # assumed that they have a meaningful value.
+    parstyle = None
+    markerstyle = None
+    indent_level = None
+    line_width = None
 
     def __init__(self, stylesheet, device=TESTDEVICE):
         self.stylesheet = stylesheet
         FactoryBase.__init__(self, device)
 
+    def copy(self):
+        clone = shallow_copy(self)
+        
     def mk_style(self, style):
         parstyle = self.parstyle
         stylesheet = self.stylesheet
@@ -45,7 +56,24 @@ class Factory(FactoryBase):
                          full_bitmap=full_bitmap)]
 
     def Table_handler(self, texel, i1, i2):
-        from ..tables import build_table_box
+        from ..tables.table_factory import build_table_box
         line_width = getattr(self, 'line_width', 400)
         self.page_width = line_width
         return [build_table_box(texel, self)]
+
+
+    def generate_boxes(self, texel, i):
+        """Generator producing a stream of boxes."""
+        for i1, i2, l in iter_paragraphs(texel, i):
+            boxes = []
+            # Iterating groups in reverse (the usual trick) is prevented
+            # by the generator, so we set parstyle directly instead.
+            nl = l[-1]
+            self.markerstyle  = getattr(l[0], 'style', EMPTYSTYLE)
+            self.parstyle     = nl.parstyle
+            fixed = self.mk_style({}).get('fixed_indent')
+            self.indent_level = fixed if fixed is not None else nl.indent
+            for node in l:
+                boxes.extend(self.create_all(node))
+            yield i1, i2, boxes
+

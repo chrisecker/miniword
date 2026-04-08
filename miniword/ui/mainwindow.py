@@ -4,7 +4,7 @@ from .styleinspector import StyleInspector
 from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
 from ..images import Image, ImageInspector
-from ..tables import TablePanel
+from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
 
 from ..images import image_editors  # registers editors

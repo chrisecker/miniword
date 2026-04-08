@@ -11,20 +11,17 @@
 #
 
 
-
 from ..wxtextview.testdevice import TESTDEVICE
 from ..wxtextview.boxes import TextBox
-from ..textmodel.texeltree import length, NewLine, EMPTYSTYLE
-from ..textmodel.iterators import iter_paragraphs
 from ..wxtextview.linewrap import simple_linewrap
 from ..core.units import mm, cm, pt
 from ..core.styles import updated, n_levels
 from ..core.papersizes import PAPER_SIZES
 from ..core.document import settings_default
-from .factory import Factory, ForceBreakBox
 from .stretchable import justify_line
-from .page import Row, Page
+from .page import ForceBreakBox, Row, Page
 from .counters import format_number
+from ..tables.table_boxes import TableBox, split_at_height
 
 from copy import copy as shallow_copy
 
@@ -229,6 +226,7 @@ def restartmemo_from_settings(settings):
 
 def split_at_breaks(boxlist):
     """Split boxlist at ForceBreakBox markers; each marker ends its segment."""
+
     segments, current = [], []
     for box in boxlist:
         current.append(box)
@@ -243,7 +241,6 @@ def split_at_breaks(boxlist):
 def split_at_tables(boxlist):
     """Split boxlist at TableBox boundaries.
     Each TableBox becomes its own single-element segment."""
-    from ..tables import TableBox
     segments, current = [], []
     for box in boxlist:
         if isinstance(box, TableBox):
@@ -262,7 +259,6 @@ def split_at_tables(boxlist):
 
 def place_longtable(box, draft, device):
     """Place a break_level>=1 TableBox as one or more fragments onto drafts."""
-    from ..tables.table_boxes import split_at_height
     row_offset = 0
 
     while box is not None and box.n_rows > box.header_rows:
@@ -276,25 +272,17 @@ def place_longtable(box, draft, device):
     return draft
 
 
-def generate_boxes(texel, i, factory):
-    """Generator producing a stream of boxes."""
-    for i1, i2, l in iter_paragraphs(texel, i):
-        boxes = []
-        # Iterating groups in reverse (the usual trick) is prevented
-        # by the generator, so we set parstyle directly instead.
-        nl = l[-1]
-        factory.markerstyle  = getattr(l[0], 'style', EMPTYSTYLE)
-        factory.parstyle     = nl.parstyle
-        fixed = factory.mk_style({}).get('fixed_indent')
-        factory.indent_level = fixed if fixed is not None else nl.indent
-        for node in l:
-            boxes.extend(factory.create_all(node))
-        yield i1, i2, boxes
 
+def generate_pages(texel, i, restartmemo, factory,
+                   footnotes=None, floats=None, allow_page_breaks=True):
+    """Generator producing a stream of pages.
 
-def generate_pages(texel, i, restartmemo, factory):
-    """Generator producing a stream of pages."""
-    from ..tables import TableBox
+    footnotes, floats: if provided, collected items are appended to these
+    lists instead of being handled internally. Useful for container content
+    where footnotes/floats belong to the enclosing page.
+    allow_page_breaks: set to False for containers that must not insert
+    page breaks (all content stays on one 'page').
+    """
     device = factory.device
 
     # In this minimal model, state and RestartMemo are the same thing.
@@ -308,19 +296,17 @@ def generate_pages(texel, i, restartmemo, factory):
     # material already present in the restart memo.
     j = i + restartmemo.get_length()
 
-    margin          = state.border  # top right bottom left
-    page_width      = state.geometry[0]
-    container_left  = margin[3]
-    container_right = page_width - margin[1]
-    factory.line_width = container_right - container_left
+    margin     = state.border  # top right bottom left
+    page_width = state.geometry[0]
+    factory.line_width = page_width - margin[1] - margin[3]
 
-    for i1, i2, boxlist in generate_boxes(texel, j, factory):
+    for i1, i2, boxlist in factory.generate_boxes(texel, j):
         draft = state.start_draft()
 
         # bad way to get filled parstyle
         r = factory.mk_style({})
 
-        if r['page_break_before'] and not draft.is_empty():
+        if allow_page_breaks and r['page_break_before'] and not draft.is_empty():
             draft = draft.create_newpage()
 
         indent            = factory.indent_level
@@ -332,11 +318,10 @@ def generate_pages(texel, i, restartmemo, factory):
         space_before      = r['space_before']
         space_after       = r['space_after']
 
-        line_left_rest   = container_left + block_indent
+        line_left_rest   = margin[3] + block_indent
         line_left_first  = line_left_rest + first_line_indent
-        line_right       = container_right
-        line_width_first = line_right - line_left_first
-        line_width_rest  = line_right - line_left_rest
+        line_width_rest  = factory.line_width - block_indent
+        line_width_first = line_width_rest - first_line_indent
 
         first  = True
         before = space_before
@@ -361,30 +346,32 @@ def generate_pages(texel, i, restartmemo, factory):
                     if alignment == 'justify' and idx < n - 1:
                         line = justify_line(line, line_width)
                     row = Row(line, device=device)
+                    
+                    style = factory.mk_style(factory.markerstyle)
+                    style['font_size'] *= style['marker_size'][indent]
+                    style['color'] = style['marker_color'][indent]
+                    pos = r['marker_pos'][indent]
 
-                    if first and r['paragraph_type'] == 'list':
-                        style = factory.mk_style(factory.markerstyle)
-                        style['font_size'] *= style['marker_size'][indent]
-                        style['color']      = style['marker_color'][indent]
-                        row.set_marker(r['marker'][indent], r['marker_pos'][indent], style)
+                    if first:
+                        if  r['paragraph_type'] == 'list':
+                            marker = r['marker'][indent]
+                            row.set_marker(marker, pos, style)
 
-                    elif first and r['paragraph_type'] == 'numbered':
-                        ns = r['numbering_style'][indent]
-                        if ns is not None:
+                        elif r['paragraph_type'] == 'numbered':
+                            ns = r['numbering_style'][indent]
                             ckey = r['counter']
                             if ckey not in counters:
                                 counters[ckey] = [0] * n_levels
                             sn = r.get('start_number')
                             if sn is not None:
                                 counters[ckey][indent] = sn - 1
-                            counters[ckey][indent] += 1
+                            else:
+                                counters[ckey][indent] += 1
                             if ckey == 'section':
+                                # a section count clears the item counter
                                 counters['item'] = [0] * n_levels
                             marker = format_number(counters[ckey], indent, ns)
-                            style = factory.mk_style(factory.markerstyle)
-                            style['font_size'] *= style['marker_size'][indent]
-                            style['color']      = style['marker_color'][indent]
-                            row.set_marker(marker, r['marker_pos'][indent], style)
+                            row.set_marker(marker, pos, style)
 
                     if not draft.can_addrow(row, line_spacing, before):
                         draft = draft.create_newpage()
@@ -408,8 +395,8 @@ def generate_pages(texel, i, restartmemo, factory):
                     if r.get('block_color'):
                         pad = r.get('block_padding') or 0
                         draft.decorations += ((
-                            container_left - pad, y_before - pad,
-                            container_right - container_left + 2 * pad,
+                            margin[3] - pad, y_before - pad,
+                            factory.line_width + 2 * pad,
                             row.height + row.depth + 2 * pad,
                             r['block_color']),)
                     first  = False
@@ -421,17 +408,26 @@ def generate_pages(texel, i, restartmemo, factory):
 
         pages, state = draft.fix_draft(device)
         state.counters = {k: list(v) for k, v in counters.items()}
+        if footnotes is not None:
+            footnotes.extend(state.footnotes)
+        if floats is not None:
+            floats.extend(state.floats)
         if pages:
             pages[0].restartmemo = restartmemo
             restartmemo = state.copy()
         for page in pages:
             yield page
 
-    # Place any remaining spillover material onto a new page
+    # Yield remaining content as the final page
     if state.rows:
-        draft = state.start_draft()
-        draft = draft.create_newpage()
-        pages, _ = draft.fix_draft(device)
+        if allow_page_breaks:
+            draft = state.start_draft()
+            draft = draft.create_newpage()
+            pages, _ = draft.fix_draft(device)
+        else:
+            page = Page(state.rows, state.geometry, device)
+            page.decorations = state.decorations
+            pages = [page]
         for page in pages:
             yield page
 
@@ -483,6 +479,7 @@ def test_02():
 
     import einstein
     from ..core.styles import testsheet
+    from .factory import Factory
     model   = einstein.get_einstein_model()
     texel   = model.get_xtexel()
     device  = TESTDEVICE

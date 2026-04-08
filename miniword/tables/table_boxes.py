@@ -2,10 +2,8 @@
 
 """TableBox rendering for Table texels."""
 
-from ..wxtextview.boxes import Box, TextBox, EmptyTextBox, NewlineBox, EMPTYSTYLE
-from ..wxtextview.linewrap import simple_linewrap
+from ..wxtextview.boxes import Box, TextBox, EmptyTextBox, EMPTYSTYLE
 from ..wxtextview.testdevice import TESTDEVICE
-from ..textmodel.texeltree import length as texel_length
 from .tables import from_strings
 
 
@@ -312,83 +310,11 @@ class TableNavRow:
 
 
 # ---------------------------------------------------------------------------
-# Build TableBox from Table texel
+# Constants used by table_factory.py
 # ---------------------------------------------------------------------------
 
 CELL_HPAD = 8   # horizontal padding per column
 CELL_VPAD = 6   # vertical padding per row
-
-
-def build_cell(cell_texel, sep, col_width, factory):
-    """Build a CellBox for one cell; cell style comes from the following separator."""
-    if texel_length(cell_texel) == 0:
-        line = EmptyTextBox(style=factory.mk_style({}), device=factory.device)
-        return CellBox([line], factory.device, hpad=CELL_HPAD, vpad=CELL_VPAD,
-                   style=getattr(sep, 'parstyle', {}))
-
-    else:
-        boxes = list(factory.create_all(cell_texel))
-
-    # Split at NewlineBox (NL or BR inside the cell) so each segment is
-    # wrapped independently, giving a real line break within the cell.
-    segments, current = [], []
-    for box in boxes:
-        current.append(box)
-        if isinstance(box, NewlineBox):
-            segments.append(current)
-            current = []
-    if current:
-        segments.append(current)
-
-    all_lines = []
-    for seg in segments:
-        all_lines.extend(simple_linewrap(seg, col_width))
-
-    from ..layout.pagegen import Row as PageRow
-    rows = [PageRow(line, device=factory.device) for line in all_lines]
-    return CellBox(rows, factory.device, hpad=CELL_HPAD, vpad=CELL_VPAD,
-                   style=getattr(sep, 'parstyle', {}))
-
-
-def build_table_box(texel, factory, row_height=None):
-    """Build a TableBox from a Table texel using factory to create cell boxes."""
-    n_rows, n_cols = texel.nrows, texel.ncols
-
-    page_width = getattr(factory, 'line_width', 400)
-    if texel.col_widths:
-        explicit = [w for w in texel.col_widths if w is not None]
-        n_auto = sum(1 for w in texel.col_widths if w is None)
-        auto_w = ((page_width - sum(explicit)) / n_auto) if n_auto else 0
-        col_widths_px = [w if w is not None else auto_w
-                         for w in texel.col_widths]
-    else:
-        col_widths_px = [page_width / n_cols] * n_cols
-
-    cell_texels = texel.childs[1::2]
-    seps        = texel.childs[2::2]
-
-    grid = []
-    for r in range(n_rows):
-        row = []
-        for c in range(n_cols):
-            idx = r * n_cols + c
-            row.append(build_cell(cell_texels[idx], seps[idx], col_widths_px[c], factory))
-        grid.append(row)
-
-    col_widths_out = [max(col_widths_px[c],
-                          max(grid[r][c].width for r in range(n_rows)))
-                      for c in range(n_cols)]
-    if row_height is None:
-        row_heights = [max(grid[r][c].height + grid[r][c].depth
-                          for c in range(n_cols))
-                       for r in range(n_rows)]
-    else:
-        row_heights = [row_height] * n_rows
-
-    return TableBox(grid, col_widths_out, row_heights,
-                    header_rows=texel.nheader,
-                    break_level=texel.breaklevel,
-                    device=factory.device)
 
 
 # ---------------------------------------------------------------------------
@@ -420,17 +346,6 @@ def test_11():
     assert len(b1) + len(b2) == len(table)
     assert b1.next is b2
     assert b2.prev is b1
-
-
-def test_03():
-    "build_table_box produces TableBox with correct length"
-    from ..wxtextview.builder import Factory
-    texts = [['Hi', 'World'], ['Foo', 'Bar']]
-    table = from_strings(texts)
-    factory = Factory()
-    box = build_table_box(table, factory, row_height=14)
-    assert isinstance(box, TableBox)
-    assert len(box) == texel_length(table)
 
 
 def test_07():

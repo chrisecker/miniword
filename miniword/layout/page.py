@@ -1,9 +1,14 @@
-from ..wxtextview.boxes import Box, TextBox, select_i_by_x, \
+from ..wxtextview.boxes import Box, TextBox, NewlineBox, select_i_by_x, \
     select_i_by_y, get_text
 from ..wxtextview.testdevice import TESTDEVICE
 from ..core.units import mm, cm, pt
 
 
+
+class ForceBreakBox(NewlineBox):
+    """Sentinel box for a forced line break (BR texel)."""
+
+    
 class Row(Box):
     """Box representing a single typeset line.
 
