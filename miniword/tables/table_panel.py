@@ -70,10 +70,10 @@ class _TableGrid(wx.Panel):
 
         # Combined title + dimension
         if self._col:
-            label = f"Tabelle einfügen: {self._col} x {self._row}"
+            label = f"Insert table: {self._col} \u00d7 {self._row}"
             dc.SetTextForeground(COL_TEXT)
         else:
-            label = "Tabelle einfügen"
+            label = "Insert table"
             dc.SetTextForeground(COL_MUTED)
         dc.DrawText(label, PADDING, 4)
 
@@ -115,7 +115,7 @@ class _CustomItem(wx.Panel):
     def __init__(self, parent):
         super().__init__(parent)
         self.SetBackgroundColour(COL_BG)
-        lbl = wx.StaticText(self, label="Benutzerdefinierte Tabelle einfügen")
+        lbl = wx.StaticText(self, label="Insert custom table")
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(lbl, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 6)
         self.SetSizer(sizer)
@@ -171,18 +171,18 @@ class CustomTableDialog(wx.Dialog):
     """Dialog for specifying arbitrary table dimensions."""
 
     def __init__(self, parent):
-        super().__init__(parent, title="Größe der Tabelle",
+        super().__init__(parent, title="Table size",
                          style=wx.DEFAULT_DIALOG_STYLE)
         self.SetBackgroundColour(COL_BG)
 
-        lbl_cols = wx.StaticText(self, label="Anzahl von Spalten")
+        lbl_cols = wx.StaticText(self, label="Columns")
         self.spin_cols = wx.SpinCtrl(self, value="2", min=1, max=50)
 
-        lbl_rows = wx.StaticText(self, label="Anzahl von Zeilen")
+        lbl_rows = wx.StaticText(self, label="Rows")
         self.spin_rows = wx.SpinCtrl(self, value="2", min=1, max=50)
 
         btn_ok     = wx.Button(self, wx.ID_OK,     label="OK")
-        btn_cancel = wx.Button(self, wx.ID_CANCEL, label="Abbrechen")
+        btn_cancel = wx.Button(self, wx.ID_CANCEL, label="Cancel")
         btn_ok.SetDefault()
 
         form = wx.FlexGridSizer(rows=2, cols=2, hgap=8, vgap=8)
@@ -218,7 +218,7 @@ class TableCreatorButton(wx.Button):
     cols=0, rows=0 means "custom table".
     """
 
-    def __init__(self, parent, label="Tabelle"):
+    def __init__(self, parent, label="Table"):
         super().__init__(parent, label=label)
         self.Bind(wx.EVT_BUTTON, self._on_click)
 
@@ -278,18 +278,18 @@ class TablePanel(wx.Panel, ViewBase):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        hdr = wx.StaticText(self, label="TABELLE")
+        hdr = wx.StaticText(self, label="TABLE")
         hdr.SetForegroundColour(COL_MUTED)
         sizer.Add(hdr, 0, wx.LEFT | wx.TOP, 10)
 
-        # --- Section: Einfügen ---
-        add_section("Einfügen", self, sizer)
+        # --- Section: Insert ---
+        add_section("Insert", self, sizer)
         btn = TableCreatorButton(self)
         btn.Bind(EVT_TABLE_CREATED, self._on_insert)
         sizer.Add(btn, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        # --- Section: Rahmen ---
-        add_section("Rahmen", self, sizer)
+        # --- Section: Borders ---
+        add_section("Borders", self, sizer)
         self._line_style = wx.Choice(self, choices=['thin', 'thick', 'double', 'none'])
         self._line_style.SetSelection(0)
         sizer.Add(self._line_style, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
@@ -305,28 +305,28 @@ class TablePanel(wx.Panel, ViewBase):
             self._border_btns.append(btn)
         sizer.Add(grid_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        # --- Section: Zeilen & Spalten ---
-        add_section("Zeilen & Spalten", self, sizer)
+        # --- Section: Rows & Columns ---
+        add_section("Rows & Columns", self, sizer)
         row_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self._btn_row = wx.Button(self, label="Zeile ▾")
-        self._btn_col = wx.Button(self, label="Spalte ▾")
+        self._btn_row = wx.Button(self, label="Row ▾")
+        self._btn_col = wx.Button(self, label="Column ▾")
         self._btn_row.Bind(wx.EVT_BUTTON, self._on_row_menu)
         self._btn_col.Bind(wx.EVT_BUTTON, self._on_col_menu)
         row_sizer.Add(self._btn_row, 1, wx.RIGHT, 4)
         row_sizer.Add(self._btn_col, 1)
         sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        # --- Section: Zelle ---
-        add_section("Zelle", self, sizer)
+        # --- Section: Cell ---
+        add_section("Cell", self, sizer)
         cell_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=4, vgap=4)
         cell_sizer.AddGrowableCol(1)
 
-        cell_sizer.Add(wx.StaticText(self, label="Hintergrund"), 0, wx.ALIGN_CENTER_VERTICAL)
+        cell_sizer.Add(wx.StaticText(self, label="Background"), 0, wx.ALIGN_CENTER_VERTICAL)
         self._bgcolor_btn = ColourButton(self)
         self._bgcolor_btn.callback = self._on_bgcolor
         cell_sizer.Add(self._bgcolor_btn, 0, wx.EXPAND)
 
-        cell_sizer.Add(wx.StaticText(self, label="V-Ausricht."), 0, wx.ALIGN_CENTER_VERTICAL)
+        cell_sizer.Add(wx.StaticText(self, label="V-Align"), 0, wx.ALIGN_CENTER_VERTICAL)
         self._valign = wx.Choice(self, choices=['top', 'middle', 'bottom'])
         self._valign.SetSelection(0)
         self._valign.Bind(wx.EVT_CHOICE, self._on_valign)
@@ -439,64 +439,93 @@ class TablePanel(wx.Panel, ViewBase):
 
     # --- border preset ---
 
+    @staticmethod
+    def _set_border(table, r1, c1, r2, c2, side, val):
+        """Set one border side of a selection, keeping both adjacent cells in sync."""
+        nrows, ncols = table.nrows, table.ncols
+        t = table
+        if side == 'left':
+            t = t.set_cellattr(r1, c1, r2, c1, border_left=val)
+            if c1 > 0:
+                t = t.set_cellattr(r1, c1 - 1, r2, c1 - 1, border_right=val)
+        elif side == 'right':
+            t = t.set_cellattr(r1, c2, r2, c2, border_right=val)
+            if c2 + 1 < ncols:
+                t = t.set_cellattr(r1, c2 + 1, r2, c2 + 1, border_left=val)
+        elif side == 'top':
+            t = t.set_cellattr(r1, c1, r1, c2, border_top=val)
+            if r1 > 0:
+                t = t.set_cellattr(r1 - 1, c1, r1 - 1, c2, border_bottom=val)
+        elif side == 'bottom':
+            t = t.set_cellattr(r2, c1, r2, c2, border_bottom=val)
+            if r2 + 1 < nrows:
+                t = t.set_cellattr(r2 + 1, c1, r2 + 1, c2, border_top=val)
+        elif side == 'inner_v':
+            for c in range(c1 + 1, c2 + 1):
+                t = t.set_cellattr(r1, c, r2, c, border_left=val)
+                t = t.set_cellattr(r1, c - 1, r2, c - 1, border_right=val)
+        elif side == 'inner_h':
+            for r in range(r1 + 1, r2 + 1):
+                t = t.set_cellattr(r, c1, r, c2, border_top=val)
+                t = t.set_cellattr(r - 1, c1, r - 1, c2, border_bottom=val)
+        return t
+
     def _on_border_preset(self, event):
         btn = event.GetEventObject()
         key = btn.preset_key
         line = self._line_style.GetStringSelection()
+        sb = self._set_border
 
         def apply(table, r1, c1, r2, c2):
             if key == 'none':
-                return table.set_cellattr(r1, c1, r2, c2,
-                                          border_left='none', border_right='none',
-                                          border_top='none', border_bottom='none')
-            elif key == 'all':
-                return table.set_cellattr(r1, c1, r2, c2,
-                                          border_left=line, border_right=line,
-                                          border_top=line, border_bottom=line)
-            elif key == 'outer':
+                # Clear all 4 attributes on selection cells + sync all neighbors
                 t = table.set_cellattr(r1, c1, r2, c2,
                                        border_left='none', border_right='none',
                                        border_top='none', border_bottom='none')
-                for r in range(r1, r2 + 1):
-                    for c in range(c1, c2 + 1):
-                        kwargs = {}
-                        if r == r1:  kwargs['border_top'] = line
-                        if r == r2:  kwargs['border_bottom'] = line
-                        if c == c1:  kwargs['border_left'] = line
-                        if c == c2:  kwargs['border_right'] = line
-                        if kwargs:
-                            t = t.set_cellattr(r, c, r, c, **kwargs)
+                if c1 > 0:
+                    t = t.set_cellattr(r1, c1 - 1, r2, c1 - 1, border_right='none')
+                if c2 + 1 < table.ncols:
+                    t = t.set_cellattr(r1, c2 + 1, r2, c2 + 1, border_left='none')
+                if r1 > 0:
+                    t = t.set_cellattr(r1 - 1, c1, r1 - 1, c2, border_bottom='none')
+                if r2 + 1 < table.nrows:
+                    t = t.set_cellattr(r2 + 1, c1, r2 + 1, c2, border_top='none')
+                return t
+            elif key == 'all':
+                t = table.set_cellattr(r1, c1, r2, c2,
+                                       border_left=line, border_right=line,
+                                       border_top=line, border_bottom=line)
+                if c1 > 0:
+                    t = t.set_cellattr(r1, c1 - 1, r2, c1 - 1, border_right=line)
+                if c2 + 1 < table.ncols:
+                    t = t.set_cellattr(r1, c2 + 1, r2, c2 + 1, border_left=line)
+                if r1 > 0:
+                    t = t.set_cellattr(r1 - 1, c1, r1 - 1, c2, border_bottom=line)
+                if r2 + 1 < table.nrows:
+                    t = t.set_cellattr(r2 + 1, c1, r2 + 1, c2, border_top=line)
+                return t
+            elif key == 'outer':
+                t = sb(table, r1, c1, r2, c2, 'left',   line)
+                t = sb(t,     r1, c1, r2, c2, 'right',  line)
+                t = sb(t,     r1, c1, r2, c2, 'top',    line)
+                t = sb(t,     r1, c1, r2, c2, 'bottom', line)
                 return t
             elif key == 'inner':
-                t = table
-                for r in range(r1, r2 + 1):
-                    for c in range(c1, c2 + 1):
-                        kwargs = {}
-                        if r1 < r:   kwargs['border_top'] = line
-                        if r < r2:   kwargs['border_bottom'] = line
-                        if c1 < c:   kwargs['border_left'] = line
-                        if c < c2:   kwargs['border_right'] = line
-                        if kwargs:
-                            t = t.set_cellattr(r, c, r, c, **kwargs)
+                t = sb(table, r1, c1, r2, c2, 'inner_h', line)
+                t = sb(t,     r1, c1, r2, c2, 'inner_v', line)
                 return t
             elif key == 'inner_h':
-                t = table
-                for r in range(r1 + 1, r2 + 1):
-                    t = t.set_cellattr(r, c1, r, c2, border_top=line)
-                return t
+                return sb(table, r1, c1, r2, c2, 'inner_h', line)
             elif key == 'inner_v':
-                t = table
-                for c in range(c1 + 1, c2 + 1):
-                    t = t.set_cellattr(r1, c, r2, c, border_left=line)
-                return t
+                return sb(table, r1, c1, r2, c2, 'inner_v', line)
             elif key == 'left':
-                return table.set_cellattr(r1, c1, r2, c2, border_left=line)
+                return sb(table, r1, c1, r2, c2, 'left',   line)
             elif key == 'right':
-                return table.set_cellattr(r1, c1, r2, c2, border_right=line)
+                return sb(table, r1, c1, r2, c2, 'right',  line)
             elif key == 'top':
-                return table.set_cellattr(r1, c1, r2, c2, border_top=line)
+                return sb(table, r1, c1, r2, c2, 'top',    line)
             elif key == 'bottom':
-                return table.set_cellattr(r1, c1, r2, c2, border_bottom=line)
+                return sb(table, r1, c1, r2, c2, 'bottom', line)
             return table
 
         self._apply_to_table(apply)
@@ -505,9 +534,9 @@ class TablePanel(wx.Panel, ViewBase):
 
     def _on_row_menu(self, event):
         menu = wx.Menu()
-        menu.Append(1, "Zeile darunter einfügen")
-        menu.Append(2, "Zeile darüber einfügen")
-        menu.Append(3, "Zeile löschen")
+        menu.Append(1, "Insert row below")
+        menu.Append(2, "Insert row above")
+        menu.Append(3, "Delete row")
         self.Bind(wx.EVT_MENU, self._on_row_action, id=1)
         self.Bind(wx.EVT_MENU, self._on_row_action, id=2)
         self.Bind(wx.EVT_MENU, self._on_row_action, id=3)
@@ -516,9 +545,9 @@ class TablePanel(wx.Panel, ViewBase):
 
     def _on_col_menu(self, event):
         menu = wx.Menu()
-        menu.Append(4, "Spalte rechts einfügen")
-        menu.Append(5, "Spalte links einfügen")
-        menu.Append(6, "Spalte löschen")
+        menu.Append(4, "Insert column right")
+        menu.Append(5, "Insert column left")
+        menu.Append(6, "Delete column")
         self.Bind(wx.EVT_MENU, self._on_col_action, id=4)
         self.Bind(wx.EVT_MENU, self._on_col_action, id=5)
         self.Bind(wx.EVT_MENU, self._on_col_action, id=6)

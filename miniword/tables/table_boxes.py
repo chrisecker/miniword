@@ -99,11 +99,20 @@ class TableBox(Box):
         y = y0
         for r, row in enumerate(self.cells):
             x = x0
+            rh = self.row_heights[r]
             for c, cell in enumerate(row):
                 ci1 = i0 + self.offsets[(r, c)]
-                yield ci1, ci1 + len(cell), x, y, cell
+                valign = cell.style.get('valign', 'top')
+                content_h = cell.height + cell.depth
+                if valign == 'middle':
+                    oy = (rh - content_h) / 2
+                elif valign == 'bottom':
+                    oy = rh - content_h
+                else:
+                    oy = 0
+                yield ci1, ci1 + len(cell), x, y + oy, cell
                 x += self.col_widths[c]
-            y += self.row_heights[r]
+            y += rh
 
     def get_index(self, x, y):
         cy = 0
@@ -117,6 +126,12 @@ class TableBox(Box):
                     cx += cw
             cy += rh
         return self.length
+
+    def extend_range(self, i1, i2):
+        # The extend-mechanism is disabled because we now use editors
+        # to modify the selection. It is defined in wxtextview which
+        # we do not want to change for now.
+        raise NotImplemented()
 
     def draw_selection(self, i1, i2, x, y, dc):
         if i1 <= 0 and i2 >= len(self):
@@ -164,10 +179,12 @@ class TableBox(Box):
 # ---------------------------------------------------------------------------
 
 BORDER_PEN = {
-    'thin':   (0.5, (0, 0, 0)),
-    'thick':  (1.5, (0, 0, 0)),
-    'double': (0.5, (0, 0, 0)),
+    'thin':  (0.5, (0, 0, 0)),
+    'thick': (1.5, (0, 0, 0)),
 }
+
+DOUBLE_GAP  = 2.0   # gap between the two lines in pt
+DOUBLE_WIDTH = 0.5
 
 
 def draw_cell_borders(tbox, r, c, cx, cy, cw, rh, dc):
@@ -193,8 +210,17 @@ def draw_cell_borders(tbox, r, c, cx, cy, cw, rh, dc):
         if border == 'none' or border is None:
             continue
 
-        pen_info = BORDER_PEN.get(border, BORDER_PEN['thin'])
-        tbox.device.draw_line(x1, y1, x2, y2, pen_info[0], dc)
+        if border == 'double':
+            g = DOUBLE_GAP / 2
+            if y1 == y2:  # horizontal
+                tbox.device.draw_line(x1, y1 - g, x2, y2 - g, DOUBLE_WIDTH, dc)
+                tbox.device.draw_line(x1, y1 + g, x2, y2 + g, DOUBLE_WIDTH, dc)
+            else:          # vertical
+                tbox.device.draw_line(x1 - g, y1, x2 - g, y2, DOUBLE_WIDTH, dc)
+                tbox.device.draw_line(x1 + g, y1, x2 + g, y2, DOUBLE_WIDTH, dc)
+        else:
+            pen_info = BORDER_PEN.get(border, BORDER_PEN['thin'])
+            tbox.device.draw_line(x1, y1, x2, y2, pen_info[0], dc)
 
 
 # ---------------------------------------------------------------------------
