@@ -1,27 +1,30 @@
 # -*- coding:utf-8-*-
 
-# pagegen.py provides:
-# - def generate_pages(texel, i, restartmemo)
-# - class RestartMemo  (creates an empty RestartMemo; page geometry
-#   parameters are accepted)
+
+# This file implements a "minimal" typesetting model:
+# - greedy line breaking
+# - each row starts at the left border
+# - no hyphenation
 #
-# The interface is deliberately minimal so that alternative algorithms
-# can be swapped in through the same API. Each implementation decides
-# how paragraphs are broken, how pages are composed, and how figures
-# and footnotes are placed. Switching from a Word-style layout to a
-# TeX-style layout would require replacing only this one small file.
+# pagegen is designed in a way that it can be replaced with a more
+# advanced layout model later implementing Knuth-Plass-Linebreaking.
+#
+
 
 
 from ..wxtextview.testdevice import TESTDEVICE
 from ..wxtextview.boxes import TextBox
 from ..textmodel.texeltree import length, NewLine, EMPTYSTYLE
+from ..textmodel.iterators import iter_paragraphs
 from ..wxtextview.linewrap import simple_linewrap
 from ..core.units import mm, cm, pt
 from ..core.styles import updated, n_levels
 from ..core.papersizes import PAPER_SIZES
+from ..core.document import settings_default
 from .factory import Factory, ForceBreakBox
 from .stretchable import justify_line
 from .page import Row, Page
+from .counters import format_number
 
 from copy import copy as shallow_copy
 
@@ -46,9 +49,11 @@ class DraftNode:
     floats      = ()
     parent      = None
     startspage  = True
-    geometry   = A4
-    border     = 2 * cm, 2 * cm, 2 * cm, 2 * cm
     x = y = None
+
+    # defaults for testing:
+    geometry   = A4
+    border     = 2*cm, 2*cm, 2*cm, 2*cm
 
     def init_xy(self):
         self.x = self.border[-1]  # ignored in the minimal model
@@ -59,20 +64,19 @@ class DraftNode:
                 and len(self.footnotes) == 0
                 and len(self.floats) == 0)
 
-    def place_row(self, row, x, y):
-        self.rows += (x, y, row)
-
     def can_addrow(self, row, line_spacing, before):
+        """Can the current page hold row or do we need to create a new page?"""
         if not self.rows:
-            return True  # always accept first row even if oversized
-        border_top, border_right, border_bottom, border_left = self.border
+            # always accept first row even if oversized
+            return True  
         natural = row.height + row.depth
         advance = natural * line_spacing
+        border_top, _, border_bottom, _ = self.border
         max_y = self.geometry[1] - border_top - border_bottom
         return self.y + before + advance <= max_y
 
     def add_row(self, row, line_spacing, before):
-        border_top, border_right, border_bottom, border_left = self.border
+        """Add row to the draft page."""
 
         # Natural box height
         natural = row.height + row.depth
@@ -82,29 +86,25 @@ class DraftNode:
 
         # Extra leading
         extra = advance - natural
-        if extra < 0:
-            extra = 0  # defensive
+        if extra < -0.5:
+            # we allow negative leading, but not too much
+            extra = -0.5 
 
-        # Distribute symmetrically
         extra_top    = extra * 0.5
         extra_bottom = extra * 0.5
 
         if self.rows:
             extra_top += before
-
-        # Adjust box parameters (critical!)
+            
         row.height += extra_top
         row.depth  += extra_bottom
 
-        # Position row
         self.rows += ((0, self.y, row),)
-
-        # Advance y for next row
         self.y += row.height + row.depth
 
     def remaining_height(self):
         """Free vertical space from current y to bottom margin."""
-        border_top, border_right, border_bottom, border_left = self.border
+        border_top, _, border_bottom, _ = self.border
         return self.geometry[1] - border_top - border_bottom - self.y
 
     def available_height(self):
@@ -113,11 +113,13 @@ class DraftNode:
         return self.geometry[1] - border_top - border_bottom
 
     def create_child(self):
+        """Create a child node. Can be used to fork or to append a new page. """
         r = shallow_copy(self)
         r.parent = self
         return r
 
     def create_newpage(self):
+        """Create  an empty new page."""
         draft = self.create_child()
         draft.startspage = True
         draft.init_xy()
@@ -127,12 +129,15 @@ class DraftNode:
         draft.footnotes   = ()
         return draft
 
-    def fix_draft(self):
-        """Finalise a draft.
-
-        Returns the completed pages and a RestartMemo describing any
-        spillover that did not fit on the last page.
+    def fix_draft(self, device):
         """
+        Finalise draft by converting it (and all parents) to
+        pages.
+
+        Returns the list of completed pages and a RestartMemo
+        describing any spillover that did not fit on the last page.
+        """
+        # Collect draft nodes
         nodes = []
         draft = self
         while draft:
@@ -140,41 +145,29 @@ class DraftNode:
             draft = draft.parent
 
         pages = []
-        info  = RestartMemo()
+        memo = RestartMemo()
         if not nodes:
-            return pages, info
+            return pages, memo
+
+        # Generate Pages
         assert nodes[0].startspage
         for i, node in enumerate(nodes):
             if node.startspage:
                 if i > 0:
-                    # XXX where to get device from?
-                    page = Page(rows, self.geometry, rows[0][-1].device)
-                    page.decorations = decorations
+                    # Flush the last page
+                    page = Page(memo.rows, self.geometry, device)
+                    page.decorations = memo.decorations
                     pages.append(page)
-                rows        = ()
-                decorations = ()
-                floats      = ()
-                footnotes   = ()
-                geometry    = node.geometry
-                border      = node.border
-            rows        += node.rows
-            decorations += node.decorations
-            floats      += node.floats
-            footnotes   += node.footnotes
-            x = node.x
-            y = node.y
+                memo = RestartMemo()
+                memo.geometry = node.geometry
+                memo.border = node.border
+            memo.rows += node.rows
+            memo.decorations += node.decorations
+            memo.floats += node.floats
+            memo.footnotes += node.footnotes
+            memo.y = node.y
 
-        # Page is not yet complete — convert to a RestartMemo.
-        info             = RestartMemo()
-        info.geometry    = geometry
-        info.border      = border
-        info.rows        = rows
-        info.decorations = decorations
-        info.floats      = floats
-        info.footnotes   = footnotes
-        info.x         = x
-        info.y         = y
-        return pages, info
+        return pages, memo
 
 
 class RestartMemo:
@@ -188,10 +181,12 @@ class RestartMemo:
     footnotes   = ()
     floats      = ()
     parent      = None
-    geometry    = 210 * mm, 297 * mm  # A4
-    border      = 2 * cm, 2 * cm, 2 * cm, 2 * cm
     y           = None
     counters    = {}   # dict: numbering_style -> list[int] of length n_levels
+
+    # defaults for testing
+    geometry    = A4
+    border      = 2*cm, 2*cm, 2*cm, 2*cm
 
     def get_length(self):
         n = 0
@@ -208,7 +203,6 @@ class RestartMemo:
         node.geometry    = self.geometry
         node.border      = self.border
         node.init_xy()
-        # x is not needed in the minimal model
         if self.y is not None:
             node.y = self.y
         return node
@@ -222,10 +216,8 @@ class RestartMemo:
 
 
 
-
 def restartmemo_from_settings(settings):
     """Convert a document settings dict to a RestartMemo with geometry/border."""
-    from ..core.document import settings_default
     props = updated(settings_default, settings)
     paper = props['paper']
     if paper in PAPER_SIZES:
@@ -239,49 +231,6 @@ def restartmemo_from_settings(settings):
     return memo
 
 
-# Could be moved to texeltree
-def iter_leafes(texel, i):
-    """Iterate through all leaf elements starting at position i.
-
-    Note: i must be a valid start position.
-    """
-    l  = [[texel]]
-    i1 = 0
-    while 1:
-        while l and not l[-1]:
-            l.pop()
-        if not l:
-            break
-        ll   = l[-1]
-        elem = ll[0]
-        del ll[0]
-        n = length(elem)
-        if i1 + n <= i:
-            i1 = i1 + n
-        elif elem.is_group:  # do not descend into containers
-            l.append(list(elem.childs))
-        else:
-            i2 = i1 + n
-            yield i1, i2, elem
-            i1 = i2
-
-
-# Could also be moved to texeltree
-def iter_paragraphs(texel, i):
-    l  = []
-    i1 = 0
-    for j1, j2, elem in iter_leafes(texel, i):
-        l.append(elem)
-        if isinstance(elem, NewLine):
-            yield i1, j2, l
-            l  = []
-            i1 = j2
-    try:
-        assert len(l) == 0
-    except:
-        from ..textmodel.texeltree import dump
-        dump(texel)
-        raise
 
 def split_at_breaks(boxlist):
     """Split boxlist at ForceBreakBox markers; each marker ends its segment."""
@@ -314,62 +263,9 @@ def split_at_tables(boxlist):
     return segments
 
 
-import re as _re
 
 
-def _to_roman(n):
-    """Convert positive integer to lowercase Roman numeral string."""
-    val  = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
-    syms = ['m', 'cm', 'd', 'cd', 'c', 'xc', 'l', 'xl', 'x', 'ix', 'v', 'iv', 'i']
-    result = ''
-    for v, s in zip(val, syms):
-        while n >= v:
-            result += s
-            n -= v
-    return result or 'i'
-
-
-def format_number(arr, level, style):
-    """Format a numbered-list marker from a counter array.
-
-    Each occurrence of ``1``, ``a``, ``A``, ``i``, or ``I`` in *style* is
-    replaced by the counter at the corresponding nesting depth (left to right,
-    starting at depth 0).  Everything else is literal text.
-
-    Examples::
-
-        format_number([3, 0, ...], 0, "1.")   → "3."
-        format_number([2, 4, ...], 1, "1.1.") → "2.4."
-        format_number([5, 0, ...], 0, "a.")   → "e."
-        format_number([3, 0, ...], 0, "i.")   → "iii."
-    """
-    parts    = _re.split(r'([1aAiI])', style)
-    n_tokens = (len(parts) - 1) // 2
-    result   = parts[0]
-    # Single-token styles ("1.", "a.", …) display the counter at the
-    # current indent level.  Composite styles ("1.1.") start at level 0
-    # so the full hierarchy is shown.
-    lev = level if n_tokens == 1 else 0
-    for k in range(1, len(parts), 2):
-        typ = parts[k]
-        n   = arr[lev] if lev < len(arr) else 0
-        lev += 1
-        if typ == '1':
-            result += str(n)
-        elif typ == 'a':
-            result += chr(ord('a') + (n - 1) % 26) if n > 0 else 'a'
-        elif typ == 'A':
-            result += chr(ord('A') + (n - 1) % 26) if n > 0 else 'A'
-        elif typ == 'i':
-            result += _to_roman(n) if n > 0 else 'i'
-        else:  # 'I'
-            result += _to_roman(n).upper() if n > 0 else 'I'
-        if k + 1 < len(parts):
-            result += parts[k + 1]
-    return result
-
-
-def _place_table_fragments(tbox, draft, device, left=0):
+def place_table_fragments(tbox, draft, device, left=0):
     """Place a break_level>=1 TableBox as one or more fragments onto drafts."""
     from ..tables import TableBox
     available   = draft.remaining_height()
@@ -416,6 +312,7 @@ def _place_table_fragments(tbox, draft, device, left=0):
 
 
 def generate_boxes(texel, i, factory):
+    """Generator producing a stream of boxes."""
     for i1, i2, l in iter_paragraphs(texel, i):
         boxes = []
         # Iterating groups in reverse (the usual trick) is prevented
@@ -431,6 +328,7 @@ def generate_boxes(texel, i, factory):
 
 
 def generate_pages(texel, i, restartmemo, factory):
+    """Generator producing a stream of pages."""
     device = factory.device
 
     # In this minimal model, state and RestartMemo are the same thing.
@@ -459,7 +357,7 @@ def generate_pages(texel, i, restartmemo, factory):
     for i1, i2, boxlist in generate_boxes(texel, j, factory):
         draft = state.start_draft()
 
-        # XXX bad way to get filled parstyle
+        # bad way to get filled parstyle
         r = factory.mk_style({})
 
         if r['page_break_before'] and not draft.is_empty():
@@ -496,7 +394,7 @@ def generate_pages(texel, i, restartmemo, factory):
                 if (len(seg) == 1
                         and isinstance(seg[0], _TableBox)
                         and seg[0].break_level >= 1):
-                    draft = _place_table_fragments(seg[0], draft, device,
+                    draft = place_table_fragments(seg[0], draft, device,
                                                     left=line_left_rest)
                 else:
                     sub_segs = split_at_breaks(seg)
@@ -518,7 +416,7 @@ def generate_pages(texel, i, restartmemo, factory):
                                     row.height + row.depth + 2 * pad,
                                     r['block_color']),)
                             before = 0
-            pages, state = draft.fix_draft()
+            pages, state = draft.fix_draft(device)
             state.counters = {k: list(v) for k, v in counters.items()}
             if pages:
                 pages[0].restartmemo = restartmemo
@@ -606,7 +504,7 @@ def generate_pages(texel, i, restartmemo, factory):
             draft.y += space_after
             # XXX adjust depth of last row?
 
-        pages, state = draft.fix_draft()
+        pages, state = draft.fix_draft(device)
         state.counters = {k: list(v) for k, v in counters.items()}
         if pages:
             pages[0].restartmemo = restartmemo
@@ -618,7 +516,7 @@ def generate_pages(texel, i, restartmemo, factory):
     if state.rows:
         draft = state.start_draft()
         draft = draft.create_newpage()
-        pages, _ = draft.fix_draft()
+        pages, _ = draft.fix_draft(device)
         for page in pages:
             yield page
 
@@ -651,7 +549,7 @@ def test_01():
         if not draft.can_addrow(row, 1.0, 0):
             draft = draft.create_newpage()
         draft.add_row(row, 1.0, 0)
-    pages, restartmemo = draft.fix_draft()
+    pages, restartmemo = draft.fix_draft(TESTDEVICE)
     assert len(pages) > 0
     assert len(restartmemo.rows) > 0
 
@@ -660,7 +558,7 @@ def test_01():
         row = TextBox("New row %i" % i)
         draft.add_row(row, 1.0, 0)
 
-    pages2, restartmemo2 = draft.fix_draft()
+    pages2, restartmemo2 = draft.fix_draft(TESTDEVICE)
     # rows that fit on one page end up in restartmemo, not pages
     assert len(pages2) + len(restartmemo2.rows) > 0
 
