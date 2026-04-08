@@ -125,12 +125,6 @@ class TableBox(Box):
             cy += rh
         return self.length
 
-    def extend_range(self, i1, i2):
-        # The extend-mechanism is disabled because we now use editors
-        # to modify the selection. It is defined in wxtextview which
-        # we do not want to change for now.
-        raise NotImplemented()
-
     def draw_selection(self, i1, i2, x, y, dc):
         if i1 <= 0 and i2 >= len(self):
             self.device.invert_rect(x, y, self.width, self.height + self.depth, dc)
@@ -402,18 +396,6 @@ def test_09():
             f"x={x}: expected bottom row (offset>={len_first_row}), got {i - ci1}"
         )
 
-
-
-def test_10():
-    "extend_range snaps to full table when touching leading separator"
-    table = mk_box_table([['A', 'B'], ['C', 'D']])
-    n = len(table)
-    # position 0 is the leading separator — snaps to full table
-    assert table.extend_range(0, 1) == (0, n)
-    # position 1 is inside the first cell — no snap
-    assert table.extend_range(1, 2) == (1, 2)
-    # overshooting also snaps (overshoot is preserved, start clamps to 0)
-    assert table.extend_range(1, n + 1) == (0, n + 1)
 
 
 # ---------------------------------------------------------------------------

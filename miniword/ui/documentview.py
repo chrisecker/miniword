@@ -9,8 +9,7 @@ from ..layout.builder import trace
 from ..core.texels import BR
 from ..textmodel.texeltree import iter_childs, grouped, Group, \
     provides_childs, length
-from ..core.utils import find_texel, transform, get_path, \
-    expand_selection
+from ..core.utils import find_texel, transform, get_path
 
 from contextlib import contextmanager
 
@@ -599,7 +598,7 @@ class DocumentView(WXTextView):
         result = self.editor.selected(s1, s2)
         if result is not None:
             return result
-        return [expand_selection(self.model.texel, s1, s2)]
+        return [self.model.expand_range(s1, s2)]
 
     def draw_selection(self, gc):
         layout = self.layout

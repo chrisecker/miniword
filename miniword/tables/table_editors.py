@@ -371,17 +371,19 @@ def test_00():
 
 def test_04():
     "MatrixEditor.copy"
-    from .table_boxes import build_table_box
+    from .table_factory import build_table_box
     from .tables import from_strings, Table
     from ..textmodel.textmodel import TextModel
     from ..textmodel.texeltree import length as texel_length
-    from ..wxtextview.builder import Factory
+    from ..layout.factory import Factory
+    from ..core.styles import testsheet
+    from ..wxtextview.testdevice import TESTDEVICE
 
     texts = [['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']]
     table = from_strings(texts)
     model = TextModel()
     model.texel = table
-    factory = Factory()
+    factory = Factory(testsheet, TESTDEVICE)
     box = build_table_box(table, factory, row_height=14)
 
     copied_model = []

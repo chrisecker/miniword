@@ -400,7 +400,7 @@ class TextView(ViewBase, Model):
         y = rect.y1
         if self.has_selection():
             s1, s2 = sorted(self.selection)
-            e1, e2 = layout.extend_range(s1, s2)
+            e1, e2 = self.model.expand_range(s1, s2)
         else:
             s1 = s2 = e1 = e2 = index
 
@@ -504,7 +504,7 @@ class TextView(ViewBase, Model):
             self.insert(index, tmp)            
         elif action == 'backspace':
             if self.has_selection():
-                j1, j2 = layout.extend_range(s1-1, s2)
+                j1, j2 = self.model.expand_range(s1-1, s2)
                 if j2 != e2:
                     self.remove(e1, e2)
                 else:
@@ -512,7 +512,7 @@ class TextView(ViewBase, Model):
             else:
                 i = self.index
                 if i>0:
-                    j1, j2 = layout.extend_range(i-1, i)
+                    j1, j2 = self.model.expand_range(i-1, i)
                     self.remove(j1, j2)
         elif action == 'copy':
             self.copy()
@@ -526,7 +526,7 @@ class TextView(ViewBase, Model):
             else:
                 i = self.index
                 if i < len(self.model):
-                    j1, j2 = layout.extend_range(i, i+1)
+                    j1, j2 = self.model.expand_range(i, i+1)
                     self.remove(j1, j2)
         elif action == 'undo':
             self.undo()
@@ -537,7 +537,7 @@ class TextView(ViewBase, Model):
             if i == index:
                 i += 1
             i = min(i, right_limit(model.texel, 0, index))
-            j1, j2 = layout.extend_range(index, i)
+            j1, j2 = self.model.expand_range(index, i)
             self.to_clipboard(model[j1:j2])
             self.remove(j1, j2)
         elif action == 'del_word_left':
@@ -551,7 +551,7 @@ class TextView(ViewBase, Model):
             except IndexError:
                 i = 0
             i = max(i, left_limit(model.texel, 0, index))                
-            j1, j2 = layout.extend_range(i, index)
+            j1, j2 = self.model.expand_range(i, index)
             self.remove(j1, j2)
         else:                  
             #print keycode

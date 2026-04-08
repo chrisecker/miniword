@@ -56,6 +56,24 @@ def dump_range(texel, i1, i2, i0=0, indent=0):
 
 
 _split = re.compile(r"([\t\n])", re.MULTILINE).split
+
+
+def _expand_range(texel, s1, s2, offset=0):
+    if not (texel.is_group or texel.is_container):
+        return s1, s2
+    for i, (j1, j2, child) in enumerate(iter_childs(texel)):
+        abs_j1 = offset + j1
+        abs_j2 = offset + j2
+        if not (abs_j1 < s2 and abs_j2 > s1):
+            continue
+        if texel.is_container and i % 2 == 0:  # separator touched
+            s1 = min(s1, offset)
+            s2 = max(s2, offset + length(texel))
+            return s1, s2
+        s1, s2 = _expand_range(child, s1, s2, abs_j1)
+    return s1, s2
+
+
 class TextModel(Model):
     """A data type for storing and manipulating styled text. Changes to
     the data are notified to views by emitting the following signals:
@@ -135,6 +153,15 @@ class TextModel(Model):
         j = self.lineend(row)
         texel = _get_texel(self.get_xtexel(), j)
         return texel.parstyle
+
+    def expand_range(self, s1, s2):
+        """Expand (s1, s2) so no container is only partially selected.
+
+        If any separator of a container falls within [s1, s2], the selection
+        is expanded to cover the complete container. Works recursively for
+        nested containers.
+        """
+        return _expand_range(self.texel, s1, s2)
 
     def position2index(self, row, col):
         """Returns the index corresponding to *row* and *col*."""
@@ -854,5 +881,25 @@ def test_20():
     assert model.get_indents(0, n) == [0, 0, 0, 0, 0, 0, 0]
     assert len(model) == n
     
+
+def test_21():
+    "expand_range: plain text range is unchanged"
+    m = TextModel("hello")
+    assert m.expand_range(1, 3) == (1, 3)
+
+
+def test_22():
+    "expand_range: separator touch expands to full container"
+    from .texeltree import Fraction
+    m = TextModel()
+    m.texel = Fraction(Text("a"), Text("b"))
+    n = length(m.texel)
+    # touching leading separator → full container
+    assert m.expand_range(0, 1) == (0, n)
+    # spanning middle separator → full container
+    assert m.expand_range(1, 4) == (0, n)
+    # inside first child only → unchanged
+    assert m.expand_range(1, 2) == (1, 2)
+
 
 __all__ = ['TextModel']
