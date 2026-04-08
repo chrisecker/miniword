@@ -63,9 +63,9 @@ class CellBox(Box):
 
 class TableBox(Box):
     """A n_rows × n_cols table box."""
-    prev      = None   # previous fragment in page-split chain (None = first)
-    next      = None   # next fragment in page-split chain (None = last)
-    orig_rows = None   # list of original row indices (set on fragments only)
+    prev       = None  # previous fragment in page-split chain (None = first)
+    next       = None  # next fragment in page-split chain (None = last)
+    row_offset = 0     # index of first row in the original table
 
     def __init__(self, cells, col_widths, row_heights,
                  header_rows=0, break_level=0, device=None,
@@ -224,6 +224,66 @@ def draw_cell_borders(tbox, r, c, cx, cy, cw, rh, dc):
 
 
 # ---------------------------------------------------------------------------
+# Split helpers
+# ---------------------------------------------------------------------------
+
+def split_at_height(box, height):
+    """Split box so that the first fragment fits within height.
+
+    Returns (frag, rest). rest is None if everything fits.
+    """
+    header_h   = sum(box.row_heights[:box.header_rows])
+    space      = height - header_h
+    body_start = box.header_rows
+    used, nfit = 0, 0
+    for r in range(body_start, box.n_rows):
+        rh = box.row_heights[r]
+        if used + rh > space and nfit > 0:
+            break
+        nfit += 1
+        used += rh
+    split_at = body_start + nfit
+    if split_at >= box.n_rows:
+        return box, None
+    return split_table_box(box, split_at)
+
+
+def split_table_box(tablebox, nrows):
+    """Split tablebox after nrows rows. Returns (box1, box2).
+
+    box1 contains the first nrows rows; box2 the remainder as a continuation
+    (no leading separator in its length). prev/next are set on both boxes.
+    """
+    box1 = TableBox(
+        tablebox.cells[:nrows],
+        tablebox.col_widths,
+        tablebox.row_heights[:nrows],
+        header_rows = min(tablebox.header_rows, nrows),
+        break_level = tablebox.break_level,
+        device      = tablebox.device,
+        is_continuation = tablebox.prev is not None
+    )
+    box2 = TableBox(
+        tablebox.cells[nrows:],
+        tablebox.col_widths,
+        tablebox.row_heights[nrows:],
+        header_rows     = 0,
+        break_level     = tablebox.break_level,
+        device          = tablebox.device,
+        is_continuation = True,
+    )
+    box1.prev = tablebox.prev
+    box1.next = box2
+    box2.prev = box1
+    box2.next = tablebox.next
+    if tablebox.prev is not None:
+        tablebox.prev.next = box1
+    if tablebox.next is not None:
+        tablebox.next.prev = box2
+    return box1, box2
+
+
+# ---------------------------------------------------------------------------
 # Navigation helper
 # ---------------------------------------------------------------------------
 
@@ -349,6 +409,17 @@ def mk_box_table(texts, col_width=60, row_height=14, device=None):
     n_rows = len(cells)
     n_cols = len(cells[0]) if cells else 0
     return TableBox(cells, [col_width] * n_cols, [row_height] * n_rows, device=dev)
+
+
+def test_11():
+    "split_table_box divides rows, preserves total length, links prev/next"
+    table = mk_box_table([['A', 'B'], ['C', 'D'], ['E', 'F']])
+    b1, b2 = split_table_box(table, 2)
+    assert b1.n_rows == 2
+    assert b2.n_rows == 1
+    assert len(b1) + len(b2) == len(table)
+    assert b1.next is b2
+    assert b2.prev is b1
 
 
 def test_03():

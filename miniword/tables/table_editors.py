@@ -281,10 +281,9 @@ class MatrixEditor(TableEditorBase):
     def _draw_frag_selection(self, frag, r1, r2, c1, c2, origin, gc):
         bx, by    = origin
         device    = frag.device
-        row_indices = frag.orig_rows if frag.orig_rows is not None \
-            else range(frag.n_rows)
         cy = by
-        for r_local, r_orig in enumerate(row_indices):
+        for r_local in range(frag.n_rows):
+            r_orig = frag.row_offset + r_local
             rh = frag.row_heights[r_local]
             if r1 <= r_orig <= r2:
                 cx = bx

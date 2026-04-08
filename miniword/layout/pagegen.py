@@ -3,8 +3,8 @@
 
 # This file implements a "minimal" typesetting model:
 # - greedy line breaking
-# - each row starts at the left border
 # - no hyphenation
+# - no flow around objects
 #
 # pagegen is designed in a way that it can be replaced with a more
 # advanced layout model later implementing Knuth-Plass-Linebreaking.
@@ -106,11 +106,6 @@ class DraftNode:
         """Free vertical space from current y to bottom margin."""
         border_top, _, border_bottom, _ = self.border
         return self.geometry[1] - border_top - border_bottom - self.y
-
-    def available_height(self):
-        """Full usable page height (margins excluded)."""
-        border_top, _, border_bottom, _ = self.border
-        return self.geometry[1] - border_top - border_bottom
 
     def create_child(self):
         """Create a child node. Can be used to fork or to append a new page. """
@@ -265,48 +260,18 @@ def split_at_tables(boxlist):
 
 
 
-def place_table_fragments(tbox, draft, device, left=0):
+def place_longtable(box, draft, device):
     """Place a break_level>=1 TableBox as one or more fragments onto drafts."""
-    from ..tables import TableBox
-    available   = draft.remaining_height()
-    page_height = draft.available_height()
-    header_h    = sum(tbox.row_heights[:tbox.header_rows])
-    remaining   = list(range(tbox.header_rows, tbox.n_rows))
-    prev_frag   = None
-    first       = True
+    from ..tables.table_boxes import split_at_height
+    row_offset = 0
 
-    while remaining:
-        space = (available if first else page_height) - header_h
-        used, slice_rows = 0, []
-        for r in remaining:
-            rh = tbox.row_heights[r]
-            if used + rh > space and slice_rows:
-                break
-            slice_rows.append(r)
-            used += rh
-
-        frag_rows    = list(range(tbox.header_rows)) + slice_rows if first else slice_rows
-        frag_cells   = [tbox.cells[r] for r in frag_rows]
-        frag_heights = [tbox.row_heights[r] for r in frag_rows]
-
-        frag = TableBox(frag_cells, tbox.col_widths, frag_heights,
-                        header_rows=tbox.header_rows if first else 0,
-                        break_level=0,
-                        device=device,
-                        is_continuation=not first)
-        frag.orig_rows = frag_rows
-        frag.prev = prev_frag
-        if prev_frag is not None:
-            prev_frag.next = frag
-
-        if not first:
+    while box is not None and box.n_rows > box.header_rows:
+        frag, box = split_at_height(box, draft.remaining_height())
+        frag.row_offset = row_offset
+        draft.add_row(Row([frag], left=draft.border[3], device=device), 1.0, 0)
+        row_offset += frag.n_rows
+        if box is not None:
             draft = draft.create_newpage()
-
-        row = Row([frag], left=left, device=device)
-        draft.add_row(row, 1.0, 0)
-        remaining = remaining[len(slice_rows):]
-        prev_frag = frag
-        first     = False
 
     return draft
 
@@ -329,6 +294,7 @@ def generate_boxes(texel, i, factory):
 
 def generate_pages(texel, i, restartmemo, factory):
     """Generator producing a stream of pages."""
+    from ..tables import TableBox
     device = factory.device
 
     # In this minimal model, state and RestartMemo are the same thing.
@@ -342,16 +308,10 @@ def generate_pages(texel, i, restartmemo, factory):
     # material already present in the restart memo.
     j = i + restartmemo.get_length()
 
-    # XXX insets are really container properties and should be moved.
-    inset_left  = 0
-    inset_right = 0
-
     margin          = state.border  # top right bottom left
     page_width      = state.geometry[0]
-    page_left       = margin[3]
-    page_right      = page_width - margin[1]
-    container_left  = page_left  + inset_left
-    container_right = page_right + inset_right
+    container_left  = margin[3]
+    container_right = page_width - margin[1]
     factory.line_width = container_right - container_left
 
     for i1, i2, boxlist in generate_boxes(texel, j, factory):
@@ -378,127 +338,82 @@ def generate_pages(texel, i, restartmemo, factory):
         line_width_first = line_right - line_left_first
         line_width_rest  = line_right - line_left_rest
 
-        from ..tables import TableBox as _TableBox
-        all_segments = split_at_tables(boxlist)
+        first  = True
+        before = space_before
 
-        has_longtable = any(
-            len(seg) == 1
-            and isinstance(seg[0], _TableBox)
-            and seg[0].break_level >= 1
-            for seg in all_segments
-        )
+        for seg in split_at_tables(boxlist):
+            if (len(seg) == 1
+                    and isinstance(seg[0], TableBox)
+                    and seg[0].break_level >= 1):
+                draft  = place_longtable(seg[0], draft, device)
+                first  = False
+                before = 0
+                continue
 
-        if has_longtable:
-            before = space_before
-            for seg in all_segments:
-                if (len(seg) == 1
-                        and isinstance(seg[0], _TableBox)
-                        and seg[0].break_level >= 1):
-                    draft = place_table_fragments(seg[0], draft, device,
-                                                    left=line_left_rest)
-                else:
-                    sub_segs = split_at_breaks(seg)
-                    for sub in sub_segs:
-                        wrapped = simple_linewrap(sub, line_width_rest)
-                        for line in wrapped:
-                            row = Row(line, device=device)
-                            if not draft.can_addrow(row, line_spacing, before):
-                                draft = draft.create_newpage()
-                            row.start = (line_left_rest, 0)
-                            row.width = line_width_rest + line_left_rest
-                            y_before  = draft.y
-                            draft.add_row(row, line_spacing, before)
-                            if r.get('block_color'):
-                                pad = r.get('block_padding') or 0
-                                draft.decorations += ((
-                                    container_left - pad, y_before - pad,
-                                    container_right - container_left + 2 * pad,
-                                    row.height + row.depth + 2 * pad,
-                                    r['block_color']),)
-                            before = 0
-            pages, state = draft.fix_draft(device)
-            state.counters = {k: list(v) for k, v in counters.items()}
-            if pages:
-                pages[0].restartmemo = restartmemo
-                restartmemo = state.copy()
-            for page in pages:
-                yield page
-            continue
+            for sub in split_at_breaks(seg):
+                w     = line_width_first if first else line_width_rest
+                lines = simple_linewrap(sub, w, line_width_rest)
+                n     = len(lines)
+                for idx, line in enumerate(lines):
+                    line_width = line_width_first if first else line_width_rest
+                    line_left  = line_left_first  if first else line_left_rest
 
-        segments = split_at_breaks(boxlist)
-        lines = []
-        for seg in segments:
-            w = line_width_first if not lines else line_width_rest
-            lines.extend(simple_linewrap(seg, w, line_width_rest))
-        line_width = line_width_first
-        line_left  = line_left_first
-        first      = True
-        before     = space_before
-        n          = len(lines)
+                    if alignment == 'justify' and idx < n - 1:
+                        line = justify_line(line, line_width)
+                    row = Row(line, device=device)
 
-        for idx, line in enumerate(lines):
-            if alignment == 'justify' and idx < n - 1:
-                line = justify_line(line, line_width)
-            row = Row(line, device=device)
+                    if first and r['paragraph_type'] == 'list':
+                        style = factory.mk_style(factory.markerstyle)
+                        style['font_size'] *= style['marker_size'][indent]
+                        style['color']      = style['marker_color'][indent]
+                        row.set_marker(r['marker'][indent], r['marker_pos'][indent], style)
 
-            if first and r['paragraph_type'] == 'list':
-                style = factory.mk_style(factory.markerstyle)
-                style['font_size'] *= style['marker_size'][indent]
-                style['color']      = style['marker_color'][indent]
-                row.set_marker(
-                    r['marker'][indent],
-                    r['marker_pos'][indent],
-                    style,
-                )
+                    elif first and r['paragraph_type'] == 'numbered':
+                        ns = r['numbering_style'][indent]
+                        if ns is not None:
+                            ckey = r['counter']
+                            if ckey not in counters:
+                                counters[ckey] = [0] * n_levels
+                            sn = r.get('start_number')
+                            if sn is not None:
+                                counters[ckey][indent] = sn - 1
+                            counters[ckey][indent] += 1
+                            if ckey == 'section':
+                                counters['item'] = [0] * n_levels
+                            marker = format_number(counters[ckey], indent, ns)
+                            style = factory.mk_style(factory.markerstyle)
+                            style['font_size'] *= style['marker_size'][indent]
+                            style['color']      = style['marker_color'][indent]
+                            row.set_marker(marker, r['marker_pos'][indent], style)
 
-            elif first and r['paragraph_type'] == 'numbered':
-                ns = r['numbering_style'][indent]
-                if ns is not None:
-                    ckey = r['counter']
-                    if ckey not in counters:
-                        counters[ckey] = [0] * n_levels
-                    sn = r.get('start_number')
-                    if sn is not None:
-                        counters[ckey][indent] = sn - 1
-                    counters[ckey][indent] += 1
-                    if ckey == 'section':
-                        counters['item'] = [0] * n_levels
-                    marker = format_number(counters[ckey], indent, ns)
-                    style = factory.mk_style(factory.markerstyle)
-                    style['font_size'] *= style['marker_size'][indent]
-                    style['color']      = style['marker_color'][indent]
-                    row.set_marker(marker, r['marker_pos'][indent], style)
+                    if not draft.can_addrow(row, line_spacing, before):
+                        draft = draft.create_newpage()
 
-            if not draft.can_addrow(row, line_spacing, before):
-                draft = draft.create_newpage()
+                    text_width = row.width
+                    if alignment == 'left':
+                        x = line_left
+                    elif alignment == 'right':
+                        x = line_left + (line_width - text_width)
+                    elif alignment == 'center':
+                        x = line_left + 0.5 * (line_width - text_width)
+                    elif alignment == 'justify':
+                        x = line_left
+                    else:
+                        assert False
 
-            text_width = row.width
-            if alignment == 'left':
-                x = line_left
-            elif alignment == 'right':
-                x = line_left + (line_width - text_width)
-            elif alignment == 'center':
-                x = line_left + 0.5 * (line_width - text_width)
-            elif alignment == 'justify':
-                x = line_left
-            else:
-                assert False
-
-            row.start  = (x, 0)
-            row.width  = line_width + x
-            y_before   = draft.y
-            draft.add_row(row, line_spacing, before)
-            if r.get('block_color'):
-                pad = r.get('block_padding') or 0
-                draft.decorations += ((
-                    container_left - pad, y_before - pad,
-                    container_right - container_left + 2 * pad,
-                    row.height + row.depth + 2 * pad,
-                    r['block_color']),)
-            line_width = line_width_rest
-            line_left  = line_left_rest
-            first      = False
-            before     = 0
+                    row.start = (x, 0)
+                    row.width = line_width + x
+                    y_before  = draft.y
+                    draft.add_row(row, line_spacing, before)
+                    if r.get('block_color'):
+                        pad = r.get('block_padding') or 0
+                        draft.decorations += ((
+                            container_left - pad, y_before - pad,
+                            container_right - container_left + 2 * pad,
+                            row.height + row.depth + 2 * pad,
+                            r['block_color']),)
+                    first  = False
+                    before = 0
 
         if space_after:
             draft.y += space_after
