@@ -12,8 +12,8 @@ from ..wxtextview.boxes import VBox, get_text
 from ..wxtextview import boxes
 from ..wxtextview.rect import Rect
 
-from .pagegen import show_page, RestartMemo, generate_pages, \
-    restartmemo_from_settings
+from .pagegen import RestartMemo, generate_pages, restartmemo_from_settings
+from .page import show_page
 from ..core.units import cm, mm
 from ..core.styles import updated
 from .factory import Factory
