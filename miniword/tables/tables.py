@@ -28,7 +28,9 @@ class Cell:
         'cell_bgcolor':   None
     }
 
-    def __init__(self, content, parstyle):
+    def __init__(self, i, content, parstyle):
+        self.i1 = i
+        self.i2 = i+length(content)+1 # +1 to include SEP
         self.content = content
         # NOTE: we copy parstyle so we can make changes without
         # violating the immutability of the source dict.
@@ -128,9 +130,13 @@ class Table(Container):
         Transforms childs[1:] into a mutable Matrix: List[List[Cell]].
         """
         childs = self.childs
-        # Group into pairs (Entry)
-        l = [Cell(childs[i], childs[i+1].parstyle) 
-             for i in range(1, len(childs), 2)]
+        l = []
+        i = 1
+        for k in range(1, len(childs), 2):
+            cell = Cell(i, childs[k], childs[k+1].parstyle)
+            l.append(cell)
+            i += length(childs[k])+1
+        
         # Chunk into rows
         n = len(l)
         ncols = self.ncols
@@ -175,21 +181,21 @@ class Table(Container):
         c1, c2 = sorted([c1, c2])
         return r1, c1, r2, c2
     
-    def get_cell_range(self, r1, c1, r2, c2):
-        """Return (i_start, i_end) covering all cells in the rectangle
-        (r1, c1)..(r2, c2), relative to the start of this Table texel."""
-        start_idx = r1 * self.ncols + c1
-        end_idx   = r2 * self.ncols + c2
-        cum = 0
-        i_start = i_end = None
-        for k, child in enumerate(self.childs):
-            if k == 2 * start_idx + 1:
-                i_start = cum
-            cum += length(child)
-            if k == 2 * end_idx + 2:
-                i_end = cum
-        return i_start, i_end
+    def get_cell_ranges(self, r1, c1, r2, c2):
+        """
+        Return [(i1, i2)..] covering all cells in the rectangle
+        (r1, c1)..(r2, c2), relative to the start of this Table
+        texel.The endpoint i2 includes the trailing separator.
+        """
+        cells = self.get_cells()
+        l = []
+        for r in range(r1, r2+1):
+            for c in range(c1, c2+1):
+                cell = cells[r][c]
+                l.append((cell.i1, cell.i2))                
+        return l
 
+    
     def set_cellattr(self, r1, c1, r2, c2, **kwds):
         r1, r2 = sorted([r1, r2])
         c1, c2 = sorted([c1, c2])
@@ -213,7 +219,7 @@ class Table(Container):
         cells = self.get_cells()
         new = []
         for row in cells:
-            part = [Cell(NULL_TEXEL, {}) for j in range(n)]            
+            part = [Cell(0, NULL_TEXEL, {}) for j in range(n)]            
             new.append(row[:i]+part+row[i:])
         return from_cells(new)
 
@@ -228,7 +234,7 @@ class Table(Container):
         # is allowed here because cells and rows are destroyed
         # immediately afterward. Texels are immutable and can
         # therefore appear repeatedly in the TexelTree.
-        new = [[Cell(NULL_TEXEL, {})]*m]*n
+        new = [[Cell(0, NULL_TEXEL, {})]*m]*n
         return from_cells(cells[:i]+new+cells[i:])
         
         
@@ -410,18 +416,18 @@ def test_08():
 
 
 def test_09():
-    """get_cell_range"""
+    """get_cell_ranges"""
     # 2x2 table: childs = [sep0, a, sep, b, sep, c, sep, d, sep]
     #            indices:   0    1   2   3   4   5   6   7   8
     t = from_strings([["a", "b"], ["c", "d"]])
-    # single cell (0,0): content starts at 1, ends after sep at 3
-    assert t.get_cell_range(0, 0, 0, 0) == (1, 3)
+    # single cell (0,0)
+    assert t.get_cell_ranges(0, 0, 0, 0) == [(1, 3)]
     # single cell (0,1)
-    assert t.get_cell_range(0, 1, 0, 1) == (3, 5)
+    assert t.get_cell_ranges(0, 1, 0, 1) == [(3, 5)]
     # full first row (0,0)..(0,1)
-    assert t.get_cell_range(0, 0, 0, 1) == (1, 5)
+    assert t.get_cell_ranges(0, 0, 0, 1) == [(1, 3), (3, 5)]
     # full table (0,0)..(1,1)
-    assert t.get_cell_range(0, 0, 1, 1) == (1, 9)
+    assert t.get_cell_ranges(0, 0, 1, 1) == [(1, 3), (3, 5), (5, 7), (7, 9)]
 
 
 def test_10():

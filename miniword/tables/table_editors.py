@@ -294,12 +294,9 @@ class MatrixEditor(TableEditorBase):
             cy += rh
 
     def selected(self, s1, s2):
-        try:
-            r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
-            i1, i2 = self.texel.get_cell_range(r1, c1, r2, c2)
-        except (IndexError, TypeError):
-            return [(s1, s2)]
-        return [(self.i1 + i1, self.i1 + i2)]
+        cells = self.texel.get_cells()
+        r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
+        return self.texel.get_cell_ranges(r1, c1, r2, c2)
 
     def copy(self):
         """Rectangular cell copy for multi-cell selections."""

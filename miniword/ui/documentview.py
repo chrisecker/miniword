@@ -309,7 +309,11 @@ class DocumentView(WXTextView):
         if self._inhibit_depth == 0 and self._pending_range is not None:
             i1, i2, delta = self._pending_range
             self._pending_range = None
-            self._rebuild_with_progress(i1, i2, delta)
+            if delta:
+                self._rebuild_with_progress(i1, i2, delta)
+            else:
+                self.builder.rebuild_range(i1, i2, 0)
+                self.refresh()
         
     def properties_changed(self, model, i1, i2):
         super().properties_changed(model, i1, i2)
