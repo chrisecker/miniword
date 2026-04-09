@@ -8,7 +8,92 @@ TEXT_MUTED = wx.Colour(160, 160, 156)
 TEXT_HIGH  = wx.Colour(233, 84, 32, 255)
 
 
+SPACER = (0, 0)
+ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
 
+
+### sidepanel
+def make_tab(notebook, title):
+    """Add a standard notebook page with BAR_BG background and 8px padding.
+    Returns (panel, content_sizer)."""
+    panel = wx.Panel(notebook)
+    panel.SetBackgroundColour(BAR_BG)
+    notebook.AddPage(panel, title)
+    content = wx.BoxSizer(wx.VERTICAL)
+    outer = wx.BoxSizer(wx.VERTICAL)
+    outer.Add(content, 1, wx.EXPAND | wx.ALL, 8)
+    panel.SetSizer(outer)
+    return panel, content
+
+
+def make_panel(panel, title):
+    """Standard panel setup: BAR_BG background, header, padded content sizer.
+
+    Returns the content sizer. The outer sizer is set on the panel.
+    """
+    panel.SetBackgroundColour(BAR_BG)
+    outer = wx.BoxSizer(wx.VERTICAL)
+    add_header(title, panel, outer)
+    content = wx.BoxSizer(wx.VERTICAL)
+    outer.Add(content, 1, wx.EXPAND | wx.ALL, 8)
+    panel.SetSizer(outer)
+    return content
+
+
+def add_header(label, parent, sizer):
+    """Add a panel header to vertical sizer *sizer*."""
+    sizer.AddSpacer(6)
+
+    # Section header
+    hdr = wx.StaticText(parent, label=label)
+    hdr.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
+                        wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
+    hdr.SetForegroundColour(TEXT_MUTED)
+    sizer.Add(hdr, 0, wx.LEFT | wx.TOP, 8)
+    sizer.AddSpacer(3)
+
+def add_section(label, panel, sizer):
+    # Helper: add a heading
+    text = wx.StaticText(panel, label=label)
+    font = text.GetFont()
+    font.SetWeight(wx.FONTWEIGHT_BOLD)
+    text.SetFont(font)        
+    sizer.Add(text, 0, wx.EXPAND|wx.TOP, 10)
+
+def add_label(label, panel, sizer):
+    # Helper: add a label
+    text = wx.StaticText(panel, label=label)
+    sizer.Add(text, 0, wx.EXPAND)
+
+    
+def add_row(sizer, *widgets):
+    # Helper: add a row of widgets    
+    rowsizer = wx.BoxSizer(wx.HORIZONTAL)
+
+    for i, widget in enumerate(widgets):
+        if isinstance(widget, tuple):
+            w, h = widget
+            widget = wx.Size(w, h)
+        if i==0:
+            rowsizer.Add(widget, 1, ALL_CENTER, 5)
+        else:            
+            rowsizer.Add(widget, 0, ALL_CENTER, 5)
+    sizer.Add(rowsizer, 0, wx.EXPAND)
+    
+
+def add_row2(label, panel, sizer, *widgets):
+    # Helper: add a row containing a label and widgets
+    add_label(label, panel, sizer)
+    rowsizer = wx.BoxSizer(wx.HORIZONTAL)
+    rowsizer.AddStretchSpacer(1)
+    rowsizer.Add(widgets[0], 0, ALL_CENTER, 5)
+    rowsizer.AddStretchSpacer(1)
+    for widget in widgets[1:]:
+        rowsizer.Add(widget, 0, ALL_CENTER, 5)
+    sizer.Add(rowsizer, 0, wx.EXPAND | wx.LEFT, 24)
+    
+
+    
 def flat_button(parent, label, size):
     b = FlatButton(parent, label, size)
     bg = BUTTON_BG
@@ -39,6 +124,7 @@ def text_button(parent, label, size):
             'press':  (bg, TEXT_HIGH.ChangeLightness(150)) # Shine
         }
     return b
+
 
 
 

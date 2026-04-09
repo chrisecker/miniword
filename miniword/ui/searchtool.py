@@ -3,6 +3,7 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from ..textmodel.modelbase import Model
 from ..textmodel.properties import overridable_property
+from .design import TEXT_MUTED, muted_button, flat_button, make_panel
 
 
 class Search(ViewBase, Model):
@@ -213,19 +214,8 @@ class SearchPanel(wx.Panel, ViewBase):
         self.search = Search(self.textmodel)
         self.set_model(self.search)
 
-        from .design import BAR_BG, TEXT_MUTED, muted_button, flat_button
 
-        self.SetBackgroundColour(BAR_BG)
-        outer = wx.BoxSizer(wx.VERTICAL)
-        outer.AddSpacer(6)
-
-        # Section header
-        hdr = wx.StaticText(self, label="FIND & REPLACE")
-        hdr.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
-                            wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        hdr.SetForegroundColour(TEXT_MUTED)
-        outer.Add(hdr, 0, wx.LEFT | wx.TOP, 8)
-        outer.AddSpacer(3)
+        content = make_panel(self, "FIND & REPLACE")
 
         # Search field + ▲▼ navigation
         sr = wx.BoxSizer(wx.HORIZONTAL)
@@ -239,13 +229,13 @@ class SearchPanel(wx.Panel, ViewBase):
         sr.Add(self.search_ctrl, 1, wx.EXPAND)
         sr.Add(btn_prev, 0, wx.EXPAND | wx.LEFT, 2)
         sr.Add(btn_next, 0, wx.EXPAND | wx.LEFT, 2)
-        outer.Add(sr, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+        content.Add(sr, 0, wx.EXPAND | wx.BOTTOM, 4)
 
         # Replace field
         self.replace_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER,
                                         size=(-1, 24))
         self.replace_ctrl.SetHint("Replace…")
-        outer.Add(self.replace_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+        content.Add(self.replace_ctrl, 0, wx.EXPAND | wx.BOTTOM, 4)
 
         # Options: Aa (case), .* (regex), W (whole word)
         os_ = wx.BoxSizer(wx.HORIZONTAL)
@@ -264,7 +254,7 @@ class SearchPanel(wx.Panel, ViewBase):
         os_.Add(self.cb_case,  0, wx.RIGHT, 10)
         os_.Add(self.cb_regex, 0, wx.RIGHT, 10)
         os_.Add(self.cb_word,  0)
-        outer.Add(os_, 0, wx.LEFT | wx.TOP, 6)
+        content.Add(os_, 0, wx.BOTTOM, 4)
 
         # Replace buttons
         brs = wx.BoxSizer(wx.HORIZONTAL)
@@ -272,25 +262,20 @@ class SearchPanel(wx.Panel, ViewBase):
         btn_all     = flat_button(self, "Replace All", size=(-1, 24))
         brs.Add(btn_replace, 1, wx.RIGHT, 3)
         brs.Add(btn_all, 1)
-        outer.Add(brs, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 4)
+        content.Add(brs, 0, wx.EXPAND | wx.BOTTOM, 8)
 
-        # Separator + count label as section header above results
-        outer.AddSpacer(8)
-        outer.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 4)
-        outer.AddSpacer(4)
+        # Separator + count label
+        content.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.BOTTOM, 4)
         self.count_label = wx.StaticText(self, label="")
         self.count_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
                                          wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         self.count_label.SetForegroundColour(TEXT_MUTED)
-        outer.Add(self.count_label, 0, wx.LEFT, 8)
-        outer.AddSpacer(3)
+        content.Add(self.count_label, 0, wx.BOTTOM, 3)
 
         # Result list
         self.result_list = SearchResultsList(self, textview)
         self.result_list.on_select = self._on_result_selected
-        outer.Add(self.result_list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 4)
-
-        self.SetSizer(outer)
+        content.Add(self.result_list, 1, wx.EXPAND)
 
         self.Bind(wx.EVT_SHOW, self._on_show)
 

@@ -3,11 +3,12 @@ from wx.lib.newevent import NewEvent
 
 from ..textmodel.viewbase import ViewBase
 from ..textmodel.texeltree import length
-from ..ui.styleinspector import add_section
 from ..ui.threestate import ColourButton
 from ..ui.icons import icon
-from .tables import Table, empty_table
+from ..ui.design import TEXT_MUTED, muted_button, flat_button, \
+    make_panel, add_section
 from ..ui.documentview import get_path
+from .tables import Table, empty_table
 
 TableCreatedEvent, EVT_TABLE_CREATED = NewEvent()
 
@@ -270,17 +271,12 @@ class TablePanel(wx.Panel, ViewBase):
     def __init__(self, parent, view):
         wx.Panel.__init__(self, parent)
         ViewBase.__init__(self)
-        self.SetBackgroundColour(COL_BG)
         self._view = view
         self._table_index = None
         self._table_box = None
         self.add_model(view)
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        hdr = wx.StaticText(self, label="TABLE")
-        hdr.SetForegroundColour(COL_MUTED)
-        sizer.Add(hdr, 0, wx.LEFT | wx.TOP, 10)
+        sizer = make_panel(self, "TABLES")
 
         # --- Section: Insert ---
         add_section("Insert", self, sizer)
@@ -334,9 +330,6 @@ class TablePanel(wx.Panel, ViewBase):
 
         sizer.Add(cell_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        padded = wx.BoxSizer(wx.VERTICAL)
-        padded.Add(sizer, 1, wx.EXPAND | wx.ALL, 8)
-        self.SetSizer(padded)
         self.Bind(wx.EVT_SHOW, self.on_show)
 
     def on_show(self, event):

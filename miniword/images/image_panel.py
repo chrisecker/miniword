@@ -6,8 +6,8 @@ from .image_editors import ImageCropEditor
 from ..textmodel.texeltree import grouped
 from ..textmodel.viewbase import ViewBase
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
-from ..ui.design import BAR_BG, TEXT_MUTED, flat_button, muted_button
-from ..ui.styleinspector import add_section, add_row
+from ..ui.design import TEXT_MUTED, flat_button, muted_button, \
+    make_panel, add_section, add_row
 
 
 class ImageInspector(wx.Panel, ViewBase):
@@ -23,7 +23,6 @@ class ImageInspector(wx.Panel, ViewBase):
     def __init__(self, parent, view):
         wx.Panel.__init__(self, parent)
         ViewBase.__init__(self)
-        self.SetBackgroundColour(BAR_BG)
         self._view = view
         self.add_model(view)
         self.add_model(view.model)
@@ -34,12 +33,7 @@ class ImageInspector(wx.Panel, ViewBase):
         self._updating     = False
         self._crop_active  = False
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
-
-        # --- Header ---
-        hdr = wx.StaticText(self, label="IMAGE")
-        hdr.SetForegroundColour(TEXT_MUTED)
-        sizer.Add(hdr, 0, wx.LEFT | wx.TOP, 10)
+        sizer = make_panel(self, "IMAGE")
 
         # --- Insert (always active) ---
         add_section("Insert", self, sizer)
@@ -97,9 +91,6 @@ class ImageInspector(wx.Panel, ViewBase):
         self.btn_unset_crop.Bind(wx.EVT_BUTTON, self._on_unset_crop)
         sizer.Add(self.btn_unset_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        padded = wx.BoxSizer(wx.VERTICAL)
-        padded.Add(sizer, 1, wx.EXPAND | wx.ALL, 8)
-        self.SetSizer(padded)
         self._set_inspector_enabled(False)
         self.Bind(wx.EVT_SHOW, self.on_show)
 

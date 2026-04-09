@@ -205,7 +205,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._search_panel = SearchPanel(self._inspector_book, self.textview)
 
         for key, panel in [
-            ("format",   self.inspector),
+            ("style",    self.inspector),
             ("settings", self.document_settings),
             ("image",    self.image_inspector),
             ("table",    self.table_panel),
@@ -219,11 +219,11 @@ class MainFrame(wx.Frame, ViewBase):
         self._panel_key = None
 
         self._strip = RightStrip(self._base, [
-            ("format",   "Aa", "Styles"),
-            ("search",   "⌕",  "Search"),
-            ("image",    "⬜",  "Image"),
-            ("table",    "⊞",  "Table"),
-            ("settings", "≡",  "Settings"),
+            ("style",    "Styles"),
+            ("search",   "Search"),
+            ("image",    "Image"),
+            ("table",    "Table"),
+            ("settings", "Settings"),
         ], self._on_panel_toggle)
 
         self._search_bar = SearchBar(self._base, self._close_search)
@@ -247,11 +247,11 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _on_menu_inspector(self, _):
         if self._mi_panel.IsChecked():
-            self._panel_key = "format"
-            self._inspector_book.SetSelection(self._inspector_pages["format"])
+            self._panel_key = "style"
+            self._inspector_book.SetSelection(self._inspector_pages["style"])
             self._inspector_book.Show()
             self._inspector_book.Raise()
-            self._strip.activate("format")
+            self._strip.activate("style")
         else:
             self._panel_key = None
             self._inspector_book.Hide()

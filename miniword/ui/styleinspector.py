@@ -2,7 +2,7 @@
 
 
 import wx
-from .design import BAR_BG
+from .design import make_tab, add_section, add_row, add_row2
 from .inspectors import InspectorBase
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
@@ -14,16 +14,16 @@ from ..wxtextview.wxdevice import defaultstyle
 from .unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from .threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
 from .buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
-from ..core.styles import defaultbullets, n_levels, style_default
 from .stylemenu import BasestyleDropdown
 from .icons import icon
+from ..core.styles import defaultbullets, n_levels, style_default
 
 # Display labels and matching format strings for the numbering dropdown.
 _NUMBERING_FORMATS = ['1.', 'a.', 'A.', 'i.']
 
 # (label, parstyle value) pairs for the role dropdown.
 _ROLES = [
-    ('—',             None),
+    ('(None)',         None),
     ('Header 1',      'h1'),
     ('Header 2',      'h2'),
     ('Header 3',      'h3'),
@@ -37,7 +37,6 @@ _ROLES = [
 ]
 
 
-    
 
 def _is_text_input(w: wx.Window) -> bool:
     return isinstance(w, (wx.TextCtrl, wx.ComboBox))
@@ -161,48 +160,8 @@ class ResetButton(wx.Button):
 
             
 
-def add_section(label, panel, sizer):
-    # Helper: add a heading
-    text = wx.StaticText(panel, label=label)
-    font = text.GetFont()
-    font.SetWeight(wx.FONTWEIGHT_BOLD)
-    text.SetFont(font)        
-    sizer.Add(text, 0, wx.EXPAND|wx.TOP, 10)
-
-def add_label(label, panel, sizer):
-    # Helper: add a labelheading
-    text = wx.StaticText(panel, label=label)
-    sizer.Add(text, 0, wx.EXPAND)
-
-    
-def add_row2(label, panel, sizer, *widgets):
-    add_label(label, panel, sizer)
-    rowsizer = wx.BoxSizer(wx.HORIZONTAL)
-    rowsizer.AddStretchSpacer(1)
-    rowsizer.Add(widgets[0], 0, ALL_CENTER, 5)
-    rowsizer.AddStretchSpacer(1)
-    for widget in widgets[1:]:
-        rowsizer.Add(widget, 0, ALL_CENTER, 5)
-    sizer.Add(rowsizer, 0, wx.EXPAND | wx.LEFT, 24)
 
 
-ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
-
-SPACER = (0, 0)
-def add_row(sizer, *widgets):
-    # Helper: add a row of widgets    
-    rowsizer = wx.BoxSizer(wx.HORIZONTAL)
-
-    for i, widget in enumerate(widgets):
-        if isinstance(widget, tuple):
-            w, h = widget
-            widget = wx.Size(w, h)
-        if i==0:
-            rowsizer.Add(widget, 1, ALL_CENTER, 5)
-        else:            
-            rowsizer.Add(widget, 0, ALL_CENTER, 5)
-    sizer.Add(rowsizer, 0, wx.EXPAND)
-    
         
 
 class Inspector(wx.Frame):
@@ -241,20 +200,8 @@ class StyleInspector(InspectorBase):
         notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,
             lambda e: (e.Skip(), wx.CallAfter(view.SetFocus)))
         
-        panel = self.panel = wx.Panel(notebook)
-        panelsizer = wx.BoxSizer(wx.VERTICAL)        
-        notebook.AddPage(panel, 'Style')
-        panel.SetBackgroundColour(wx.SystemSettings.GetColour(
-            wx.SYS_COLOUR_BTNFACE))
-
-
-        #line = wx.StaticLine(panel, style=wx.LI_HORIZONTAL)
-        #panelsizer.Add(line, 0, wx.ALL, 5)
-
-        
-        contentsizer = wx.BoxSizer(wx.VERTICAL)
+        panel, contentsizer = make_tab(notebook, 'Style')
         choices = list(map(str, self.sizes))
-        ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
 
         add_section("Fontstyle", panel, contentsizer)
 
@@ -312,17 +259,8 @@ class StyleInspector(InspectorBase):
             wx.EVT_CHECKBOX,
             lambda e:self.set_char_properties(italic=self.italic.GetValue()))
 
-        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
-        panel.SetSizer(panelsizer)
-        panel.Layout()
-        panelsizer.Fit(panel )
-
         ### layout tab ###
-        panel = self.panel = wx.Panel(notebook)
-        panelsizer = wx.BoxSizer(wx.VERTICAL)        
-        notebook.AddPage(panel, 'Layout')
-        panel.SetBackgroundColour(BAR_BG)
-        contentsizer = wx.BoxSizer(wx.VERTICAL)
+        panel, contentsizer = make_tab(notebook, 'Layout')
 
         add_section("Alignment", panel, contentsizer)
 
@@ -358,18 +296,8 @@ class StyleInspector(InspectorBase):
         # - Absatz nicht umbrechen (Keep together / Keep with next - optional)
         # XXX TODO
 
-        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
-        panel.SetSizer(panelsizer)
-        panel.Layout()
-        panelsizer.Fit(panel )
-
-        ### Paragraph structure tab ###
-        panel = self.panel = wx.Panel(notebook)
-        panelsizer = wx.BoxSizer(wx.VERTICAL)        
-        notebook.AddPage(panel, 'Structure')
-        panel.SetBackgroundColour(BAR_BG)
-        contentsizer = wx.BoxSizer(wx.VERTICAL)
-        # ...
+        ### structure tab ###
+        panel, contentsizer = make_tab(notebook, 'Structure')
         add_section("Indentation", panel, contentsizer)
 
         label = wx.StaticText(panel, label='Level') # XXX Identation level
@@ -470,20 +398,28 @@ class StyleInspector(InspectorBase):
 
         contentsizer.Add(spanel, 0, wx.EXPAND, 5)
 
-        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
-        panel.SetSizer(panelsizer)
-        panel.Layout()
-        panelsizer.Fit(panel )
+        ### other tab ###
+        panel, contentsizer = make_tab(notebook, 'Other')
 
+        add_section("Block", panel, contentsizer)
+        self.block_color = ColourButton(panel)
+        self.reset_block_color = ResetButton(panel, ['block_color'])
+        add_row(contentsizer, wx.StaticText(panel, label="Color"),
+                self.block_color, self.reset_block_color)
+        self.block_color.callback = lambda: self.set_parproperties(
+            block_color=self.block_color.get_colour())
 
-        # Other tab
-        panel = self.panel = wx.Panel(notebook)
-        panelsizer = wx.BoxSizer(wx.VERTICAL)
-        notebook.AddPage(panel, 'Other')
-        panel.SetBackgroundColour(BAR_BG)
-        contentsizer = wx.BoxSizer(wx.VERTICAL)
+        self.block_padding = LengthInput(panel, 'mm')
+        self.reset_block_padding = ResetButton(panel, ['block_padding'])
+        add_row(contentsizer, wx.StaticText(panel, label="Padding"),
+                self.block_padding, self.reset_block_padding)
+        self.block_padding.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(
+                block_padding=self.block_padding.GetValue()))
 
-        self.page_break_before = wx.CheckBox(panel, -1, "Page break before",
+        add_section("Page break", panel, contentsizer)
+        self.page_break_before = wx.CheckBox(panel, -1, "Break before",
                                              style=wx.CHK_3STATE)
         self.reset_page_break_before = ResetButton(panel, ['page_break_before'])
         add_row(contentsizer, self.page_break_before, self.reset_page_break_before)
@@ -492,35 +428,16 @@ class StyleInspector(InspectorBase):
             lambda e: self.set_parproperties(
                 page_break_before=self.page_break_before.GetValue()))
 
-        label = wx.StaticText(panel, label="Block color")
-        self.block_color = ColourButton(panel)
-        self.reset_block_color = ResetButton(panel, ['block_color'])
-        add_row(contentsizer, label, self.block_color, self.reset_block_color)
-        self.block_color.callback = lambda: self.set_parproperties(
-            block_color=self.block_color.get_colour())
-
-        self.block_padding = LengthInput(panel, 'mm')
-        self.reset_block_padding = ResetButton(panel, ['block_padding'])
-        add_row2('Padding', panel, contentsizer, self.block_padding,
-                 self.reset_block_padding)
-        self.block_padding.Bind(
-            EVT_UNIT_CHANGED,
-            lambda e: self.set_parproperties(
-                block_padding=self.block_padding.GetValue()))
-
-        label = wx.StaticText(panel, label="Role")
+        
+        add_section("Semantics", panel, contentsizer)
         self.role = wx.Choice(panel, choices=[lbl for lbl, _ in _ROLES])
-        self.role.SetSelection(0)
         self.reset_role = ResetButton(panel, ['role'])
-        add_row(contentsizer, label, self.role, self.reset_role)
+        add_row(contentsizer, wx.StaticText(panel, label="Role"),
+                self.role, self.reset_role)
+        self.role.SetSelection(0)
         self.role.Bind(wx.EVT_CHOICE, self.on_role)
 
-        panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
-        panel.SetSizer(panelsizer)
-        panel.Layout()
-        panelsizer.Fit(panel)
-        
-        ### Epilog
+        ### epilog
         mainsizer.Add(notebook, 1, wx.EXPAND |wx.ALL, 5)
         self.SetSizer(mainsizer)
 

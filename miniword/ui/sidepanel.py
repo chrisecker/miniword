@@ -1,39 +1,36 @@
 import wx
+from pathlib import Path
 
 PANEL_W    = 300
 STRIP_W    = 52
-ICON_H     = 56
+ICON_H     = 48
 
 BG_CANVAS  = wx.Colour(228, 228, 224)
 BG_STRIP   = wx.Colour(242, 242, 238)
 BG_PANEL   = wx.Colour(250, 250, 248)
 COL_BORDER = wx.Colour(205, 205, 200)
-COL_TEXT   = wx.Colour(38,  38,  36)
-COL_MUTED  = wx.Colour(110, 110, 106)
 COL_ACTIVE = wx.Colour(222, 222, 218)
 COL_HOVER  = wx.Colour(234, 234, 230)
 
+_ICONS_DIR = Path(__file__).resolve().parent.parent / "icons"
 
+
+def _svg_bundle(name):
+    return wx.BitmapBundle.FromSVGFile(str(_ICONS_DIR / name), (24, 24))
 
 
 class IconButton(wx.Panel):
-    """
-    Two fixed zones:
-      upper 38px → symbol  (font 16, vertically centred)
-      lower 18px → label   (font 7,  vertically centred)
-    """
     SIZE = (STRIP_W, ICON_H)
 
-    def __init__(self, parent, symbol, label, callback):
+    def __init__(self, parent, key, label, callback):
         super().__init__(parent, size=self.SIZE)
-        self.symbol   = symbol
-        self.label    = label[:6]
         self.callback = callback
         self.active   = False
         self.hover    = False
         self.SetMinSize(self.SIZE)
         self.SetMaxSize(self.SIZE)
         self.SetToolTip(label)
+        self._bmp = _svg_bundle(f'{key}.svg')
         self.Bind(wx.EVT_PAINT,        self._paint)
         self.Bind(wx.EVT_LEFT_UP,      lambda e: self.callback(self))
         self.Bind(wx.EVT_ENTER_WINDOW, lambda e: self._set_hover(True))
@@ -53,28 +50,15 @@ class IconButton(wx.Panel):
         bg = COL_ACTIVE if self.active else (COL_HOVER if self.hover else BG_STRIP)
         dc.SetBackground(wx.Brush(bg))
         dc.Clear()
-        SYM_H = 38
-        LBL_H = h - SYM_H
-        f_sym = wx.Font(16, wx.FONTFAMILY_DEFAULT,
-                        wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-        dc.SetFont(f_sym)
-        dc.SetTextForeground(COL_TEXT if self.active else wx.Colour(80, 80, 76))
-        sw, sh = dc.GetTextExtent(self.symbol)
-        dc.DrawText(self.symbol, (w - sw) // 2, (SYM_H - sh) // 2)
-        f_lbl = wx.Font(7, wx.FONTFAMILY_DEFAULT,
-                        wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-        dc.SetFont(f_lbl)
-        dc.SetTextForeground(COL_MUTED)
-        lw, lh = dc.GetTextExtent(self.label)
-        dc.DrawText(self.label, (w - lw) // 2, SYM_H + (LBL_H - lh) // 2)
+        dc.SetPen(wx.Pen(COL_BORDER, 1))
+        dc.DrawLine(0, 0, 0, h)
+        bmp = self._bmp.GetBitmap(wx.Size(24, 24))
+        bw, bh = bmp.GetSize()
+        dc.DrawBitmap(bmp, (w - bw) // 2, (h - bh) // 2)
 
 
 class RightStrip(wx.Panel):
-    """
-    Vertical icon strip on the right edge.
-    entries: list of (key, symbol, label)
-    on_toggle: called with key or None when toggled off
-    """
+    """Vertical icon strip on the right edge. entries: list of (key, label)."""
 
     def __init__(self, parent, entries, on_toggle):
         super().__init__(parent, size=(STRIP_W, -1))
@@ -87,8 +71,8 @@ class RightStrip(wx.Panel):
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.AddSpacer(4)
-        for key, sym, lbl in entries:
-            btn = IconButton(self, sym, lbl, self._click)
+        for key, lbl in entries:
+            btn = IconButton(self, key, lbl, self._click)
             btn._key = key
             self._key_to_btn[key] = btn
             sizer.Add(btn, 0)
