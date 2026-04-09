@@ -1,7 +1,7 @@
 from ..wxtextview.builder import Factory as FactoryBase
 from ..wxtextview.testdevice import TESTDEVICE
 from ..wxtextview.boxes import NewlineBox
-from ..textmodel.iterators import iter_paragraphs
+from ..textmodel.utils import iter_paragraphs
 from ..textmodel.texeltree import EMPTYSTYLE
 from ..core.styles import updated, style_default
 

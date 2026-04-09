@@ -1,6 +1,6 @@
 
 from ..wxtextview.wxtextview import WXTextView
-from ..textmodel.iterators import iter_newlines
+from ..textmodel.utils import iter_newlines
 from ..layout.builder import Factory, Builder
 from ..layout.editorbase import NullEditor
 from ..layout.cairodevice import CairoDevice

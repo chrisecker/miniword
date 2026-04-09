@@ -3,9 +3,9 @@
 
 from .texeltree import Text, Group, NewLine, Tabulator, insert, takeout, \
     ENDMARK, is_homogeneous, provides_childs, grouped, length, iter_childs, depth, \
-    is_list_efficient, is_root_efficient, strip2list, EMPTYSTYLE, transform, \
+    is_list_efficient, is_root_efficient, strip2list, EMPTYSTYLE, \
     dump
-from .iterators import iter_newlines
+from .utils import iter_newlines, get_newlines, transform
 from .styles import updated_style, create_style, get_styles, set_styles, \
     get_style, set_properties, get_parstyles, set_parstyles, set_parproperties, \
     clear_properties, clear_parproperties, StyleIterator
@@ -350,19 +350,13 @@ class TextModel(Model):
                 return texel.set_indent(new.pop(0))
             return texel
         texel = self.get_xtexel()
-        t = transform(texel, i1, i2, fun, descend_containers=False)
+        t = transform(texel, i1, i2, fun)
         self._set_xtexel(grouped(t))
         self.notify_views('properties_changed', i1, i2)
         return old
 
     def get_indents(self, i1, i2):
-        texel = self.get_xtexel()
-        r = []
-        for j1, j2, texel in iter_newlines(texel, i1, descend_containers=False):
-            if j1>=i2:
-                break
-            r.append(texel.indent)
-        return r
+        return [nl.indent for _, nl in get_newlines(self.get_xtexel(), i1, i2)]
             
     def insert(self, i, text):
         """Inserts *text* at position *i*."""

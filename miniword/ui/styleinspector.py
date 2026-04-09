@@ -7,7 +7,7 @@ from .inspectors import InspectorBase
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
     NewLine, dump
-from ..textmodel.iterators import iter_newlines
+from ..textmodel.utils import iter_newlines
 from ..textmodel.styles import create_style, updated_style
 from ..wxtextview.wxdevice import defaultstyle
 

@@ -157,7 +157,7 @@ def _save_txt(doc, path):
 
 
 def _check_txt(doc):
-    from ..textmodel.iterators import iter_paragraphs
+    from ..textmodel.utils import iter_paragraphs
     from ..textmodel.texeltree import NewLine
     issues = set()
     texel = doc.textmodel.get_xtexel()
