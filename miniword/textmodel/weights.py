@@ -71,18 +71,17 @@ def find_newline(texel, i):
     elif texel.is_group:
         for j1, j2, child in iter_childs(texel):
             if j2 <= i:
-                # before i
                 continue
             if j1 < i and child.is_container:
-                # inside a container cell
-                return find_newline(child, i-j1)+j1
-                
+                result = find_newline(child, i-j1)
+                if result is not None:
+                    return result+j1
+                continue
             if child.weights[windex] == 0:
                 continue
-
-            # We have nl-weight > 0 so the call to find_newline
-            # gives an integer:
-            return find_newline(child, i-j1)+j1
+            result = find_newline(child, i-j1)
+            if result is not None:
+                return result+j1
 
     elif texel.is_single and texel.weights[windex] > 0:
         # we found it!
