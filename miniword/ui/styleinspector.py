@@ -21,6 +21,21 @@ from .icons import icon
 # Display labels and matching format strings for the numbering dropdown.
 _NUMBERING_FORMATS = ['1.', 'a.', 'A.', 'i.']
 
+# (label, parstyle value) pairs for the role dropdown.
+_ROLES = [
+    ('—',             None),
+    ('Header 1',      'h1'),
+    ('Header 2',      'h2'),
+    ('Header 3',      'h3'),
+    ('Header 4',      'h4'),
+    ('Header 5',      'h5'),
+    ('Header 6',      'h6'),
+    ('List',          'ul'),
+    ('Enumeration',   'ol'),
+    ('Code',          'code'),
+    ('Quote',         'quote'),
+]
+
 
     
 
@@ -493,6 +508,13 @@ class StyleInspector(InspectorBase):
             lambda e: self.set_parproperties(
                 block_padding=self.block_padding.GetValue()))
 
+        label = wx.StaticText(panel, label="Role")
+        self.role = wx.Choice(panel, choices=[lbl for lbl, _ in _ROLES])
+        self.role.SetSelection(0)
+        self.reset_role = ResetButton(panel, ['role'])
+        add_row(contentsizer, label, self.role, self.reset_role)
+        self.role.Bind(wx.EVT_CHOICE, self.on_role)
+
         panelsizer.Add(contentsizer, 1, wx.ALL|wx.EXPAND, 5)
         panel.SetSizer(panelsizer)
         panel.Layout()
@@ -528,6 +550,7 @@ class StyleInspector(InspectorBase):
                 self.reset_page_break_before,
                 self.reset_block_color,
                 self.reset_block_padding,
+                self.reset_role,
         ]:
             resetter.callback = self.clear_parproperties            
 
@@ -563,6 +586,10 @@ class StyleInspector(InspectorBase):
     def on_numbering(self, event):
         fmt = _NUMBERING_FORMATS[self.numbering.Selection]
         self.set_parproperties(numbering_style=(fmt,) * n_levels)
+
+    def on_role(self, event):
+        _, value = _ROLES[self.role.GetSelection()]
+        self.set_parproperties(role=value)
 
     def on_counter(self, event):
         value = ['item', 'section'][self.counter.Selection]
@@ -1009,6 +1036,13 @@ class StyleInspector(InspectorBase):
 
         self.block_padding.SetValue(properties['block_padding'])
         self.reset_block_padding.set_x('block_padding' in overrides)
+
+        role = properties.get('role')
+        role_values = [v for _, v in _ROLES]
+        self.role.Unbind(wx.EVT_CHOICE)
+        self.role.SetSelection(role_values.index(role) if role in role_values else 0)
+        self.role.Bind(wx.EVT_CHOICE, self.on_role)
+        self.reset_role.set_x('role' in overrides)
 
         self.Layout()
         
