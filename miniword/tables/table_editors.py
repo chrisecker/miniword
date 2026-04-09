@@ -232,7 +232,7 @@ class CursorEditor(TableEditorBase):
 
 class MatrixEditor(TableEditorBase):
     """
-    Editor for matrix like selections which can span several cells. 
+    Editor for matrix like selections which can span several cells.
     """
 
     @staticmethod

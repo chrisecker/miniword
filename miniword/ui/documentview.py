@@ -249,8 +249,7 @@ class DocumentView(WXTextView):
         """
         index = self.index
         editor = self.editor
-        texel = self.model.texel
-        path = get_path(texel, index)
+        path = get_path(self.model.get_xtexel(), index)
 
         # 1. Current editor still valid?
         if not editor.is_null:
@@ -259,7 +258,6 @@ class DocumentView(WXTextView):
                 i1, i2, depth, texel = m
                 assert i1 == editor.i1
                 assert i2 == editor.i2
-                assert depth == editor.depth
                 self.reinstall_editor(texel)
                 return            
             self.remove_editor()
