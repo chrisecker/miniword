@@ -7,7 +7,7 @@ from ..ui.styleinspector import add_section
 from ..ui.threestate import ColourButton
 from ..ui.icons import icon
 from .tables import Table, empty_table
-from ..ui.documentview import find_texel, transform, get_path
+from ..ui.documentview import get_path
 
 TableCreatedEvent, EVT_TABLE_CREATED = NewEvent()
 
@@ -411,7 +411,7 @@ class TablePanel(wx.Panel, ViewBase):
         return min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2)
 
     def _apply_to_table(self, fn):
-        """Find table, apply fn(table, r1, c1, r2, c2) → new_table, commit."""
+        """Find table, apply fn(table, r1, c1, r2, c2) → new_table, commit via undo."""
         table, offset = self._find_table_texel()
         if table is None:
             return
@@ -419,22 +419,8 @@ class TablePanel(wx.Panel, ViewBase):
         new_table = fn(table, r1, c1, r2, c2)
         if new_table is table:
             return
-        model = self._view.model
-        _, _, depth = find_texel(model.texel, table, offset)
-        model.texel = transform(model.texel, offset, depth, lambda t: new_table)
-        model.notify_views('properties_changed', offset, offset + 1)
-
-    def _apply_table_replace(self, new_table_fn):
-        """Find table, replace it with new_table_fn(table) → new_table."""
-        table, offset = self._find_table_texel()
-        if table is None:
-            return
-        new_table = new_table_fn(table)
-        if new_table is table:
-            return
-        model = self._view.model
         with self._view.atomic():
-            model.remove(offset, offset + length(table))
+            self._view.remove(offset, offset + length(table))
             self._view.insert_texel(offset, new_table)
 
     # --- border preset ---
@@ -567,11 +553,11 @@ class TablePanel(wx.Panel, ViewBase):
         if table is None:
             return
         if eid == 1:
-            self._apply_table_replace(lambda t: t.insert_rows(r + 1, 1))
+            self._apply_to_table(lambda t, *_: t.insert_rows(r + 1, 1))
         elif eid == 2:
-            self._apply_table_replace(lambda t: t.insert_rows(r, 1))
+            self._apply_to_table(lambda t, *_: t.insert_rows(r, 1))
         elif eid == 3:
-            self._apply_table_replace(lambda t: t.remove_rows(r, 1))
+            self._apply_to_table(lambda t, *_: t.remove_rows(r, 1))
 
     def _on_col_action(self, event):
         eid = event.GetId()
@@ -579,11 +565,11 @@ class TablePanel(wx.Panel, ViewBase):
         if table is None:
             return
         if eid == 4:
-            self._apply_table_replace(lambda t: t.insert_cols(c + 1, 1))
+            self._apply_to_table(lambda t, *_: t.insert_cols(c + 1, 1))
         elif eid == 5:
-            self._apply_table_replace(lambda t: t.insert_cols(c, 1))
+            self._apply_to_table(lambda t, *_: t.insert_cols(c, 1))
         elif eid == 6:
-            self._apply_table_replace(lambda t: t.remove_cols(c, 1))
+            self._apply_to_table(lambda t, *_: t.remove_cols(c, 1))
 
     # --- cell style ---
 
@@ -599,15 +585,9 @@ class TablePanel(wx.Panel, ViewBase):
         self._set_cell_attr('valign', val)
 
     def _set_cell_attr(self, attr, value):
-        table, offset = self._find_table_texel()
-        if table is None:
-            return
-        r1, c1, r2, c2 = self._selected_cell_range(table, offset)
-        new_table = table.set_cellattr(r1, c1, r2, c2, **{attr: value})
-        model = self._view.model
-        _, _, depth = find_texel(model.texel, table, offset)
-        model.texel = transform(model.texel, offset, depth, lambda t: new_table)
-        model.notify_views('properties_changed', offset, offset + 1)
+        self._apply_to_table(
+            lambda table, r1, c1, r2, c2: table.set_cellattr(r1, c1, r2, c2, **{attr: value})
+        )
 
 
 def demo_00():
