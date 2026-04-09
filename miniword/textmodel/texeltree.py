@@ -123,9 +123,9 @@ G = Group
 class Container(_TexelWithChilds):
     is_container = 1
     functions = (
-        lambda l:0,
+        lambda l:0, # no depth!
         sum,               
-        sum)
+        lambda l:0) # no NL-weight!
         
     def set_childs(self, childs):
         clone = shallow_copy(self)
@@ -178,7 +178,7 @@ class Tabulator(Single):
 class Fraction(Container):
     # A simple math object for debugging
     def __init__(self, denominator, nominator):
-        self.childs = [TAB, denominator, TAB, nominator, TAB]
+        self.childs = [NL, denominator, NL, nominator, NL]
         self.compute_weights()
     
 

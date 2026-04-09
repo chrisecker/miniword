@@ -1,3 +1,1 @@
 from .textmodel import TextModel
-
-

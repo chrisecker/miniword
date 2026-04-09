@@ -5,6 +5,7 @@ modules = [
     "miniword.textmodel.texeltree",
     "miniword.textmodel.iterators",
     "miniword.textmodel.styles",
+    "miniword.textmodel.weights",
     "miniword.textmodel.textmodel",
 
     # wxtextview

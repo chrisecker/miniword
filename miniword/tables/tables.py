@@ -1,7 +1,7 @@
 from copy import copy
 
-from ..textmodel.texeltree import Text, Container, NewLine, length, as_style, \
-    NULL_TEXEL
+from ..textmodel.texeltree import Text, Container, length, as_style, \
+    NULL_TEXEL, NL
 
 """
 Terms:
@@ -72,10 +72,7 @@ def dump_cells(cells):
         i += 1
             
     
-class Separator(NewLine):
-    weights = (0, 1, 0)
-    text = '\n'
-SEP = Separator()
+SEP = NL
 
 
 class Table(Container):
@@ -92,7 +89,7 @@ class Table(Container):
         self.breaklevel = breaklevel
         
         # First child: Anchor separator (i=0) for cursor separation
-        childs = [Separator({})] 
+        childs = [SEP] 
         
         # Following: Pairs of Content and Separator
         for texel, parstyle in entries:
@@ -426,3 +423,17 @@ def test_09():
     # full table (0,0)..(1,1)
     assert t.get_cell_range(0, 0, 1, 1) == (1, 9)
 
+
+def test_10():
+    """set cell alignment"""
+    from ..textmodel import TextModel
+    m = TextModel()
+    t = from_strings([["a", "b"], ["c", "d"]])
+    m.texel = t
+
+    right = {'alignment':'right'}
+    center = {'alignment':'center'}
+    m.set_parstyle(1, right) # right align "a"
+    m.set_parstyle(3, center) # center "b"
+    assert m.get_parstyle(1) == right
+    assert m.get_parstyle(3) == center

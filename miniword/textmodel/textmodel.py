@@ -9,7 +9,7 @@ from .iterators import iter_newlines
 from .styles import updated_style, create_style, get_styles, set_styles, \
     get_style, set_properties, get_parstyles, set_parstyles, set_parproperties, \
     clear_properties, clear_parproperties, StyleIterator
-from .weights import find_weight, get_weight, NotFound
+from .weights import find_weight, get_weight, find_newline, NotFound
 from .modelbase import Model
 import re
 
@@ -18,22 +18,22 @@ import re
 debug = 0
 
 
-def _get_texel(texel, i):
+def get_texel(texel, i):
     if provides_childs(texel):
         for i1, i2, child in iter_childs(texel):
             if i1 <= i < i2:
-                return _get_texel(child, i-i1)
+                return get_texel(child, i-i1)
     else:
         if i != 0:
             raise IndexError(i)
     return texel
 
-def _get_text(texel, i1, i2):
+def get_text(texel, i1, i2):
     r = []
     if provides_childs(texel):
         for j1, j2, child in iter_childs(texel):
             if i1 < j2 and j1 < i2: # intersection
-                r.append(_get_text(child, i1-j1, i2-j1))
+                r.append(get_text(child, i1-j1, i2-j1))
         return u''.join(r)
     text = texel.text
     return text[max(0, i1):min(i2, len(text))]
@@ -58,7 +58,7 @@ def dump_range(texel, i1, i2, i0=0, indent=0):
 _split = re.compile(r"([\t\n])", re.MULTILINE).split
 
 
-def _expand_range(texel, s1, s2, offset=0):
+def expand_range(texel, s1, s2, offset=0):
     if not (texel.is_group or texel.is_container):
         return s1, s2
     for i, (j1, j2, child) in enumerate(iter_childs(texel)):
@@ -70,7 +70,7 @@ def _expand_range(texel, s1, s2, offset=0):
             s1 = min(s1, offset)
             s2 = max(s2, offset + length(texel))
             return s1, s2
-        s1, s2 = _expand_range(child, s1, s2, abs_j1)
+        s1, s2 = expand_range(child, s1, s2, abs_j1)
     return s1, s2
 
 
@@ -133,7 +133,7 @@ class TextModel(Model):
         return self.texel.weights[2]+1
 
     def get_text(self, i1=None, i2=None):
-        """Retuns the text between *i1* and *i2* as unicode string."""
+        """Returns the text between *i1* and *i2* as unicode string."""
         if i1 is None:
             i1 = 0
         if i2 is None:
@@ -142,17 +142,23 @@ class TextModel(Model):
             raise IndexError(i1)
         if i2>len(self):
             raise IndexError(i2)
-        return _get_text(self.texel, i1, i2)
+        return get_text(self.texel, i1, i2)
 
     def get_style(self, i):
         """Returns the style at index *i*."""
         return get_style(self.get_xtexel(), i)
 
+    def find_newline(self, i):
+        """Return the position of the next newline at or after *i*.
+
+        Descends into containers when *i* lies inside one, so the result
+        is always on the same nesting level as *i*. 
+        """
+        return find_newline(self.get_xtexel(), i)
+
     def get_parstyle(self, i):
-        row, col = self.index2position(i)
-        j = self.lineend(row)
-        texel = _get_texel(self.get_xtexel(), j)
-        return texel.parstyle
+        j = find_newline(self.get_xtexel(), i)
+        return get_texel(self.get_xtexel(), j).parstyle
 
     def expand_range(self, s1, s2):
         """Expand (s1, s2) so no container is only partially selected.
@@ -161,7 +167,7 @@ class TextModel(Model):
         is expanded to cover the complete container. Works recursively for
         nested containers.
         """
-        return _expand_range(self.texel, s1, s2)
+        return expand_range(self.texel, s1, s2)
 
     def position2index(self, row, col):
         """Returns the index corresponding to *row* and *col*."""
@@ -316,11 +322,8 @@ class TextModel(Model):
         return memo
 
     def set_parstyle(self, i, style):
-        # XXX Inefficient. Do we need this?
-        row, col = self.index2position(i)
-        tmp = self.lineend(row)
-        i2 = tmp+1
-        return self.set_parstyles(i, [(i2-i, style)])
+        j = find_newline(self.get_xtexel(), i)
+        return self.set_parstyles(i, [(j + 1 - i, style)])
 
     def increase_indent(self, i1, i2):
         indents = self.get_indents(i1, i2)
@@ -333,16 +336,12 @@ class TextModel(Model):
         return self.set_indents(i1, i2, new)
     
     def get_indent(self, i):
-        row, col = self.index2position(i)
-        j = self.lineend(row)
-        texel = _get_texel(self.get_xtexel(), j)
-        return texel.indent
+        j = find_newline(self.get_xtexel(), i)
+        return get_texel(self.get_xtexel(), j).indent
 
     def set_indent(self, i, indent):
-        row, col = self.index2position(i)
-        tmp = self.lineend(row)
-        i2 = tmp+1
-        return self.set_indents(i, i2, [indent])
+        j = find_newline(self.get_xtexel(), i)
+        return self.set_indents(i, j + 1, [indent])
 
     def set_indents(self, i1, i2, indents):
         old = self.get_indents(i1, i2)
@@ -367,7 +366,6 @@ class TextModel(Model):
             
     def insert(self, i, text):
         """Inserts *text* at position *i*."""
-        row, col = self.index2position(i)
         n = length(text.texel)
         m = length(self.texel)
         stuff = strip2list(text.texel)
@@ -391,9 +389,6 @@ class TextModel(Model):
 
     def copy(self, i1, i2):
         """Returns a copy of all data between *i1* and *i2*."""
-        row1, col1 = self.index2position(i1)
-        row2, col2 = self.index2position(i2)
-
         rest, removed = takeout(self.texel, i1, i2)
         model = self.create_textmodel()
         model.texel = grouped(removed)
@@ -427,9 +422,6 @@ class TextModel(Model):
 
     def remove(self, i1, i2):
         """Removes everything between *i1* and *i2*."""
-        row1, col1 = self.index2position(i1)
-        row2, col2 = self.index2position(i2)
-
         rest, kern = takeout(self.texel, i1, i2)
         self.texel = grouped(rest)
 
@@ -439,6 +431,9 @@ class TextModel(Model):
         self.notify_views('removed', i1, model)
         #assert check(self.texel)
         return model
+
+    def dump(self, i1=None, i2=None):
+        dump_range(self.texel, i1 or 0, i2 or len(self))
 
 
 
@@ -855,7 +850,7 @@ def test_18():
 
 
 def test_19():
-    "parstyle"
+    "get/set parstyle"
     model = TextModel(text1+'\n'+text2)
     n = len(model)
     assert model.get_parstyle(1) == {}
@@ -883,23 +878,44 @@ def test_20():
     
 
 def test_21():
-    "expand_range: plain text range is unchanged"
+    "expand_range"
     m = TextModel("hello")
     assert m.expand_range(1, 3) == (1, 3)
 
-
-def test_22():
-    "expand_range: separator touch expands to full container"
     from .texeltree import Fraction
     m = TextModel()
     m.texel = Fraction(Text("a"), Text("b"))
     n = length(m.texel)
-    # touching leading separator → full container
+    # touching leading separator --> full container
     assert m.expand_range(0, 1) == (0, n)
-    # spanning middle separator → full container
+    # spanning middle separator --> full container
     assert m.expand_range(1, 4) == (0, n)
-    # inside first child only → unchanged
+    # inside first child only --> unchanged
     assert m.expand_range(1, 2) == (1, 2)
+
+
+def test_23():
+    "get_parstyle inside a container"
+    from .texeltree import Fraction, NewLine, Group, grouped
+    # Paragraph: [container] [NL with parstyle]
+    nl = NewLine({'color': 'red'})
+    nl = nl.set_parstyle({'alignment': 'left'})
+    nl.indent = 2
+    
+    container = Fraction(Text("a"), Text("b"))
+    sep1 = container.childs[2].set_parstyle({'alignment' : 'right'})
+    sep2 = container.childs[4].set_parstyle({'alignment' : 'center'})
+
+    container.childs[2] = sep1
+    container.childs[4] = sep2
+    
+    m = TextModel()
+    m.texel = grouped([container, nl])
+
+    assert m.get_parstyle(1) == {'alignment': 'right'}
+    assert m.get_parstyle(2) == {'alignment': 'right'}
+    assert m.get_parstyle(3) == {'alignment': 'center'}
+    assert m.get_parstyle(4) == {'alignment': 'center'}
 
 
 __all__ = ['TextModel']
