@@ -13,7 +13,7 @@ long as it matches.
 
 import wx
 from ..layout.editorbase import TexelEditor
-from .tables import Table
+from .tables import Table, from_cells
 from .table_boxes import TableBox
 
 _HIT_RADIUS = 5          # hit detection radius in screen pixels
@@ -266,17 +266,13 @@ class MatrixEditor(TableEditorBase):
 
     def draw_selection(self, gc):
         """Highlight the rectangular cell block covered by the selection."""
-        sel = self.docview.selection
-        if sel is None:
+        if not self.docview.has_selection():
             return
-        s1, s2 = sorted(sel)
+        s1, s2 = sorted(self.docview.selection)
         try:
-            ar, ac = self.texel.get_coord(s1 - self.i1)
-            cr, cc = self.texel.get_coord(s2 - self.i1)
-        except (IndexError, TypeError):
+            r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
+        except IndexError:
             return
-        r1, r2 = sorted([ar, cr])
-        c1, c2 = sorted([ac, cc])
 
         # Walk to the first fragment, then forward through the chain.
         # _origin is only set on fragments that were drawn in this paint
@@ -312,38 +308,22 @@ class MatrixEditor(TableEditorBase):
 
     def copy(self):
         """Rectangular cell copy for multi-cell selections."""
-        sel = self.docview.selection
-        if sel is None:
+        if not self.docview.has_selection():
             return
-        abs_s1, abs_s2 = sorted(sel)
-        tb = self.box
-        if tb is None:
-            return
+        s1, s2 = sorted(self.docview.selection)
         ci1   = self.i0_box
         model = self.docview.model
-        i1, i2 = abs_s1 - ci1, abs_s2 - ci1
+        i1, i2 = s1 - ci1, s2 - ci1
 
-        ar, ac = self.texel.get_coord(i1)
-        cr, cc = self.texel.get_coord(max(i1, i2 - 1))
-        if ar == cr and ac == cc:
-            part = model.copy(ci1 + i1, ci1 + i2)
-            self.docview.to_clipboard(part)
+        r1, c1, r2, c2 = self.texel.get_rect(i1, i2)
+        if r1 == r2 and c1 == c2:
+            self.docview.to_clipboard(model.copy(ci1 + i1, ci1 + i2))
             return
 
-        r1, r2 = min(ar, cr), max(ar, cr)
-        c1, c2 = min(ac, cc), max(ac, cc)
-        grid = []
-        for r in range(r1, r2 + 1):
-            row = []
-            for c in range(c1, c2 + 1):
-                cell_i1 = tb.offsets[(r, c)]
-                cell_i2 = cell_i1 + len(tb.cells[r][c]) - 1
-                row.append(model.copy(ci1 + cell_i1, ci1 + cell_i2).texel)
-            grid.append(row)
-        entries = [(t, {}) for row in grid for t in row]
-        new_table = Table(*entries, ncols=c2 - c1 + 1)
-        result = model.create_textmodel()
-        result.texel = new_table
+        cells    = self.texel.get_cells()
+        sub_grid = [cells[r][c1:c2 + 1] for r in range(r1, r2 + 1)]
+        result   = model.create_textmodel()
+        result.texel = from_cells(sub_grid)
         self.docview.to_clipboard(result)
 
 

@@ -173,7 +173,7 @@ class Table(Container):
         coord and (r2, c2) the bottom right coordinate of the
         rectangle connecting the cells described by i1 and i2).
 
-        When bot indices are in the same cell, (r2, c2) == (r1, c1).
+        When both indices are in the same cell, (r2, c2) == (r1, c1).
         """
         r1, c1 = self.get_coord(i1)
         r2, c2 = self.get_coord(i2)
