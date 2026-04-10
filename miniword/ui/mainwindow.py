@@ -1,3 +1,4 @@
+import sys
 import wx
 from ..textmodel.viewbase import ViewBase
 from .styleinspector import StyleInspector
@@ -44,9 +45,14 @@ def load_plugins():
     tools_items = []
     for path in paths:
         try:
-            spec = importlib.util.spec_from_file_location("_mw_plugin", path)
-            mod  = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+            mod_name = f"_mw_plugin_{os.path.splitext(os.path.basename(path))[0]}"
+            if mod_name in sys.modules:
+                mod = sys.modules[mod_name]
+            else:
+                spec = importlib.util.spec_from_file_location(mod_name, path)
+                mod  = importlib.util.module_from_spec(spec)
+                sys.modules[mod_name] = mod
+                spec.loader.exec_module(mod)
         except Exception as e:
             print(f"Plugin error ({os.path.basename(path)}): {e}")
             continue
