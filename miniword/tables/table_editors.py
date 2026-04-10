@@ -294,9 +294,9 @@ class MatrixEditor(TableEditorBase):
             cy += rh
 
     def selected(self, s1, s2):
-        cells = self.texel.get_cells()
         r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
-        return self.texel.get_cell_ranges(r1, c1, r2, c2)
+        return [(self.i1 + a, self.i1 + b)
+                for a, b in self.texel.get_cell_ranges(r1, c1, r2, c2)]
 
     def copy(self):
         """Rectangular cell copy for multi-cell selections."""
@@ -409,6 +409,31 @@ def test_04():
     assert isinstance(result.texel, Table)
     assert result.texel.nrows == 2
     assert result.texel.ncols == 2
+
+
+def test_05():
+    "MatrixEditor.selected returns absolute positions"
+    from .tables import from_strings
+    from ..textmodel.texeltree import length as texel_length
+    from ..textmodel.textmodel import TextModel
+
+    texts = [['A', 'B'], ['C', 'D']]
+    table = from_strings(texts)
+    offset = 5  # table does NOT start at position 0
+
+    class FakeView:
+        selection = None
+
+    editor = MatrixEditor(FakeView(), offset, offset + texel_length(table), 0)
+    editor.texel = table
+
+    # select the full table (both rows, both cols)
+    s1, s2 = offset + 1, offset + texel_length(table) - 1
+    ranges = editor.selected(s1, s2)
+    # all returned positions must be >= offset
+    for a, b in ranges:
+        assert a >= offset, f"relative position leaked: {a} < offset {offset}"
+        assert b >= offset, f"relative position leaked: {b} < offset {offset}"
 
 
 def demo_00():
