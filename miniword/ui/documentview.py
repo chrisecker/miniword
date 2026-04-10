@@ -441,15 +441,13 @@ class DocumentView(WXTextView):
             t0 = time.time()
             self.builder.buildto_y(y)
             
-    def ensure_index(self):
+    def ensure_index(self, index=None):
         """Safety net: build until index covered (no dialog)."""
         layout = self.layout
-        index = self.index
+        if index is None:
+            index = self.index
         if len(layout) < index and not layout.is_finished:
-            import time
-            t0 = time.time()
-            self.builder.buildto_index(index)
-        
+            self.builder.buildto_index(index)        
 
     @trace
     def rebuild_range(self, i1, i2, delta):
@@ -611,7 +609,7 @@ class DocumentView(WXTextView):
     ### Cursor and selection
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
-        self.builder.buildto_index(index + 1)
+        self.ensure_index(index+1)
         # Selection must be updated before checking editor mode.
         old = self._index
         WXTextView.set_index(self, index, extend, update)
@@ -622,7 +620,7 @@ class DocumentView(WXTextView):
         self.update_editor()
 
     def iter_rows(self):
-        # XXX TODO: move this to table editor
+        # TODO: move this to table editor
         from ..tables import TableBox, TableNavRow
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):

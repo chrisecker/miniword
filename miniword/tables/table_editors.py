@@ -83,10 +83,7 @@ def is_multi_cell(texel, i1, i2):
 
     i1 and i2 are texel-local indices.
     """
-    try:
-        r1, c1, r2, c2 = texel.get_rect(i1, i2)
-    except (IndexError, TypeError):
-        return False
+    r1, c1, r2, c2 = texel.get_rect(i1, i2)
     return r1 != r2 or c1 != c2
 
 
@@ -98,22 +95,31 @@ class TableEditorBase(TexelEditor):
 
     def find_box(self):
         """
-        Return (TableBox, cx, cy, ci1, ci2) for the box containing index.
-        
+        Return (ci1, (cx, cy), TableBox) for the box containing index.
+
         Raises: IndexError when no Box is found.
         """
         layout = self.docview.layout
-        index =  self.docview.index
-        for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
+        index = self.docview.index
+
+        def visit(p1, p2, x, y, box):
             if not (p1 <= index < p2):
-                continue
-            for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
-                if not (r1 <= index < r2):
-                    continue
-                for ci1, ci2, cx, cy, child in row.iter_boxes(r1, rx, ry):
-                    if isinstance(child, TableBox) and ci1 <= index < ci2:
-                        return ci1, (cx, cy), child
-        raise IndexError(index)
+                return None
+            if isinstance(box, TableBox):
+                if self.i1 == p1 + box.get_texel_offset():
+                    return p1, (x, y), box
+            for c1, c2, cx, cy, child in box.iter_boxes(p1, x, y):
+                result = visit(c1, c2, cx, cy, child)
+                if result:
+                    return result
+            return None
+
+        for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
+            result = visit(p1, p2, px, py, page)
+            if result:
+                return result
+
+        raise IndexError(index)    
 
     def get_cursor(self, handle_id):
         return wx.CURSOR_SIZEWE
@@ -218,15 +224,17 @@ class CursorEditor(TableEditorBase):
     @staticmethod
     def match(view, path):
         result = None
-        for depth, (i1, i2, texel) in enumerate(path):
+        for depth, (i1, i2, texel) in enumerate(path):            
             if isinstance(texel, Table):
                 sel = view.selection
                 if sel is None:
                     result = i1, i2, depth, texel
                 else:
                     s1, s2 = sorted(sel)
-                    if not is_multi_cell(texel, s1 - i1, s2 - i1):
+                    if not is_multi_cell(texel, s1-i1, s2-i1):
                         result = i1, i2, depth, texel
+                    else:
+                        result = None
         return result
 
 
@@ -237,15 +245,15 @@ class MatrixEditor(TableEditorBase):
 
     @staticmethod
     def match(view, path):
+        sel = view.selection
+        if sel is None:
+            return None
+        s1, s2 = sorted(sel)
         result = None
         for depth, (i1, i2, texel) in enumerate(path):
             if isinstance(texel, Table):
-                sel = view.selection
-                if sel is None:
-                    return None
-                s1, s2 = sorted(sel)
-                if is_multi_cell(texel, s1 - i1, s2 - i1):
-                    result = i1, i2, depth, texel
+                if is_multi_cell(texel, s1-i1, s2-i1):
+                    result = i1, i2, depth, texel                
         return result
 
     def draw_cursor(self, gc):

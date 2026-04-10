@@ -90,6 +90,14 @@ class TableBox(Box):
                 i += len(cell)
         self.length = i
 
+    def get_texel_offset(self):
+        box = self
+        i = 0
+        while box.prev:
+            box = box.prev
+            i -= len(box)
+        return i
+            
     def __len__(self):
         return self.length
 
