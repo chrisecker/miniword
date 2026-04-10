@@ -1,10 +1,10 @@
 """
-Style selection dropdown widget.
+Style selection widget.
 
 Classes:
-    StyleDropdown  – main control (base class)
-    StylePopup     – floating list panel
-    BasestyleDropdown / ListstyleDropdown – concrete subclasses
+    StyleSelector  – main control (base class)
+    StyleList      – floating list panel
+    BasestyleSelector / ListstyleSelector – concrete subclasses
 """
 
 import re
@@ -54,15 +54,33 @@ TRIANGLE_AREA = 30
 PLUS_HEIGHT   = 28
 POPUP_EXTRA_W = 40
 
+# Colours
+SEL_NORMAL   = wx.Colour(255, 255, 255)   # StyleSelector normal bg
+SEL_HOVER    = wx.Colour(232, 232, 228)   # StyleSelector hover bg
+SEL_OPEN     = wx.Colour(225, 235, 252)   # StyleSelector open bg
+SEL_BORDER   = wx.Colour(195, 195, 190)   # StyleSelector border (normal)
+SEL_BORDER_H = wx.Colour(120, 120, 120)   # StyleSelector border (hover)
+SEL_BORDER_O = wx.Colour(0,   100, 200)   # StyleSelector border (open)
+SEL_ARROW    = wx.Colour(80,  80,  80)    # dropdown arrow
+SEL_MODIFIED = wx.Colour(200, 60,  0)     # arrow when style is modified
+
+LIST_BG      = wx.Colour(255, 255, 255)   # StyleList background
+LIST_HOVER   = wx.Colour(222, 222, 218)   # StyleList item hover
+LIST_BORDER  = wx.Colour(140, 140, 135)   # StyleList outer border
+LIST_SEP     = wx.Colour(180, 180, 175)   # StyleList separator line
+LIST_TEXT    = wx.Colour(60,  60,  60)    # StyleList text
+LIST_TRI     = wx.Colour(30,  30,  30)    # triangle arrow
+LIST_TRI_H   = wx.Colour(180, 210, 255)   # triangle hover circle
+
 
 # ---------------------------------------------------------------------------
 # Popup panel
 # ---------------------------------------------------------------------------
 
-class StylePopup(wx.PopupTransientWindow):
+class StyleList(wx.PopupTransientWindow):
     """Floating list that shows all available styles."""
 
-    def __init__(self, parent: "StyleDropdown"):
+    def __init__(self, parent: "StyleSelector"):
         super().__init__(parent, wx.BORDER_NONE)
         self.dropdown = parent
 
@@ -74,13 +92,14 @@ class StylePopup(wx.PopupTransientWindow):
         self.triangle_hover: bool = False
 
         self.panel = wx.Panel(self)
-        self.panel.SetBackgroundColour(wx.Colour(245, 245, 243))
+        self.panel.SetBackgroundColour(LIST_BG)
 
-        self.panel.Bind(wx.EVT_PAINT,        self._on_paint)
-        self.panel.Bind(wx.EVT_MOTION,       self._on_mouse_move)
-        self.panel.Bind(wx.EVT_LEFT_DOWN,    self._on_left_down)
-        self.panel.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
-        self.panel.Bind(wx.EVT_MENU,         self._on_menu)
+        self.panel.Bind(wx.EVT_PAINT,        self.on_paint)
+        self.panel.Bind(wx.EVT_MOTION,       self.on_mouse_move)
+        self.panel.Bind(wx.EVT_LEFT_DOWN,    self.on_left_down)
+        self.panel.Bind(wx.EVT_LEAVE_WINDOW, self.on_leave)
+        self.panel.Bind(wx.EVT_MENU,         self.on_menu)
+        self.Bind(wx.EVT_SHOW, self.on_show)
 
     # ------------------------------------------------------------------
     # Public API
@@ -102,9 +121,10 @@ class StylePopup(wx.PopupTransientWindow):
         super().Popup()
         self.panel.SetFocus()
 
-    def OnDismiss(self):
-        self.dropdown._open = False
-        self.dropdown.Refresh()
+    def on_show(self, evt):
+        if not evt.IsShown():
+            self.dropdown.Refresh()
+        evt.Skip()
 
     # ------------------------------------------------------------------
     # Layout helpers
@@ -131,12 +151,9 @@ class StylePopup(wx.PopupTransientWindow):
     # Drawing
     # ------------------------------------------------------------------
 
-    def _on_paint(self, _evt):
-        BG       = wx.Colour(245, 245, 243)
-        BG_HOVER = wx.Colour(222, 222, 218)
-
+    def on_paint(self, _evt):
         dc = wx.BufferedPaintDC(self.panel)
-        dc.SetBackground(wx.Brush(BG))
+        dc.SetBackground(wx.Brush(LIST_BG))
         dc.Clear()
 
         w, h = self.panel.GetSize()
@@ -144,16 +161,16 @@ class StylePopup(wx.PopupTransientWindow):
         # "+" item at index 0
         plus_y, plus_h = self._item_rects[0]
         if self.hover_item == 0:
-            dc.SetBrush(wx.Brush(BG_HOVER))
+            dc.SetBrush(wx.Brush(LIST_HOVER))
             dc.SetPen(wx.TRANSPARENT_PEN)
             dc.DrawRectangle(0, plus_y, w, plus_h)
         dc.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
-        dc.SetTextForeground(wx.Colour(60, 60, 60))
+        dc.SetTextForeground(LIST_TEXT)
         dc.DrawText("+ Create new style from selection",
                     PADDING_LEFT, plus_y + (plus_h - dc.GetCharHeight()) // 2)
 
         # Separator line below the "+" item
-        dc.SetPen(wx.Pen(wx.Colour(180, 180, 175)))
+        dc.SetPen(wx.Pen(LIST_SEP))
         dc.DrawLine(0, plus_y + plus_h - 1, w, plus_y + plus_h - 1)
 
         # Style items at indices 1…n
@@ -161,7 +178,7 @@ class StylePopup(wx.PopupTransientWindow):
             item_y, item_h = self._item_rects[i + 1]
 
             if i + 1 == self.hover_item:
-                dc.SetBrush(wx.Brush(BG_HOVER))
+                dc.SetBrush(wx.Brush(LIST_HOVER))
                 dc.SetPen(wx.TRANSPARENT_PEN)
                 dc.DrawRectangle(0, item_y, w, item_h)
 
@@ -172,22 +189,21 @@ class StylePopup(wx.PopupTransientWindow):
 
         # Border around the entire popup
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetPen(wx.Pen(wx.Colour(140, 140, 135)))
+        dc.SetPen(wx.Pen(LIST_BORDER))
         dc.DrawRectangle(0, 0, w, h)
 
     def _draw_triangle(self, dc: wx.DC, panel_w: int, item_y: int, item_h: int):
-        color = wx.Colour(30, 30, 30)
         cx = panel_w - TRIANGLE_AREA // 2
         cy = item_y + item_h // 2
 
         if self.triangle_hover:
-            dc.SetBrush(wx.Brush(wx.Colour(180, 210, 255)))
+            dc.SetBrush(wx.Brush(LIST_TRI_H))
             dc.SetPen(wx.TRANSPARENT_PEN)
             dc.DrawCircle(cx, cy, min(item_h // 2 - 1, 13))
 
         pts = [wx.Point(cx - 3, cy - 5), wx.Point(cx - 3, cy + 5), wx.Point(cx + 4, cy)]
-        dc.SetBrush(wx.Brush(color))
-        dc.SetPen(wx.Pen(color))
+        dc.SetBrush(wx.Brush(LIST_TRI))
+        dc.SetPen(wx.Pen(LIST_TRI))
         dc.DrawPolygon(pts)
 
     # ------------------------------------------------------------------
@@ -208,7 +224,7 @@ class StylePopup(wx.PopupTransientWindow):
     # Event handlers
     # ------------------------------------------------------------------
 
-    def _on_mouse_move(self, evt: wx.MouseEvent):
+    def on_mouse_move(self, evt: wx.MouseEvent):
         x, y = evt.GetPosition()
         new_hover = self._item_at(y)
         new_tri   = self._is_over_triangle(x) if new_hover and new_hover > 0 else False
@@ -220,12 +236,12 @@ class StylePopup(wx.PopupTransientWindow):
 
         self.panel.SetCursor(wx.Cursor(wx.CURSOR_HAND if new_tri else wx.CURSOR_ARROW))
 
-    def _on_leave(self, _evt):
+    def on_leave(self, _evt):
         self.hover_item     = None
         self.triangle_hover = False
         self.panel.Refresh()
 
-    def _on_left_down(self, evt: wx.MouseEvent):
+    def on_left_down(self, evt: wx.MouseEvent):
         x, y = evt.GetPosition()
         idx = self._item_at(y)
         if idx == 0:
@@ -270,7 +286,7 @@ class StylePopup(wx.PopupTransientWindow):
         menu.Destroy()
         self.Dismiss()
 
-    def _on_menu(self, event):
+    def on_menu(self, event):
         try:
             i = self._menu_ids.index(event.GetId())
         except ValueError:
@@ -290,7 +306,7 @@ class StylePopup(wx.PopupTransientWindow):
 # Main control
 # ---------------------------------------------------------------------------
 
-class StyleDropdown(wx.Control, ViewBase):
+class StyleSelector(wx.Control, ViewBase):
     """
     Base dropdown for style selection.
 
@@ -307,15 +323,13 @@ class StyleDropdown(wx.Control, ViewBase):
         self.properties: dict = {}
         self.overrides: set   = set()
         self.modified: bool   = False
-        self._popup: Optional[StylePopup] = None
-        self._hover: bool     = False
-        self._open: bool      = False
+        self._popup: Optional[StyleList] = None
 
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        self.Bind(wx.EVT_PAINT,        self._on_paint)
-        self.Bind(wx.EVT_LEFT_DOWN,    self._on_click)
-        self.Bind(wx.EVT_ENTER_WINDOW, lambda _: self._set_hover(True))
-        self.Bind(wx.EVT_LEAVE_WINDOW, lambda _: self._set_hover(False))
+        self.Bind(wx.EVT_PAINT,        self.on_paint)
+        self.Bind(wx.EVT_LEFT_DOWN,    self.on_click)
+        self.Bind(wx.EVT_ENTER_WINDOW, lambda _: self.Refresh())
+        self.Bind(wx.EVT_LEAVE_WINDOW, lambda _: self.Refresh())
 
     stylesheet = None
     protected: frozenset = frozenset()
@@ -377,25 +391,23 @@ class StyleDropdown(wx.Control, ViewBase):
     # Drawing
     # ------------------------------------------------------------------
 
-    def _set_hover(self, state: bool):
-        self._hover = state
-        self.Refresh()
-
-    def _on_paint(self, _evt):
+    def on_paint(self, _evt):
         dc = wx.AutoBufferedPaintDC(self)
         w, h = self.GetClientSize()
 
-        if self._open:
-            bg = wx.Colour(225, 235, 252)
-            border = wx.Colour(0, 100, 200)
-        elif self._hover:
-            bg = wx.Colour(240, 240, 240)
-            border = wx.Colour(120, 120, 120)
+        is_open  = self._popup is not None and self._popup.IsShown()
+        is_hover = self.GetScreenRect().Contains(wx.GetMousePosition())
+        if is_open:
+            bg, border = SEL_OPEN, SEL_BORDER_O
+        elif is_hover:
+            bg, border = SEL_HOVER, SEL_BORDER_H
         else:
-            bg = wx.WHITE
-            border = wx.Colour(150, 150, 150)
+            bg, border = SEL_NORMAL, SEL_BORDER
+
+        dc.SetBackground(wx.Brush(bg))
+        dc.Clear()
         dc.SetBrush(wx.Brush(bg))
-        dc.SetPen(wx.Pen(border, 1 if not self._open else 2))
+        dc.SetPen(wx.Pen(border))
         dc.DrawRoundedRectangle(0, 0, w, h, 3)
 
         if self.styles and 0 <= self.selection < len(self.styles):
@@ -403,21 +415,20 @@ class StyleDropdown(wx.Control, ViewBase):
 
         # Small dropdown arrow
         cx, cy = w - 14, h // 2
-        color = wx.Colour("red") if self.modified else wx.Colour(80, 80, 80)
-        dc.SetBrush(wx.Brush(color))
-        dc.SetPen(wx.Pen(color))
+        arrow = SEL_MODIFIED if self.modified else SEL_ARROW
+        dc.SetBrush(wx.Brush(arrow))
+        dc.SetPen(wx.Pen(arrow))
         dc.DrawPolygon([wx.Point(cx - 6, cy - 3), wx.Point(cx + 6, cy - 3),
                         wx.Point(cx, cy + 3)])
 
-    def _on_click(self, _evt):
-        if self._open and self._popup and self._popup.IsShown():
+    def on_click(self, _evt):
+        if self._popup and self._popup.IsShown():
             self._popup.Dismiss()
             return
-        self._open = True
-        self.Refresh()
-        self._popup = StylePopup(self)
+        self._popup = StyleList(self)
         self._popup.SetStyles(self.styles)
         self._popup.Popup()
+        self.Refresh()
 
     # ------------------------------------------------------------------
     # Style operations
@@ -510,7 +521,7 @@ class StyleDropdown(wx.Control, ViewBase):
 # Concrete subclasses
 # ---------------------------------------------------------------------------
 
-class BasestyleDropdown(StyleDropdown):
+class BasestyleSelector(StyleSelector):
     protected = frozenset({'normal'})
 
     def UpdateSelection(self):
@@ -532,7 +543,7 @@ class BasestyleDropdown(StyleDropdown):
         dc.DrawText(label, x, y + (box_h - th) // 2)
 
 
-class ListstyleDropdown(StyleDropdown):
+class ListstyleSelector(StyleSelector):
     def GetItemLabel(self, name: str) -> str:
         return self.stylesheet.get(name).get("name", name)
 
@@ -549,10 +560,10 @@ def test_00():
 
 
 def test_01():
-    "BasestyleDropdown – modified flag"
+    "BasestyleSelector – modified flag"
     app = wx.App(False)
     frame = wx.Frame(None)
-    dropdown = BasestyleDropdown(frame)
+    dropdown = BasestyleSelector(frame)
     from ..core.styles import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
 
@@ -575,7 +586,7 @@ def test_02():
     "CreateNewStyle"
     app = wx.App(False)
     frame = wx.Frame(None)
-    dropdown = BasestyleDropdown(frame)
+    dropdown = BasestyleSelector(frame)
     from ..core.styles import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     dropdown.set_properties("h1", {"font_size": 1}, {})
@@ -588,7 +599,7 @@ def test_04():
     "DeleteStyle – blocks 'normal', fires callback for other styles"
     app = wx.App(False)
     frame = wx.Frame(None)
-    dropdown = BasestyleDropdown(frame)
+    dropdown = BasestyleSelector(frame)
     from ..core.styles import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     called = []
@@ -605,7 +616,7 @@ def test_03():
     "UpdateStyle"
     app = wx.App(False)
     frame = wx.Frame(None)
-    dropdown = BasestyleDropdown(frame)
+    dropdown = BasestyleSelector(frame)
     from ..core.styles import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     dropdown.set_properties("h1", {"font_size": 1}, {})
@@ -618,12 +629,12 @@ def test_03():
 # ---------------------------------------------------------------------------
 
 def demo_00():
-    "BasestyleDropdown"
+    "BasestyleSelector"
     app = wx.App(True)
     frame = wx.Frame(None)
     frame.Centre()
     frame.Show()
-    dropdown = BasestyleDropdown(frame)
+    dropdown = BasestyleSelector(frame)
     from ..core.styles import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     dropdown.SetSelection(2)
@@ -633,7 +644,7 @@ def demo_00():
 
 
 def demo_01():
-    "ListstyleDropdown"
+    "ListstyleSelector"
     from ..core.stylesheet import StyleSheet
     liststyles = StyleSheet()
     liststyles.set("numbers", {"name": "1, 2, 3"})
@@ -644,7 +655,7 @@ def demo_01():
     frame = wx.Frame(None)
     frame.Centre()
     frame.Show()
-    dropdown = ListstyleDropdown(frame)
+    dropdown = ListstyleSelector(frame)
     dropdown.set_stylesheet(liststyles)
     dropdown.SetSelection(2)
     app.MainLoop()

@@ -14,7 +14,7 @@ from ..wxtextview.wxdevice import defaultstyle
 from .unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from .threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
 from .buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
-from .stylemenu import BasestyleDropdown
+from .stylemenu import BasestyleSelector
 from .icons import icon
 from ..core.styles import defaultbullets, n_levels, style_default
 
@@ -185,7 +185,7 @@ class StyleInspector(InspectorBase):
         
         mainsizer = wx.BoxSizer( wx.VERTICAL )
 
-        self.basestyle = BasestyleDropdown(self, size=(-1, 40))
+        self.basestyle = BasestyleSelector(self, size=(-1, 40))
         self.basestyle.Bind(wx.EVT_CHOICE, self.on_basestyle)
         stylesheet = view.builder.stylesheet
         self.basestyle.set_stylesheet(self.basestyles)
