@@ -409,7 +409,7 @@ class TablePanel(wx.Panel, ViewBase):
         i1 = max(1, min(s1 - ci1, n - 1))
         i2 = max(1, min(s2 - ci1, n - 1))
         r1, c1 = table.get_coord(i1)
-        r2, c2 = table.get_coord(max(i1, i2 - 1))
+        r2, c2 = table.get_coord(max(i1, i2))
         return min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2)
 
     def _apply_to_table(self, fn):
