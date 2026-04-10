@@ -5,8 +5,7 @@ from ..textmodel.viewbase import ViewBase
 from ..textmodel.texeltree import length
 from ..ui.threestate import ColourButton
 from ..ui.icons import icon
-from ..ui.design import TEXT_MUTED, muted_button, flat_button, \
-    make_panel, add_section
+from ..ui.design import TEXT_MUTED, muted_button, make_panel, add_section
 from ..ui.documentview import get_path
 from .tables import Table, empty_table
 
@@ -111,7 +110,7 @@ class _TableGrid(wx.Panel):
 
 
 class _CustomItem(wx.Panel):
-    """Clickable 'Benutzerdefinierte Tabelle einfügen' row."""
+    """Clickable 'Insert custom table'."""
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -141,13 +140,16 @@ class _CustomItem(wx.Panel):
 
 
 class _TablePopup(wx.PopupTransientWindow):
-    def __init__(self, parent):
+    def __init__(self, parent, width):
         super().__init__(parent, wx.BORDER_SIMPLE)
         self.SetBackgroundColour(COL_BG)
 
         # Measure label width so the grid matches it exactly
         self.custom = _CustomItem(self)
-        target_w    = self.custom.GetBestSize().width
+        if width:
+            target_w = width
+        else:
+            target_w    = self.custom.GetBestSize().width
 
         self.grid   = _TableGrid(self, target_w)
         separator   = wx.StaticLine(self)
@@ -213,35 +215,31 @@ class CustomTableDialog(wx.Dialog):
 
 
 class TableCreatorButton(wx.Button):
-    """Button that opens a table-size picker dropdown.
+    """Button that opens a table-size picker on LEFT_DOWN.
 
     Fires EVT_TABLE_CREATED with .cols/.rows on the button.
     cols=0, rows=0 means "custom table".
     """
 
-    def __init__(self, parent, label="Table"):
+    def __init__(self, parent, label="Table ▾"):
         super().__init__(parent, label=label)
-        self.Bind(wx.EVT_BUTTON, self._on_click)
+        self.Bind(wx.EVT_LEFT_DOWN, self.on_press)
 
-    def _on_click(self, event):
-        popup = _TablePopup(self)
-        on_sel = lambda e: self._on_selected(popup, e)
-        popup.grid.Bind(EVT_TABLE_CREATED,   on_sel)
-        popup.custom.Bind(EVT_TABLE_CREATED, on_sel)
-        pos  = self.GetScreenPosition()
-        size = self.GetSize()
-        popup.Position(pos, (0, size.height))
+    def on_press(self, _evt):
+        popup = _TablePopup(self, self.Size[0])
+        popup.grid.Bind(EVT_TABLE_CREATED,   lambda e: self.on_selected(popup, e))
+        popup.custom.Bind(EVT_TABLE_CREATED, lambda e: self.on_selected(popup, e))
+        popup.Position(self.GetScreenPosition(), (0, self.GetSize().height))
         popup.Popup()
-        wx.CallAfter(popup.grid.SetFocus)
 
-    def _on_selected(self, popup, event):
+    def on_selected(self, popup, event):
         popup.Dismiss()
         if event.cols == 0:
-            self._show_custom_dialog()
+            self.show_custom_dialog()
         else:
             wx.PostEvent(self, TableCreatedEvent(cols=event.cols, rows=event.rows))
 
-    def _show_custom_dialog(self):
+    def show_custom_dialog(self):
         with CustomTableDialog(self) as dlg:
             if dlg.ShowModal() == wx.ID_OK:
                 wx.PostEvent(self, TableCreatedEvent(cols=dlg.cols, rows=dlg.rows))
@@ -306,8 +304,8 @@ class TablePanel(wx.Panel, ViewBase):
         row_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self._btn_row = wx.Button(self, label="Row ▾")
         self._btn_col = wx.Button(self, label="Column ▾")
-        self._btn_row.Bind(wx.EVT_BUTTON, self._on_row_menu)
-        self._btn_col.Bind(wx.EVT_BUTTON, self._on_col_menu)
+        self._btn_row.Bind(wx.EVT_LEFT_DOWN, self.on_row_menu)
+        self._btn_col.Bind(wx.EVT_LEFT_DOWN, self.on_col_menu)
         row_sizer.Add(self._btn_row, 1, wx.RIGHT, 4)
         row_sizer.Add(self._btn_col, 1)
         sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
@@ -330,6 +328,12 @@ class TablePanel(wx.Panel, ViewBase):
 
         sizer.Add(cell_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
+        self._table_controls = (
+            [self._btn_row, self._btn_col, self._line_style,
+             self._bgcolor_btn, self._valign]
+            + self._border_btns
+        )
+        self._set_table_controls(False)
         self.Bind(wx.EVT_SHOW, self.on_show)
 
     def on_show(self, event):
@@ -355,8 +359,13 @@ class TablePanel(wx.Panel, ViewBase):
     def properties_changed(self, model, *args, **kwargs):
         self._update_cell_inspector()
 
+    def _set_table_controls(self, enabled):
+        for w in self._table_controls:
+            w.Enable(enabled)
+
     def _update_cell_inspector(self):
         table, ci1 = self._find_table_texel()
+        self._set_table_controls(table is not None)
         if table is None:
             return
         r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
@@ -511,26 +520,30 @@ class TablePanel(wx.Panel, ViewBase):
 
     # --- row/column operations ---
 
-    def _on_row_menu(self, event):
+    def on_row_menu(self, _evt):
+        table, ci1, r, c = self._current_cell()
         menu = wx.Menu()
-        menu.Append(1, "Insert row below")
-        menu.Append(2, "Insert row above")
-        menu.Append(3, "Delete row")
-        self.Bind(wx.EVT_MENU, self._on_row_action, id=1)
-        self.Bind(wx.EVT_MENU, self._on_row_action, id=2)
-        self.Bind(wx.EVT_MENU, self._on_row_action, id=3)
-        self._btn_row.PopupMenu(menu)
+        m1 = menu.Append(wx.ID_ANY, "Insert row below")
+        m2 = menu.Append(wx.ID_ANY, "Insert row above")
+        m3 = menu.Append(wx.ID_ANY, "Delete row")
+        self.Bind(wx.EVT_MENU, lambda e: self._apply_to_table(lambda t, *_: t.insert_rows(r + 1, 1)), m1)
+        self.Bind(wx.EVT_MENU, lambda e: self._apply_to_table(lambda t, *_: t.insert_rows(r,     1)), m2)
+        self.Bind(wx.EVT_MENU, lambda e: self._apply_to_table(lambda t, *_: t.remove_rows(r,     1)), m3)
+        pos = self._btn_row.GetPosition()
+        self.PopupMenu(menu, wx.Point(pos.x, pos.y + self._btn_row.GetSize().height))
         menu.Destroy()
 
-    def _on_col_menu(self, event):
+    def on_col_menu(self, _evt):
+        table, ci1, r, c = self._current_cell()
         menu = wx.Menu()
-        menu.Append(4, "Insert column right")
-        menu.Append(5, "Insert column left")
-        menu.Append(6, "Delete column")
-        self.Bind(wx.EVT_MENU, self._on_col_action, id=4)
-        self.Bind(wx.EVT_MENU, self._on_col_action, id=5)
-        self.Bind(wx.EVT_MENU, self._on_col_action, id=6)
-        self._btn_col.PopupMenu(menu)
+        m1 = menu.Append(wx.ID_ANY, "Insert column right")
+        m2 = menu.Append(wx.ID_ANY, "Insert column left")
+        m3 = menu.Append(wx.ID_ANY, "Delete column")
+        self.Bind(wx.EVT_MENU, lambda e: self._apply_to_table(lambda t, *_: t.insert_cols(c + 1, 1)), m1)
+        self.Bind(wx.EVT_MENU, lambda e: self._apply_to_table(lambda t, *_: t.insert_cols(c,     1)), m2)
+        self.Bind(wx.EVT_MENU, lambda e: self._apply_to_table(lambda t, *_: t.remove_cols(c,     1)), m3)
+        pos = self._btn_col.GetPosition()
+        self.PopupMenu(menu, wx.Point(pos.x, pos.y + self._btn_col.GetSize().height))
         menu.Destroy()
 
     def _current_cell(self):
@@ -539,30 +552,6 @@ class TablePanel(wx.Panel, ViewBase):
             return None, None, None, None
         r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
         return table, ci1, r1, c1
-
-    def _on_row_action(self, event):
-        eid = event.GetId()
-        table, ci1, r, c = self._current_cell()
-        if table is None:
-            return
-        if eid == 1:
-            self._apply_to_table(lambda t, *_: t.insert_rows(r + 1, 1))
-        elif eid == 2:
-            self._apply_to_table(lambda t, *_: t.insert_rows(r, 1))
-        elif eid == 3:
-            self._apply_to_table(lambda t, *_: t.remove_rows(r, 1))
-
-    def _on_col_action(self, event):
-        eid = event.GetId()
-        table, ci1, r, c = self._current_cell()
-        if table is None:
-            return
-        if eid == 4:
-            self._apply_to_table(lambda t, *_: t.insert_cols(c + 1, 1))
-        elif eid == 5:
-            self._apply_to_table(lambda t, *_: t.insert_cols(c, 1))
-        elif eid == 6:
-            self._apply_to_table(lambda t, *_: t.remove_cols(c, 1))
 
     # --- cell style ---
 
