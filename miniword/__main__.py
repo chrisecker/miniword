@@ -13,6 +13,7 @@ def main():
     path = args[0] if args else None
 
     app = wx.App(redirect=False)
+    app.SetAppName("miniword")
     from .ui.mainwindow import load_plugins
     load_plugins()
     if path:

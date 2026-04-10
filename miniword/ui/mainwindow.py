@@ -7,6 +7,7 @@ from .documentview import DocumentView
 from ..images import Image, ImageInspector
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
+from .icons import ICONS_DIR
 
 from ..images import image_editors  # registers editors
 from ..tables import table_editors  # registers editors
@@ -75,6 +76,13 @@ class MainFrame(wx.Frame, ViewBase):
         ViewBase.__init__(self)
 
         self.SetMinSize((800, 480))
+        logo_svg = str(ICONS_DIR / "miniword.svg")
+        bundle = wx.IconBundle()
+        for size in (16, 32, 48, 64):
+            bmp = wx.BitmapBundle.FromSVGFile(logo_svg, (size, size))
+            bundle.AddIcon(wx.Icon(bmp.GetBitmap(wx.Size(size, size))))
+        self.SetIcons(bundle)
+        self.SetName("miniword")
         self._build_menu()
         self._load_plugins()
         self._build_layout()
@@ -161,7 +169,10 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
         self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
 
-        bar.Append(wx.Menu(), "&Help")
+        help_menu = wx.Menu()
+        help_menu.Append(wx.ID_ABOUT, "&About MiniWord…")
+        self.Bind(wx.EVT_MENU, self._on_about, id=wx.ID_ABOUT)
+        bar.Append(help_menu, "&Help")
 
         from ..layout import builder as _builder
         if _builder.DEBUG:
@@ -250,6 +261,40 @@ class MainFrame(wx.Frame, ViewBase):
             self._inspector_book.Raise()
             self._mi_panel.Check(True)
         self._layout()
+
+    def _on_about(self, _):
+        from importlib.metadata import version, PackageNotFoundError
+        try:
+            ver = version("miniword")
+        except PackageNotFoundError:
+            ver = "-"
+
+        dlg = wx.Dialog(self, title="About MiniWord")
+        logo_bmp = wx.StaticBitmap(dlg,
+            bitmap=wx.BitmapBundle.FromSVGFile(
+                str(ICONS_DIR / "miniword.svg"), (64, 64)
+            ).GetBitmap(wx.Size(64, 64)))
+        name_lbl = wx.StaticText(dlg, label="MiniWord")
+        name_lbl.SetFont(name_lbl.GetFont().Bold().Scaled(1.4))
+        info_lbl = wx.StaticText(dlg,
+            label=f"Version {ver}\n\nCopyright \u00a9 2025 C. Ecker")
+        ok_btn = wx.Button(dlg, wx.ID_OK, label="OK")
+        ok_btn.SetDefault()
+
+        text_sizer = wx.BoxSizer(wx.VERTICAL)
+        text_sizer.Add(name_lbl, 0, wx.BOTTOM, 6)
+        text_sizer.Add(info_lbl, 0)
+
+        row = wx.BoxSizer(wx.HORIZONTAL)
+        row.Add(logo_bmp, 0, wx.RIGHT | wx.ALIGN_TOP, 16)
+        row.Add(text_sizer, 0, wx.ALIGN_CENTER_VERTICAL)
+
+        outer = wx.BoxSizer(wx.VERTICAL)
+        outer.Add(row,    0, wx.ALL, 20)
+        outer.Add(ok_btn, 0, wx.ALIGN_CENTER | wx.BOTTOM, 16)
+        dlg.SetSizerAndFit(outer)
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def _on_menu_inspector(self, _):
         if self._mi_panel.IsChecked():

@@ -53,6 +53,13 @@ mkdir -p ~/.miniword/plugins
 cp examples/*.py ~/.miniword/plugins
 ```
 
+If you want to register MiniWord to the desktop (you probably will)
+
+```
+cp miniword/icons/miniword.svg ~/.local/share/icons/
+cp miniword.desktop ~/.local/share/applications/
+```
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 – see LICENSE for details. Contact me if you need something else.

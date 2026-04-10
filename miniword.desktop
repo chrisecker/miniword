@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MiniWord
+Exec=miniword %f
+Icon=miniword
+Terminal=false
+StartupWMClass=miniword
+Categories=Office
