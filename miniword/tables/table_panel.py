@@ -284,7 +284,7 @@ class TablePanel(wx.Panel, ViewBase):
 
         # --- Section: Borders ---
         add_section("Borders", self, sizer)
-        self._line_style = wx.Choice(self, choices=['thin', 'thick', 'double', 'none'])
+        self._line_style = wx.Choice(self, choices=['Thin line', 'Thick line', 'Double line'])
         self._line_style.SetSelection(0)
         sizer.Add(self._line_style, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
@@ -461,7 +461,8 @@ class TablePanel(wx.Panel, ViewBase):
     def _on_border_preset(self, event):
         btn = event.GetEventObject()
         key = btn.preset_key
-        line = self._line_style.GetStringSelection()
+        s = self._line_style.Selection
+        line = ['thin', 'thick', 'double'][s]
         sb = self._set_border
 
         def apply(table, r1, c1, r2, c2):
