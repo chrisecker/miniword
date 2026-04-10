@@ -227,11 +227,13 @@ class CursorEditor(TableEditorBase):
         for depth, (i1, i2, texel) in enumerate(path):            
             if isinstance(texel, Table):
                 sel = view.selection
-                if sel is None:
+                if sel is None or sel[0] == sel[1]:
                     result = i1, i2, depth, texel
                 else:
                     s1, s2 = sorted(sel)
-                    if not is_multi_cell(texel, s1-i1, s2-i1):
+                    if s1 <= i1+1 or i2 <= s2:
+                        result = None  # selection not inside cell area
+                    elif not is_multi_cell(texel, s1-i1, s2-i1):
                         result = i1, i2, depth, texel
                     else:
                         result = None
@@ -252,7 +254,9 @@ class MatrixEditor(TableEditorBase):
         result = None
         for depth, (i1, i2, texel) in enumerate(path):
             if isinstance(texel, Table):
-                if is_multi_cell(texel, s1-i1, s2-i1):
+                if s1 <= i1+1 or i2 <= s2:
+                    result = None  # selection not inside cell area
+                elif is_multi_cell(texel, s1-i1, s2-i1):
                     result = i1, i2, depth, texel                
         return result
 
@@ -445,21 +449,43 @@ def test_05():
 
 
 def demo_00():
-    """CursorEditor demo: drag column separators to resize columns."""
+    """CursorEditor"""
     from .tables import from_strings
     from ..core.document import Document
-    from ..ui.documentview import DocumentView, get_path
+    from ..ui.documentview import DocumentView
 
     doc = Document()
     doc.textmodel.texel = from_strings([['Name',     'City',       'Country'],
                                         ['Einstein', 'Ulm',        'Germany'],
                                         ['Darwin',   'Shrewsbury', 'England']])
 
-    doc.textmodel.insert_text(0, "\n"*36)
     app   = wx.App(True)
     frame = wx.Frame(None, title='CursorEditor demo', size=(420, 300))
     view  = DocumentView(frame, doc)
     frame.Show()
-    view.set_index(36)   # cursor inside table → auto-installs CursorEditor
-    assert not view.editor.is_null
     app.MainLoop()
+
+
+def demo_01():
+    """Nested table: outer 2×2 with an inner table in cell (0, 1)."""
+    from ..textmodel.texeltree import Text
+    from .tables import Table, from_strings
+    from ..core.document import Document
+    from ..ui.documentview import DocumentView
+
+    inner = from_strings([['A', 'B'], ['C', 'D']])
+    outer = Table(
+        (Text('outer (0,0)'), {}), (inner,             {}),
+        (Text('outer (1,0)'), {}), (Text('outer (1,1)'), {}),
+        ncols=2,
+    )
+
+    doc = Document()
+    doc.textmodel.texel = outer
+
+    app   = wx.App(True)
+    frame = wx.Frame(None, title='Nested table demo', size=(500, 300))
+    view  = DocumentView(frame, doc)
+    frame.Show()
+    app.MainLoop()
+
