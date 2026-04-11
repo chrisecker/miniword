@@ -22,6 +22,7 @@ class InspectorBase(wx.Panel, ViewBase):
         ViewBase.__init__(self)
         self.SetBackgroundColour(BAR_BG)
         self._view = view
+        self._needs_update = True  # ensure update() runs on first show
         self.add_model(view)
         self.Bind(wx.EVT_SHOW,      self.on_show)
         self.Bind(wx.EVT_UPDATE_UI, self.on_update_ui)
