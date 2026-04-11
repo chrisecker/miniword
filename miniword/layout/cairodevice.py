@@ -1,3 +1,4 @@
+import sys
 import wx
 import wx.lib.wxcairo as wxcairo
 import cairo
@@ -44,7 +45,10 @@ def set_font(ctx, style):
 
 class CairoDevice:
     zoom = 1.0
-    buffering = True
+    # On Windows, wx.BufferedDC is a memory DC and wxcairo.ContextFromDC()
+    # cannot create a Cairo context from it.  Use the plain PaintDC instead
+    # and rely on SetDoubleBuffered(True) on the widget for flicker-free drawing.
+    buffering = sys.platform != 'win32'
     t0 = 0  # time since last movement
 
     def __init__(self):
@@ -52,11 +56,15 @@ class CairoDevice:
         self._image_cache = {}   # id(blob_data) → (surface, w, h)
         self._temp_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)
         self._temp_ctx = cairo.Context(self._temp_surface)
+        self._temp_ctx.set_font_options(self._make_font_options())
+        self.reset_blink()
+
+    @staticmethod
+    def _make_font_options():
         fo = cairo.FontOptions()
         fo.set_hint_style(cairo.HINT_STYLE_NONE)
         fo.set_hint_metrics(cairo.HINT_METRICS_OFF)
-        self._temp_ctx.set_font_options(fo)
-        self.reset_blink()
+        return fo
 
     def clear_caches(self):
         self._cache.clear()
@@ -65,20 +73,26 @@ class CairoDevice:
     def reset_blink(self):
         self._blink_reference_time = time.time()
 
-    def create_painter(self, dc):
+    def create_painter(self, dc, origin=(0, 0)):
         ctx = wxcairo.ContextFromDC(dc)
 
         if not ctx:
             raise RuntimeError("Failed to create Cairo context.")
 
+        # Apply scroll/centering offset in pixel space before scaling.
+        # dc.SetDeviceOrigin() is ignored by Cairo on Windows (Win32 backend
+        # renders directly into the pixel buffer, bypassing GDI transforms),
+        # so the offset must be applied through Cairo's own transform.
+        ox, oy = origin
+        if ox or oy:
+            ctx.translate(ox, oy)
+
         # Apply zoom scaling directly in Cairo
         ctx.scale(self.zoom, self.zoom)
 
-        # Disable hinting for linear scaling
-        fo = cairo.FontOptions()
-        fo.set_hint_style(cairo.HINT_STYLE_NONE)
-        fo.set_hint_metrics(cairo.HINT_METRICS_OFF)
-        ctx.set_font_options(fo)
+        ctx.set_font_options(self._make_font_options())
+        if sys.platform == 'win32':
+            ctx.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
         return ctx
 
     def create_pdf_painter(self, filename, width, height):
@@ -155,6 +169,26 @@ class CairoDevice:
         ctx.rectangle(x, ul_y, width, thickness)
         ctx.fill()
 
+    def _snap_baseline(self, ctx, y):
+        """Round y to the nearest device pixel (screen rendering only).
+
+        On Windows, Cairo places glyphs at the exact (fractional) y position
+        passed to move_to().  When the baseline falls at e.g. 5.3 px the
+        anti-aliaser spreads the stroke across two rows with unequal weights,
+        so thin horizontal strokes (top of 'T', crossbar of 'H', …) look
+        thinner on some lines than on others.  Snapping to a whole pixel
+        eliminates the inconsistency.
+
+        Only applied on Windows and only for screen contexts (PDF surfaces are
+        resolution-independent, so fractional positions are correct there).
+        This does not affect any measurements or layout calculations.
+        """
+        if sys.platform != 'win32':
+            return y
+        _, dev_y = ctx.user_to_device(0, y)
+        _, snapped = ctx.device_to_user(0, round(dev_y))
+        return snapped
+
     def draw_strings(self, strings, x, y, spacing, ctx):
         """Draw a list of strings at consecutive horizontal positions.
 
@@ -199,8 +233,9 @@ class CairoDevice:
             ctx.restore()
 
         # 2. Draw all text strings
+        baseline_y = self._snap_baseline(ctx, y + line_h)
         for text, tx, _ in positions:
-            ctx.move_to(tx, y + line_h)
+            ctx.move_to(tx, baseline_y)
             ctx.show_text(text)
 
         # 3. Draw underline as one continuous line
@@ -232,7 +267,7 @@ class CairoDevice:
             ctx.fill()
             ctx.restore()
 
-        ctx.move_to(x, y + line_h)
+        ctx.move_to(x, self._snap_baseline(ctx, y + line_h))
         ctx.show_text(text)
         if getattr(self, '_current_underline', False):
             self.draw_underline(x, y, xa, ctx)

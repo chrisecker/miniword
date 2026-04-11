@@ -42,6 +42,8 @@ class DocumentView(WXTextView):
         self.document = document
         super().__init__(parent)
         self.editor = NullEditor(self)
+        if wx.Platform == '__WXMSW__':
+            self.SetDoubleBuffered(True)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.set_model(document.textmodel)
@@ -558,15 +560,14 @@ class DocumentView(WXTextView):
         spx, spy = self.CalcScrolledPosition((0, 0))
         ox, oy   = self.content_offset()
         px, py   = spx + ox, spy + oy
-        dc.SetDeviceOrigin(px, py)
 
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
         dc.Clear()
         region = self.GetUpdateRegion()
         rx, ry, rw, rh = region.Box
-        dc.SetClippingRegion(rx - px - 1, ry - py - 1, rw + 2, rh + 2)
-        painter = device.create_painter(dc)
+        dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
+        painter = device.create_painter(dc, origin=(px, py))
 
         layout.draw_background(0, 0, painter)          # 1. white page fills
 
