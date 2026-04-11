@@ -1,3 +1,4 @@
+import sys
 import wx
 import wx.lib.newevent
 
@@ -113,16 +114,35 @@ class ColourButton(wx.Button):
         bmp = wx.Bitmap(w, h)
         dc = wx.MemoryDC(bmp)
 
-        if self._colour is None:
-            dc.SetBackground(wx.WHITE_BRUSH)
+        if sys.platform == 'win32':
+            # Fill corners with panel background so rounded corners look clean.
+            dc.SetBackground(wx.Brush(self.GetParent().GetBackgroundColour()))
             dc.Clear()
-            brush = wx.Brush(wx.BLACK, wx.BRUSHSTYLE_BDIAGONAL_HATCH)
+            gc = wx.GCDC(dc)
+            gc.SetPen(wx.Pen(wx.Colour(160, 160, 160), 1))
+            r = 3
+            if self._colour is None:
+                # White base + hatch overlay to signal "mixed"
+                gc.SetBrush(wx.WHITE_BRUSH)
+                gc.DrawRoundedRectangle(1, 1, w - 2, h - 2, r)
+                gc.SetPen(wx.TRANSPARENT_PEN)
+                gc.SetBrush(wx.Brush(wx.Colour(160, 160, 160),
+                                     wx.BRUSHSTYLE_BDIAGONAL_HATCH))
+                gc.DrawRoundedRectangle(1, 1, w - 2, h - 2, r)
+            else:
+                gc.SetBrush(wx.Brush(self._colour))
+                gc.DrawRoundedRectangle(1, 1, w - 2, h - 2, r)
+            gc = None
         else:
-            brush = wx.Brush(self._colour)
-
-        dc.SetPen(wx.Pen("black", 5))
-        dc.SetBrush(brush)
-        dc.DrawRectangle(0, 0, w, h)
+            if self._colour is None:
+                dc.SetBackground(wx.WHITE_BRUSH)
+                dc.Clear()
+                brush = wx.Brush(wx.BLACK, wx.BRUSHSTYLE_BDIAGONAL_HATCH)
+            else:
+                brush = wx.Brush(self._colour)
+            dc.SetPen(wx.TRANSPARENT_PEN)
+            dc.SetBrush(brush)
+            dc.DrawRectangle(0, 0, w, h)
 
         dc.SelectObject(wx.NullBitmap)
         self.SetBitmap(bmp)
