@@ -40,7 +40,11 @@ _ROLES = [
 
 
 def _is_text_input(w: wx.Window) -> bool:
-    return isinstance(w, (wx.TextCtrl, wx.ComboBox))
+    """Return True for controls that must keep focus to function correctly."""
+    return isinstance(w, (wx.TextCtrl, wx.ComboBox, wx.Choice,
+                          wx.SpinCtrl, wx.SpinCtrlDouble, wx.SpinButton,
+                          wx.CheckBox, wx.RadioButton, wx.Slider,
+                          wx.ListBox, wx.ListCtrl))
 
 def passfocus(widget: wx.Window, mainwidget: wx.Window, interval_ms: int = 100):
     def _check(event):
