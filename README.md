@@ -16,7 +16,7 @@ A minimal word processor in python. In development but already great.
 
 ## Dependencies
 
-Miniword is developed under Linux but should run under Windows and Mac as well.
+Miniword is developed under Linux. In principle it should run under Windows and Mac as well.
 
 The following dependencies are required:
 
@@ -39,7 +39,7 @@ cd miniword
 python -m miniword
 ```
 
-## Install
+## Install (Linux)
 
 Install all dependencies. Then
 
@@ -62,6 +62,25 @@ cp miniword/icons/miniword.svg ~/.local/share/icons/
 cp miniword.desktop ~/.local/share/applications/
 ```
 
+## Install (Windows)
+
+Installation on Windows is possible, but more challenging.
+You should use cairocffi instead of pycairo:
+
+```
+pip install cairocffi
+```
+
+You also need to install the **Cairo DLL**. The easiest way is to install the full GTK3 runtime from: https://github.com/tschoonj/gtk-for-windows-runtime-environment-installer/releases
+
+You must add the directory containing **libcairo-2.dll** to your *PATH* environment variable. In my case, this is:
+
+```
+C:\Program Files\GTK3-Runtime Win64\bin
+```
+
+**Note** that MiniWord is not yet **optimised** for Windows. While it mostly works, the rendering quality is lower and startup times are a bit slow.
+
 ## License
 
-This project is licensed under the GNU General Public License v3.0 – see LICENSE for details. Contact me if you need something else.
+This project is licensed under the GNU General Public License v3.0 â€“ see LICENSE for details. Contact me if you need something else.
