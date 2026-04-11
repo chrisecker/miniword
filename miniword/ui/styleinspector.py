@@ -2,7 +2,8 @@
 
 
 import wx
-from .design import make_tab, add_section, add_row, add_row2
+from .design import make_tab, add_section, add_row, add_row2, BAR_BG, TEXT_HIGH
+from .flatbutton import FlatButton
 from .inspectors import InspectorBase
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
@@ -43,6 +44,8 @@ def _is_text_input(w: wx.Window) -> bool:
 
 def passfocus(widget: wx.Window, mainwidget: wx.Window, interval_ms: int = 100):
     def _check(event):
+        if wx.GetMouseState().LeftIsDown():
+            return  # don't steal focus mid-click; let the widget process it
         focused = wx.Window.FindFocus()
         if focused is None:
             return
@@ -134,29 +137,28 @@ class PromptingComboBox(wx.ComboBox) :
                 break
 
             
-class ResetButton(wx.Button):
+class ResetButton(FlatButton):
     callback = None
     def __init__(self, parent, properties):
-        super().__init__(parent, label="", size=(24, 24), style=wx.BORDER_NONE)
+        super().__init__(parent, label="", size=(24, 24))
         self.properties = properties
-        self.SetForegroundColour(wx.Colour(200, 0, 0))
+        self.colors = {
+            'normal': (BAR_BG, wx.Colour(200, 0, 0)),
+            'hover':  (BAR_BG, TEXT_HIGH),
+            'press':  (BAR_BG, TEXT_HIGH),
+        }
         self.SetToolTip("Remove local change")
-        self.Disable()
         self.Bind(wx.EVT_BUTTON, self.on_button)
 
     def on_button(self, event):
-        if self.callback:
+        if self.callback and self.label:
             self.callback(*self.properties)
 
     def set_x(self, visible: bool):
-        if visible == self.Enabled:
+        if visible == bool(self.label):
             return
-        if visible:
-            self.SetLabel("\u2715")
-            self.Enable()
-        else:
-            self.SetLabel("")   # no X
-            self.Disable()      # not clickable
+        self.label = "\u2715" if visible else ""
+        self.Refresh()
 
             
 
