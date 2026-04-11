@@ -30,6 +30,13 @@ class FlatButton(wx.Control):
         evt = wx.CommandEvent(wx.wxEVT_BUTTON, self.GetId())
         self.GetEventHandler().ProcessEvent(evt)
         
+    def DoGetBestSize(self):
+        dc = wx.ClientDC(self)
+        dc.SetFont(self.GetFont())
+        _, th = dc.GetTextExtent("Ag")
+        w, h = self.GetSize()
+        return wx.Size(w if w > 0 else 24, th + 6)
+
     def on_paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
         bg, fg = self.colors[self.state]
