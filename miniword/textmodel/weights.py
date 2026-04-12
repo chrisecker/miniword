@@ -65,7 +65,9 @@ def find_newline(texel, i):
             if j2 <= i:
                 continue            
             if i < j2-1 and content.weights[windex]:
-                return find_newline(content, i-j1)+j1
+                result = find_newline(content, i-j1)
+                if result is not None:
+                    return result+j1
             return j2-1 # position of SEP
 
     elif texel.is_group:
