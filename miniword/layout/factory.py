@@ -1,3 +1,5 @@
+import logging
+
 from ..wxtextview.builder import Factory as FactoryBase
 from ..wxtextview.testdevice import TESTDEVICE
 from ..wxtextview.boxes import NewlineBox
@@ -6,6 +8,8 @@ from ..textmodel.texeltree import EMPTYSTYLE
 from ..core.styles import updated, style_default
 
 from copy import copy as shallow_copy
+
+log = logging.getLogger(__name__)
 
 
 
@@ -35,23 +39,22 @@ class Factory(FactoryBase):
         return [ForceBreakBox(self.mk_style(texel.style), self.device)]
 
     def Image_handler(self, texel, i1, i2):
-        from ..images import ImageBox
-        try:
-            blob = getattr(self, 'blobs', {})[texel.blob_id]
-            bitmap, src_w, src_h = self.device.load_image(blob)
-        except Exception:
-            bitmap, src_w, src_h = None, 0, 0
+        from ..images import ImageBox, ErrorPlaceholderBox
+        blobs = getattr(self, 'blobs', {})
+        if texel.blob_id not in blobs:
+            log.warning("Image blob not found: %r", texel.blob_id)
+            return [ErrorPlaceholderBox(50, 50, self.device)]
+        bitmap, src_w, src_h = self.device.load_image(blobs[texel.blob_id])
+        if bitmap is None:
+            return [ErrorPlaceholderBox(50, 50, self.device)]
         full_bitmap = bitmap
         if texel.crop:
             cl, cr, ct, cb = texel.crop
             cw, ch = src_w - cl - cr, src_h - ct - cb
             w, h   = cw * texel.scale_x, ch * texel.scale_y
-            if bitmap is not None:
-                bitmap = self.device.crop_image_surface(bitmap, cl, ct, cw, ch)
-        elif src_w:
-            w, h = src_w * texel.scale_x, src_h * texel.scale_y
+            bitmap = self.device.crop_image_surface(bitmap, cl, ct, cw, ch)
         else:
-            w, h = 50, 50
+            w, h = src_w * texel.scale_x, src_h * texel.scale_y
         return [ImageBox(bitmap, w, h, self.device, src_w=src_w, src_h=src_h,
                          full_bitmap=full_bitmap)]
 

@@ -138,6 +138,31 @@ class ImageBox(Box):
         return 0
 
 
+class ErrorPlaceholderBox(Box):
+    """Shown when an image could not be loaded."""
+    depth = 0
+
+    def __init__(self, width=50, height=50, device=TESTDEVICE):
+        self.width  = width
+        self.height = height
+        if device is not TESTDEVICE:
+            self.device = device
+
+    def __len__(self):
+        return 1
+
+    def draw(self, x, y, gc):
+        self.device.draw_rect(x, y, self.width, self.height, gc)
+        self.device.draw_line(x, y, x + self.width, y + self.height, 1, gc)
+        self.device.draw_line(x + self.width, y, x, y + self.height, 1, gc)
+
+    def draw_selection(self, i1, i2, x, y, gc):
+        if i1 < 1 and i2 > 0:
+            self.device.invert_rect(x, y, self.width, self.height, gc)
+
+    def get_index(self, x, y):
+        return 0
+
 
 # ---------------------------------------------------------------------------
 # Demo
