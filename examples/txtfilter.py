@@ -4,8 +4,8 @@
 # Note: Plain Text (.txt) is already built into Miniword (importexport.py).
 # This file demonstrates how to write an import/export plugin for other formats.
 
-from miniword.importexport import register_import, register_export
-from miniword.document import Document
+from miniword.io.importexport import register_import, register_export
+from miniword.code.document import Document
 from miniword.textmodel.textmodel import TextModel
 
 
