@@ -148,9 +148,9 @@ class MainFrame(wx.Frame, ViewBase):
         bar.Append(edit_menu, "&Edit")
         self.Bind(wx.EVT_MENU, lambda _: self.textview.undo(),  id=wx.ID_UNDO)
         self.Bind(wx.EVT_MENU, lambda _: self.textview.redo(),  id=wx.ID_REDO)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.cut(),   id=wx.ID_CUT)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.copy(),  id=wx.ID_COPY)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.paste(), id=wx.ID_PASTE)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('cut'),   id=wx.ID_CUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('copy'),  id=wx.ID_COPY)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('paste'), id=wx.ID_PASTE)
         self.Bind(wx.EVT_MENU, self._on_find, id=wx.ID_FIND)
 
         self._id_zoom_fit_w = wx.NewIdRef()
