@@ -5,6 +5,20 @@ from .ui.mainwindow import MainFrame
 from .layout import builder
 
 
+def _enable_dpi_awareness():
+    """Enable Per-Monitor DPI awareness on Windows to avoid blurry rendering."""
+    if sys.platform != 'win32':
+        return
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-Monitor DPI aware
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
 def main():
     args = sys.argv[1:]
     if '--debug' in args:
@@ -12,6 +26,7 @@ def main():
         args = [a for a in args if a != '--debug']
     path = args[0] if args else None
 
+    _enable_dpi_awareness()
     app = wx.App(redirect=False)
     app.SetAppName("miniword")
     from .ui.mainwindow import load_plugins
