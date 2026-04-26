@@ -5,7 +5,7 @@
 # This file demonstrates how to write an import/export plugin for other formats.
 
 from miniword.io.importexport import register_import, register_export
-from miniword.code.document import Document
+from miniword.core.document import Document
 from miniword.textmodel.textmodel import TextModel
 
 
@@ -23,7 +23,7 @@ def _save(doc, path):
 
 
 def _check_txt(doc):
-    from miniword.importexport import _check_txt as builtin_check
+    from miniword.io.importexport import _check_txt as builtin_check
     return builtin_check(doc)
 
 
