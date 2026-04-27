@@ -48,11 +48,12 @@ cd miniword
 pip install .
 ```
 
+MiniWord stores its configuration and plugins in `~/.config/miniword/` (Linux).
 If you want to install the plugins (you probably will)
 
 ```
-mkdir -p ~/.miniword/plugins
-cp examples/*.py ~/.miniword/plugins
+mkdir -p ~/.config/miniword/plugins
+cp examples/*.py ~/.config/miniword/plugins
 ```
 
 If you want to register MiniWord to the desktop (you probably will)
@@ -79,7 +80,30 @@ You must add the directory containing **libcairo-2.dll** to your *PATH* environm
 C:\Program Files\GTK3-Runtime Win64\bin
 ```
 
+If you want to install the plugins (you probably will)
+
+```
+mkdir %APPDATA%\miniword\plugins
+copy examples\*.py %APPDATA%\miniword\plugins
+```
+
+MiniWord stores its configuration and plugins in `%APPDATA%\miniword\`
+(e.g. `C:\Users\<you>\AppData\Roaming\miniword\`).
+
 **Note** that MiniWord is not yet **optimised** for Windows. While it mostly works, the rendering quality is lower and startup times are a bit slow.
+
+## Install (macOS)
+
+If you want to install the plugins (you probably will)
+
+```
+mkdir -p ~/Library/Application\ Support/miniword/plugins
+cp examples/*.py ~/Library/Application\ Support/miniword/plugins
+```
+
+MiniWord stores its configuration and plugins in `~/Library/Application Support/miniword/`.
+
+**Note** that MiniWord has not been tested on macOS.
 
 ## License
 

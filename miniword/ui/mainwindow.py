@@ -54,17 +54,28 @@ def save_file_history():
     config.Flush()
 
 
+def _miniword_dir():
+    import os, sys
+    if sys.platform == 'win32':
+        base = os.environ.get('APPDATA', os.path.expanduser('~'))
+    elif sys.platform == 'darwin':
+        base = os.path.expanduser('~/Library/Application Support')
+    else:
+        base = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
+    return os.path.join(base, 'miniword')
+
+
 def _config_path():
     import os
-    return os.path.expanduser("~/.miniword/config.ini")
+    return os.path.join(_miniword_dir(), "config.ini")
 
 
 def load_plugins():
-    """Load all plugins from ~/.miniword/plugins/ and return tools list."""
+    """Load all plugins from the platform config dir's plugins/ subdirectory."""
     import glob
     import importlib.util
     import os
-    plugin_dir = os.path.expanduser("~/.miniword/plugins")
+    plugin_dir = os.path.join(_miniword_dir(), "plugins")
     paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
     tools_items = []
     for path in paths:
