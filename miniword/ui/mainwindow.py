@@ -36,6 +36,29 @@ class _LayoutProgressDlg(wx.Dialog):
         self.gauge.SetValue(min(n_chars, total_chars))
 
 
+file_history = None
+
+
+def get_file_history():
+    global file_history
+    if file_history is None:
+        file_history = wx.FileHistory(9)
+        config = wx.FileConfig(localFilename=_config_path())
+        file_history.Load(config)
+    return file_history
+
+
+def save_file_history():
+    config = wx.FileConfig(localFilename=_config_path())
+    file_history.Save(config)
+    config.Flush()
+
+
+def _config_path():
+    import os
+    return os.path.expanduser("~/.miniword/config.ini")
+
+
 def load_plugins():
     """Load all plugins from ~/.miniword/plugins/ and return tools list."""
     import glob
@@ -106,6 +129,13 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu = wx.Menu()
         file_menu.Append(wx.ID_NEW,    "&New\tCtrl+N")
         file_menu.Append(wx.ID_OPEN,   "&Open\tCtrl+O")
+        self._recent_menu = wx.Menu()
+        file_menu.AppendSubMenu(self._recent_menu, "Open &Recent")
+        fh = get_file_history()
+        fh.UseMenu(self._recent_menu)
+        fh.AddFilesToMenu(self._recent_menu)
+        self.Bind(wx.EVT_MENU_RANGE, self._on_recent_file,
+                  id=wx.ID_FILE1, id2=wx.ID_FILE9)
         self._id_import = wx.NewIdRef()
         file_menu.Append(self._id_import, "&Import…")
         file_menu.AppendSeparator()
@@ -401,6 +431,7 @@ class MainFrame(wx.Frame, ViewBase):
         if builder is not None:
             builder.generator = None
             builder._layout.is_finished = True  # stop buildto_y immediately
+        get_file_history().RemoveMenu(self._recent_menu)
         event.Skip()
 
     def _on_new(self, event):
@@ -427,6 +458,27 @@ class MainFrame(wx.Frame, ViewBase):
         frame._current_path = path
         frame._update_title()
         frame.Show()
+        get_file_history().AddFileToHistory(path)
+        save_file_history()
+
+    def _on_recent_file(self, event):
+        idx = event.GetId() - wx.ID_FILE1
+        fh = get_file_history()
+        path = fh.GetHistoryFile(idx)
+        from ..io import importexport
+        try:
+            doc = importexport.open_file(path)
+        except Exception as e:
+            wx.MessageBox(str(e), "Open Recent", wx.OK | wx.ICON_ERROR, self)
+            fh.RemoveFileFromHistory(idx)
+            save_file_history()
+            return
+        frame = MainFrame(doc)
+        frame._current_path = path
+        frame._update_title()
+        frame.Show()
+        fh.AddFileToHistory(path)
+        save_file_history()
 
     def _on_import(self, event):
         from ..io import importexport
@@ -445,6 +497,8 @@ class MainFrame(wx.Frame, ViewBase):
             return
         frame = MainFrame(doc)
         frame.Show()
+        get_file_history().AddFileToHistory(path)
+        save_file_history()
 
     def _on_export(self, event):
         from ..io import importexport
@@ -506,6 +560,8 @@ class MainFrame(wx.Frame, ViewBase):
             fn(self.document, path)
         self.textview.clear_undo()
         self._update_title()
+        get_file_history().AddFileToHistory(path)
+        save_file_history()
 
     def _confirm_lossy_save(self, path, warnings):
         import os
