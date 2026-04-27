@@ -113,7 +113,8 @@ class WXTextView(wx.ScrolledWindow, TextView):
             # triggers Ctrl!
             if (ctrl and not alt) or keycode < 32:
                 return event.Skip()  # needed for menu
-            action = chr(keycode)
+            ukey = event.GetUnicodeKey()
+            action = chr(ukey if ukey != wx.WXK_NONE else keycode)
         self.handle_action(action, shift)
 
     def to_clipboard(self, textmodel):
