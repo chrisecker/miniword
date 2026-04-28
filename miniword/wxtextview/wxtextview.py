@@ -104,18 +104,29 @@ class WXTextView(wx.ScrolledWindow, TextView):
 
     def on_char(self, event):
         keycode = event.GetKeyCode()
+        ukey = event.GetUnicodeKey()
+
         ctrl = event.ControlDown()
         shift = event.ShiftDown()
         alt = event.AltDown()
+
         action = self.actions.get((keycode, ctrl, alt))
-        if action is None:
-            # NOTE: there seems to be a bug in wx - AltGr also
-            # triggers Ctrl!
-            if (ctrl and not alt) or keycode < 32:
-                return event.Skip()  # needed for menu
-            ukey = event.GetUnicodeKey()
-            action = chr(ukey if ukey != wx.WXK_NONE else keycode)
-        self.handle_action(action, shift)
+        if action is not None:
+            self.handle_action(action, shift)
+            return
+
+        # Ctrl-Sequences are used for menu shortcuts -> Skip the event
+        # so it is handled by wx. 
+        if ctrl and not alt:
+            # NOTE: AltGr triggers Ctrl in wx and is used only for
+            # text here. We therefore have to exclude this case.
+            event.Skip()
+            return
+
+        if ukey != wx.WXK_NONE:
+            self.type_char(chr(ukey))
+        else:
+            event.Skip()
 
     def to_clipboard(self, textmodel):
         for i in range(2):

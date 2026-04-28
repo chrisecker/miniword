@@ -60,7 +60,7 @@ class DocumentView(WXTextView):
         actions[wx.WXK_UP,    False, True] = 'move_par_up'     # Alt+Up
         actions[wx.WXK_DOWN,  False, True] = 'move_par_down'   # Alt+Down
         actions[20, True, False]           = 'cycle_list_type'  # Ctrl+T
-        actions[116, False, True]          = 'cycle_basestyle'  # Alt+T
+        actions[116, False, True]          = 'cycle_basestyle'  # Alt+t
         actions[84,  False, True]          = 'cycle_basestyle'  # Shift+Alt+T
         self.actions = actions
         

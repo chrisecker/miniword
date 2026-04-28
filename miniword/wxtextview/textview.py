@@ -205,8 +205,16 @@ class TextView(ViewBase, Model):
         self.add_undo(info)
 
     def insert_text(self, i, text, **style):
-        model = self.model.__class__(text, **style)  
+        model = self.model.__class__(text, **style)
         return self.insert(i, model)
+
+    def type_char(self, char):
+        if self.has_selection():
+            s1, s2 = sorted(self.selection)
+            e1, e2 = self.model.expand_range(s1, s2)
+            self.remove(e1, e2)
+        self.insert_text(self.index, char, **self.get_current_style())
+        self.Refresh()
 
     def remove(self, i1, i2):
         info = self._remove(i1, i2)
@@ -553,11 +561,6 @@ class TextView(ViewBase, Model):
             i = max(i, left_limit(model.texel, 0, index))                
             j1, j2 = self.model.expand_range(i, index)
             self.remove(j1, j2)
-        else:                  
-            #print keycode
-            assert len(action) == 1 # single character
-            del_selection()
-            self.insert_text(self.index, action, **style)
         self.Refresh()
 
     def copy(self):
