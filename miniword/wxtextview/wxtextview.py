@@ -74,7 +74,7 @@ class WXTextView(wx.ScrolledWindow, TextView):
             (26, True, False) : 'undo',
             (18, True, False) : 'redo',  
             (11, True, False) : 'del_line_end',   
-            (127, True, False) : 'del_word_left',   
+            (wx.WXK_BACK, True, False) : 'del_word_left',
             (1, True, False) : 'select_all',
             (9, True, False) : 'indent',
             (21, True, False) : 'dedent',
