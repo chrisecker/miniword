@@ -56,6 +56,7 @@ structure_default = {
     "fixed_indent":    None,         # None = free, 0–8 = fixed at that level
     "indent_levels":   tuple(i * cm for i in range(n_levels)),
     "first_line_indent": 0,          # hanging indent: use negative values
+    "list_indent":      1 * cm,      # extra indent applied to list/numbered paragraphs
     "marker":          defaultbullets + ("–",) * (n_levels-len(defaultbullets)),
     "marker_pos":      (-0.8 * cm,) * n_levels,
     # "marker_alignment": ('right',) * n_levels,

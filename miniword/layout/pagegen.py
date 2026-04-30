@@ -312,7 +312,9 @@ def generate_pages(texel, i, restartmemo, factory,
         indent            = factory.indent_level
         first_line_indent = r['first_line_indent']
         indent_levels     = r['indent_levels']
-        block_indent      = indent_levels[indent]
+        is_list           = r['paragraph_type'] in ('list', 'numbered')
+        list_indent       = r['list_indent'] if is_list else 0
+        block_indent      = indent_levels[indent] + list_indent
         alignment         = r['alignment']
         line_spacing      = r['line_spacing']
         space_before      = r['space_before']

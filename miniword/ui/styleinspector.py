@@ -333,7 +333,13 @@ class StyleInspector(InspectorBase):
         self.reset_paragraph_type = ResetButton(panel, ['paragraph_type'])
         self.paragraph_type.Bind(wx.EVT_CHOICE, self.on_paragraph_type)
         add_row(contentsizer, self.paragraph_type, self.reset_paragraph_type)
-        
+
+        label = wx.StaticText(panel, label='List indent')
+        self.list_indent = LengthInput(panel, 'mm')
+        self.reset_list_indent = ResetButton(panel, ['list_indent'])
+        self.list_indent.Bind(EVT_UNIT_CHANGED, self.on_list_indent)
+        add_row(contentsizer, label, self.list_indent, self.reset_list_indent)
+
         ### Marker properties
         spanel = self.marker_panel = wx.Panel(panel)
         spanelsizer = wx.BoxSizer(wx.VERTICAL)
@@ -466,6 +472,7 @@ class StyleInspector(InspectorBase):
                 self.reset_policy,
                 self.reset_indent,
                 self.reset_paragraph_type,
+                self.reset_list_indent,
                 self.reset_marker_pos,
                 self.reset_marker_color,
                 self.reset_marker_size,
@@ -546,6 +553,9 @@ class StyleInspector(InspectorBase):
         
     def on_indent_position(self, event):
         self.set_list_value('indent_levels', event.value)
+
+    def on_list_indent(self, event):
+        self.set_parproperties(list_indent=event.value)
 
     def on_indent_first(self, event):
         value = event.value
@@ -858,6 +868,9 @@ class StyleInspector(InspectorBase):
         self.indent_first.SetValue(first)
         x = 'first_line_indent' in overrides
         self.reset_first.set_x(x)
+
+        self.list_indent.SetValue(properties['list_indent'])
+        self.reset_list_indent.set_x('list_indent' in overrides)
 
         fixed = properties['fixed_indent']
         if fixed is not None:

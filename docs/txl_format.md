@@ -80,6 +80,7 @@ The `indent` attribute of `NL` selects which value applies to a given paragraph.
 | `level_policy`      | `"free"`                                                   | `free` / `fixed`                               |
 | `indent_levels`     | (0cm, 1cm, 2cm, 3cm, 4cm, 5cm, 6cm, 7cm, 8cm, 9cm)        | Left indent per level                          |
 | `first_line_indent` | `0`                                                        | First-line indent in pt (negative = hanging)   |
+| `list_indent`       | `1cm`                                                      | Extra indent added to list/numbered paragraphs (on top of `indent_levels[indent]`) |
 | `marker`            | ("•","◦","-","-","-","-","-","-","-","-")                  | Bullet symbol per level                        |
 | `marker_pos`        | (-0.5cm × 10)                                              | Marker position relative to text per level     |
 | `marker_size`       | (1 × 10)                                                   | Marker size per level                          |
@@ -321,6 +322,8 @@ NL({base="body"})
 T("First level item.")
 NL({base="bullet"})
 T("Second level item.")
+NL({indent=0, base="bullet"})
+T("Nested list item.")
 NL({indent=1, base="bullet"})
 
 T("First numbered item.")
@@ -346,7 +349,7 @@ ENDMARK({base="body"})
 1. **ID stability:** Always reuse existing style IDs. Never invent new IDs unless adding a new style.
 2. **Minimal overrides:** Only specify properties that differ from the named style. Unspecified properties fall back to the named style, then to built-in defaults.
 3. **Roles:** The `role` field enables semantic export (e.g. to Markdown or HTML). It may change without modifying the content stream.
-4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. It is an index, not a distance. `indent=0` corresponds to the normal text column (no extra indentation); bullet lists therefore typically use `indent=1`.
+4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. It is an index, not a distance. `indent=0` corresponds to the normal text column (no extra indentation). List paragraphs get an additional `list_indent` offset on top of `indent_levels[indent]`, so `indent=0` is correct for a top-level list item.
 5. **Markers:** A bullet or number is rendered on the first line of a paragraph when `paragraph_type="list"` or `"numbered"` is set. For numbered paragraphs, `counter="section"` uses the section counter (resets the item counter on increment); `counter="item"` (default) uses the item counter.
 6. **Unified property block:** All element parameters — structural and stylistic — go in the `{…}` block. There are no positional arguments other than the element type string and slot contents.
 7. **Singles vs. Containers:** `IMG` and other keyword elements are Singles — they behave as atomic units in the edit model (length 1, no slots). Use `C("type", …)` only when slots are needed.

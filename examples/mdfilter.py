@@ -97,10 +97,10 @@ def _doc_to_md(doc):
         elif base == 'quote':
             parts.append('> ' + inline)
         elif ptype == 'list':
-            prefix = '  ' * max(0, indent - 1) + '- '
+            prefix = '  ' * indent + '- '
             parts.append(prefix + inline)
         elif ptype == 'numbered':
-            prefix = '  ' * max(0, indent - 1) + '1. '
+            prefix = '  ' * indent + '1. '
             parts.append(prefix + inline)
         else:
             parts.append(inline)
@@ -353,14 +353,14 @@ def _parse_md_paragraphs(text):
         m = _UL_RE.match(line)
         if m:
             flush_buf()
-            indent = len(m.group(1)) // 2 + 1
+            indent = len(m.group(1)) // 2
             paragraphs.append(('list', indent, _parse_inline(m.group(2))))
             continue
 
         m = _OL_RE.match(line)
         if m:
             flush_buf()
-            indent = len(m.group(1)) // 2 + 1
+            indent = len(m.group(1)) // 2
             paragraphs.append(('numbered', indent, _parse_inline(m.group(2))))
             continue
 
@@ -845,23 +845,23 @@ def test_05():
 
 
 def test_06():
-    "unordered list — indent > 0"
+    "unordered list — top-level items have indent 0"
     pars = _parse("- Alpha\n- Beta\n")
     assert len(pars) == 2
     for base, ptype, indent, runs in pars:
         assert ptype  == 'list'
-        assert indent >= 1
+        assert indent == 0
     assert ''.join(t for t, _ in pars[0][3]) == 'Alpha'
     assert ''.join(t for t, _ in pars[1][3]) == 'Beta'
 
 
 def test_07():
-    "ordered list — indent > 0"
+    "ordered list — top-level items have indent 0"
     pars = _parse("1. First\n2. Second\n")
     assert len(pars) == 2
     for base, ptype, indent, runs in pars:
         assert ptype  == 'numbered'
-        assert indent >= 1
+        assert indent == 0
 
 
 def test_08():
@@ -877,7 +877,7 @@ def test_09():
     text0 = ''.join(t for t, _ in pars[0][3])
     assert 'First line' in text0
     assert 'continues here' in text0
-    assert pars[1][2] >= 1
+    assert pars[1][2] == 0
 
 
 def test_10():
