@@ -304,6 +304,7 @@ class StyleInspector(InspectorBase):
 
         ### structure tab ###
         panel, contentsizer = make_tab(notebook, 'Structure')
+        self._structure_page = panel
         add_section("Indentation", panel, contentsizer)
 
         label = wx.StaticText(panel, label='Level') # XXX Identation level
@@ -945,6 +946,7 @@ class StyleInspector(InspectorBase):
         self.marker_panel.Show(ptype in ("list", "numbered"))
         self.list_panel.Show(ptype == "list")
         self.enum_panel.Show(ptype == "numbered")
+        self._structure_page.Layout()
 
         value = properties['page_break_before']
         if value is None:
