@@ -31,9 +31,9 @@ _ROLES = [
     ('Header 4',      'h4'),
     ('Header 5',      'h5'),
     ('Header 6',      'h6'),
-    ('List',          'ul'),
-    ('Enumeration',   'ol'),
-    ('Code',          'code'),
+    ('List',          'list'),
+    ('Enumeration',   'numbered'),
+    ('Code',          'pre'),
     ('Quote',         'quote'),
 ]
 
