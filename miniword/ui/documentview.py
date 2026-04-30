@@ -304,6 +304,7 @@ class DocumentView(WXTextView):
                 self._rebuild_with_progress(i1, i2, delta)
             else:
                 self.builder.rebuild_range(i1, i2, 0)
+                self.builder.build_background()
                 self.refresh()
 
     @contextmanager
@@ -510,7 +511,7 @@ class DocumentView(WXTextView):
             # wx.CallAfter to ensure that any necessary yields occur
             # asynchronously after the current event cycle.
 
-            wx.CallAfter(self.builder.build_background)
+            self.builder.build_background()
             self.refresh()
 
     @trace
