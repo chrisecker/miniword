@@ -177,21 +177,32 @@ class TextView(ViewBase, Model):
         self._undoinfo = []
         self._redoinfo = []
         self._undo_group = None  # None = not grouping; list = collecting entries
+        self._undo_stack = []   # stack of parent groups for nested begin/end pairs
 
     # ------------------------------------------------------------------
     # Undo grouping
     # ------------------------------------------------------------------
 
     def begin_undo_group(self):
-        """Start collecting undo entries into a single group."""
+        """Push a new undo group onto the stack."""
+        self._undo_stack.append(self._undo_group)
         self._undo_group = []
 
     def end_undo_group(self):
-        """Flush the collected group as one atomic undo entry."""
+        """Pop the current undo group.
+
+        If a parent group is active, the entries are merged into it.
+        Only the outermost end_undo_group commits to _undoinfo.
+        """
         group = self._undo_group
-        self._undo_group = None
+        self._undo_group = self._undo_stack.pop()
         if not group:
             return
+        if self._undo_group is not None:
+            # Still inside a parent group: merge entries upward.
+            self._undo_group.extend(group)
+            return
+        # Outermost group closed: commit to _undoinfo.
         entry = group[0] if len(group) == 1 else group
         # Insert directly, bypassing join_undo (groups must not be merged).
         self._undoinfo.insert(0, entry)
