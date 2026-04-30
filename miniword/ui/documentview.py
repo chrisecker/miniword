@@ -296,6 +296,26 @@ class DocumentView(WXTextView):
         r = (i1, i2, delta)
         self._pending_range = accumulate(self._pending_range, r)
 
+    def flush_pending_layout(self):
+        if self._inhibit_depth == 0 and self._pending_range is not None:
+            i1, i2, delta = self._pending_range
+            self._pending_range = None
+            if delta:
+                self._rebuild_with_progress(i1, i2, delta)
+            else:
+                self.builder.rebuild_range(i1, i2, 0)
+                self.refresh()
+
+    @contextmanager
+    def inhibit_layout(self):
+        """Suppress individual rebuilds; trigger one rebuild on exit."""
+        self._inhibit_depth += 1
+        try:
+            yield
+        finally:
+            self._inhibit_depth -= 1
+        self.flush_pending_layout()
+
     @contextmanager
     def atomic(self):
         """Group multiple model/stylesheet changes into one layout rebuild."""
@@ -306,14 +326,25 @@ class DocumentView(WXTextView):
         finally:
             self.end_undo_group()
             self._inhibit_depth -= 1
-        if self._inhibit_depth == 0 and self._pending_range is not None:
-            i1, i2, delta = self._pending_range
-            self._pending_range = None
-            if delta:
-                self._rebuild_with_progress(i1, i2, delta)
-            else:
-                self.builder.rebuild_range(i1, i2, 0)
-                self.refresh()
+        self.flush_pending_layout()
+
+    def undo(self):
+        if not self._undoinfo:
+            return
+        if isinstance(self._undoinfo[0], list):
+            with self.inhibit_layout():
+                super().undo()
+        else:
+            super().undo()
+
+    def redo(self):
+        if not self._redoinfo:
+            return
+        if isinstance(self._redoinfo[0], list):
+            with self.inhibit_layout():
+                super().redo()
+        else:
+            super().redo()
         
     def properties_changed(self, model, i1, i2):
         super().properties_changed(model, i1, i2)

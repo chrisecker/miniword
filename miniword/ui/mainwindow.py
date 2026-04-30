@@ -71,13 +71,19 @@ def _config_path():
 
 
 def load_plugins():
-    """Load all plugins from the platform config dir's plugins/ subdirectory."""
+    """Load all plugins from the platform config dir's plugins/ subdirectory.
+
+    Returns (tools_items, all_mods):
+      tools_items: [(name, mod), ...] for modules with a run() function
+      all_mods:    all successfully loaded modules
+    """
     import glob
     import importlib.util
     import os
     plugin_dir = os.path.join(_miniword_dir(), "plugins")
     paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
     tools_items = []
+    all_mods = []
     for path in paths:
         try:
             mod_name = f"_mw_plugin_{os.path.splitext(os.path.basename(path))[0]}"
@@ -91,9 +97,10 @@ def load_plugins():
         except Exception as e:
             print(f"Plugin error ({os.path.basename(path)}): {e}")
             continue
+        all_mods.append(mod)
         if hasattr(mod, 'run'):
             tools_items.append((getattr(mod, 'name', os.path.basename(path)), mod))
-    return tools_items
+    return tools_items, all_mods
 
 
 # ---------------------------------------------------------------------------
@@ -124,15 +131,25 @@ class MainFrame(wx.Frame, ViewBase):
         self.Centre()
 
     def _load_plugins(self):
-        tools_items = load_plugins()
+        tools_items, all_mods = load_plugins()
+        bar = self.GetMenuBar()
         if tools_items:
             tools_menu = wx.Menu()
-            bar = self.GetMenuBar()
             bar.Insert(bar.GetMenuCount() - 1, tools_menu, "&Tools")
             for name, mod in tools_items:
                 item_id = wx.NewIdRef()
                 tools_menu.Append(item_id, name)
                 self.Bind(wx.EVT_MENU, lambda evt, m=mod: m.run(self), id=item_id)
+        for mod in all_mods:
+            if not hasattr(mod, 'get_menus'):
+                continue
+            for menu_name, items in mod.get_menus(self.document):
+                menu = wx.Menu()
+                bar.Insert(bar.GetMenuCount() - 1, menu, menu_name)
+                for label, handler in items:
+                    item_id = wx.NewIdRef()
+                    menu.Append(item_id, label)
+                    self.Bind(wx.EVT_MENU, lambda evt, h=handler: h(self), id=item_id)
 
     def _build_menu(self):
         bar = wx.MenuBar()
