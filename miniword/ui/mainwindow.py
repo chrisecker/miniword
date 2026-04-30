@@ -104,6 +104,50 @@ def load_plugins():
 
 
 # ---------------------------------------------------------------------------
+# Preferences dialog
+# ---------------------------------------------------------------------------
+
+_UNIT_CHOICES = ["mm", "cm", "inch", "pt"]
+_UNIT_LABELS  = {"layout": "Layout (margins, paper)", "typographic": "Typographic (spacing, indents)"}
+
+
+class _PreferencesDialog(wx.Dialog):
+    def __init__(self, parent, prefs, config):
+        super().__init__(parent, title="Preferences", style=wx.DEFAULT_DIALOG_STYLE)
+        self._prefs  = prefs
+        self._config = config
+
+        grid = wx.FlexGridSizer(cols=2, vgap=8, hgap=12)
+        grid.AddGrowableCol(1)
+
+        self._choices = {}
+        for category, label in _UNIT_LABELS.items():
+            grid.Add(wx.StaticText(self, label=label), 0, wx.ALIGN_CENTER_VERTICAL)
+            ch = wx.Choice(self, choices=_UNIT_CHOICES)
+            current = prefs.get_unit(category)
+            if current in _UNIT_CHOICES:
+                ch.SetSelection(_UNIT_CHOICES.index(current))
+            grid.Add(ch, 0, wx.EXPAND)
+            self._choices[category] = ch
+
+        btn_sizer = self.CreateButtonSizer(wx.OK | wx.CANCEL)
+        self.Bind(wx.EVT_BUTTON, self._on_ok, id=wx.ID_OK)
+
+        outer = wx.BoxSizer(wx.VERTICAL)
+        outer.Add(grid,       0, wx.ALL | wx.EXPAND, 16)
+        outer.Add(btn_sizer,  0, wx.ALIGN_RIGHT | wx.ALL, 8)
+        self.SetSizerAndFit(outer)
+        self.CentreOnParent()
+
+    def _on_ok(self, event):
+        for category, ch in self._choices.items():
+            unit = _UNIT_CHOICES[ch.GetSelection()]
+            self._prefs.set_unit(category, unit)
+            self._config.set(f"{category}_unit", unit)
+        event.Skip()
+
+
+# ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
 
@@ -203,13 +247,16 @@ class MainFrame(wx.Frame, ViewBase):
         edit_menu.Append(wx.ID_PASTE, "&Paste\tCtrl+V")
         edit_menu.AppendSeparator()
         edit_menu.Append(wx.ID_FIND,    "&Find && Replace…\tCtrl+F")
+        edit_menu.AppendSeparator()
+        edit_menu.Append(wx.ID_PREFERENCES, "&Preferences…")
         bar.Append(edit_menu, "&Edit")
         self.Bind(wx.EVT_MENU, lambda _: self.textview.undo(),  id=wx.ID_UNDO)
         self.Bind(wx.EVT_MENU, lambda _: self.textview.redo(),  id=wx.ID_REDO)
         self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('cut'),   id=wx.ID_CUT)
         self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('copy'),  id=wx.ID_COPY)
         self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('paste'), id=wx.ID_PASTE)
-        self.Bind(wx.EVT_MENU, self._on_find, id=wx.ID_FIND)
+        self.Bind(wx.EVT_MENU, self._on_find,        id=wx.ID_FIND)
+        self.Bind(wx.EVT_MENU, self._on_preferences, id=wx.ID_PREFERENCES)
 
         self._id_zoom_fit_w = wx.NewIdRef()
         self._id_zoom_fit_p = wx.NewIdRef()
@@ -321,6 +368,13 @@ class MainFrame(wx.Frame, ViewBase):
             self._inspector_book.Raise()
             self._mi_panel.Check(True)
         self._layout()
+
+    def _on_preferences(self, _):
+        from ..core.config import get_config
+        from .unitentry import LengthInput
+        dlg = _PreferencesDialog(self, LengthInput.prefs, get_config())
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def _on_about(self, _):
         from importlib.metadata import version, PackageNotFoundError

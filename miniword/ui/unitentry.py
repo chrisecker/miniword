@@ -1,4 +1,5 @@
 import re
+import weakref
 import wx
 from wx.lib.newevent import NewEvent
 from .design import muted_button
@@ -8,14 +9,48 @@ UnitChangedEvent, EVT_UNIT_CHANGED = NewEvent()
 
 
 def _parse(text, units, display_unit):
-    """Parse 'value [unit]' string. Returns canonical value or raises ValueError."""
+    """Parse 'value [unit]' string. Returns (canonical_value, unit_used) or raises ValueError."""
     m = re.match(r'^([+-]?\d+(?:\.\d+)?)\s*(\S+)?$', text.strip())
     if not m:
         raise ValueError
     unit = (m.group(2) or display_unit).lower()
     if unit not in units:
         raise ValueError(f"Unknown unit: {unit!r}")
-    return float(m.group(1)) * units[unit]
+    return float(m.group(1)) * units[unit], unit
+
+
+class UnitPrefs:
+    """Model: per-category unit preferences. Views (LengthInput) register by category.
+
+    Categories: "layout" (margins, paper) and "typographic" (spacing, indents).
+    """
+
+    def __init__(self, layout="mm", typographic="mm"):
+        self._units = {"layout": layout, "typographic": typographic}
+        self._views = {}  # {category: [weakref]}
+
+    def get_unit(self, category):
+        return self._units.get(category, "mm")
+
+    def set_unit(self, category, unit):
+        self._units[category] = unit
+        self._notify(category)
+
+    def register(self, view, category):
+        self._views.setdefault(category, []).append(weakref.ref(view))
+
+    def _notify(self, category):
+        alive = []
+        for ref in self._views.get(category, []):
+            view = ref()
+            if view is None:
+                continue
+            try:
+                view.set_display_unit(self._units[category])
+                alive.append(ref)
+            except RuntimeError:
+                pass  # wx C++ object was destroyed
+        self._views[category] = alive
 
 
 class UnitInput(wx.Panel):
@@ -23,8 +58,7 @@ class UnitInput(wx.Panel):
 
     Subclasses define:
         units        — {unit_name: factor}  where canonical = display_value * factor.
-                       The internal (canonical) unit has factor 1.0 implicitly.
-        display_unit — preferred display unit; user-changeable in the future.
+        display_unit — default display unit; overridden by UnitPrefs if set.
 
     SetValue/GetValue and event.value are always in canonical units.
     """
@@ -60,8 +94,15 @@ class UnitInput(wx.Panel):
         self.text.Bind(wx.EVT_TEXT_ENTER, self._on_commit)
         self.text.Bind(wx.EVT_KILL_FOCUS,  self._on_commit)
 
+    def set_display_unit(self, unit):
+        self.display_unit = unit
+        if self._last is not None:
+            self.text.SetValue(self._format(self._last))
+
     def _parse(self, text):
-        return _parse(text, self.units, self.display_unit)
+        value, unit = _parse(text, self.units, self.display_unit)
+        self.display_unit = unit
+        return value
 
     def _format(self, canonical):
         factor = self.units[self.display_unit]
@@ -92,11 +133,11 @@ class UnitInput(wx.Panel):
 
     def _change_value(self, delta):
         text = self.text.GetValue().strip()
-        factor = self.units[self.display_unit]
         try:
             canonical = self._parse(text) if text else 0.0
         except ValueError:
             return
+        factor = self.units[self.display_unit]
         canonical += delta * factor
         self.text.SetValue(self._format(canonical))
         self._commit()
@@ -114,9 +155,48 @@ class UnitInput(wx.Panel):
 
 
 class LengthInput(UnitInput):
-    """UnitInput for physical lengths. Canonical unit: pt (factor 1.0)."""
+    """UnitInput for physical lengths. Canonical unit: pt (factor 1.0).
+
+    Each instance belongs to a category ("layout" or "typographic") and
+    registers with LengthInput.prefs (a UnitPrefs instance) if set.
+    Set LengthInput.prefs at app startup before creating any widgets.
+    """
     units = {"pt": 1.0, "mm": 72.0 / 25.4, "cm": 72.0 / 2.54, "inch": 72.0, "in": 72.0}
     display_unit = "mm"
+    prefs = None
+
+    def __init__(self, parent, category="layout"):
+        self._category = category
+        unit = self.prefs.get_unit(category) if self.prefs else self.display_unit
+        super().__init__(parent, display_unit=unit)
+        if self.prefs is not None:
+            self.prefs.register(self, category)
+        self.text.Bind(wx.EVT_CONTEXT_MENU, self._on_context_menu)
+
+    def _on_context_menu(self, event):
+        menu = wx.Menu()
+        ids = {}
+        for unit in self.units:
+            if unit == "in":
+                continue  # skip alias
+            item = menu.AppendRadioItem(wx.ID_ANY, unit)
+            ids[item.GetId()] = unit
+            if unit == self.display_unit:
+                item.Check(True)
+
+        def on_select(e):
+            unit = ids.get(e.GetId())
+            if unit:
+                if self.prefs is not None:
+                    from ..core.config import get_config
+                    self.prefs.set_unit(self._category, unit)
+                    get_config().set(f"{self._category}_unit", unit)
+                else:
+                    self.set_display_unit(unit)
+
+        menu.Bind(wx.EVT_MENU, on_select)
+        self.text.PopupMenu(menu)
+        menu.Destroy()
 
 
 class FractionInput(UnitInput):
@@ -129,7 +209,7 @@ def demo_00():
     app = wx.App()
     frame = wx.Frame(None, title="UnitInput Demo", size=(300, 120))
     panel = wx.Panel(frame)
-    length = LengthInput(panel, display_unit="mm")
+    length = LengthInput(panel, category="layout")
     fraction = FractionInput(panel)
     sizer = wx.BoxSizer(wx.VERTICAL)
     sizer.Add(length,   0, wx.ALL | wx.EXPAND, 10)

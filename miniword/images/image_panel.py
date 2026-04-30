@@ -49,13 +49,13 @@ class ImageInspector(wx.Panel, ViewBase):
         # --- Size ---
         add_section("Size", self, sizer)
 
-        self.txt_size_x = LengthInput(self, display_unit="mm")
+        self.txt_size_x = LengthInput(self, category="layout")
         self.txt_size_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('x'))
         btn_reset_w = muted_button(self, "\u00d7", size=(20, -1))
         btn_reset_w.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_x())
         add_row(sizer, wx.StaticText(self, label="Width"), self.txt_size_x, btn_reset_w)
 
-        self.txt_size_y = LengthInput(self, display_unit="mm")
+        self.txt_size_y = LengthInput(self, category="layout")
         self.txt_size_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('y'))
         btn_reset_h = muted_button(self, "\u00d7", size=(20, -1))
         btn_reset_h.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_y())

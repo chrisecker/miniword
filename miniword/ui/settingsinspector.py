@@ -54,12 +54,12 @@ class SettingsInspector(wx.Panel, ViewBase):
         add_row(form, lbl, self.choice_paper)
 
         self._lbl_width = wx.StaticText(scrolled, label="Width")
-        self.inp_width = LengthInput(scrolled, 'mm')
+        self.inp_width = LengthInput(scrolled, category="layout")
         self.inp_width.Bind(EVT_UNIT_CHANGED, self._on_paper_width)
         add_row(form, self._lbl_width, self.inp_width)
 
         self._lbl_height = wx.StaticText(scrolled, label="Height")
-        self.inp_height = LengthInput(scrolled, 'mm')
+        self.inp_height = LengthInput(scrolled, category="layout")
         self.inp_height.Bind(EVT_UNIT_CHANGED, self._on_paper_height)
         add_row(form, self._lbl_height, self.inp_height)
 
@@ -74,7 +74,7 @@ class SettingsInspector(wx.Panel, ViewBase):
             ('margin_right',  'Right'),
         ]:
             lbl = wx.StaticText(scrolled, label=label_text)
-            inp = LengthInput(scrolled, 'mm')
+            inp = LengthInput(scrolled, category="layout")
             self._margin_inputs[key] = inp
             inp.Bind(EVT_UNIT_CHANGED,
                      lambda e, k=key: self._on_margin(k, e.value))

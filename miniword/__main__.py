@@ -1,7 +1,9 @@
 import sys
 import wx
 from .core.document import Document
+from .core.config import get_config
 from .ui.mainwindow import MainFrame
+from .ui.unitentry import LengthInput, UnitPrefs
 from .layout import builder
 
 
@@ -27,6 +29,11 @@ def main():
     path = args[0] if args else None
 
     _enable_dpi_awareness()
+    config = get_config()
+    LengthInput.prefs = UnitPrefs(
+        layout=config.get("layout_unit"),
+        typographic=config.get("typographic_unit"),
+    )
     app = wx.App(redirect=False)
     app.SetAppName("miniword")
     from .ui.mainwindow import load_plugins

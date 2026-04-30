@@ -277,12 +277,12 @@ class StyleInspector(InspectorBase):
 
         add_section("Space", panel, contentsizer)
         
-        self.space_before = LengthInput(panel, 'mm')
+        self.space_before = LengthInput(panel, category='typographic')
         self.reset_space_before = ResetButton(panel, ['space_before'])
         add_row2('Before paragraph', panel, contentsizer, self.space_before, self.reset_space_before)
         self.space_before.Bind(EVT_UNIT_CHANGED, self.on_space_before)
 
-        self.space_after = LengthInput(panel, 'mm')
+        self.space_after = LengthInput(panel, category='typographic')
         self.reset_space_after = ResetButton(panel, ['space_after'])
         add_row2('After paragraph', panel, contentsizer, self.space_after, self.reset_space_after)
         self.space_after.Bind(EVT_UNIT_CHANGED, self.on_space_after)
@@ -294,7 +294,7 @@ class StyleInspector(InspectorBase):
 
         add_section("Indentation", panel, contentsizer)
 
-        self.indent_first = LengthInput(panel, 'mm')
+        self.indent_first = LengthInput(panel, category='typographic')
         self.reset_first = ResetButton(panel, ['first_line_indent'])
         add_row2('First line', panel, contentsizer, self.indent_first, self.reset_first)
         self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
@@ -323,7 +323,7 @@ class StyleInspector(InspectorBase):
         add_row(contentsizer, label, self.policy, self.reset_policy)
         
         label = wx.StaticText(panel, label='Indentation')
-        self.indent_position = LengthInput(panel, 'mm')
+        self.indent_position = LengthInput(panel, category='typographic')
         self.reset_indent = ResetButton(panel, ['indent_levels'])
         self.indent_position.Bind(EVT_UNIT_CHANGED, self.on_indent_position)
         add_row(contentsizer, label, self.indent_position, self.reset_indent)
@@ -335,7 +335,7 @@ class StyleInspector(InspectorBase):
         add_row(contentsizer, self.paragraph_type, self.reset_paragraph_type)
 
         label = wx.StaticText(panel, label='List indent')
-        self.list_indent = LengthInput(panel, 'mm')
+        self.list_indent = LengthInput(panel, category='typographic')
         self.reset_list_indent = ResetButton(panel, ['list_indent'])
         self.list_indent.Bind(EVT_UNIT_CHANGED, self.on_list_indent)
         add_row(contentsizer, label, self.list_indent, self.reset_list_indent)
@@ -348,7 +348,7 @@ class StyleInspector(InspectorBase):
         add_section("Marker options", spanel, spanelsizer)
         
         label = wx.StaticText(spanel, label="Offset")
-        self.marker_pos = LengthInput(spanel, 'mm')
+        self.marker_pos = LengthInput(spanel, category='typographic')
         self.reset_marker_pos = ResetButton(spanel, ['marker_pos'])
         self.marker_pos.Bind(EVT_UNIT_CHANGED, self.on_marker_pos)        
         add_row(spanelsizer, label, self.marker_pos, self.reset_marker_pos)
@@ -422,7 +422,7 @@ class StyleInspector(InspectorBase):
         self.block_color.callback = lambda: self.set_parproperties(
             block_color=self.block_color.get_colour())
 
-        self.block_padding = LengthInput(panel, 'mm')
+        self.block_padding = LengthInput(panel, category='typographic')
         self.reset_block_padding = ResetButton(panel, ['block_padding'])
         add_row(contentsizer, wx.StaticText(panel, label="Padding"),
                 self.block_padding, self.reset_block_padding)
