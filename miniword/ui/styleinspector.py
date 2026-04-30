@@ -751,19 +751,14 @@ class StyleInspector(InspectorBase):
             return [(i, i)]
         return selected
 
-    def get_parrange(self): 
-        """Return list of (i1, i2) ranges extended to include the NL of each paragraph.
-
-        Uses find_newline so that container cells are handled correctly.
-        """
+    def get_parrange(self):
+        """Return list of (i1, i2) ranges extended to cover complete lines."""
         view = self.model
-        model = view.model
         selected = view.get_selected()
         if selected:
-            return selected
-        index = view.index
-        j = model.find_newline(index)
-        return [(index, index if j is None else j + 1)]
+            return [view.expand_lines(i1, i2) for i1, i2 in selected]
+        i = view.index
+        return [view.expand_lines(i, i)]
 
     _stylenames = ()
     _state = None

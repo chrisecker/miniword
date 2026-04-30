@@ -757,6 +757,21 @@ class TextView(ViewBase, Model):
             return []
         return [(s1, s2)]
 
+    def expand_lines(self, i1, i2):
+        """Extend (i1, i2) to cover complete lines.
+
+        Calls expand_range first so that i1 and i2 are on the same
+        nesting level.  Then shifts the left edge to the start of i1's
+        line and the right edge past the NL of i2's line.
+        """
+        model = self.model
+        e1, e2 = model.expand_range(i1, i2)
+        row, _ = model.index2position(e1)
+        s1 = model.linestart(row)
+        j = model.find_newline(e2)
+        s2 = e2 if j is None else j + 1
+        return s1, s2
+
     def start_selection(self):
         index = self.index
         self.selection = index, index

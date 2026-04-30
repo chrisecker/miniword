@@ -141,9 +141,7 @@ class DocumentView(WXTextView):
             s1, s2 = sorted(self.selection)
         else:
             s1 = s2 = i
-        row2, col2 = model.index2position(s2)
-        ps1 = model.linestart(model.index2position(s1)[0])
-        ps2 = s2 if col2 == 0 else model.lineend(row2) + 1
+        ps1, ps2 = self.expand_lines(s1, s2)
         if action == 'insert_newline' and shift:
             self.insert_texel(i, BR(style))
         elif action == 'undo' and shift:
