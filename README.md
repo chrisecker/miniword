@@ -72,13 +72,7 @@ You should use cairocffi instead of pycairo:
 pip install cairocffi
 ```
 
-You also need to install the **Cairo DLL**. The easiest way is to install the full GTK3 runtime from: https://github.com/tschoonj/gtk-for-windows-runtime-environment-installer/releases
-
-You must add the directory containing **libcairo-2.dll** to your *PATH* environment variable. In my case, this is:
-
-```
-C:\Program Files\GTK3-Runtime Win64\bin
-```
+No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`.
 
 If you want to install the plugins (you probably will)
 

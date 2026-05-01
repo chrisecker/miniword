@@ -6,6 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "miniword"
 version = "0.1.0"
 requires-python = ">=3.9"
+dependencies = [
+    "wxPython>=4.0",
+    "cairocffi",
+]
 
 [tool.setuptools.packages.find]
 include = ["miniword*"]
