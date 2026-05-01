@@ -1,3 +1,4 @@
+import os
 import sys
 import wx
 from ..textmodel.viewbase import ViewBase
@@ -55,7 +56,6 @@ def save_file_history():
 
 
 def _miniword_dir():
-    import os, sys
     if sys.platform == 'win32':
         base = os.environ.get('APPDATA', os.path.expanduser('~'))
     elif sys.platform == 'darwin':
@@ -66,8 +66,9 @@ def _miniword_dir():
 
 
 def _config_path():
-    import os
-    return os.path.join(_miniword_dir(), "config.ini")
+    d = _miniword_dir()
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, "config.ini")
 
 
 def load_plugins():
@@ -79,7 +80,6 @@ def load_plugins():
     """
     import glob
     import importlib.util
-    import os
     plugin_dir = os.path.join(_miniword_dir(), "plugins")
     paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
     tools_items = []
@@ -487,7 +487,6 @@ class MainFrame(wx.Frame, ViewBase):
         self._base.Refresh()
 
     def _update_title(self):
-        import os
         path = getattr(self, '_current_path', None)
         name = os.path.basename(path) if path else "Untitled"
         dirty = hasattr(self, 'textview') and self.textview.undocount() > 0
@@ -619,7 +618,6 @@ class MainFrame(wx.Frame, ViewBase):
             if dlg.ShowModal() != wx.ID_OK:
                 return
             path = dlg.GetPath()
-        import os
         ext = os.path.splitext(path)[1].lstrip('.').lower()
         self.document.home_format = ext if ext != 'txl' else 'txl'
         self._current_path = path
@@ -646,7 +644,6 @@ class MainFrame(wx.Frame, ViewBase):
         save_file_history()
 
     def _confirm_lossy_save(self, path, warnings):
-        import os
         items = '\n'.join('\u2022 ' + w for w in warnings)
         msg = ("Saving as '%s' will lose:\n\n%s\n\nSave anyway?"
                % (os.path.basename(path), items))
@@ -670,7 +667,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._update_title()
 
     def _on_print(self, event):
-        import tempfile, os, subprocess, sys
+        import tempfile, subprocess
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             path = f.name
         self.textview.export_pdf(path)
