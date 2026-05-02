@@ -231,7 +231,7 @@ class CursorEditor(TableEditorBase):
                     result = i1, i2, depth, texel
                 else:
                     s1, s2 = sorted(sel)
-                    if s1 <= i1+1 or i2 <= s2:
+                    if s1 <= i1 or i2 <= s2:
                         result = None  # selection not inside cell area
                     elif not is_multi_cell(texel, s1-i1, s2-i1):
                         result = i1, i2, depth, texel
@@ -254,7 +254,7 @@ class MatrixEditor(TableEditorBase):
         result = None
         for depth, (i1, i2, texel) in enumerate(path):
             if isinstance(texel, Table):
-                if s1 <= i1+1 or i2 <= s2:
+                if s1 <= i1 or i2 <= s2:
                     result = None  # selection not inside cell area
                 elif is_multi_cell(texel, s1-i1, s2-i1):
                     result = i1, i2, depth, texel                
