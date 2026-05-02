@@ -379,6 +379,7 @@ def test_04():
     class FakeView:
         layout    = None
         selection = None
+        def has_selection(self): return self.selection is not None and self.selection[0] != self.selection[1]
         def to_clipboard(self, m):
             copied_model.append(m)
         def copy(self): pass
