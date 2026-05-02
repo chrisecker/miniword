@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 class TestDevice:
     # Device is a interface layer to capsule platform dependent

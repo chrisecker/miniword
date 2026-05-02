@@ -1,21 +1,23 @@
-# -*- coding: latin-1 -*-
+# -*- coding: utf-8 -*-
 
 
-from .texeltree import Text, Group, NewLine, Tabulator, insert, takeout, \
-    ENDMARK, is_homogeneous, provides_childs, grouped, length, iter_childs, depth, \
-    is_list_efficient, is_root_efficient, strip2list, EMPTYSTYLE, \
-    dump
-from .utils import iter_newlines, get_newlines, transform
-from .styles import updated_style, create_style, get_styles, set_styles, \
-    get_style, set_properties, get_parstyles, set_parstyles, set_parproperties, \
-    clear_properties, clear_parproperties, StyleIterator
-from .weights import find_weight, get_weight, find_newline, NotFound
+from .texeltree import (
+    Text, Group, NewLine, Tabulator, insert, takeout, ENDMARK, provides_childs,
+    grouped, length, iter_childs, strip2list, EMPTYSTYLE, dump)
+
+from .styles import (
+    updated_style, create_style, get_styles, set_styles, get_style,
+    set_properties, get_parstyles, set_parstyles, set_parproperties,
+    clear_properties, clear_parproperties, StyleIterator)
+
+from .utils import (
+    find_weight, get_weight, next_newline, prev_newline, 
+    get_localroot, NotFound, get_newlines, transform_range)
+
 from .modelbase import Model
 import re
 
 
-
-debug = 0
 
 
 def get_texel(texel, i):
@@ -148,17 +150,34 @@ class TextModel(Model):
         """Returns the style at index *i*."""
         return get_style(self.get_xtexel(), i)
 
-    def find_newline(self, i):
-        """Return the position of the next newline at or after *i*.
-
-        Descends into containers when *i* lies inside one, so the result
-        is always on the same nesting level as *i*. 
+    def next_newline(self, i):
+        """Return position of first NewLine at or after *i*, or length if none.
         """
-        return find_newline(self.get_xtexel(), i)
+        return next_newline(self.get_xtexel(), i)
+
+    def prev_newline(self, i):
+        """Return position of last NewLine strictly before *i*, or -1 if none.
+        """
+        return prev_newline(self.get_xtexel(), i)
+
+    def get_start(self, i):
+        """Return start of the local region: 0, or cell start if i is inside a
+        container.
+        """
+        _, offset = get_localroot(self.texel, i)
+        return offset
+
+    def get_end(self, i):
+        """Return end of the local region: length of model, or closing
+        separator of the container cell.
+        """
+        root, offset = get_localroot(self.texel, i)
+        return offset + length(root)
 
     def get_parstyle(self, i):
-        j = find_newline(self.get_xtexel(), i)
-        return get_texel(self.get_xtexel(), j).parstyle
+        xtexel = self.get_xtexel()
+        j = next_newline(xtexel, i)
+        return get_texel(xtexel, j).parstyle
 
     def expand_range(self, s1, s2):
         """Expand (s1, s2) so no container is only partially selected.
@@ -169,69 +188,47 @@ class TextModel(Model):
         """
         return expand_range(self.texel, s1, s2)
 
-    def position2index(self, row, col):
-        """Returns the index corresponding to *row* and *col*."""
-        i = find_weight(self.texel, row, 2)
-        if i is None:
+    def position2index(self, row, col, i0=0):
+        """Returns the index for (row, col) within the flow starting at i0."""
+        if i0 > 0:
+            root, _ = get_localroot(self.texel, i0)
+        else:
+            root = self.texel
+        try:
+            return i0 + find_weight(root, row, 2) + col
+        except NotFound:
             raise IndexError(row)
-        return i+col
-
-    def _lfromt(self, t):
-        # for debugging
-        splitter = t.split('\n')
-        l = [len(s)+1 for s in splitter[:-1]]
-        return l
 
     def index2position(self, i):
-        """Returns the (row, col)-tuple corresponding to index *i*."""
-        texel = self.texel
-        if i > length(texel):
-            raise IndexError(i)
-        if i < 0:
-            raise IndexError(i)
+        """Returns (row, col, i0) for index *i*, where i0 is the flow start."""
+        root, i0 = get_localroot(self.texel, i)
+        local_i = i - i0
+        row = get_weight(root, 2, local_i)
+        col = local_i - find_weight(root, row, 2)
+        return row, col, i0
 
-        row = get_weight(texel, 2, i)
-        assert type(row) is int
-        j = find_weight(texel, row, 2)
-        col = i-j
-        return row, col
+    def linestart(self, i):
+        """Returns the index where the line containing *i* starts."""
+        return self.prev_newline(i) + 1
 
-    def linestart(self, row):
-        """Returns the index where line number *row* starts."""
-        try:
-            return find_weight(self.texel, row, 2)
-        except NotFound:
-            raise IndexError(row)
-
-    def lineend(self, row):
-        """Returns the index where line number *row* ends. The NewLine-marker
-           ist not included.  
-
-           >>> TextModel("").lineend(0) 
-           0 
-
-           >>> TextModel("x").lineend(0)
-           1
+    def lineend(self, i):
+        """Returns the NewLine position at the end of the line containing *i*,
+        or length of model if on the last line.
         """
-        try:
-            return find_weight(self.get_xtexel(), row+1, 2)-1
-        except NotFound:
-            raise IndexError(row)
+        return self.next_newline(i)
 
-    def linelength(self, row):
-        """Returns the length of line *row*."""
-        try:
-            i1 = find_weight(self.texel, row, 2)
-        except NotFound:
-            raise IndexError(row)
-        try:
-            i2 = find_weight(self.texel, row+1, 2)
-        except NotFound:
-            i2 = len(self)
-        return i2-i1
-
+    def linelength(self, i):
+        """Returns the length of the line containing *i*, including the NL if
+        present.
+        """
+        end = self.lineend(i)
+        start = self.linestart(i)
+        if end < len(self):
+            return end - start + 1
+        return end - start
 
     def clear_styles(self, i1, i2):
+        """Empties all the style-Attributes between *i1* and *i2*.""" 
         return self.set_styles(i1, [(i2-i1, EMPTYSTYLE)])
 
     def set_properties(self, i1, i2, **properties):
@@ -241,7 +238,6 @@ class TextModel(Model):
         memo = get_styles(self.texel, i1, i2)
         self.texel = grouped(
             set_properties(self.texel, i1, i2, properties))
-        #assert check(self.texel)
         self.notify_views('properties_changed', i1, i2)
         return memo
 
@@ -252,7 +248,6 @@ class TextModel(Model):
         memo = get_styles(self.texel, i1, i2)
         self.texel = grouped(
             clear_properties(self.texel, i1, i2, keys))
-        #assert check(self.texel)
         self.notify_views('properties_changed', i1, i2)
         return memo    
 
@@ -272,6 +267,7 @@ class TextModel(Model):
         """Sets the paragraph properties between *i1* and *i2*.
 
         Note that i2 can include the endmark, so that i2 <= len(self)+1.
+        Also note that only NL-texels between i1..i2 are changed. 
         """
         n = len(self)
         if not (0 <= i1 <= i2 <= n+1):
@@ -282,7 +278,7 @@ class TextModel(Model):
             set_parproperties(texel, i1, i2, properties))
         self._set_xtexel(t)        
         
-        # XXX This is controversial: should we restrict the change
+        # This is controversial: should we restrict the change
         # message to the range occupied by Texel or should we allow +1
         # to signal ENDMARK-changes?
         self.notify_views('properties_changed', i1, min(i2, n))
@@ -297,7 +293,6 @@ class TextModel(Model):
             clear_parproperties(texel, i1, i2, keys))
         assert length(t) == length(texel)
         self._set_xtexel(t)
-        #assert check(self.texel)
         self.notify_views('properties_changed', i1, i2)
         return memo    
         
@@ -315,14 +310,14 @@ class TextModel(Model):
             set_parstyles(texel, i, iterator))
         self._set_xtexel(t)        
 
-        # XXX This is controversial: should we restrict the change
+        # This is controversial: should we restrict the change
         # message to the range occupied by Texel or should we allow +1
         # to signal ENDMARK-changes?
         self.notify_views('properties_changed', i, min(i+m, n))        
         return memo
 
     def set_parstyle(self, i, style):
-        j = find_newline(self.get_xtexel(), i)
+        j = next_newline(self.get_xtexel(), i)
         return self.set_parstyles(i, [(j + 1 - i, style)])
 
     def increase_indent(self, i1, i2):
@@ -336,11 +331,11 @@ class TextModel(Model):
         return self.set_indents(i1, i2, new)
     
     def get_indent(self, i):
-        j = find_newline(self.get_xtexel(), i)
+        j = next_newline(self.get_xtexel(), i)
         return get_texel(self.get_xtexel(), j).indent
 
     def set_indent(self, i, indent):
-        j = find_newline(self.get_xtexel(), i)
+        j = next_newline(self.get_xtexel(), i)
         return self.set_indents(i, j + 1, [indent])
 
     def set_indents(self, i1, i2, indents):
@@ -350,7 +345,7 @@ class TextModel(Model):
                 return texel.set_indent(new.pop(0))
             return texel
         texel = self.get_xtexel()
-        t = transform(texel, i1, i2, fun)
+        t = transform_range(texel, i1, i2, fun)
         self._set_xtexel(grouped(t))
         self.notify_views('properties_changed', i1, i2)
         return old
@@ -431,12 +426,12 @@ class TextModel(Model):
 
 
 
-def pycolorize(rawtext, coding='latin-1'): # XXX is latin-1 ok?
+def pycolorize(rawtext, coding='latin-1'): # is latin-1 ok?
     # used for benchmarking
     assert type(rawtext) == bytes
     
     from io import BytesIO
-    rawtext += b'\n' # XXX still needed in py3?
+    rawtext += b'\n' # still needed in py3?
     instream = BytesIO(rawtext).readline
 
     import token, tokenize, keyword
@@ -474,10 +469,6 @@ def pycolorize(rawtext, coding='latin-1'): # XXX is latin-1 ok?
     return model.copy(0, len(model)-1)
 
 
-
-if debug: # enable contract checking
-     import contract
-     contract.checkmod(__name__)
 
 
 text1 = "0123456789"
@@ -537,6 +528,12 @@ def test_01():
         col = i-i0
         return row, col
 
+    def lfromt(t):
+        # for debugging
+        splitter = t.split('\n')
+        l = [len(s)+1 for s in splitter[:-1]]
+        return l
+
     texts = [text3]
     text = '0123456789'
     import random
@@ -549,12 +546,13 @@ def test_01():
 
     for text in texts:
         t = TextModel(text)
-        ll_text = t._lfromt(text)
+        ll_text = lfromt(text)
 
 
         for i in range(len(text)):
-            row, col = t.index2position(i)
+            row, col, i0 = t.index2position(i)
             assert (row, col) == index2position(text, i)
+            assert i0 == 0
 
         for i in range(len(text)):
             row, col = index2position(text, i)
@@ -577,7 +575,7 @@ def test_03():
     assert t3.get_text()[10] == '\n'
     assert t3.get_text()[11] == 'a'
     assert t3.linelength(0) == len(text1)+1 # the newline counts!
-    assert t3.linelength(1) == len(text2)
+    assert t3.linelength(len(text1)+1) == len(text2)
 
     t1.insert(0, t2)
     assert  t1.get_text() == text2+text1
@@ -600,7 +598,7 @@ def test_04():
 
     for i in range(len(t)):
 
-        assert t.index2position(i) == (row, col)
+        assert t.index2position(i) == (row, col, 0)
         if t.get_text(i, i+1) == '\n':
             row += 1
             col = 0
@@ -888,9 +886,30 @@ def test_21():
     assert m.expand_range(1, 2) == (1, 2)
 
 
+def test_22():
+    "get_start / get_end"
+    m = TextModel("hello")
+    n = len(m)
+    assert m.get_start(0) == 0
+    assert m.get_end(0) == n
+
+    from .texeltree import Fraction
+    m = TextModel()
+    m.texel = Fraction(Text("a"), Text("b"))
+    n = len(m) 
+    assert m.get_start(0) == 0
+    assert m.get_start(1) == 1
+    assert m.get_start(2) == 1   # sep1 treated as end of cell 1
+    assert m.get_start(3) == 3
+    
+    assert m.get_end(0) == n
+    assert m.get_end(1) == 2     # closing sep of cell 1
+    assert m.get_end(3) == 4     # closing sep of cell 2
+
+    
 def test_23():
     "get_parstyle inside a container"
-    from .texeltree import Fraction, NewLine, Group, grouped
+    from .texeltree import Fraction
     # Paragraph: [container] [NL with parstyle]
     nl = NewLine({'color': 'red'})
     nl = nl.set_parstyle({'alignment': 'left'})

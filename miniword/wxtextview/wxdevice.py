@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 # WxDevice provides a lightweight abstraction layer that keeps device
 # and application specific code isolated from the rest of the

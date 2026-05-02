@@ -1,3 +1,4 @@
+﻿# -*- coding: utf-8 -*-
 from .texeltree import NewLine, length
 
 

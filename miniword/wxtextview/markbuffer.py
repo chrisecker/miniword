@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 
 # Neuester Stand: Alle Tests verlaufen erfolgreich

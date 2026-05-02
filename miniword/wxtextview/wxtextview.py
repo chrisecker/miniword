@@ -17,120 +17,126 @@ import pickle
 
 
 
-class WXTextView(wx.ScrolledWindow, TextView):
+class WxMixin(wx.ScrolledWindow):
+    """wx-specific layer: rendering, scrolling, clipboard, events.
+
+    Designed to be mixed with TextView (or a subclass) to produce a
+    working wx widget without duplicating that code for every view type.
+    """
     _scrollrate = 10, 10
 
-    def __init__(self, parent, id=-1,  
+    def __init__(self, parent, id=-1,
                  pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):
         wx.ScrolledWindow.__init__(self, parent, id,
                                    pos, size,
-                                   style|wx.WANTS_CHARS)
-        TextView.__init__(self)
+                                   style | wx.WANTS_CHARS)
         try:
-            # This attribute only exists in some newer versions of wx (>= 3.0 ?) 
             wx.ScrolledWindow.DisableKeyboardScrolling(self)
-        except AttributeError: pass
+        except AttributeError:
+            pass
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_ERASE_BACKGROUND, lambda event: None)
         self.Bind(wx.EVT_CHAR, self.on_char)
         self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_LEFT_DOWN, self.on_leftdown)
+        self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.Bind(wx.EVT_LEFT_DCLICK, self.on_leftdclick)
         self.Bind(wx.EVT_MOTION, self.on_motion)
         self.Bind(wx.EVT_KILL_FOCUS, self.on_focus)
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
 
         self.timer = wx.Timer(self)
-        self.timer.Start(500) # 2x per second
+        self.timer.Start(500)  # 2x per second
         self.Bind(wx.EVT_TIMER, self.on_blink)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
-        
-        # key = keycode, control, alt
+
+        # key = (keycode, control, alt)
         self.actions = {
-            (wx.WXK_ESCAPE, False, False) : 'dump_info', 
-            (wx.WXK_ESCAPE, True, False) : 'dump_boxes', 
-            (wx.WXK_RIGHT, True, False)  : 'move_word_end',
-            (wx.WXK_RIGHT, False, False)  : 'move_right',
-            (wx.WXK_LEFT, True, False)  : 'move_word_begin',
-            (wx.WXK_LEFT, False, False)  : 'move_left',
-            (wx.WXK_DOWN, True, False)  : 'move_paragraph_end',
-            (wx.WXK_DOWN, False, False)  : 'move_down',
-            (wx.WXK_UP, True, False)  : 'move_paragraph_begin',
-            (wx.WXK_UP, False, False)  : 'move_up',
-            (wx.WXK_HOME, False, False) : 'move_line_start',
-            (wx.WXK_END, False, False) : 'move_line_end',   
-            (wx.WXK_HOME, True, False) : 'move_document_start',
-            (wx.WXK_END, True, False) : 'move_document_end',            
+            (wx.WXK_ESCAPE, False, False): 'dump_info',
+            (wx.WXK_ESCAPE, True,  False): 'dump_boxes',
+            (wx.WXK_RIGHT,  True,  False): 'move_word_end',
+            (wx.WXK_RIGHT,  False, False): 'move_right',
+            (wx.WXK_LEFT,   True,  False): 'move_word_begin',
+            (wx.WXK_LEFT,   False, False): 'move_left',
+            (wx.WXK_DOWN,   True,  False): 'move_paragraph_end',
+            (wx.WXK_DOWN,   False, False): 'move_down',
+            (wx.WXK_UP,     True,  False): 'move_paragraph_begin',
+            (wx.WXK_UP,     False, False): 'move_up',
+            (wx.WXK_HOME,   False, False): 'move_line_start',
+            (wx.WXK_END,    False, False): 'move_line_end',
+            (wx.WXK_HOME,   True,  False): 'move_document_start',
+            (wx.WXK_END,    True,  False): 'move_document_end',
             (wx.WXK_PAGEDOWN, False, False): 'move_page_down',
-            (wx.WXK_PAGEUP, False, False): 'move_page_up',
-            (wx.WXK_PAGEUP, True, False) : 'move_document_start',
-            (wx.WXK_PAGEDOWN, True, False) : 'move_document_end',            
+            (wx.WXK_PAGEUP,   False, False): 'move_page_up',
+            (wx.WXK_PAGEUP,   True,  False): 'move_document_start',
+            (wx.WXK_PAGEDOWN, True,  False): 'move_document_end',
             (wx.WXK_RETURN, False, False): 'insert_newline',
-            (wx.WXK_BACK, False, False): 'backspace',
+            (wx.WXK_BACK,   False, False): 'backspace',
             (wx.WXK_DELETE, False, False): 'delete',
-            (3, True, False) : 'copy',
-            (22, True, False) : 'paste',
-            (24, True, False) : 'cut',
-            (26, True, False) : 'undo',
-            (18, True, False) : 'redo',  
-            (11, True, False) : 'del_line_end',   
-            (wx.WXK_BACK, True, False) : 'del_word_left',
-            (1, True, False) : 'select_all',
-            (9, True, False) : 'indent',
-            (21, True, False) : 'dedent',
-            }        
-        
-    def create_builder(self):
-        return Builder(
-            self.model, 
-            device=WxDevice(), 
-            maxw=self._maxw)
+            (3,  True, False): 'copy',
+            (22, True, False): 'paste',
+            (24, True, False): 'cut',
+            (26, True, False): 'undo',
+            (18, True, False): 'redo',
+            (11, True, False): 'del_line_end',
+            (127, True, False): 'del_word_left',
+            (1,  True, False): 'select_all',
+            (9,  True, False): 'indent',
+            (21, True, False): 'dedent',
+        }
+
+    # --- wx hooks (satisfy TextView abstract interface) ---
 
     def refresh(self):
         self.Refresh()
 
+    def get_client_size(self):
+        return self.GetClientSize()
+
+    def content_offset(self):
+        return 0, 0
+
+    def keep_cursor_on_screen(self):
+        pass
+
+    # --- timer / focus ---
+
     def on_blink(self, event):
-        # We could limit the refresh area to the cursor rect.
         self.Refresh()
 
     def on_destroy(self, event):
         if self.timer.IsRunning():
             self.timer.Stop()
-        event.Skip()        
+        event.Skip()
 
     def on_focus(self, event):
-        # focus changed
         self.Refresh()
 
-    def on_char(self, event):
-        keycode = event.GetKeyCode()
-        ukey = event.GetUnicodeKey()
+    def on_size(self, event):
+        self.keep_cursor_on_screen()
 
+    # --- keyboard ---
+
+    def on_char(self, event):
+        if self.editor.on_key(event.GetKeyCode(), event):
+            return
+        keycode = event.GetKeyCode()
         ctrl = event.ControlDown()
         shift = event.ShiftDown()
         alt = event.AltDown()
-
         action = self.actions.get((keycode, ctrl, alt))
-        if action is not None:
-            self.handle_action(action, shift)
-            return
+        if action is None:
+            # NOTE: there seems to be a bug in wx - AltGr also triggers Ctrl!
+            if (ctrl and not alt) or keycode < 32:
+                return event.Skip()  # needed for menu
+            action = chr(keycode)
+        self.handle_action(action, shift)
 
-        # Ctrl-Sequences are used for menu shortcuts -> Skip the event
-        # so it is handled by wx. 
-        if ctrl and not alt:
-            # NOTE: AltGr triggers Ctrl in wx and is used only for
-            # text here. We therefore have to exclude this case.
-            event.Skip()
-            return
-
-        if ukey != wx.WXK_NONE:
-            self.type_char(chr(ukey))
-        else:
-            event.Skip()
+    # --- clipboard ---
 
     def to_clipboard(self, textmodel):
         for i in range(2):
-            # loop is a hack to make clipboard work reliable under linux
+            # loop is a hack to make clipboard work reliably under linux
             text = textmodel.get_text()
             plain = wx.TextDataObject()
             plain.SetText(text)
@@ -139,7 +145,6 @@ class WXTextView(wx.ScrolledWindow, TextView):
             data = wx.DataObjectComposite()
             data.Add(pickled, preferred=True)
             data.Add(plain)
-            
             if wx.TheClipboard.Open():
                 wx.TheClipboard.SetData(data)
                 wx.TheClipboard.Flush()
@@ -147,23 +152,54 @@ class WXTextView(wx.ScrolledWindow, TextView):
                 self._clipboard_data = data  # prevent gc of collecting data
 
     def read_clipboard(self):
-        if wx.TheClipboard.IsOpened(): # may crash, otherwise
+        if wx.TheClipboard.IsOpened():
             return
-            
         if not wx.TheClipboard.Open():
             return None
         pickled = wx.CustomDataObject("pytextmodel")
         plain = wx.TextDataObject()
         textmodel = None
-        if wx.TheClipboard.GetData(pickled):            
+        if wx.TheClipboard.GetData(pickled):
             textmodel = pickle.loads(pickled.GetData())
-
         elif wx.TheClipboard.GetData(plain):
             textmodel = self._TextModel(plain.GetText())
-
         wx.TheClipboard.Close()
         return textmodel
-   
+
+    # --- mouse ---
+
+    def on_motion(self, event):
+        if self.editor.on_motion(event):
+            return
+        if not event.LeftIsDown():
+            return event.Skip()
+        x, y = self.window_to_content(event.Position)
+        i = self.layout.get_index(x, y)
+        if i is not None:
+            self.set_index(i, extend=True)
+
+    def on_leftdown(self, event):
+        if self.editor.on_leftdown(event):
+            return
+        x, y = self.window_to_content(event.Position)
+        i = self.compute_index(x, y)
+        if i is not None:
+            self.set_index(i, extend=event.ShiftDown())
+        self.SetFocus()
+
+    def on_leftup(self, event):
+        if self.editor.on_leftup(event):
+            self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
+
+    def on_leftdclick(self, event):
+        if self.try_install_click_editor():
+            return
+        x, y = self.window_to_content(event.Position)
+        self.select_word(x, y)
+        self.SetFocus()
+
+    # --- painting ---
+
     def on_paint(self, event):
         self._update_scroll()
         self.keep_cursor_on_screen()
@@ -179,21 +215,19 @@ class WXTextView(wx.ScrolledWindow, TextView):
             dc = pdc
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
-        #dc.SetBackground(wx.WHITE_BRUSH)
-        
         dc.Clear()
         region = self.GetUpdateRegion()
         rx, ry, rw, rh = region.Box
-        dc.SetClippingRegion(rx-1, ry-1, rw+2, rh+2)
+        dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
         painter = device.create_painter(dc)
 
-        scale = self.scale
+        zoom = self.zoom
         layout = self.layout
 
         px, py = self.CalcScrolledPosition((0, 0))
         ox, oy = self.content_offset()
-        x = (px + ox) / scale
-        y = (py + oy) / scale
+        x = (px + ox) / zoom
+        y = (py + oy) / zoom
 
         layout.draw(x, y, painter)
 
@@ -204,55 +238,18 @@ class WXTextView(wx.ScrolledWindow, TextView):
             layout.draw_selection(j1, j2, x, y, painter)
         dc = None
         painter = None
-        
-    def on_size(self, event):
-        self.keep_cursor_on_screen()
 
-    def _virtual_size(self):
-        return int(self.content_width * self.scale), int(self.content_height * self.scale)
+    # --- scroll ---
 
-    def content_offset(self):
-        return 0, 0
-
-    def window_to_content(self, pos):
-        """Calculates content coordinates from window-coordinates,
-        accounts for scroll position."""
-        scale = self.scale
-        x, y = self.CalcUnscrolledPosition(pos)
-        ox, oy = self.content_offset()
-        return (x - ox) / scale, (y - oy) / scale
-    
-    def on_motion(self, event):
-        if not event.LeftIsDown():
-            return event.Skip()
-        x, y = self.window_to_content(event.Position)
-        i = self.layout.get_index(x, y)
-        if i is not None:
-            self.set_index(i, extend=True)
-
-    def on_leftdown(self, event):
-        x, y = self.window_to_content(event.Position)
-        i = self.compute_index(x, y)
-        if i is not None:
-            self.set_index(i, extend=event.ShiftDown())
-        self.SetFocus()
-
-    def on_leftdclick(self, event):
-        x, y = self.window_to_content(event.Position)
-        self.select_word(x, y)
-        self.SetFocus()        
-
-    ### Scroll
     def _update_scroll(self):
         layout = self.layout
-        scale = self.scale
-        w = int(layout.width  * scale)
-        h = int(layout.height * scale)
+        zoom = self.zoom
+        w = int(layout.width * zoom)
+        h = int(layout.height * zoom)
         vw, vh = self.GetVirtualSize()
         if vw == w and vh == h:
             return
-        # While rebuilding, never shrink the virtual size — the scroll
-        # position must not be clamped before the layout catches up.
+        # While rebuilding, never shrink the virtual size.
         if not getattr(self.layout, 'is_finished', True):
             w = max(w, vw)
             h = max(h, vh)
@@ -260,31 +257,27 @@ class WXTextView(wx.ScrolledWindow, TextView):
             return
         self.SetVirtualSize((w, h))
         self.SetScrollRate(*self._scrollrate)
-        
+
     def adjust_viewport(self):
         layout = self.layout
-        scale = self.scale
+        zoom = self.zoom
 
         if self.index > len(layout):
             return  # layout not yet rebuilt to cursor position
         r = layout.get_rect(self.index, 0, 0)
 
-        # cursor in device coordinates
-        x1 = r.x1 * scale
-        y1 = r.y1 * scale
-        x2 = r.x2 * scale
-        y2 = r.y2 * scale
+        x1 = r.x1 * zoom
+        y1 = r.y1 * zoom
+        x2 = r.x2 * zoom
+        y2 = r.y2 * zoom
 
         fw, fh = self._scrollrate
-
         width, height = self.GetClientSize()
         firstcol, firstrow = self.GetViewStart()
 
-        # current viewport in pixels
         vx = firstcol * fw
         vy = firstrow * fh
 
-        # check vertically
         if y1 <= vy:
             vy = y1
             firstrow = int(vy / fh)
@@ -292,7 +285,6 @@ class WXTextView(wx.ScrolledWindow, TextView):
             vy = y2 - height
             firstrow = ceil(vy / float(fh))
 
-        # check horizontally
         if x1 <= vx:
             vx = x1
             firstcol = int(vx / fw)
@@ -303,9 +295,15 @@ class WXTextView(wx.ScrolledWindow, TextView):
         if (firstcol, firstrow) != self.GetViewStart():
             self.Scroll(firstcol, firstrow)
 
-            
-    def keep_cursor_on_screen(self):
-        pass # not implemented
+    def window_to_content(self, pos):
+        """Calculates content coordinates from window-coordinates,
+        accounts for scroll position."""
+        zoom = self.zoom
+        x, y = self.CalcUnscrolledPosition(pos)
+        ox, oy = self.content_offset()
+        return (x - ox) / zoom, (y - oy) / zoom
+
+    # --- zoom ---
 
     def get_zoom(self):
         return self.builder.get_device().zoom
@@ -314,6 +312,9 @@ class WXTextView(wx.ScrolledWindow, TextView):
         self.builder.get_device().zoom = zoom
         self.refresh()
 
+
+class WXTextView(WxMixin, TextView):
+
     @property
     def scale(self):
         try:
@@ -321,22 +322,22 @@ class WXTextView(wx.ScrolledWindow, TextView):
         except AttributeError:
             dpi = wx.ScreenDC().GetPPI()[1]
         return self.builder.get_device().get_scale(dpi)
-        
-        
-        
 
-testtext = u"""Ein m�nnlicher Briefmark erlebte
-Was Sch�nes, bevor er klebte.
-Er war von einer Prinzessin beleckt.
-Da war die Liebe in ihm geweckt.
-Er wollte sie wiederk�ssen,
-Da hat er verreisen m�ssen.
-So liebte er sie vergebens.
-Das ist die Tragik des Lebens.
+    def __init__(self, parent, id=-1,
+                 pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):
+        WxMixin.__init__(self, parent, id, pos, size, style)
+        TextView.__init__(self)
 
-(Joachim Ringelnatz)"""
+    def create_builder(self):
+        return Builder(
+            self.model,
+            device=WxDevice(),
+            maxw=self._maxw)
+
+
 
 def init_testing(redirect=True):
+    from .textview import testtext
     app = wx.App(redirect=redirect)
     model = TextModel(testtext)
     model.set_properties(15, 24, fontsize=14)
@@ -348,23 +349,22 @@ def init_testing(redirect=True):
     view.model = model
     assert view.layout is not None
     box = wx.BoxSizer(wx.VERTICAL)
-    box.Add(view, 1, wx.ALL|wx.GROW, 1)
+    box.Add(view, 1, wx.ALL | wx.GROW, 1)
     win.SetSizer(box)
     win.SetAutoLayout(True)
-    frame.Show()    
+    frame.Show()
     return locals()
 
-
-    
 def test_02():
+    "setting cursor & selection"
     ns = init_testing(redirect=True)
     view = ns['view']
     view.cursor = 5
-    view.selection = 3, 6    
+    view.selection = 3, 6
     return ns
 
-
 def test_03():
+    "inserting text"
     ns = init_testing(redirect=False)
     model = ns['model']
     view = ns['view']
@@ -376,11 +376,10 @@ def test_03():
     n = len(model)
     text = '\n12345\n'
     model.insert_text(5, text)
-    model.remove(5, 5+len(text))
+    model.remove(5, 5 + len(text))
     assert len(model) == n
-    assert len(view.layout) == n+1
+    assert len(view.layout) == n + 1
     return locals()
-
 
 def test_04():
     "insert/remove"
@@ -418,6 +417,7 @@ def test_09():
     return ns
 
 def test_10():
+    "linebreak after insert"
     ns = init_testing(redirect=False)
     model = ns['model']
     view = ns['view']
@@ -428,34 +428,30 @@ def test_10():
     builder.set_maxw(100)
     layout = view.layout
     assert layout.get_info(4, 0, 0)
-    x, y =  layout.get_info(3, 0, 0)[-2:]
+    x, y = layout.get_info(3, 0, 0)[-2:]
     u, v = layout.get_info(4, 0, 0)[-2:]
-    # Cursorposition 4 must be at the begining of next line
-    assert u<x # 3 must be left of 4
-    assert v>y # and 4 must be below 3
-
+    assert u < x
+    assert v > y
 
 def test_11():
-    # Problem: if the click position is right of the line, the cursor
-    # should jump to the last index position in that line.
+    "relayout after changes"
     ns = init_testing(redirect=False)
     model = ns['model']
     view = ns['view']
-    #view.layout.dump_boxes(0, 0, 0)
     model.remove(0, len(model))
     model.insert(0, TextModel("123\n"))
     assert view.layout.get_index(100, 0) == 3
 
-
 def test_13():
-    # Problem: Exception during delete 10.01.2015
+    "exception during delete 10.01.2015"
     ns = init_testing(redirect=False)
     model = ns['model']
     view = ns['view']
     view.index = 271
-    view.selection = (42, 42+227)
+    view.selection = (42, 42 + 227)
     view.cut()
-    
+
+
 def test_14():
     "join_undo"
     ns = init_testing(redirect=False)
@@ -475,25 +471,25 @@ def demo_00():
     "simple demo"
     ns = test_02()
     from . import testing
-    testing.pyshell(ns)    
+    testing.pyshell(ns)
     ns['app'].MainLoop()
 
 
 def demo_01():
     "colorize demo"
-    app = wx.App(redirect = False)
+    app = wx.App(redirect=False)
     frame = wx.Frame(None)
     win = wx.Panel(frame)
     view = WXTextView(win)
     box = wx.BoxSizer(wx.VERTICAL)
-    box.Add(view, 1, wx.ALL|wx.GROW, 1)
+    box.Add(view, 1, wx.ALL | wx.GROW, 1)
     win.SetSizer(box)
     win.SetAutoLayout(True)
 
     from ..textmodel.textmodel import pycolorize
     from ..textmodel import texeltree
     filename = texeltree.__file__.replace('pyc', 'py')
-    rawtext = open(filename, 'rb').read() 
+    rawtext = open(filename, 'rb').read()
     model = pycolorize(rawtext)
     view.set_model(model)
     frame.Show()
@@ -502,19 +498,19 @@ def demo_01():
 
 def demo_02():
     "empty text"
-    app = wx.App(redirect = True)
+    app = wx.App(redirect=True)
     frame = wx.Frame(None)
     win = wx.Panel(frame)
     view = WXTextView(win)
     box = wx.BoxSizer(wx.VERTICAL)
-    box.Add(view, 1, wx.ALL|wx.GROW, 1)
+    box.Add(view, 1, wx.ALL | wx.GROW, 1)
     win.SetSizer(box)
     win.SetAutoLayout(True)
     model = TextModel(u'')
     view.set_model(model)
     frame.Show()
     from . import testing
-    testing.pyshell(locals())    
+    testing.pyshell(locals())
     app.MainLoop()
 
 
@@ -522,7 +518,7 @@ def demo_03():
     "line break"
     ns = test_09()
     from . import testing
-    testing.pyshell(ns)    
+    testing.pyshell(ns)
     ns['app'].MainLoop()
 
 def benchmark_00():
@@ -543,6 +539,3 @@ def benchmark_00():
 
     for i in range(100):
         model.insert_text(1000, "TEXT")
-
-    
-    

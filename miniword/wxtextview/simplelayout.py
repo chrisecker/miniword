@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 # Simple layout for text editors
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

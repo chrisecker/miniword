@@ -1,5 +1,5 @@
+﻿# -*- coding: utf-8 -*-
 from sys import intern
-# -*- coding: latin-1 -*-
 
 
 class Properties(object):

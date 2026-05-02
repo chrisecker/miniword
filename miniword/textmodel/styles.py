@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 from . import texeltree
 from .texeltree import G, T, length, grouped, provides_childs, iter_childs, \

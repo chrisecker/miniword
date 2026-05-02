@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 from .testdevice import TESTDEVICE
 from .boxes import TabulatorBox, TextBox, EmptyTextBox, NewlineBox, Row
