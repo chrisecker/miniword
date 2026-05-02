@@ -155,8 +155,8 @@ class DemoPanel(wx.Panel):
         
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
-        btn_rep = flat_button(self, "Replace", size=(-1, 28))
-        btn_all = flat_button(self, "Replace all", size=(-1, 28))
+        btn_rep = flat_button(self, "Replace", size=(-1, self.FromDIP(28)))
+        btn_all = flat_button(self, "Replace all", size=(-1, self.FromDIP(28)))
         
         btn_sizer.Add(btn_rep, 1, wx.RIGHT, 5)
         btn_sizer.Add(btn_all, 1)

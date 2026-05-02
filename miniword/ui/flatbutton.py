@@ -1,7 +1,9 @@
 import wx
 
 class FlatButton(wx.Control):
-    def __init__(self, parent, label, size=(-1, 24)):
+    def __init__(self, parent, label, size=None):
+        if size is None:
+            size = (-1, parent.FromDIP(24))
         super().__init__(parent, size=size, style=wx.BORDER_NONE)
         
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
@@ -35,7 +37,7 @@ class FlatButton(wx.Control):
         dc.SetFont(self.GetFont())
         _, th = dc.GetTextExtent("Ag")
         w, h = self.GetSize()
-        return wx.Size(w if w > 0 else 24, th + 6)
+        return wx.Size(w if w > 0 else self.FromDIP(24), th + self.FromDIP(6))
 
     def on_paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)

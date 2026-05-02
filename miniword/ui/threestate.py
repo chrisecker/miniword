@@ -83,7 +83,9 @@ class ColourButton(wx.Button):
     """Colour picker button with three-state support (None = mixed)."""
     callback = None
 
-    def __init__(self, parent, size=(100, 30)):
+    def __init__(self, parent, size=None):
+        if size is None:
+            size = parent.FromDIP(wx.Size(100, 30))
         super().__init__(parent, label="", size=size)
         self._colour = None
         self.Bind(wx.EVT_BUTTON, self.on_click)

@@ -297,7 +297,7 @@ class TablePanel(wx.Panel, ViewBase):
         grid_sizer = wx.GridSizer(rows=2, cols=5, hgap=dip(2), vgap=dip(2))
         self._border_btns = []
         for icon_name, key in _BORDER_PRESETS:
-            btn = wx.BitmapButton(self, bitmap=icon(icon_name + '.svg', (dip(24), dip(24))),
+            btn = wx.BitmapButton(self, bitmap=icon(icon_name + '.svg', (24, 24)),
                                   size=(dip(32), dip(32)))
             btn.preset_key = key
             btn.Bind(wx.EVT_BUTTON, self._on_border_preset)

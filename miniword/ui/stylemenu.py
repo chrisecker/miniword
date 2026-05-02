@@ -133,8 +133,7 @@ class StyleList(wx.PopupTransientWindow):
     # ------------------------------------------------------------------
 
     def _compute_rects(self) -> list[tuple[int, int]]:
-        dc = wx.MemoryDC()
-        dc.SelectObject(wx.NullBitmap)
+        dc = wx.ClientDC(self.Parent)
         plus_h = self.FromDIP(PLUS_HEIGHT)
         rects: list[tuple[int, int]] = [(0, plus_h)]  # index 0 = "+" item
         y = plus_h
