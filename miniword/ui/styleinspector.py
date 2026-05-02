@@ -191,7 +191,7 @@ class StyleInspector(InspectorBase):
         
         mainsizer = wx.BoxSizer( wx.VERTICAL )
 
-        self.basestyle = BasestyleSelector(self, size=(-1, 40))
+        self.basestyle = BasestyleSelector(self, size=(-1, self.FromDIP(40)))
         self.basestyle.Bind(wx.EVT_CHOICE, self.on_basestyle)
         stylesheet = view.builder.stylesheet
         self.basestyle.set_stylesheet(self.basestyles)
@@ -200,7 +200,7 @@ class StyleInspector(InspectorBase):
         self.basestyle.on_revert_style   = self._revert_style
         self.basestyle.on_rename_style   = self._rename_style
         self.basestyle.on_delete_style   = self._delete_style
-        mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, 5)
+        mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, self.FromDIP(5))
         
         notebook = wx.Notebook(self)
         notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,

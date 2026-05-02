@@ -100,7 +100,7 @@ class SearchResultsList(wx.VListBox):
         self.Refresh()
 
     def OnMeasureItem(self, index):
-        return 78
+        return self.FromDIP(78)
 
     def OnDrawItem(self, dc, rect, index):
         i1, i2, snippet, query = self.results[index]
@@ -109,14 +109,15 @@ class SearchResultsList(wx.VListBox):
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.DrawRectangle(rect)
 
-        padding = 12
+        dip = self.FromDIP
+        padding = dip(12)
 
         if self.IsSelected(index):
             sel_rect = wx.Rect(rect)
             sel_rect.Deflate(1, 1)
             dc.SetBrush(wx.Brush(wx.Colour(225, 238, 255)))
             dc.SetPen(wx.TRANSPARENT_PEN)
-            dc.DrawRoundedRectangle(sel_rect, 6)
+            dc.DrawRoundedRectangle(sel_rect, dip(6))
 
         dc.SetFont(self.line_font)
         dc.SetTextForeground(wx.Colour(140, 140, 140))
@@ -124,15 +125,15 @@ class SearchResultsList(wx.VListBox):
         dc.DrawText(str(line), rect.x + padding, rect.y + padding)
 
         dc.SetFont(self.preview_font)
-        max_width = rect.width - 60
+        max_width = rect.width - dip(60)
         lines = self._wrap_text(dc, snippet, max_width)
         y = rect.y + padding
         for line_text in lines[:self.MAX_LINES]:
-            self._draw_highlighted_line(dc, line_text, query, rect.x + 50, y)
-            y += 18
+            self._draw_highlighted_line(dc, line_text, query, rect.x + dip(50), y)
+            y += dip(18)
 
         dc.SetPen(wx.Pen(wx.Colour(235, 235, 235)))
-        dc.DrawLine(rect.x + 10, rect.bottom - 1, rect.right - 10, rect.bottom - 1)
+        dc.DrawLine(rect.x + dip(10), rect.bottom - 1, rect.right - dip(10), rect.bottom - 1)
 
     def _wrap_text(self, dc, text, max_width):
         words = text.split()
@@ -215,27 +216,27 @@ class SearchPanel(wx.Panel, ViewBase):
         self.set_model(self.search)
 
 
+        dip = self.FromDIP
         content = make_panel(self, "FIND & REPLACE")
 
         # Search field + ▲▼ navigation
         sr = wx.BoxSizer(wx.HORIZONTAL)
-        self.search_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER,
-                                       size=(-1, 24))
+        self.search_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.search_ctrl.SetHint("Search…")
-        btn_prev = muted_button(self, "▲", size=(20, -1))
-        btn_next = muted_button(self, "▼", size=(20, -1))
-        btn_prev.SetMinSize((20, -1))
-        btn_next.SetMinSize((20, -1))
+        btn_w = dip(20)
+        btn_prev = muted_button(self, "▲", size=(btn_w, -1))
+        btn_next = muted_button(self, "▼", size=(btn_w, -1))
+        btn_prev.SetMinSize((btn_w, -1))
+        btn_next.SetMinSize((btn_w, -1))
         sr.Add(self.search_ctrl, 1, wx.EXPAND)
-        sr.Add(btn_prev, 0, wx.EXPAND | wx.LEFT, 2)
-        sr.Add(btn_next, 0, wx.EXPAND | wx.LEFT, 2)
-        content.Add(sr, 0, wx.EXPAND | wx.BOTTOM, 4)
+        sr.Add(btn_prev, 0, wx.EXPAND | wx.LEFT, dip(2))
+        sr.Add(btn_next, 0, wx.EXPAND | wx.LEFT, dip(2))
+        content.Add(sr, 0, wx.EXPAND | wx.BOTTOM, dip(4))
 
         # Replace field
-        self.replace_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER,
-                                        size=(-1, 24))
+        self.replace_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.replace_ctrl.SetHint("Replace…")
-        content.Add(self.replace_ctrl, 0, wx.EXPAND | wx.BOTTOM, 4)
+        content.Add(self.replace_ctrl, 0, wx.EXPAND | wx.BOTTOM, dip(4))
 
         # Options: Aa (case), .* (regex), W (whole word)
         os_ = wx.BoxSizer(wx.HORIZONTAL)
@@ -251,26 +252,26 @@ class SearchPanel(wx.Panel, ViewBase):
         self.cb_word.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
                                      wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         self.cb_word.SetToolTip("Whole word")
-        os_.Add(self.cb_case,  0, wx.RIGHT, 10)
-        os_.Add(self.cb_regex, 0, wx.RIGHT, 10)
+        os_.Add(self.cb_case,  0, wx.RIGHT, dip(10))
+        os_.Add(self.cb_regex, 0, wx.RIGHT, dip(10))
         os_.Add(self.cb_word,  0)
-        content.Add(os_, 0, wx.BOTTOM, 4)
+        content.Add(os_, 0, wx.BOTTOM, dip(4))
 
         # Replace buttons
         brs = wx.BoxSizer(wx.HORIZONTAL)
-        btn_replace = flat_button(self, "Replace",     size=(-1, 24))
-        btn_all     = flat_button(self, "Replace All", size=(-1, 24))
-        brs.Add(btn_replace, 1, wx.RIGHT, 3)
+        btn_replace = flat_button(self, "Replace",     size=(-1, dip(24)))
+        btn_all     = flat_button(self, "Replace All", size=(-1, dip(24)))
+        brs.Add(btn_replace, 1, wx.RIGHT, dip(3))
         brs.Add(btn_all, 1)
-        content.Add(brs, 0, wx.EXPAND | wx.BOTTOM, 8)
+        content.Add(brs, 0, wx.EXPAND | wx.BOTTOM, dip(8))
 
         # Separator + count label
-        content.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.BOTTOM, 4)
+        content.Add(wx.StaticLine(self), 0, wx.EXPAND | wx.BOTTOM, dip(4))
         self.count_label = wx.StaticText(self, label="")
         self.count_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
                                          wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
         self.count_label.SetForegroundColour(TEXT_MUTED)
-        content.Add(self.count_label, 0, wx.BOTTOM, 3)
+        content.Add(self.count_label, 0, wx.BOTTOM, dip(3))
 
         # Result list
         self.result_list = SearchResultsList(self, textview)

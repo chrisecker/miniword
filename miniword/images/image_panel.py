@@ -33,63 +33,64 @@ class ImageInspector(wx.Panel, ViewBase):
         self._updating     = False
         self._crop_active  = False
 
+        dip = self.FromDIP
         sizer = make_panel(self, "IMAGE")
 
         # --- Insert (always active) ---
         add_section("Insert", self, sizer)
-        btn_insert = flat_button(self, "Insert Image\u2026", size=(-1, 28))
+        btn_insert = flat_button(self, "Insert Image\u2026", size=(-1, dip(28)))
         btn_insert.Bind(wx.EVT_BUTTON, self._on_insert)
-        sizer.Add(btn_insert, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(btn_insert, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         # --- Replace ---
-        self.btn_replace = flat_button(self, "Replace Image\u2026", size=(-1, 28))
+        self.btn_replace = flat_button(self, "Replace Image\u2026", size=(-1, dip(28)))
         self.btn_replace.Bind(wx.EVT_BUTTON, self._on_replace)
-        sizer.Add(self.btn_replace, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(self.btn_replace, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         # --- Size ---
         add_section("Size", self, sizer)
 
         self.txt_size_x = LengthInput(self, category="layout")
         self.txt_size_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('x'))
-        btn_reset_w = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_w = muted_button(self, "\u00d7", size=(dip(20), -1))
         btn_reset_w.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_x())
         add_row(sizer, wx.StaticText(self, label="Width"), self.txt_size_x, btn_reset_w)
 
         self.txt_size_y = LengthInput(self, category="layout")
         self.txt_size_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('y'))
-        btn_reset_h = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_h = muted_button(self, "\u00d7", size=(dip(20), -1))
         btn_reset_h.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_y())
         add_row(sizer, wx.StaticText(self, label="Height"), self.txt_size_y, btn_reset_h)
 
         self.chk_proportional = wx.CheckBox(self, label="Proportional")
         self.chk_proportional.Bind(wx.EVT_CHECKBOX, self._on_proportional)
-        sizer.Add(self.chk_proportional, 0, wx.LEFT | wx.TOP, 28)
+        sizer.Add(self.chk_proportional, 0, wx.LEFT | wx.TOP, dip(28))
 
         # --- Scale ---
         add_section("Scale", self, sizer)
 
         self.txt_scale_x = FractionInput(self)
         self.txt_scale_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('x'))
-        btn_reset_sx = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_sx = muted_button(self, "\u00d7", size=(dip(20), -1))
         btn_reset_sx.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_x())
         add_row(sizer, wx.StaticText(self, label="X"), self.txt_scale_x, btn_reset_sx)
 
         self.txt_scale_y = FractionInput(self)
         self.txt_scale_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('y'))
-        btn_reset_sy = muted_button(self, "\u00d7", size=(20, -1))
+        btn_reset_sy = muted_button(self, "\u00d7", size=(dip(20), -1))
         btn_reset_sy.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_y())
         add_row(sizer, wx.StaticText(self, label="Y"), self.txt_scale_y, btn_reset_sy)
 
         # --- Crop ---
         add_section("Crop", self, sizer)
 
-        self.btn_crop = flat_button(self, "Edit Crop", size=(-1, 28))
+        self.btn_crop = flat_button(self, "Edit Crop", size=(-1, dip(28)))
         self.btn_crop.Bind(wx.EVT_BUTTON, self._on_crop_toggle)
-        sizer.Add(self.btn_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(self.btn_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
-        self.btn_unset_crop = flat_button(self, "Unset Crop", size=(-1, 28))
+        self.btn_unset_crop = flat_button(self, "Unset Crop", size=(-1, dip(28)))
         self.btn_unset_crop.Bind(wx.EVT_BUTTON, self._on_unset_crop)
-        sizer.Add(self.btn_unset_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(self.btn_unset_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         self._set_inspector_enabled(False)
         self.Bind(wx.EVT_SHOW, self.on_show)

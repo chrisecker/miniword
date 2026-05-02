@@ -71,17 +71,19 @@ class UnitInput(wx.Panel):
             self.display_unit = display_unit
         self._last = None
 
+        dip = self.FromDIP
         self.text = wx.TextCtrl(self, value=f"10 {self.display_unit}",
                                 style=wx.TE_PROCESS_ENTER | wx.TE_RIGHT)
-        self.text.SetMinSize((100, -1))
+        self.text.SetMinSize((dip(100), -1))
         h = self.text.GetBestSize().height
-        btn_up = muted_button(self, "▲", size=(14, h))
-        btn_dn = muted_button(self, "▼", size=(14, h))
-        btn_up.SetMinSize((14, h))
-        btn_dn.SetMinSize((14, h))
+        btn_w = dip(14)
+        btn_up = muted_button(self, "▲", size=(btn_w, h))
+        btn_dn = muted_button(self, "▼", size=(btn_w, h))
+        btn_up.SetMinSize((btn_w, h))
+        btn_dn.SetMinSize((btn_w, h))
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        btn_sizer.Add(btn_up, 0, wx.EXPAND|wx.LEFT, 10)
+        btn_sizer.Add(btn_up, 0, wx.EXPAND|wx.LEFT, dip(10))
         btn_sizer.Add(btn_dn, 0, wx.EXPAND)
 
         sizer = wx.BoxSizer(wx.HORIZONTAL)

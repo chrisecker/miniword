@@ -19,9 +19,10 @@ def make_tab(notebook, title):
     panel = wx.Panel(notebook)
     panel.SetBackgroundColour(BAR_BG)
     notebook.AddPage(panel, title)
+    dip = panel.FromDIP
     content = wx.BoxSizer(wx.VERTICAL)
     outer = wx.BoxSizer(wx.VERTICAL)
-    outer.Add(content, 1, wx.EXPAND | wx.ALL, 8)
+    outer.Add(content, 1, wx.EXPAND | wx.ALL, dip(8))
     panel.SetSizer(outer)
     return panel, content
 
@@ -32,33 +33,35 @@ def make_panel(panel, title):
     Returns the content sizer. The outer sizer is set on the panel.
     """
     panel.SetBackgroundColour(BAR_BG)
+    dip = panel.FromDIP
     outer = wx.BoxSizer(wx.VERTICAL)
     add_header(title, panel, outer)
     content = wx.BoxSizer(wx.VERTICAL)
-    outer.Add(content, 1, wx.EXPAND | wx.ALL, 8)
+    outer.Add(content, 1, wx.EXPAND | wx.ALL, dip(8))
     panel.SetSizer(outer)
     return content
 
 
 def add_header(label, parent, sizer):
     """Add a panel header to vertical sizer *sizer*."""
-    sizer.AddSpacer(6)
+    dip = parent.FromDIP
+    sizer.AddSpacer(dip(6))
 
     # Section header
     hdr = wx.StaticText(parent, label=label)
     hdr.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
                         wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
     hdr.SetForegroundColour(TEXT_MUTED)
-    sizer.Add(hdr, 0, wx.LEFT | wx.TOP, 8)
-    sizer.AddSpacer(3)
+    sizer.Add(hdr, 0, wx.LEFT | wx.TOP, dip(8))
+    sizer.AddSpacer(dip(3))
 
 def add_section(label, panel, sizer):
     # Helper: add a heading
     text = wx.StaticText(panel, label=label)
     font = text.GetFont()
     font.SetWeight(wx.FONTWEIGHT_BOLD)
-    text.SetFont(font)        
-    sizer.Add(text, 0, wx.EXPAND|wx.TOP, 10)
+    text.SetFont(font)
+    sizer.Add(text, 0, wx.EXPAND|wx.TOP, panel.FromDIP(10))
 
 def add_label(label, panel, sizer):
     # Helper: add a label
@@ -67,30 +70,32 @@ def add_label(label, panel, sizer):
 
     
 def add_row(sizer, *widgets):
-    # Helper: add a row of widgets    
+    # Helper: add a row of widgets
     rowsizer = wx.BoxSizer(wx.HORIZONTAL)
-
+    ref = next((w for w in widgets if isinstance(w, wx.Window)), None)
+    border = ref.FromDIP(5) if ref else 5
     for i, widget in enumerate(widgets):
         if isinstance(widget, tuple):
             w, h = widget
             widget = wx.Size(w, h)
-        if i==0:
-            rowsizer.Add(widget, 1, ALL_CENTER, 5)
-        else:            
-            rowsizer.Add(widget, 0, ALL_CENTER, 5)
+        if i == 0:
+            rowsizer.Add(widget, 1, ALL_CENTER, border)
+        else:
+            rowsizer.Add(widget, 0, ALL_CENTER, border)
     sizer.Add(rowsizer, 0, wx.EXPAND)
-    
+
 
 def add_row2(label, panel, sizer, *widgets):
     # Helper: add a row containing a label and widgets
     add_label(label, panel, sizer)
+    dip = panel.FromDIP
     rowsizer = wx.BoxSizer(wx.HORIZONTAL)
     rowsizer.AddStretchSpacer(1)
-    rowsizer.Add(widgets[0], 0, ALL_CENTER, 5)
+    rowsizer.Add(widgets[0], 0, ALL_CENTER, dip(5))
     rowsizer.AddStretchSpacer(1)
     for widget in widgets[1:]:
-        rowsizer.Add(widget, 0, ALL_CENTER, 5)
-    sizer.Add(rowsizer, 0, wx.EXPAND | wx.LEFT, 24)
+        rowsizer.Add(widget, 0, ALL_CENTER, dip(5))
+    sizer.Add(rowsizer, 0, wx.EXPAND | wx.LEFT, dip(24))
     
 
     

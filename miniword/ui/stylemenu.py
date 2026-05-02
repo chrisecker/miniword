@@ -111,13 +111,15 @@ class StyleList(wx.PopupTransientWindow):
         self._item_rects = self._compute_rects()
 
     def Popup(self):
+        dip = self.FromDIP
         dd = self.dropdown
-        w = dd.GetSize().width + POPUP_EXTRA_W
+        extra_w = dip(POPUP_EXTRA_W)
+        w = dd.GetSize().width + extra_w
         h = self._total_height() + 2   # +2 for border
 
         self.panel.SetSize(w, h)
         self.SetSize(w, h)
-        self.Move(dd.ClientToScreen(wx.Point(-POPUP_EXTRA_W, dd.GetSize().height)))
+        self.Move(dd.ClientToScreen(wx.Point(-extra_w, dd.GetSize().height)))
         super().Popup()
         self.panel.SetFocus()
 
@@ -133,8 +135,9 @@ class StyleList(wx.PopupTransientWindow):
     def _compute_rects(self) -> list[tuple[int, int]]:
         dc = wx.MemoryDC()
         dc.SelectObject(wx.NullBitmap)
-        rects: list[tuple[int, int]] = [(0, PLUS_HEIGHT)]  # index 0 = "+" item
-        y = PLUS_HEIGHT
+        plus_h = self.FromDIP(PLUS_HEIGHT)
+        rects: list[tuple[int, int]] = [(0, plus_h)]  # index 0 = "+" item
+        y = plus_h
         for name in self.styles:
             _, h = self.Parent.GetItemExtent(name, dc)
             rects.append((y, h))
@@ -159,6 +162,8 @@ class StyleList(wx.PopupTransientWindow):
         w, h = self.panel.GetSize()
 
         # "+" item at index 0
+        dip = self.FromDIP
+        pad = dip(PADDING_LEFT)
         plus_y, plus_h = self._item_rects[0]
         if self.hover_item == 0:
             dc.SetBrush(wx.Brush(LIST_HOVER))
@@ -167,7 +172,7 @@ class StyleList(wx.PopupTransientWindow):
         dc.SetFont(wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT))
         dc.SetTextForeground(LIST_TEXT)
         dc.DrawText("+ Create new style from selection",
-                    PADDING_LEFT, plus_y + (plus_h - dc.GetCharHeight()) // 2)
+                    pad, plus_y + (plus_h - dc.GetCharHeight()) // 2)
 
         # Separator line below the "+" item
         dc.SetPen(wx.Pen(LIST_SEP))
@@ -182,7 +187,7 @@ class StyleList(wx.PopupTransientWindow):
                 dc.SetPen(wx.TRANSPARENT_PEN)
                 dc.DrawRectangle(0, item_y, w, item_h)
 
-            self.Parent.DrawItem(name, dc, PADDING_LEFT, item_y, item_h)
+            self.Parent.DrawItem(name, dc, pad, item_y, item_h)
 
             if i + 1 == self.hover_item:
                 self._draw_triangle(dc, w, item_y, item_h)
@@ -193,15 +198,18 @@ class StyleList(wx.PopupTransientWindow):
         dc.DrawRectangle(0, 0, w, h)
 
     def _draw_triangle(self, dc: wx.DC, panel_w: int, item_y: int, item_h: int):
-        cx = panel_w - TRIANGLE_AREA // 2
+        dip = self.FromDIP
+        cx = panel_w - dip(TRIANGLE_AREA) // 2
         cy = item_y + item_h // 2
 
         if self.triangle_hover:
             dc.SetBrush(wx.Brush(LIST_TRI_H))
             dc.SetPen(wx.TRANSPARENT_PEN)
-            dc.DrawCircle(cx, cy, min(item_h // 2 - 1, 13))
+            dc.DrawCircle(cx, cy, min(item_h // 2 - 1, dip(13)))
 
-        pts = [wx.Point(cx - 3, cy - 5), wx.Point(cx - 3, cy + 5), wx.Point(cx + 4, cy)]
+        pts = [wx.Point(cx - dip(3), cy - dip(5)),
+               wx.Point(cx - dip(3), cy + dip(5)),
+               wx.Point(cx + dip(4), cy)]
         dc.SetBrush(wx.Brush(LIST_TRI))
         dc.SetPen(wx.Pen(LIST_TRI))
         dc.DrawPolygon(pts)
@@ -218,7 +226,7 @@ class StyleList(wx.PopupTransientWindow):
 
     def _is_over_triangle(self, x: int) -> bool:
         w, _ = self.panel.GetSize()
-        return x >= w - TRIANGLE_AREA
+        return x >= w - self.FromDIP(TRIANGLE_AREA)
 
     # ------------------------------------------------------------------
     # Event handlers
@@ -281,7 +289,7 @@ class StyleList(wx.PopupTransientWindow):
 
         w, _ = self.panel.GetSize()
         item_y, item_h = self._item_rects[idx]
-        screen_pos = self.panel.ClientToScreen(wx.Point(w - TRIANGLE_AREA, item_y + item_h))
+        screen_pos = self.panel.ClientToScreen(wx.Point(w - self.FromDIP(TRIANGLE_AREA), item_y + item_h))
         self.panel.PopupMenu(menu, self.panel.ScreenToClient(screen_pos))
         menu.Destroy()
         self.Dismiss()
@@ -408,18 +416,20 @@ class StyleSelector(wx.Control, ViewBase):
         dc.Clear()
         dc.SetBrush(wx.Brush(bg))
         dc.SetPen(wx.Pen(border))
-        dc.DrawRoundedRectangle(0, 0, w, h, 3)
+        dip = self.FromDIP
+        dc.DrawRoundedRectangle(0, 0, w, h, dip(3))
 
         if self.styles and 0 <= self.selection < len(self.styles):
-            self.DrawItem(self.styles[self.selection], dc, 8, 0, h)
+            self.DrawItem(self.styles[self.selection], dc, dip(PADDING_LEFT), 0, h)
 
         # Small dropdown arrow
-        cx, cy = w - 14, h // 2
+        cx, cy = w - dip(14), h // 2
         arrow = SEL_MODIFIED if self.modified else SEL_ARROW
         dc.SetBrush(wx.Brush(arrow))
         dc.SetPen(wx.Pen(arrow))
-        dc.DrawPolygon([wx.Point(cx - 6, cy - 3), wx.Point(cx + 6, cy - 3),
-                        wx.Point(cx, cy + 3)])
+        dc.DrawPolygon([wx.Point(cx - dip(6), cy - dip(3)),
+                        wx.Point(cx + dip(6), cy - dip(3)),
+                        wx.Point(cx, cy + dip(3))])
 
     def on_click(self, _evt):
         if self._popup and self._popup.IsShown():

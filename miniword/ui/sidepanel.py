@@ -20,15 +20,17 @@ def _svg_bundle(name):
 
 
 class IconButton(wx.Panel):
-    SIZE = (STRIP_W, ICON_H)
 
     def __init__(self, parent, key, label, callback):
-        super().__init__(parent, size=self.SIZE)
+        super().__init__(parent)
+        dip = self.FromDIP
+        size = dip(wx.Size(STRIP_W, ICON_H))
+        self.SetMinSize(size)
+        self.SetMaxSize(size)
+        self.SetSize(size)
         self.callback = callback
         self.active   = False
         self.hover    = False
-        self.SetMinSize(self.SIZE)
-        self.SetMaxSize(self.SIZE)
         self.SetToolTip(label)
         self._bmp = _svg_bundle(f'{key}.svg')
         self.Bind(wx.EVT_PAINT,        self._paint)
@@ -52,7 +54,7 @@ class IconButton(wx.Panel):
         dc.Clear()
         dc.SetPen(wx.Pen(COL_BORDER, 1))
         dc.DrawLine(0, 0, 0, h)
-        bmp = self._bmp.GetBitmap(wx.Size(24, 24))
+        bmp = self._bmp.GetBitmap(self.FromDIP(wx.Size(24, 24)))
         bw, bh = bmp.GetSize()
         dc.DrawBitmap(bmp, (w - bw) // 2, (h - bh) // 2)
 
@@ -61,16 +63,17 @@ class RightStrip(wx.Panel):
     """Vertical icon strip on the right edge. entries: list of (key, label)."""
 
     def __init__(self, parent, entries, on_toggle):
-        super().__init__(parent, size=(STRIP_W, -1))
+        super().__init__(parent)
+        dip = self.FromDIP
+        self.SetMinSize((dip(STRIP_W), -1))
+        self.SetMaxSize((dip(STRIP_W), -1))
         self.SetBackgroundColour(BG_STRIP)
-        self.SetMinSize((STRIP_W, -1))
-        self.SetMaxSize((STRIP_W, -1))
         self.on_toggle   = on_toggle
         self.active_btn  = None
         self._key_to_btn = {}
 
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.AddSpacer(4)
+        sizer.AddSpacer(dip(4))
         for key, lbl in entries:
             btn = IconButton(self, key, lbl, self._click)
             btn._key = key

@@ -157,10 +157,11 @@ class MainFrame(wx.Frame, ViewBase):
 
     def __init__(self, document):
         self.document = document
-        wx.Frame.__init__(self, None, title="MiniWord", size=(1400, 700))
+        wx.Frame.__init__(self, None, title="MiniWord")
         ViewBase.__init__(self)
 
-        self.SetMinSize((800, 480))
+        self.SetSize(self.FromDIP(wx.Size(1400, 700)))
+        self.SetMinSize(self.FromDIP(wx.Size(800, 480)))
         logo_svg = str(ICONS_DIR / "miniword.svg")
         bundle = wx.IconBundle()
         for size in (16, 32, 48, 64):
@@ -271,7 +272,7 @@ class MainFrame(wx.Frame, ViewBase):
         bar.Append(view_menu, "&View")
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1.15),  id=wx.ID_ZOOM_IN)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1/1.15), id=wx.ID_ZOOM_OUT)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.set_zoom(1.0), id=wx.ID_ZOOM_100)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.set_zoom(self.textview._default_zoom), id=wx.ID_ZOOM_100)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_width(),  id=self._id_zoom_fit_w)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
         self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
@@ -462,22 +463,22 @@ class MainFrame(wx.Frame, ViewBase):
         w, h = self._base.GetClientSize()
         if w <= 0 or h <= 0:
             return
-        search_h = 34 if self._search_bar.IsShown() else 0
+        strip_w  = self.FromDIP(STRIP_W)
+        panel_w  = self.FromDIP(PANEL_W) if self._panel_key is not None else 0
+        search_h = self.FromDIP(34) if self._search_bar.IsShown() else 0
         canvas_h = h - search_h
-        canvas_w = w - STRIP_W
-
-        panel_w = PANEL_W if self._panel_key is not None else 0
-        text_w  = canvas_w - panel_w
+        canvas_w = w - strip_w
+        text_w   = canvas_w - panel_w
 
         self.textview.SetPosition((0, 0))
         self.textview.SetSize((text_w, canvas_h))
 
-        self._strip.SetPosition((w - STRIP_W, 0))
-        self._strip.SetSize((STRIP_W, h))
+        self._strip.SetPosition((w - strip_w, 0))
+        self._strip.SetSize((strip_w, h))
 
         if self._panel_key is not None:
             self._inspector_book.SetPosition((text_w, 0))
-            self._inspector_book.SetSize((PANEL_W, canvas_h))
+            self._inspector_book.SetSize((panel_w, canvas_h))
 
         if self._search_bar.IsShown():
             self._search_bar.SetPosition((0, canvas_h))

@@ -41,9 +41,14 @@ class DocumentView(WXTextView):
     def __init__(self, parent, document):
         self.document = document
         super().__init__(parent)
-        self.editor = NullEditor(self)
         if wx.Platform == '__WXMSW__':
             self.SetDoubleBuffered(True)
+            dpi = wx.ScreenDC().GetPPI()[1]
+            self._default_zoom = dpi / 96.0
+        else:
+            self._default_zoom = 1.0
+        self.set_zoom(self._default_zoom)
+        self.editor = NullEditor(self)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.set_model(document.textmodel)
