@@ -40,23 +40,24 @@ class Factory(FactoryBase):
 
     def Image_handler(self, texel, i1, i2):
         from ..images import ImageBox, ErrorPlaceholderBox
-        blobs = getattr(self, 'blobs', {})
-        if texel.blob_id not in blobs:
-            log.warning("Image blob not found: %r", texel.blob_id)
+        from ..images.imageio import crop_surface
+        get_image = getattr(self, 'get_image', None)
+        if get_image is None:
             return [ErrorPlaceholderBox(50, 50, self.device)]
-        bitmap, src_w, src_h = self.device.load_image(blobs[texel.blob_id])
-        if bitmap is None:
+        image_data = get_image(texel.blob_id)
+        if image_data is None:
+            log.warning("Image not found: %r", texel.blob_id)
             return [ErrorPlaceholderBox(50, 50, self.device)]
-        full_bitmap = bitmap
+        bitmap = image_data.bitmap
+        src_w, src_h = image_data.width_px, image_data.height_px
         if texel.crop:
             cl, cr, ct, cb = texel.crop
             cw, ch = src_w - cl - cr, src_h - ct - cb
             w, h   = cw * texel.scale_x, ch * texel.scale_y
-            bitmap = self.device.crop_image_surface(bitmap, cl, ct, cw, ch)
+            bitmap = crop_surface(bitmap, cl, ct, cw, ch)
         else:
             w, h = src_w * texel.scale_x, src_h * texel.scale_y
-        return [ImageBox(bitmap, w, h, self.device, src_w=src_w, src_h=src_h,
-                         full_bitmap=full_bitmap)]
+        return [ImageBox(bitmap, w, h, image_data, self.device)]
 
     def Table_handler(self, texel, i1, i2):
         from ..tables.table_factory import build_table_box

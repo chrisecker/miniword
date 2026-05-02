@@ -1,5 +1,4 @@
 import sys
-import logging
 import wx
 import wx.lib.wxcairo as wxcairo
 try:
@@ -7,8 +6,6 @@ try:
 except ImportError:
     import cairo
 import time
-
-log = logging.getLogger(__name__)
 
 
 from ..core.units import mm, cm, pt, inch
@@ -59,7 +56,6 @@ class CairoDevice:
 
     def __init__(self):
         self._cache = LRUCache(1000)
-        self._image_cache = {}   # id(blob_data) → (surface, w, h)
         self._temp_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)
         self._temp_ctx = cairo.Context(self._temp_surface)
         self._temp_ctx.set_font_options(self._make_font_options())
@@ -74,7 +70,6 @@ class CairoDevice:
 
     def clear_caches(self):
         self._cache.clear()
-        self._image_cache.clear()
 
     def reset_blink(self):
         self._blink_reference_time = time.time()
@@ -343,49 +338,6 @@ class CairoDevice:
         ctx.rectangle(x, y, w, h)
         ctx.fill()
 
-    def load_image(self, blob_data):
-        """Decode blob_data → (cairo.ImageSurface, width, height).
-
-        Returns (None, 0, 0) if decoding fails.
-        Decoded surfaces are cached by object identity of blob_data.
-        """
-        key = id(blob_data)
-        if key in self._image_cache:
-            return self._image_cache[key]
-        result = self._decode_image(blob_data)
-        self._image_cache[key] = result
-        return result
-
-    def _decode_image(self, blob_data):
-        import io
-        # PNG: native cairo support
-        try:
-            surface = cairo.ImageSurface.create_from_png(io.BytesIO(blob_data))
-            return surface, surface.get_width(), surface.get_height()
-        except Exception:
-            pass
-        # JPEG / other formats: via wx.Image (no PIL or numpy required)
-        try:
-            img = wx.Image(io.BytesIO(blob_data), type=wx.BITMAP_TYPE_ANY)
-            if not img.IsOk():
-                raise ValueError("wx.Image reported IsOk=False")
-            w, h = img.GetWidth(), img.GetHeight()
-            rgb = img.GetData()  # bytes, RGB order
-            # Convert RGB → BGRA (Cairo ARGB32 is BGRA in memory on little-endian)
-            alpha = b'\xff' * (w * h)
-            bgra = bytearray(w * h * 4)
-            bgra[0::4] = rgb[2::3]  # B
-            bgra[1::4] = rgb[1::3]  # G
-            bgra[2::4] = rgb[0::3]  # R
-            bgra[3::4] = alpha
-            surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
-            surface.get_data()[:] = bgra
-            surface.mark_dirty()
-            return surface, w, h
-        except Exception:
-            log.warning("Failed to decode image", exc_info=True)
-            return None, 0, 0
-
     def draw_bitmap(self, bitmap, x, y, width, height, ctx):
         """Draw a cairo.ImageSurface scaled to (width, height) at (x, y)."""
         if bitmap is None:
@@ -400,14 +352,6 @@ class CairoDevice:
         ctx.set_source_surface(bitmap, 0, 0)
         ctx.paint()
         ctx.restore()
-
-    def crop_image_surface(self, surface, cx, cy, cw, ch):
-        """Return a new ImageSurface containing only the (cx, cy, cw, ch) region."""
-        dst = cairo.ImageSurface(cairo.FORMAT_ARGB32, cw, ch)
-        ctx = cairo.Context(dst)
-        ctx.set_source_surface(surface, -cx, -cy)
-        ctx.paint()
-        return dst
 
 
 def eq(a, b, delta=1e-2):

@@ -109,14 +109,17 @@ class ImageInspector(wx.Panel, ViewBase):
             w.Enable(enabled)
         self.btn_unset_crop.Enable(enabled and has_crop)
 
-    def refresh(self, image, box=None):
+    def refresh(self, image):
         """Enable inspector and fill values from the Image texel."""
         self._updating     = True
         self._blob_id      = image.blob_id
         self._current_crop = image.crop
-        if box is not None:
-            self._natural_w = box.width  / (image.scale_x or 1.0)
-            self._natural_h = box.height / (image.scale_y or 1.0)
+        get_image = getattr(self._view, 'get_image', None)
+        if get_image:
+            image_data = get_image(image.blob_id)
+            if image_data:
+                self._natural_w = image_data.width_px
+                self._natural_h = image_data.height_px
         self.txt_size_x.SetValue(self._natural_w * image.scale_x)
         self.txt_size_y.SetValue(self._natural_h * image.scale_y)
         self.txt_scale_x.SetValue(image.scale_x)
@@ -290,14 +293,13 @@ class ImageInspector(wx.Panel, ViewBase):
         if blob_id is None:
             return
         self._view.document.blobs[blob_id] = data
-        index = self._view.index
+        index   = self._view.index
         scale_x = scale_y = 1.0
-        load_image = getattr(self._view.builder.device, 'load_image', None)
-        if load_image:
-            _, src_w, src_h = load_image(data)
+        image_data = self._view.get_image(blob_id)
+        if image_data and image_data.width_px > 0:
             avail_w = self._view.get_rowwidth(index)
-            if src_w > 0 and avail_w and src_w > avail_w:
-                scale_x = scale_y = avail_w / src_w
+            if avail_w and image_data.width_px > avail_w:
+                scale_x = scale_y = avail_w / image_data.width_px
         self._view.insert_texel(index, grouped([Image(blob_id, scale_x, scale_y)]))
 
     def _on_replace(self, event):

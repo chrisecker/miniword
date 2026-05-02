@@ -99,30 +99,34 @@ class Image(Single):
 
 
 # ---------------------------------------------------------------------------
+# ImageData — decoded image (Cairo surface + natural pixel dimensions)
+# ---------------------------------------------------------------------------
+
+class ImageData:
+    """Decoded image: Cairo surface + natural pixel dimensions."""
+    def __init__(self, bitmap, width_px, height_px):
+        self.bitmap    = bitmap
+        self.width_px  = width_px
+        self.height_px = height_px
+
+
+# ---------------------------------------------------------------------------
 # Boxes
 # ---------------------------------------------------------------------------
 
 class ImageBox(Box):
     """Inline image box. Sits on the baseline (depth=0)."""
-    depth = 0
+    depth      = 0
+    image_data = None
 
-    src_w       = 0
-    src_h       = 0
-    full_bitmap = None   # uncropped original, set when crop is active
-
-    def __init__(self, bitmap, width, height, device=TESTDEVICE,
-                 src_w=0, src_h=0, full_bitmap=None):
+    def __init__(self, bitmap, width, height, image_data=None, device=TESTDEVICE):
         self.bitmap = bitmap
         self.width  = width
         self.height = height
+        if image_data is not None:
+            self.image_data = image_data
         if device is not TESTDEVICE:
             self.device = device
-        if src_w:
-            self.src_w = src_w
-        if src_h:
-            self.src_h = src_h
-        if full_bitmap is not None:
-            self.full_bitmap = full_bitmap
 
     def __len__(self):
         return 1

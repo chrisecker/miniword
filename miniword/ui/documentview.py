@@ -39,7 +39,8 @@ class DocumentView(WXTextView):
     zoom_step = 0.1
 
     def __init__(self, parent, document):
-        self.document = document
+        self.document     = document
+        self._image_cache = {}
         super().__init__(parent)
         if wx.Platform == '__WXMSW__':
             self.SetDoubleBuffered(True)
@@ -64,10 +65,24 @@ class DocumentView(WXTextView):
         actions[84,  False, True]          = 'cycle_basestyle'  # Shift+Alt+T
         self.actions = actions
         
+    def get_image(self, blob_id):
+        """Return cached ImageData for blob_id, decoding on first access."""
+        if blob_id not in self._image_cache:
+            from ..images.imageio import decode
+            blob = self.document.blobs.get(blob_id)
+            if blob is None:
+                return None
+            self._image_cache[blob_id] = decode(blob)
+        return self._image_cache.get(blob_id)
+
+    def clear_caches(self):
+        self._image_cache.clear()
+        super().clear_caches()
+
     def create_builder(self):
         device = CairoDevice()
         factory = Factory(self.document.basestyles, device=device)
-        factory.blobs = self.document.blobs
+        factory.get_image = self.get_image
         builder = Builder(self.model, factory)
         builder.settings = self.document.settings
         return builder

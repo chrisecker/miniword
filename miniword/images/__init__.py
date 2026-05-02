@@ -1,2 +1,2 @@
-from .images import Image, ImageBox, ErrorPlaceholderBox
+from .images import Image, ImageData, ImageBox, ErrorPlaceholderBox
 from .image_panel import ImageInspector

@@ -161,8 +161,8 @@ class ImageCropEditor(ImageEditor):
 
     def install(self, texel):
         super().install(texel)
-        self._src_w = self.box.src_w
-        self._src_h = self.box.src_h
+        self._src_w = self.box.image_data.width_px
+        self._src_h = self.box.image_data.height_px
         self._preview_crop = list(texel.crop) if texel.crop else [0, 0, 0, 0]
 
     def get_handles(self):
@@ -242,7 +242,7 @@ class ImageCropEditor(ImageEditor):
         gc.rectangle(fx, fy, fw, fh)
         gc.fill()
 
-        full_bmp = tb.full_bitmap if tb.full_bitmap is not None else tb.bitmap
+        full_bmp = tb.image_data.bitmap
         if full_bmp is not None:
             tb.device.draw_bitmap(full_bmp, fx, fy, fw, fh, gc)
         else:
