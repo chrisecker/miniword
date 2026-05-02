@@ -6,8 +6,8 @@ from .image_editors import ImageCropEditor
 from ..textmodel.texeltree import grouped
 from ..textmodel.viewbase import ViewBase
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
-from ..ui.design import TEXT_MUTED, flat_button, muted_button, \
-    make_panel, add_section, add_row
+from ..ui.design import TEXT_MUTED, flat_button, make_panel, add_section, add_row
+from ..ui.flatbutton import ResetButton
 
 
 class ImageInspector(wx.Panel, ViewBase):
@@ -52,15 +52,15 @@ class ImageInspector(wx.Panel, ViewBase):
 
         self.txt_size_x = LengthInput(self, category="layout")
         self.txt_size_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('x'))
-        btn_reset_w = muted_button(self, "\u00d7", size=(dip(20), -1))
-        btn_reset_w.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_x())
-        add_row(sizer, wx.StaticText(self, label="Width"), self.txt_size_x, btn_reset_w)
+        self.btn_reset_w = ResetButton(self)
+        self.btn_reset_w.callback = self._reset_size_x
+        add_row(sizer, wx.StaticText(self, label="Width"), self.txt_size_x, self.btn_reset_w)
 
         self.txt_size_y = LengthInput(self, category="layout")
         self.txt_size_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('y'))
-        btn_reset_h = muted_button(self, "\u00d7", size=(dip(20), -1))
-        btn_reset_h.Bind(wx.EVT_BUTTON, lambda e: self._reset_size_y())
-        add_row(sizer, wx.StaticText(self, label="Height"), self.txt_size_y, btn_reset_h)
+        self.btn_reset_h = ResetButton(self)
+        self.btn_reset_h.callback = self._reset_size_y
+        add_row(sizer, wx.StaticText(self, label="Height"), self.txt_size_y, self.btn_reset_h)
 
         self.chk_proportional = wx.CheckBox(self, label="Proportional")
         self.chk_proportional.Bind(wx.EVT_CHECKBOX, self._on_proportional)
@@ -71,15 +71,15 @@ class ImageInspector(wx.Panel, ViewBase):
 
         self.txt_scale_x = FractionInput(self)
         self.txt_scale_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('x'))
-        btn_reset_sx = muted_button(self, "\u00d7", size=(dip(20), -1))
-        btn_reset_sx.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_x())
-        add_row(sizer, wx.StaticText(self, label="X"), self.txt_scale_x, btn_reset_sx)
+        self.btn_reset_sx = ResetButton(self)
+        self.btn_reset_sx.callback = self._reset_scale_x
+        add_row(sizer, wx.StaticText(self, label="X"), self.txt_scale_x, self.btn_reset_sx)
 
         self.txt_scale_y = FractionInput(self)
         self.txt_scale_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('y'))
-        btn_reset_sy = muted_button(self, "\u00d7", size=(dip(20), -1))
-        btn_reset_sy.Bind(wx.EVT_BUTTON, lambda e: self._reset_scale_y())
-        add_row(sizer, wx.StaticText(self, label="Y"), self.txt_scale_y, btn_reset_sy)
+        self.btn_reset_sy = ResetButton(self)
+        self.btn_reset_sy.callback = self._reset_scale_y
+        add_row(sizer, wx.StaticText(self, label="Y"), self.txt_scale_y, self.btn_reset_sy)
 
         # --- Crop ---
         add_section("Crop", self, sizer)
@@ -123,12 +123,21 @@ class ImageInspector(wx.Panel, ViewBase):
         self.txt_scale_y.SetValue(image.scale_y)
         self.chk_proportional.SetValue(image.proportional)
         self._set_inspector_enabled(True, has_crop=image.crop is not None)
+        modified_x = abs(image.scale_x - 1.0) > 1e-6
+        modified_y = abs(image.scale_y - 1.0) > 1e-6
+        self.btn_reset_w.set_x(modified_x)
+        self.btn_reset_h.set_x(modified_y)
+        self.btn_reset_sx.set_x(modified_x)
+        self.btn_reset_sy.set_x(modified_y)
         self._updating = False
 
     def clear(self):
         """Disable inspector section (cursor is not on an Image texel)."""
         self._blob_id = None
         self._set_inspector_enabled(False)
+        for btn in (self.btn_reset_w, self.btn_reset_h,
+                    self.btn_reset_sx, self.btn_reset_sy):
+            btn.set_x(False)
 
     # ------------------------------------------------------------------
 
@@ -188,6 +197,12 @@ class ImageInspector(wx.Panel, ViewBase):
         self.txt_scale_y.SetValue(scale_y)
         self.txt_size_x.SetValue(scale_x * self._natural_w)
         self.txt_size_y.SetValue(scale_y * self._natural_h)
+        modified_x = abs(scale_x - 1.0) > 1e-6
+        modified_y = abs(scale_y - 1.0) > 1e-6
+        self.btn_reset_w.set_x(modified_x)
+        self.btn_reset_h.set_x(modified_y)
+        self.btn_reset_sx.set_x(modified_x)
+        self.btn_reset_sy.set_x(modified_y)
         self._updating = False
         self._notify()
 

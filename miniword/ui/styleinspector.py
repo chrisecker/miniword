@@ -3,7 +3,7 @@
 
 import wx
 from .design import make_tab, add_section, add_row, add_row2, BAR_BG, TEXT_HIGH
-from .flatbutton import FlatButton
+from .flatbutton import FlatButton, ResetButton
 from .inspectors import InspectorBase
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
@@ -141,28 +141,6 @@ class PromptingComboBox(wx.ComboBox) :
                 break
 
             
-class ResetButton(FlatButton):
-    callback = None
-    def __init__(self, parent, properties):
-        super().__init__(parent, label="", size=(24, 24))
-        self.properties = properties
-        self.colors = {
-            'normal': (BAR_BG, wx.Colour(200, 0, 0)),
-            'hover':  (BAR_BG, TEXT_HIGH),
-            'press':  (BAR_BG, TEXT_HIGH),
-        }
-        self.SetToolTip("Remove local change")
-        self.Bind(wx.EVT_BUTTON, self.on_button)
-
-    def on_button(self, event):
-        if self.callback and self.label:
-            self.callback(*self.properties)
-
-    def set_x(self, visible: bool):
-        if visible == bool(self.label):
-            return
-        self.label = "\u2715" if visible else ""
-        self.Refresh()
 
             
 
