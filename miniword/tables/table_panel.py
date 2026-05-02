@@ -31,15 +31,20 @@ COL_HOVER   = wx.Colour(220, 235, 250)
 class _TableGrid(wx.Panel):
     """Cell grid — fixed COLS×ROWS, cell size derived from target width."""
 
-    _LABEL_H = 24   # room for combined title line
+    _LABEL_H = 24   # room for combined title line (logical px)
 
     def __init__(self, parent, target_w):
+        super().__init__(parent)
+        dip = self.FromDIP
+        self._padding = dip(PADDING)
+        self._gap     = dip(CELL_GAP)
+        self._label_h = dip(self._LABEL_H)
         # back-calculate cell size so grid fills target_w exactly
-        cell = (target_w - 2 * PADDING - (COLS - 1) * CELL_GAP) // COLS
-        self._cell = max(cell, 8)
-        w = 2 * PADDING + COLS * self._cell + (COLS - 1) * CELL_GAP
-        h = self._LABEL_H + ROWS * self._cell + (ROWS - 1) * CELL_GAP + PADDING
-        super().__init__(parent, size=(w, h))
+        cell = (target_w - 2 * self._padding - (COLS - 1) * self._gap) // COLS
+        self._cell = max(cell, dip(8))
+        w = 2 * self._padding + COLS * self._cell + (COLS - 1) * self._gap
+        h = self._label_h + ROWS * self._cell + (ROWS - 1) * self._gap + self._padding
+        self.SetSize((w, h))
         self.SetMinSize((w, h))
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)   # suppress default erase → no flicker
         self._col = 0
@@ -51,8 +56,8 @@ class _TableGrid(wx.Panel):
         self.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
 
     def _cell_origin(self, col, row):
-        x = PADDING + col * (self._cell + CELL_GAP)
-        y = self._LABEL_H + row * (self._cell + CELL_GAP)
+        x = self._padding + col * (self._cell + self._gap)
+        y = self._label_h + row * (self._cell + self._gap)
         return x, y
 
     def _hit(self, px, py):
@@ -75,7 +80,7 @@ class _TableGrid(wx.Panel):
         else:
             label = "Insert table"
             dc.SetTextForeground(COL_MUTED)
-        dc.DrawText(label, PADDING, 4)
+        dc.DrawText(label, self._padding, self.FromDIP(4))
 
         # Cells
         for row in range(ROWS):
@@ -117,7 +122,7 @@ class _CustomItem(wx.Panel):
         self.SetBackgroundColour(COL_BG)
         lbl = wx.StaticText(self, label="Insert custom table")
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(lbl, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 6)
+        sizer.Add(lbl, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, self.FromDIP(6))
         self.SetSizer(sizer)
 
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
@@ -269,6 +274,7 @@ class TablePanel(wx.Panel, ViewBase):
     def __init__(self, parent, view):
         wx.Panel.__init__(self, parent)
         ViewBase.__init__(self)
+        dip = self.FromDIP
         self._view = view
         self._table_index = None
         self._table_box = None
@@ -280,24 +286,24 @@ class TablePanel(wx.Panel, ViewBase):
         add_section("Insert", self, sizer)
         btn = TableCreatorButton(self)
         btn.Bind(EVT_TABLE_CREATED, self._on_insert)
-        sizer.Add(btn, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(btn, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         # --- Section: Borders ---
         add_section("Borders", self, sizer)
         self._line_style = wx.Choice(self, choices=['Thin line', 'Thick line', 'Double line'])
         self._line_style.SetSelection(0)
-        sizer.Add(self._line_style, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(self._line_style, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
-        grid_sizer = wx.GridSizer(rows=2, cols=5, hgap=2, vgap=2)
+        grid_sizer = wx.GridSizer(rows=2, cols=5, hgap=dip(2), vgap=dip(2))
         self._border_btns = []
         for icon_name, key in _BORDER_PRESETS:
-            btn = wx.BitmapButton(self, bitmap=icon(icon_name + '.svg', (24, 24)),
-                                  size=(32, 32))
+            btn = wx.BitmapButton(self, bitmap=icon(icon_name + '.svg', (dip(24), dip(24))),
+                                  size=(dip(32), dip(32)))
             btn.preset_key = key
             btn.Bind(wx.EVT_BUTTON, self._on_border_preset)
             grid_sizer.Add(btn, 0, wx.EXPAND)
             self._border_btns.append(btn)
-        sizer.Add(grid_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(grid_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         # --- Section: Rows & Columns ---
         add_section("Rows & Columns", self, sizer)
@@ -306,13 +312,13 @@ class TablePanel(wx.Panel, ViewBase):
         self._btn_col = wx.Button(self, label="Column ▾")
         self._btn_row.Bind(wx.EVT_LEFT_DOWN, self.on_row_menu)
         self._btn_col.Bind(wx.EVT_LEFT_DOWN, self.on_col_menu)
-        row_sizer.Add(self._btn_row, 1, wx.RIGHT, 4)
+        row_sizer.Add(self._btn_row, 1, wx.RIGHT, dip(4))
         row_sizer.Add(self._btn_col, 1)
-        sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         # --- Section: Cell ---
         add_section("Cell", self, sizer)
-        cell_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=4, vgap=4)
+        cell_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=dip(4), vgap=dip(4))
         cell_sizer.AddGrowableCol(1)
 
         cell_sizer.Add(wx.StaticText(self, label="Background"), 0, wx.ALIGN_CENTER_VERTICAL)
@@ -326,7 +332,7 @@ class TablePanel(wx.Panel, ViewBase):
         self._valign.Bind(wx.EVT_CHOICE, self._on_valign)
         cell_sizer.Add(self._valign, 0, wx.EXPAND)
 
-        sizer.Add(cell_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(cell_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         self._table_controls = (
             [self._btn_row, self._btn_col, self._line_style,

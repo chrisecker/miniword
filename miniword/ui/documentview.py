@@ -22,8 +22,8 @@ class DocumentView(WXTextView):
 
     def content_offset(self):
         cw, ch = self.GetClientSize()
-        vw = int(self.layout.width * self.zoom)
-        vh = int(self.layout.height * self.zoom)
+        vw = int(self.layout.width * self.scale)
+        vh = int(self.layout.height * self.scale)
         ox = (cw - vw) // 2 if vw < cw else 0
         oy = (ch - vh) // 2 if vh < ch else 0
         return ox, oy
@@ -43,11 +43,6 @@ class DocumentView(WXTextView):
         super().__init__(parent)
         if wx.Platform == '__WXMSW__':
             self.SetDoubleBuffered(True)
-            dpi = wx.ScreenDC().GetPPI()[1]
-            self._default_zoom = dpi / 96.0
-        else:
-            self._default_zoom = 1.0
-        self.set_zoom(self._default_zoom)
         self.editor = NullEditor(self)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
@@ -70,7 +65,8 @@ class DocumentView(WXTextView):
         self.actions = actions
         
     def create_builder(self):
-        factory = Factory(self.document.basestyles, device=CairoDevice())
+        device = CairoDevice()
+        factory = Factory(self.document.basestyles, device=device)
         factory.blobs = self.document.blobs
         builder = Builder(self.model, factory)
         builder.settings = self.document.settings
@@ -415,9 +411,9 @@ class DocumentView(WXTextView):
     def on_mousewheel(self, event):
         if not event.ControlDown():
             return event.Skip()  # scroll
-        old_zoom = self.zoom
+        old_scale = self.scale
         factor = 1.1 if event.GetWheelRotation() > 0 else 1 / 1.1
-        new_zoom = max(0.2, min(5.0, old_zoom * factor))
+        new_zoom = max(0.2, min(5.0, self.zoom * factor))
 
         cw, ch = self.GetClientSize()
         rx, ry = self._scrollrate
@@ -425,20 +421,21 @@ class DocumentView(WXTextView):
         scroll_x = sx * rx
         scroll_y = sy * ry
 
-        # Content-center in old zoom
-        cx_content = (scroll_x + cw / 2) / old_zoom
-        cy_content = (scroll_y + ch / 2) / old_zoom
-
-        # new scroll so that content-center does not change
-        new_scroll_x = cx_content * new_zoom - cw / 2
-        new_scroll_y = cy_content * new_zoom - ch / 2
+        # Content-center in old scale
+        cx_content = (scroll_x + cw / 2) / old_scale
+        cy_content = (scroll_y + ch / 2) / old_scale
 
         self.set_zoom(new_zoom)
+        new_scale = self.scale
 
-        # VirtualSize must be updateted before Scroll()
+        # new scroll so that content-center does not change
+        new_scroll_x = cx_content * new_scale - cw / 2
+        new_scroll_y = cy_content * new_scale - ch / 2
+
+        # VirtualSize must be updated before Scroll()
         layout = self.layout
-        vw = int(layout.width * new_zoom)
-        vh = int(layout.height * new_zoom)
+        vw = int(layout.width * new_scale)
+        vh = int(layout.height * new_scale)
         self.SetVirtualSize((vw, vh))
         self.SetScrollRate(rx, ry)
 
@@ -456,7 +453,7 @@ class DocumentView(WXTextView):
         """Return the text index of the first visible character."""
         rx, ry = self._scrollrate
         _, sy = self.GetViewStart()
-        scroll_y = sy * ry / self.zoom
+        scroll_y = sy * ry / self.scale
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             if py + page.height + page.depth >= scroll_y:
                 return p1
@@ -467,7 +464,7 @@ class DocumentView(WXTextView):
         rx, ry = self._scrollrate
         _, sy  = self.GetViewStart()
         ch     = self.GetClientSize()[1]
-        return (sy * ry + ch) / self.zoom
+        return (sy * ry + ch) / self.scale
 
     def ensure_viewport(self):
         """Safety net: build until viewport is covered (no dialog)."""
@@ -589,7 +586,6 @@ class DocumentView(WXTextView):
         else:
             dc = pdc
 
-        zoom = self.zoom
         layout = self.layout
 
         spx, spy = self.CalcScrolledPosition((0, 0))
@@ -702,7 +698,7 @@ class DocumentView(WXTextView):
         layout   = self.layout
         x, y     = layout.get_rect(index, 0, 0).items()[:2]
         _, ch    = self.GetClientSize()
-        target_y = y + ch / self.zoom
+        target_y = y + ch / self.scale
         last     = None
         for r1, r2, rx, ry, row in self.iter_rows():
             if ry >= target_y:
@@ -718,7 +714,7 @@ class DocumentView(WXTextView):
         layout   = self.layout
         x, y     = layout.get_rect(index, 0, 0).items()[:2]
         _, ch    = self.GetClientSize()
-        target_y = y - ch / self.zoom
+        target_y = y - ch / self.scale
         prev     = None
         for r1, r2, rx, ry, row in self.iter_rows():
             if ry + row.height + row.depth > target_y:

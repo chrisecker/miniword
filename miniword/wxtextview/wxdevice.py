@@ -45,6 +45,9 @@ class WxDevice:
     """
     zoom = 1.0
     buffering = True
+
+    def get_scale(self, dpi):
+        return self.zoom
     def __init__(self):
         self._cache = LRUCache(1000)
         # Temporary GC for measuring

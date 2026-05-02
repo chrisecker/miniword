@@ -50,11 +50,11 @@ def set_font(ctx, style):
 
 
 class CairoDevice:
-    zoom = 1.0
     # On Windows, wx.BufferedDC is a memory DC and wxcairo.ContextFromDC()
     # cannot create a Cairo context from it.  Use the plain PaintDC instead
     # and rely on SetDoubleBuffered(True) on the widget for flicker-free drawing.
     buffering = sys.platform != 'win32'
+    zoom = 1.0  # screen_dpi / 72 * user_zoom; updated by DocumentView
     t0 = 0  # time since last movement
 
     def __init__(self):
@@ -79,6 +79,11 @@ class CairoDevice:
     def reset_blink(self):
         self._blink_reference_time = time.time()
 
+    def get_scale(self, dpi):
+        if sys.platform == 'win32':
+            return dpi / 72.0 * self.zoom
+        return self.zoom
+
     def create_painter(self, dc, origin=(0, 0)):
         ctx = wxcairo.ContextFromDC(dc)
 
@@ -93,8 +98,17 @@ class CairoDevice:
         if ox or oy:
             ctx.translate(ox, oy)
 
-        # Apply zoom scaling directly in Cairo
-        ctx.scale(self.zoom, self.zoom)
+        # On Windows, dc.GetPPI() returns the physical DPI and the app must
+        # apply DPI scaling itself.  On Linux/macOS the display server already
+        # applies physical scaling, so dc.GetPPI() returns the logical DPI (96)
+        # and no extra factor is needed.
+        if sys.platform == 'win32':
+            _, ppi_y = dc.GetPPI()
+            dpi = ppi_y if ppi_y > 0 else 96
+            s = dpi / 72.0 * self.zoom
+        else:
+            s = self.zoom
+        ctx.scale(s, s)
 
         ctx.set_font_options(self._make_font_options())
         if sys.platform == 'win32':

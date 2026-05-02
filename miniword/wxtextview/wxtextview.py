@@ -187,13 +187,13 @@ class WXTextView(wx.ScrolledWindow, TextView):
         dc.SetClippingRegion(rx-1, ry-1, rw+2, rh+2)
         painter = device.create_painter(dc)
 
-        zoom = self.zoom
+        scale = self.scale
         layout = self.layout
 
         px, py = self.CalcScrolledPosition((0, 0))
         ox, oy = self.content_offset()
-        x = (px + ox) / zoom
-        y = (py + oy) / zoom
+        x = (px + ox) / scale
+        y = (py + oy) / scale
 
         layout.draw(x, y, painter)
 
@@ -209,7 +209,7 @@ class WXTextView(wx.ScrolledWindow, TextView):
         self.keep_cursor_on_screen()
 
     def _virtual_size(self):
-        return int(self.content_width * self.zoom), int(self.content_height * self.zoom)
+        return int(self.content_width * self.scale), int(self.content_height * self.scale)
 
     def content_offset(self):
         return 0, 0
@@ -217,10 +217,10 @@ class WXTextView(wx.ScrolledWindow, TextView):
     def window_to_content(self, pos):
         """Calculates content coordinates from window-coordinates,
         accounts for scroll position."""
-        zoom = self.zoom
+        scale = self.scale
         x, y = self.CalcUnscrolledPosition(pos)
         ox, oy = self.content_offset()
-        return (x - ox) / zoom, (y - oy) / zoom
+        return (x - ox) / scale, (y - oy) / scale
     
     def on_motion(self, event):
         if not event.LeftIsDown():
@@ -245,9 +245,9 @@ class WXTextView(wx.ScrolledWindow, TextView):
     ### Scroll
     def _update_scroll(self):
         layout = self.layout
-        zoom = self.zoom
-        w = int(layout.width  * zoom)
-        h = int(layout.height * zoom)
+        scale = self.scale
+        w = int(layout.width  * scale)
+        h = int(layout.height * scale)
         vw, vh = self.GetVirtualSize()
         if vw == w and vh == h:
             return
@@ -263,17 +263,17 @@ class WXTextView(wx.ScrolledWindow, TextView):
         
     def adjust_viewport(self):
         layout = self.layout
-        zoom = self.zoom
+        scale = self.scale
 
         if self.index > len(layout):
             return  # layout not yet rebuilt to cursor position
         r = layout.get_rect(self.index, 0, 0)
 
-        # curosr in device coordinates
-        x1 = r.x1 * zoom
-        y1 = r.y1 * zoom
-        x2 = r.x2 * zoom
-        y2 = r.y2 * zoom
+        # cursor in device coordinates
+        x1 = r.x1 * scale
+        y1 = r.y1 * scale
+        x2 = r.x2 * scale
+        y2 = r.y2 * scale
 
         fw, fh = self._scrollrate
 
@@ -309,10 +309,18 @@ class WXTextView(wx.ScrolledWindow, TextView):
 
     def get_zoom(self):
         return self.builder.get_device().zoom
-        
+
     def set_zoom(self, zoom):
         self.builder.get_device().zoom = zoom
         self.refresh()
+
+    @property
+    def scale(self):
+        try:
+            dpi = self.GetDPI().y
+        except AttributeError:
+            dpi = wx.ScreenDC().GetPPI()[1]
+        return self.builder.get_device().get_scale(dpi)
         
         
         
