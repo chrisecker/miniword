@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 
 from ..textmodel.texeltree import EMPTYSTYLE
 from .testdevice import TESTDEVICE
@@ -182,35 +182,6 @@ class Box:
         # Convience method.
         return reversed(tuple(self.iter_boxes(i, x, y)))
         
-    def get_ranges(self, i1, i2):
-        """Return selected character ranges for the interval [i1, i2].
-
-        If the selection falls entirely within one child, delegate to that
-        child (which may be a TableBox returning multiple cell ranges).
-        Otherwise return a single range via extend_range.
-        """
-        for j1, j2, x1, y1, child in self.iter_boxes(0, 0, 0):
-            if j1 <= i1 and i2 <= j2:
-                return [(r1 + j1, r2 + j1)
-                        for r1, r2 in child.get_ranges(i1 - j1, i2 - j1)]
-        return [self.extend_range(i1, i2)]
-
-    def extend_range(self, i1, i2):
-        """In some situations the user may not be allowed to select from $i1$
-        to $i2$. We solve this by extending the selection to a
-        possible interval.
-        """
-        
-        # This is the default implementation. It lets the children
-        # decide whether the seleciton should be extended. Must to be
-        # overriden if a different behaviour is needed.
-        for j1, j2, x1, y1, child in self.iter_boxes(0, 0, 0):
-            if i1 < j2 and j1 < i2:
-                k1, k2 = child.extend_range(i1-j1, i2-j1)
-                i1 = min(i1, k1+j1)
-                i2 = max(i2, k2+j1)
-        return i1, i2
-
     def responding_child(self, i, x0, y0):
         """Finds the child which is responsible for index position i. Returns
         a tuple: child, j1, x1, y1. Child is either the responsible
@@ -480,22 +451,6 @@ class EmptyTextBox(_TextBoxBase):
 
 
 
-def extend_range_seperated(box, i1, i2):
-    # Restrict ranges to child boundaries, e.g. in the fraction it
-    # should not be possible to select a part of the nominator and a
-    # part of the denominator. 
-    last = 0
-    for j1, j2, x, y, child in box.iter_boxes(0, 0, 0):
-        if not (i1<j2 and j1<i2):
-            continue
-        if i1 < j1 or i2>j2:
-            return min(i1, 0), max(i2, len(box))
-        k1, k2 = child.extend_range(i1-j1, i2-j1)
-        return min(i1, k1+j1), max(i2, k2+j1)
-    return i1, i2
-
-
-
 class ChildBox(Box):
     # Baseclass for many boxes which are used to layout their content in a
     # certain way (e.g. HBox, VBox, HGroup, ...). It is assumed, that
@@ -712,23 +667,7 @@ def check_box(box, texel=None):
     if texel is None:
         return True
 
-    if 0:
-        # All index positions which can be selected must be copyable
-        for i in range(len(box)):
-            j1, j2 = box.extend_range(i, i+1)
-            rest, part = texel.takeout(j1, j2)
-            assert calc_length(part) == j2-j1
-            assert calc_length(rest)+calc_length(part) == len(texel)
-
-        for i in range(len(box)):
-            if i+2>len(box):
-                continue
-            j1, j2 = box.extend_range(i, i+2)        
-            rest, part = texel.takeout(j1, j2)
-            assert calc_length(part) == j2-j1
-            assert calc_length(rest)+calc_length(part) == len(texel)
-
-    return True        
+    return True
     
 
 def _create_testobjects(s):

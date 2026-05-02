@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: utf-8 -*-
 
 
 from ..textmodel import texeltree
@@ -134,6 +134,11 @@ class BuilderBase:
 
     def rebuild_range(self, i1, i2, delta):
         pass
+
+class TestBuilder(BuilderBase):
+    """A dummy Builder which enables simple testing."""
+    def get_layout(self):
+        return
 
 
 

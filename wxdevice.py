@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 # WxDevice provides a lightweight abstraction layer that keeps device
 # and application specific code isolated from the rest of the
@@ -45,6 +45,9 @@ class WxDevice:
     """
     zoom = 1.0
     buffering = True
+
+    def get_scale(self, dpi):
+        return self.zoom
     def __init__(self):
         self._cache = LRUCache(1000)
         # Temporary GC for measuring
@@ -168,8 +171,16 @@ class WxDevice:
         """
         brush = gc.CreateBrush(wx.Brush(wx.Colour(color)))
         gc.SetBrush(brush)
-        gc.SetPen(wx.TRANSPARENT_PEN)        
+        gc.SetPen(wx.TRANSPARENT_PEN)
         gc.DrawRectangle(x, y, w, h)
+
+    def draw_line(self, x1, y1, x2, y2, width, gc):
+        """
+        Draw a line from (x1,y1) to (x2,y2) with given width in PT coordinates.
+        """
+        pen = gc.CreatePen(wx.GraphicsPenInfo(wx.BLACK).Width(width))
+        gc.SetPen(pen)
+        gc.StrokeLine(x1, y1, x2, y2)
 
 
         
