@@ -289,8 +289,7 @@ class CairoDevice:
 
     def draw_rect(self, x, y, w, h, ctx):
         ctx.set_source_rgb(0.7, 0.7, 0.7)
-        ctx.set_line_width(1.0 / self.zoom)  # constant line width
-                                             # regardless of zoom
+        ctx.set_line_width(1.0 / self.zoom)  # constant line width regardless of zoom
         ctx.rectangle(x, y, w, h)
         ctx.stroke()
 

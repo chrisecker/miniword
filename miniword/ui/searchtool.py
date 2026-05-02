@@ -199,7 +199,7 @@ class SearchResultsList(wx.VListBox):
         self.textview.adjust_viewport()
 
     def _line_from_pos(self, index):
-        row, col = self.textmodel.index2position(index)
+        row, col, _ = self.textmodel.index2position(index)
         return row + 1
 
 

@@ -46,6 +46,7 @@ class NullEditor:
     def on_motion(self, event):    return False
     def on_leftup(self, event):    return False
     def on_key(self, key, event):  return False
+    def handle_action(self, action, shift, ctx): return False
 
     # Draw — default cursor + selection
     def draw(self, painter):
@@ -292,6 +293,9 @@ class TexelEditor:
         if keycode == wx.WXK_ESCAPE:
             self.docview.remove_editor()
             return True
+        return False
+
+    def handle_action(self, action, shift, ctx):
         return False
 
     # ------------------------------------------------------------------

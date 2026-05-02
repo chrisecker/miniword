@@ -123,6 +123,7 @@ class TextView(ViewBase, Model):
     maxw = overridable_property('maxw')
     _maxw = 0
     zoom = overridable_property('zoom')
+    scale = overridable_property('scale')
     _zoom = 1.0
     _scrollrate = 10, 10
     _TextModel = TextModel
@@ -474,6 +475,9 @@ class TextView(ViewBase, Model):
     def set_zoom(self, zoom):
         self._zoom = zoom
 
+    def get_scale(self):
+        return self._zoom
+
     def get_maxw(self):
         return self._maxw
 
@@ -788,6 +792,19 @@ class TextView(ViewBase, Model):
             return result
         return [self.model.expand_range(s1, s2)]
 
+    def expand_lines(self, i1, i2):
+        """Extend (i1, i2) to cover complete lines.
+
+        Calls expand_range first so that i1 and i2 are on the same
+        nesting level.  Then shifts the left edge to the start of i1's
+        line and the right edge past the NL of i2's line.
+        """
+        model = self.model
+        e1, e2 = model.expand_range(i1, i2)
+        s1 = model.linestart(e1)
+        s2 = model.lineend(e2) + 1
+        return s1, s2
+
     def start_selection(self):
         index = self.index
         self.selection = index, index
@@ -861,10 +878,10 @@ def default_handler(view, action, shift, ctx):
         view.set_index(model.lineend(index), shift)
     elif action == 'move_page_down':
         _, height = view.get_client_size()
-        view.set_index(view.compute_index(x, y + height / view.zoom), shift)
+        view.set_index(view.compute_index(x, y + height / view.scale), shift)
     elif action == 'move_page_up':
         _, height = view.get_client_size()
-        view.set_index(view.compute_index(x, y - height / view.zoom), shift)
+        view.set_index(view.compute_index(x, y - height / view.scale), shift)
     elif action == 'move_document_start':
         view.set_index(0, shift)
     elif action == 'move_document_end':

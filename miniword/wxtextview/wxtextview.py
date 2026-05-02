@@ -25,6 +25,14 @@ class WxMixin(wx.ScrolledWindow):
     """
     _scrollrate = 10, 10
 
+    @property
+    def scale(self):
+        try:
+            dpi = self.GetDPI().y
+        except AttributeError:
+            dpi = wx.ScreenDC().GetPPI()[1]
+        return self.builder.get_device().get_scale(dpi)
+
     def __init__(self, parent, id=-1,
                  pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):
         wx.ScrolledWindow.__init__(self, parent, id,
@@ -221,13 +229,13 @@ class WxMixin(wx.ScrolledWindow):
         dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
         painter = device.create_painter(dc)
 
-        zoom = self.zoom
+        scale = self.scale
         layout = self.layout
 
         px, py = self.CalcScrolledPosition((0, 0))
         ox, oy = self.content_offset()
-        x = (px + ox) / zoom
-        y = (py + oy) / zoom
+        x = (px + ox) / scale
+        y = (py + oy) / scale
 
         layout.draw(x, y, painter)
 
@@ -243,9 +251,9 @@ class WxMixin(wx.ScrolledWindow):
 
     def _update_scroll(self):
         layout = self.layout
-        zoom = self.zoom
-        w = int(layout.width * zoom)
-        h = int(layout.height * zoom)
+        scale = self.scale
+        w = int(layout.width * scale)
+        h = int(layout.height * scale)
         vw, vh = self.GetVirtualSize()
         if vw == w and vh == h:
             return
@@ -260,16 +268,16 @@ class WxMixin(wx.ScrolledWindow):
 
     def adjust_viewport(self):
         layout = self.layout
-        zoom = self.zoom
+        scale = self.scale
 
         if self.index > len(layout):
             return  # layout not yet rebuilt to cursor position
         r = layout.get_rect(self.index, 0, 0)
 
-        x1 = r.x1 * zoom
-        y1 = r.y1 * zoom
-        x2 = r.x2 * zoom
-        y2 = r.y2 * zoom
+        x1 = r.x1 * scale
+        y1 = r.y1 * scale
+        x2 = r.x2 * scale
+        y2 = r.y2 * scale
 
         fw, fh = self._scrollrate
         width, height = self.GetClientSize()
@@ -298,10 +306,10 @@ class WxMixin(wx.ScrolledWindow):
     def window_to_content(self, pos):
         """Calculates content coordinates from window-coordinates,
         accounts for scroll position."""
-        zoom = self.zoom
+        scale = self.scale
         x, y = self.CalcUnscrolledPosition(pos)
         ox, oy = self.content_offset()
-        return (x - ox) / zoom, (y - oy) / zoom
+        return (x - ox) / scale, (y - oy) / scale
 
     # --- zoom ---
 
@@ -314,14 +322,6 @@ class WxMixin(wx.ScrolledWindow):
 
 
 class WXTextView(WxMixin, TextView):
-
-    @property
-    def scale(self):
-        try:
-            dpi = self.GetDPI().y
-        except AttributeError:
-            dpi = wx.ScreenDC().GetPPI()[1]
-        return self.builder.get_device().get_scale(dpi)
 
     def __init__(self, parent, id=-1,
                  pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):

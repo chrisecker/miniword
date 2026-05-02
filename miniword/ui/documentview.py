@@ -203,15 +203,24 @@ class DocumentView(WXTextView):
 
     def swap_paragraph(self, direction):
         model = self.model
-        row, col = model.index2position(self.index)
-        other_row = row + direction
-        if other_row < 0 or other_row >= model.nlines() - 1:
-            return
-        a, b = min(row, other_row), max(row, other_row)
-        a_start = model.linestart(a)
-        a_end   = model.lineend(a) + 1
-        b_start = model.linestart(b)
-        b_end   = model.lineend(b) + 1
+        index = self.index
+        cur_start = model.linestart(index)
+        cur_end   = model.lineend(index) + 1
+        col = index - cur_start
+        if direction == 1:
+            if cur_end >= len(model):
+                return
+            other_start = cur_end
+            other_end   = model.lineend(other_start) + 1
+            a_start, a_end = cur_start, cur_end
+            b_start, b_end = other_start, other_end
+        else:
+            if cur_start == 0:
+                return
+            other_start = model.linestart(cur_start - 1)
+            other_end   = cur_start
+            a_start, a_end = other_start, other_end
+            b_start, b_end = cur_start, cur_end
         para_a = model.copy(a_start, a_end)
         para_b = model.copy(b_start, b_end)
         with self.atomic():
@@ -219,8 +228,8 @@ class DocumentView(WXTextView):
             self.remove(a_start, a_end)
             self.insert(a_start, para_b)
             self.insert(a_start + len(para_b), para_a)
-        new_start = model.linestart(other_row)
-        self.set_index(min(new_start + col, model.lineend(other_row)))
+        new_start = a_start if direction == 1 else a_start + len(para_b)
+        self.set_index(min(new_start + col, model.lineend(new_start)))
 
     def cycle_list_type(self, s1, s2):
         types = ['normal', 'list', 'numbered']
