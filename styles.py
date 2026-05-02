@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+﻿# -*- coding: utf-8 -*-
 
 from . import texeltree
 from .texeltree import G, T, length, grouped, provides_childs, iter_childs, \
@@ -181,7 +181,7 @@ def get_parstyles(texel, i1, i2):
     """
     if i1 == i2:
         return []
-    if texel.weights[2]>0 and provides_childs(texel):
+    if (texel.weights[2] > 0 or texel.is_container) and provides_childs(texel):
         j1 = i1
         j2 = i2
         styles = []
@@ -210,7 +210,7 @@ def set_parstyles(texel, i, iterator):
            is_list_efficient(__return__)
            length(texel) == calc_length(__return__)
     """
-    if not texel.weights[2]:
+    if not texel.weights[2] and not texel.is_container:
         iterator.advance(length(texel)-max(0, i))
         return [texel]
 
