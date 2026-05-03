@@ -68,20 +68,34 @@ def _miniword_dir():
 def _config_path():
     d = _miniword_dir()
     os.makedirs(d, exist_ok=True)
+    os.makedirs(os.path.join(d, "plugins"), exist_ok=True)
     return os.path.join(d, "config.ini")
 
 
 def load_plugins():
-    """Load all plugins from the platform config dir's plugins/ subdirectory.
+    """Load plugins from an ordered list of directories; first file wins per name.
 
+    Search order: user config dir, then built-in miniword/plugins/.
     Returns (tools_items, all_mods):
       tools_items: [(name, mod), ...] for modules with a run() function
       all_mods:    all successfully loaded modules
     """
     import glob
     import importlib.util
-    plugin_dir = os.path.join(_miniword_dir(), "plugins")
-    paths = sorted(glob.glob(os.path.join(plugin_dir, "*.py")))
+
+    _builtin = os.path.normpath(
+        os.path.join(os.path.dirname(__file__), '..', 'plugins'))
+    plugin_dirs = [os.path.join(_miniword_dir(), "plugins"), _builtin]
+
+    seen = set()
+    paths = []
+    for d in plugin_dirs:
+        for path in sorted(glob.glob(os.path.join(d, "*.py"))):
+            name = os.path.basename(path)
+            if name not in seen:
+                seen.add(name)
+                paths.append(path)
+
     tools_items = []
     all_mods = []
     for path in paths:
