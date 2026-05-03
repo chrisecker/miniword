@@ -1,4 +1,5 @@
 import wx
+from .colours import colours
 
 
 class FontListBox(wx.VListBox):
@@ -7,10 +8,16 @@ class FontListBox(wx.VListBox):
         self.popup = popup
         self._items = []
 
+        colours.set(self, 'BackgroundColour', 'WINDOW')
+        colours.register(self, self.refresh_all)
+
         self.Bind(wx.EVT_LEFT_DOWN,    self.on_click)
         self.Bind(wx.EVT_MOTION,       self.on_motion)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.on_leave)
         self.Bind(wx.EVT_KEY_DOWN,     self.on_key)
+
+    def refresh_all(self):
+        self.RefreshAll()
 
     def set_items(self, items):
         self._items = items
@@ -158,6 +165,9 @@ class FontCombo(wx.ComboCtrl):
         self.SetPopupControl(self.popup)
 
         self._current_selection = -1
+
+        colours.set(self, 'BackgroundColour', 'WINDOW')
+        colours.set(self, 'ForegroundColour', 'WINDOWTEXT')
 
         self._load_fonts()
 

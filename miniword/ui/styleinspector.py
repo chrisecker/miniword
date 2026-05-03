@@ -2,7 +2,7 @@
 
 
 import wx
-from .design import make_tab, add_section, add_row, add_row2, BAR_BG, TEXT_HIGH
+from .design import make_tab, add_section, add_row, add_row2
 from .flatbutton import FlatButton, ResetButton
 from .inspectors import InspectorBase
 from ..textmodel.textmodel import TextModel
@@ -16,7 +16,6 @@ from .unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from .threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
 from .buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
 from .stylemenu import BasestyleSelector
-from .icons import icon
 from ..core.styles import defaultbullets, n_levels, style_default
 
 # Display labels and matching format strings for the numbering dropdown.
@@ -67,29 +66,21 @@ def passfocus(widget: wx.Window, mainwidget: wx.Window, interval_ms: int = 100):
 class AlignBar(ButtonBar):
     def __init__(self, parent):
         ButtonBar.__init__(self, parent, exclusive=True)
-        icon_left = icon("format_align_left_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
-        icon_center = icon("format_align_center_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
-        icon_right = icon("format_align_right_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
-        icon_justify = icon("format_align_justify_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
-
-        for icon_, name in [
-            (icon_left, "left"),
-            (icon_center, "center"),
-            (icon_right, "right"),
-            (icon_justify, "justify")]:
-            self.add(name, icon_)
+        for name, svg in [
+            ("left",    "format_align_left_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"),
+            ("center",  "format_align_center_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"),
+            ("right",   "format_align_right_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"),
+            ("justify", "format_align_justify_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")]:
+            self.add(name, svg)
 
 
 class IndentBar(ButtonBar):
     def __init__(self, parent):
         ButtonBar.__init__(self, parent, exclusive=False)
-        icon_indent = icon("format_indent_increase_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
-        icon_dedent = icon("format_indent_decrease_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")
-
-        for icon_, name in [
-            (icon_dedent, "dedent"),
-            (icon_indent, "indent")]:
-            self.add(name, icon_)
+        for name, svg in [
+            ("dedent", "format_indent_decrease_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg"),
+            ("indent", "format_indent_increase_24dp_1F1F1F_FILL0_wght400_GRAD0_opsz24.svg")]:
+            self.add(name, svg)
 
 
     

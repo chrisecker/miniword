@@ -1,13 +1,15 @@
 import wx
+from .colours import colours
+
 
 class FlatButton(wx.Control):
     def __init__(self, parent, label, size=None):
         if size is None:
             size = (-1, parent.FromDIP(24))
         super().__init__(parent, size=size, style=wx.BORDER_NONE)
-        
+
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-        
+
         self.label = label
         self.state = 'normal'
         self.init_colors()
@@ -16,12 +18,15 @@ class FlatButton(wx.Control):
         self.Bind(wx.EVT_ENTER_WINDOW, lambda e: self.set_state('hover'))
         self.Bind(wx.EVT_LEAVE_WINDOW, lambda e: self.set_state('normal'))
         self.Bind(wx.EVT_LEFT_DOWN,    lambda e: self.set_state('press'))
-        self.Bind(wx.EVT_LEFT_UP,      self.on_release)        
+        self.Bind(wx.EVT_LEFT_UP,      self.on_release)
 
     def init_colors(self):
-        bg = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE)
-        txt = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOWTEXT)
-        self.colors = {'normal': (bg, txt), 'hover': (bg, txt), 'press': (bg, txt)}
+        colours.set(self, 'colour_normal_bg', 'BTNFACE')
+        colours.set(self, 'colour_normal_fg', 'WINDOWTEXT')
+        colours.set(self, 'colour_hover_bg',  'BTNFACE')
+        colours.set(self, 'colour_hover_fg',  'WINDOWTEXT')
+        colours.set(self, 'colour_press_bg',  'BTNFACE')
+        colours.set(self, 'colour_press_fg',  'WINDOWTEXT')
 
     def set_state(self, state):
         self.state = state
@@ -31,7 +36,7 @@ class FlatButton(wx.Control):
         self.set_state('hover')
         evt = wx.CommandEvent(wx.wxEVT_BUTTON, self.GetId())
         self.GetEventHandler().ProcessEvent(evt)
-        
+
     def DoGetBestSize(self):
         dc = wx.ClientDC(self)
         dc.SetFont(self.GetFont())
@@ -41,7 +46,8 @@ class FlatButton(wx.Control):
 
     def on_paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
-        bg, fg = self.colors[self.state]
+        bg = getattr(self, f'colour_{self.state}_bg')
+        fg = getattr(self, f'colour_{self.state}_fg')
         dc.SetBackground(wx.Brush(bg))
         dc.Clear()
         dc.SetFont(self.GetFont())
@@ -58,13 +64,10 @@ class ResetButton(FlatButton):
     def __init__(self, parent, properties=()):
         sz = parent.FromDIP(wx.Size(24, 24))
         super().__init__(parent, label="", size=sz)
-        _bg = wx.Colour(245, 245, 245)
+        colours.set(self, 'colour_normal_fg', 'WarningRed')
+        colours.set(self, 'colour_hover_fg',  'Highlight')
+        colours.set(self, 'colour_press_fg',  'Highlight')
         self.properties = properties
-        self.colors = {
-            'normal': (_bg, wx.Colour(200, 0, 0)),
-            'hover':  (_bg, wx.Colour(233, 84, 32)),
-            'press':  (_bg, wx.Colour(233, 84, 32)),
-        }
         self.SetToolTip("Remove local change")
         self.Bind(wx.EVT_BUTTON, self._on_button)
 
@@ -75,6 +78,5 @@ class ResetButton(FlatButton):
     def set_x(self, visible: bool):
         if visible == bool(self.label):
             return
-        self.label = "\u2715" if visible else ""
+        self.label = "✕" if visible else ""
         self.Refresh()
-

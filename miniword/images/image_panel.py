@@ -6,7 +6,7 @@ from .image_editors import ImageCropEditor
 from ..textmodel.texeltree import grouped
 from ..textmodel.viewbase import ViewBase
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
-from ..ui.design import TEXT_MUTED, flat_button, make_panel, add_section, add_row
+from ..ui.design import flat_button, make_panel, add_section, add_row
 from ..ui.flatbutton import ResetButton
 
 

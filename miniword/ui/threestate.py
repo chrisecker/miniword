@@ -1,6 +1,7 @@
 import sys
 import wx
 import wx.lib.newevent
+from .colours import colours
 
 
 ValueChangeEvent, EVT_SPIN_VALUE = wx.lib.newevent.NewCommandEvent()
@@ -93,6 +94,7 @@ class ColourButton(wx.Button):
         self._colour = None
         self.Bind(wx.EVT_BUTTON, self.on_click)
         self.Bind(wx.EVT_SIZE, lambda e: (e.Skip(), self.update_bitmap()))
+        colours.register(self, self.update_bitmap)
         self.update_bitmap()
 
     def on_click(self, event):
@@ -119,20 +121,22 @@ class ColourButton(wx.Button):
         bmp = wx.Bitmap(w, h)
         dc = wx.MemoryDC(bmp)
 
+        get = wx.SystemSettings.GetColour
+        border_col = get(wx.SYS_COLOUR_BTNSHADOW)
+        window_col = get(wx.SYS_COLOUR_WINDOW)
+        wintext_col = get(wx.SYS_COLOUR_WINDOWTEXT)
         if sys.platform == 'win32':
             # Fill corners with panel background so rounded corners look clean.
             dc.SetBackground(wx.Brush(self.GetParent().GetBackgroundColour()))
             dc.Clear()
             gc = wx.GCDC(dc)
-            gc.SetPen(wx.Pen(wx.Colour(160, 160, 160), 1))
+            gc.SetPen(wx.Pen(border_col, 1))
             r = 3
             if self._colour is None:
-                # White base + hatch overlay to signal "mixed"
-                gc.SetBrush(wx.WHITE_BRUSH)
+                gc.SetBrush(wx.Brush(window_col))
                 gc.DrawRoundedRectangle(1, 1, w - 2, h - 2, r)
                 gc.SetPen(wx.TRANSPARENT_PEN)
-                gc.SetBrush(wx.Brush(wx.Colour(160, 160, 160),
-                                     wx.BRUSHSTYLE_BDIAGONAL_HATCH))
+                gc.SetBrush(wx.Brush(border_col, wx.BRUSHSTYLE_BDIAGONAL_HATCH))
                 gc.DrawRoundedRectangle(1, 1, w - 2, h - 2, r)
             else:
                 gc.SetBrush(wx.Brush(self._colour))
@@ -140,9 +144,9 @@ class ColourButton(wx.Button):
             gc = None
         else:
             if self._colour is None:
-                dc.SetBackground(wx.WHITE_BRUSH)
+                dc.SetBackground(wx.Brush(window_col))
                 dc.Clear()
-                brush = wx.Brush(wx.BLACK, wx.BRUSHSTYLE_BDIAGONAL_HATCH)
+                brush = wx.Brush(wintext_col, wx.BRUSHSTYLE_BDIAGONAL_HATCH)
             else:
                 brush = wx.Brush(self._colour)
             dc.SetPen(wx.TRANSPARENT_PEN)

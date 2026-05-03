@@ -13,8 +13,6 @@ from typing import Optional
 from dataclasses import dataclass, field
 from ..textmodel.viewbase import ViewBase
 from ..core.styles import PARAGRAPH_ONLY_KEYS
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -54,23 +52,22 @@ TRIANGLE_AREA = 30
 PLUS_HEIGHT   = 28
 POPUP_EXTRA_W = 40
 
-# Colours
-SEL_NORMAL   = wx.Colour(255, 255, 255)   # StyleSelector normal bg
-SEL_HOVER    = wx.Colour(232, 232, 228)   # StyleSelector hover bg
-SEL_OPEN     = wx.Colour(225, 235, 252)   # StyleSelector open bg
-SEL_BORDER   = wx.Colour(195, 195, 190)   # StyleSelector border (normal)
-SEL_BORDER_H = wx.Colour(120, 120, 120)   # StyleSelector border (hover)
-SEL_BORDER_O = wx.Colour(0,   100, 200)   # StyleSelector border (open)
-SEL_ARROW    = wx.Colour(80,  80,  80)    # dropdown arrow
-SEL_MODIFIED = wx.Colour(200, 60,  0)     # arrow when style is modified
+SEL_NORMAL   = wx.Colour(255, 255, 255)
+SEL_HOVER    = wx.Colour(232, 232, 228)
+SEL_OPEN     = wx.Colour(225, 235, 252)
+SEL_BORDER   = wx.Colour(195, 195, 190)
+SEL_BORDER_H = wx.Colour(120, 120, 120)
+SEL_BORDER_O = wx.Colour(0,   100, 200)
+SEL_ARROW    = wx.Colour(80,  80,  80)
+SEL_MODIFIED = wx.Colour(200, 60,  0)
+LIST_BG      = wx.Colour(255, 255, 255)
+LIST_HOVER   = wx.Colour(222, 222, 218)
+LIST_BORDER  = wx.Colour(140, 140, 135)
+LIST_SEP     = wx.Colour(180, 180, 175)
+LIST_TEXT    = wx.Colour(60,  60,  60)
+LIST_TRI     = wx.Colour(30,  30,  30)
+LIST_TRI_H   = wx.Colour(180, 210, 255)
 
-LIST_BG      = wx.Colour(255, 255, 255)   # StyleList background
-LIST_HOVER   = wx.Colour(222, 222, 218)   # StyleList item hover
-LIST_BORDER  = wx.Colour(140, 140, 135)   # StyleList outer border
-LIST_SEP     = wx.Colour(180, 180, 175)   # StyleList separator line
-LIST_TEXT    = wx.Colour(60,  60,  60)    # StyleList text
-LIST_TRI     = wx.Colour(30,  30,  30)    # triangle arrow
-LIST_TRI_H   = wx.Colour(180, 210, 255)   # triangle hover circle
 
 
 # ---------------------------------------------------------------------------
@@ -159,8 +156,6 @@ class StyleList(wx.PopupTransientWindow):
         dc.Clear()
 
         w, h = self.panel.GetSize()
-
-        # "+" item at index 0
         dip = self.FromDIP
         pad = dip(PADDING_LEFT)
         plus_y, plus_h = self._item_rects[0]
@@ -173,25 +168,19 @@ class StyleList(wx.PopupTransientWindow):
         dc.DrawText("+ Create new style from selection",
                     pad, plus_y + (plus_h - dc.GetCharHeight()) // 2)
 
-        # Separator line below the "+" item
         dc.SetPen(wx.Pen(LIST_SEP))
         dc.DrawLine(0, plus_y + plus_h - 1, w, plus_y + plus_h - 1)
 
-        # Style items at indices 1…n
         for i, (name, label) in enumerate(zip(self.styles, self._labels)):
             item_y, item_h = self._item_rects[i + 1]
-
             if i + 1 == self.hover_item:
                 dc.SetBrush(wx.Brush(LIST_HOVER))
                 dc.SetPen(wx.TRANSPARENT_PEN)
                 dc.DrawRectangle(0, item_y, w, item_h)
-
             self.Parent.DrawItem(name, dc, pad, item_y, item_h)
-
             if i + 1 == self.hover_item:
                 self._draw_triangle(dc, w, item_y, item_h)
 
-        # Border around the entire popup
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
         dc.SetPen(wx.Pen(LIST_BORDER))
         dc.DrawRectangle(0, 0, w, h)
@@ -401,6 +390,7 @@ class StyleSelector(wx.Control, ViewBase):
     def on_paint(self, _evt):
         dc = wx.AutoBufferedPaintDC(self)
         w, h = self.GetClientSize()
+        dip = self.FromDIP
 
         is_open  = self._popup is not None and self._popup.IsShown()
         is_hover = self.GetScreenRect().Contains(wx.GetMousePosition())
@@ -415,13 +405,11 @@ class StyleSelector(wx.Control, ViewBase):
         dc.Clear()
         dc.SetBrush(wx.Brush(bg))
         dc.SetPen(wx.Pen(border))
-        dip = self.FromDIP
         dc.DrawRoundedRectangle(0, 0, w, h, dip(3))
 
         if self.styles and 0 <= self.selection < len(self.styles):
             self.DrawItem(self.styles[self.selection], dc, dip(PADDING_LEFT), 0, h)
 
-        # Small dropdown arrow
         cx, cy = w - dip(14), h // 2
         arrow = SEL_MODIFIED if self.modified else SEL_ARROW
         dc.SetBrush(wx.Brush(arrow))

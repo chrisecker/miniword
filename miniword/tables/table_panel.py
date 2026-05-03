@@ -5,7 +5,8 @@ from ..textmodel.viewbase import ViewBase
 from ..textmodel.texeltree import length
 from ..ui.threestate import ColourButton
 from ..ui.icons import icon
-from ..ui.design import TEXT_MUTED, muted_button, make_panel, add_section
+from ..ui.design import muted_button, make_panel, add_section
+from ..ui.colours import colours
 from ..ui.documentview import get_path
 from .tables import Table, empty_table
 
@@ -17,15 +18,6 @@ ROWS = 8
 CELL_SIZE = 16
 CELL_GAP  = 3
 PADDING   = 8
-
-COL_BG      = wx.Colour(245, 245, 245)
-COL_NORMAL  = wx.Colour(210, 210, 210)
-COL_BORDER  = wx.Colour(170, 170, 170)
-COL_SEL     = wx.Colour(100, 160, 220)
-COL_SEL_BDR = wx.Colour(60,  110, 180)
-COL_TEXT    = wx.Colour(38,  38,  36)
-COL_MUTED   = wx.Colour(160, 160, 156)
-COL_HOVER   = wx.Colour(220, 235, 250)
 
 
 class _TableGrid(wx.Panel):
@@ -69,29 +61,34 @@ class _TableGrid(wx.Panel):
         return 0, 0
 
     def _on_paint(self, event):
+        gc        = wx.SystemSettings.GetColour
+        btnface   = gc(wx.SYS_COLOUR_BTNFACE)
+        highlight = gc(wx.SYS_COLOUR_HIGHLIGHT)
+        shadow    = gc(wx.SYS_COLOUR_BTNSHADOW)
+        wintext   = gc(wx.SYS_COLOUR_WINDOWTEXT)
+        graytext  = gc(wx.SYS_COLOUR_GRAYTEXT)
+
         dc = wx.AutoBufferedPaintDC(self)
-        dc.SetBackground(wx.Brush(COL_BG))
+        dc.SetBackground(wx.Brush(btnface))
         dc.Clear()
 
-        # Combined title + dimension
         if self._col:
             label = f"Insert table: {self._col} \u00d7 {self._row}"
-            dc.SetTextForeground(COL_TEXT)
+            dc.SetTextForeground(wintext)
         else:
             label = "Insert table"
-            dc.SetTextForeground(COL_MUTED)
+            dc.SetTextForeground(graytext)
         dc.DrawText(label, self._padding, self.FromDIP(4))
 
-        # Cells
         for row in range(ROWS):
             for col in range(COLS):
                 x, y = self._cell_origin(col, row)
                 if col < self._col and row < self._row:
-                    dc.SetBrush(wx.Brush(COL_SEL))
-                    dc.SetPen(wx.Pen(COL_SEL_BDR))
+                    dc.SetBrush(wx.Brush(highlight.ChangeLightness(150)))
+                    dc.SetPen(wx.Pen(highlight))
                 else:
-                    dc.SetBrush(wx.Brush(COL_NORMAL))
-                    dc.SetPen(wx.Pen(COL_BORDER))
+                    dc.SetBrush(wx.Brush(shadow.ChangeLightness(130)))
+                    dc.SetPen(wx.Pen(shadow))
                 dc.DrawRectangle(x, y, self._cell, self._cell)
 
     def _on_motion(self, event):
@@ -119,7 +116,7 @@ class _CustomItem(wx.Panel):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.SetBackgroundColour(COL_BG)
+        colours.set(self, 'BackgroundColour', 'BTNFACE')
         lbl = wx.StaticText(self, label="Insert custom table")
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(lbl, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, self.FromDIP(6))
@@ -132,11 +129,12 @@ class _CustomItem(wx.Panel):
             w.Bind(wx.EVT_LEFT_UP,      self._on_click)
 
     def _on_enter(self, event):
-        self.SetBackgroundColour(COL_HOVER)
+        gc = wx.SystemSettings.GetColour
+        self.SetBackgroundColour(gc(wx.SYS_COLOUR_HIGHLIGHT).ChangeLightness(185))
         self.Refresh()
 
     def _on_leave(self, event):
-        self.SetBackgroundColour(COL_BG)
+        self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
         self.Refresh()
 
     def _on_click(self, event):
@@ -147,7 +145,7 @@ class _CustomItem(wx.Panel):
 class _TablePopup(wx.PopupTransientWindow):
     def __init__(self, parent, width):
         super().__init__(parent, wx.BORDER_SIMPLE)
-        self.SetBackgroundColour(COL_BG)
+        colours.set(self, 'BackgroundColour', 'BTNFACE')
 
         # Measure label width so the grid matches it exactly
         self.custom = _CustomItem(self)
@@ -181,7 +179,7 @@ class CustomTableDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title="Table size",
                          style=wx.DEFAULT_DIALOG_STYLE)
-        self.SetBackgroundColour(COL_BG)
+        colours.set(self, 'BackgroundColour', 'BTNFACE')
 
         lbl_cols = wx.StaticText(self, label="Columns")
         self.spin_cols = wx.SpinCtrl(self, value="2", min=1, max=50)

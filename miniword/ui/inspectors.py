@@ -5,7 +5,7 @@ is visible and the model has changed.
 """
 
 import wx
-from .design import BAR_BG
+from .colours import colours
 from ..textmodel.viewbase import ViewBase
 
 
@@ -20,7 +20,7 @@ class InspectorBase(wx.Panel, ViewBase):
     def __init__(self, parent, view):
         wx.Panel.__init__(self, parent)
         ViewBase.__init__(self)
-        self.SetBackgroundColour(BAR_BG)
+        colours.set(self, 'BackgroundColour', 'BTNFACE')
         self._view = view
         self._needs_update = True  # ensure update() runs on first show
         self.add_model(view)

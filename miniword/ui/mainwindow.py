@@ -7,7 +7,8 @@ from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
 from ..images import Image, ImageInspector
 from ..tables.table_panel import TablePanel
-from .sidepanel import RightStrip, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
+from .sidepanel import RightStrip, STRIP_W, PANEL_W
+from .colours import colours
 from .icons import ICONS_DIR
 
 from ..images import image_editors  # registers editors
@@ -340,18 +341,18 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _build_layout(self):
         self._base = wx.Panel(self)
-        self._base.SetBackgroundColour(BG_CANVAS)
+        colours.set(self._base, 'BackgroundColour', 'CanvasBg')
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(self._base, 1, wx.EXPAND)
         self.SetSizer(outer)
 
         self.textview = DocumentView(self._base, self.document)
-        self.textview.SetBackgroundColour(BG_CANVAS)
+        colours.set(self.textview, 'BackgroundColour', 'CanvasBg')
         self.textview.add_view(self)
 
         # Inspector container
         self._inspector_book = wx.Simplebook(self._base)
-        self._inspector_book.SetBackgroundColour(BG_PANEL)
+        colours.set(self._inspector_book, 'BackgroundColour', 'BTNFACE')
         self._inspector_pages = {}
 
         self.inspector = StyleInspector(

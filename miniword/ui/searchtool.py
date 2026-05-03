@@ -3,7 +3,8 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from ..textmodel.modelbase import Model
 from ..textmodel.properties import overridable_property
-from .design import TEXT_MUTED, muted_button, flat_button, make_panel
+from .colours import colours
+from .design import muted_button, flat_button, make_panel
 
 
 class Search(ViewBase, Model):
@@ -84,7 +85,7 @@ class SearchResultsList(wx.VListBox):
         self.textmodel = textview.model
         self.results = []
 
-        self.SetBackgroundColour(wx.Colour(252, 252, 252))
+        colours.set(self, 'BackgroundColour', 'WINDOW')
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         self.preview_font = wx.Font(10, wx.FONTFAMILY_DEFAULT,
@@ -103,9 +104,17 @@ class SearchResultsList(wx.VListBox):
         return self.FromDIP(78)
 
     def OnDrawItem(self, dc, rect, index):
+        gc        = wx.SystemSettings.GetColour
+        window    = gc(wx.SYS_COLOUR_WINDOW)
+        highlight = gc(wx.SYS_COLOUR_HIGHLIGHT)
+        graytext  = gc(wx.SYS_COLOUR_GRAYTEXT)
+        wintext   = gc(wx.SYS_COLOUR_WINDOWTEXT)
+        shadow    = gc(wx.SYS_COLOUR_BTNSHADOW)
+        hotlight  = gc(wx.SYS_COLOUR_HOTLIGHT)
+
         i1, i2, snippet, query = self.results[index]
 
-        dc.SetBrush(wx.Brush(wx.Colour(252, 252, 252)))
+        dc.SetBrush(wx.Brush(window))
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.DrawRectangle(rect)
 
@@ -115,12 +124,12 @@ class SearchResultsList(wx.VListBox):
         if self.IsSelected(index):
             sel_rect = wx.Rect(rect)
             sel_rect.Deflate(1, 1)
-            dc.SetBrush(wx.Brush(wx.Colour(225, 238, 255)))
+            dc.SetBrush(wx.Brush(highlight.ChangeLightness(185)))
             dc.SetPen(wx.TRANSPARENT_PEN)
             dc.DrawRoundedRectangle(sel_rect, dip(6))
 
         dc.SetFont(self.line_font)
-        dc.SetTextForeground(wx.Colour(140, 140, 140))
+        dc.SetTextForeground(graytext)
         line = self._line_from_pos(i1)
         dc.DrawText(str(line), rect.x + padding, rect.y + padding)
 
@@ -129,10 +138,11 @@ class SearchResultsList(wx.VListBox):
         lines = self._wrap_text(dc, snippet, max_width)
         y = rect.y + padding
         for line_text in lines[:self.MAX_LINES]:
-            self._draw_highlighted_line(dc, line_text, query, rect.x + dip(50), y)
+            self._draw_highlighted_line(dc, line_text, query, rect.x + dip(50), y,
+                                        wintext, hotlight)
             y += dip(18)
 
-        dc.SetPen(wx.Pen(wx.Colour(235, 235, 235)))
+        dc.SetPen(wx.Pen(shadow.ChangeLightness(140)))
         dc.DrawLine(rect.x + dip(10), rect.bottom - 1, rect.right - dip(10), rect.bottom - 1)
 
     def _wrap_text(self, dc, text, max_width):
@@ -152,27 +162,27 @@ class SearchResultsList(wx.VListBox):
             lines.append(current)
         return lines
 
-    def _draw_highlighted_line(self, dc, text, query, x, y):
-        text_lower = text.lower()
+    def _draw_highlighted_line(self, dc, text, query, x, y, wintext, hotlight):
+        text_lower  = text.lower()
         query_lower = query.lower()
         offset_x = x
         i = 0
         while i < len(text):
             idx = text_lower.find(query_lower, i)
             if idx == -1:
-                dc.SetTextForeground(wx.Colour(40, 40, 40))
+                dc.SetTextForeground(wintext)
                 dc.DrawText(text[i:], offset_x, y)
                 break
             if idx > i:
-                dc.SetTextForeground(wx.Colour(40, 40, 40))
+                dc.SetTextForeground(wintext)
                 part = text[i:idx]
                 dc.DrawText(part, offset_x, y)
                 w, _ = dc.GetTextExtent(part)
                 offset_x += w
-            dc.SetTextForeground(wx.Colour(200, 50, 50))
+            dc.SetTextForeground(hotlight)
             dc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
                                wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            match_text = text[idx:idx+len(query)]
+            match_text = text[idx:idx + len(query)]
             dc.DrawText(match_text, offset_x, y)
             w, _ = dc.GetTextExtent(match_text)
             offset_x += w
@@ -274,7 +284,7 @@ class SearchPanel(wx.Panel, ViewBase):
         self.count_label = wx.StaticText(self, label="")
         self.count_label.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
                                          wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        self.count_label.SetForegroundColour(TEXT_MUTED)
+        colours.set(self.count_label, 'ForegroundColour', 'GRAYTEXT')
         content.Add(self.count_label, 0, wx.BOTTOM, dip(3))
 
         # Result list

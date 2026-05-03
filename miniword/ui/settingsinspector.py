@@ -1,6 +1,7 @@
 import wx
 from ..textmodel.viewbase import ViewBase
-from .design import BAR_BG, add_header, add_section, add_row
+from .colours import colours
+from .design import add_header, add_section, add_row
 
 from .unitentry import LengthInput, EVT_UNIT_CHANGED
 from ..core.document import settings_default
@@ -17,7 +18,7 @@ class SettingsInspector(wx.Panel, ViewBase):
     def __init__(self, parent, document):
         wx.Panel.__init__(self, parent)
         ViewBase.__init__(self)
-        self.SetBackgroundColour(BAR_BG)
+        colours.set(self, 'BackgroundColour', 'BTNFACE')
         self._updating = False
         self.model = document
         self.create()
@@ -28,7 +29,7 @@ class SettingsInspector(wx.Panel, ViewBase):
 
         scrolled = wx.ScrolledWindow(self, style=wx.VSCROLL | wx.BORDER_NONE)
         scrolled.SetScrollRate(0, 10)
-        scrolled.SetBackgroundColour(BAR_BG)
+        colours.set(scrolled, 'BackgroundColour', 'BTNFACE')
         form = wx.BoxSizer(wx.VERTICAL)
 
         # --- Document Info ---

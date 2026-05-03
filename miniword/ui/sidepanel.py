@@ -1,16 +1,10 @@
 import wx
 from pathlib import Path
+from .colours import colours
 
 PANEL_W    = 300
 STRIP_W    = 52
 ICON_H     = 48
-
-BG_CANVAS  = wx.Colour(228, 228, 224)
-BG_STRIP   = wx.Colour(242, 242, 238)
-BG_PANEL   = wx.Colour(250, 250, 248)
-COL_BORDER = wx.Colour(205, 205, 200)
-COL_ACTIVE = wx.Colour(222, 222, 218)
-COL_HOVER  = wx.Colour(234, 234, 230)
 
 _ICONS_DIR = Path(__file__).resolve().parent.parent / "icons"
 
@@ -46,12 +40,15 @@ class IconButton(wx.Panel):
         self.Refresh()
 
     def _paint(self, _):
+        gc = wx.SystemSettings.GetColour
+        btnface = gc(wx.SYS_COLOUR_BTNFACE)
+        bg = btnface.ChangeLightness(92) if self.active else (
+             btnface.ChangeLightness(97) if self.hover else btnface)
         dc = wx.PaintDC(self)
         w, h = self.GetClientSize()
-        bg = COL_ACTIVE if self.active else (COL_HOVER if self.hover else BG_STRIP)
         dc.SetBackground(wx.Brush(bg))
         dc.Clear()
-        dc.SetPen(wx.Pen(COL_BORDER, 1))
+        dc.SetPen(wx.Pen(gc(wx.SYS_COLOUR_BTNSHADOW), 1))
         dc.DrawLine(0, 0, 0, h)
         icon_px = self.FromDIP(24)
         bmp = self._bmp.GetBitmap(wx.Size(icon_px, icon_px))
@@ -66,7 +63,7 @@ class RightStrip(wx.Panel):
         dip = self.FromDIP
         self.SetMinSize((dip(STRIP_W), -1))
         self.SetMaxSize((dip(STRIP_W), -1))
-        self.SetBackgroundColour(BG_STRIP)
+        colours.set(self, 'BackgroundColour', 'BTNFACE')
         self.on_toggle   = on_toggle
         self.active_btn  = None
         self._key_to_btn = {}
@@ -85,7 +82,7 @@ class RightStrip(wx.Panel):
     def _paint(self, _):
         dc = wx.PaintDC(self)
         h  = self.GetClientSize()[1]
-        dc.SetPen(wx.Pen(COL_BORDER, 1))
+        dc.SetPen(wx.Pen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNSHADOW), 1))
         dc.DrawLine(0, 0, 0, h)
 
     def _click(self, btn):
