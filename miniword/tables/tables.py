@@ -203,29 +203,39 @@ class Table(Container):
         for r in range(r1, r2+1):
             for c in range(c1, c2+1):
                 cells[r][c].set_attributes(**kwds)
-        return from_cells(cells)
+        return from_cells(cells, col_widths=self.col_widths,
+                          row_heights=self.row_heights,
+                          nheader=self.nheader, breaklevel=self.breaklevel)
 
     def remove_cols(self, i, n):
         if i+n > self.ncols:
             raise IndexError(i+n)
-        
         cells = self.get_cells()
-        new = []
-        for row in cells:
-            new.append(row[:i]+row[i+n:])
-        return from_cells(new)
+        new = [row[:i]+row[i+n:] for row in cells]
+        widths = None
+        if self.col_widths is not None:
+            widths = self.col_widths[:i] + self.col_widths[i+n:]
+        return from_cells(new, col_widths=widths,
+                          row_heights=self.row_heights,
+                          nheader=self.nheader, breaklevel=self.breaklevel)
 
     def insert_cols(self, i, n):
         cells = self.get_cells()
-        new = []
-        for row in cells:
-            part = [Cell(0, NULL_TEXEL, {}) for j in range(n)]            
-            new.append(row[:i]+part+row[i:])
-        return from_cells(new)
+        new = [row[:i] + [Cell(0, NULL_TEXEL, {}) for _ in range(n)] + row[i:]
+               for row in cells]
+        widths = None
+        if self.col_widths is not None:
+            avg = sum(self.col_widths) / len(self.col_widths)
+            widths = self.col_widths[:i] + [avg] * n + self.col_widths[i:]
+        return from_cells(new, col_widths=widths,
+                          row_heights=self.row_heights,
+                          nheader=self.nheader, breaklevel=self.breaklevel)
 
     def remove_rows(self, i, n):
         cells = self.get_cells()
-        return from_cells(cells[:i]+cells[i+n:])         
+        return from_cells(cells[:i]+cells[i+n:], col_widths=self.col_widths,
+                          row_heights=self.row_heights,
+                          nheader=self.nheader, breaklevel=self.breaklevel)
 
     def insert_rows(self, i, n):
         cells = self.get_cells()
@@ -235,7 +245,9 @@ class Table(Container):
         # immediately afterward. Texels are immutable and can
         # therefore appear repeatedly in the TexelTree.
         new = [[Cell(0, NULL_TEXEL, {})]*m]*n
-        return from_cells(cells[:i]+new+cells[i:])
+        return from_cells(cells[:i]+new+cells[i:], col_widths=self.col_widths,
+                          row_heights=self.row_heights,
+                          nheader=self.nheader, breaklevel=self.breaklevel)
         
         
 
@@ -249,7 +261,8 @@ def from_cells(cells, col_widths=None, row_heights=None, nheader=0, breaklevel=1
     for row in cells:
         for cell in row:
             entries.append((cell.content, as_style(cell.parstyle)))
-    return Table(*entries, ncols=ncols)
+    return Table(*entries, ncols=ncols, col_widths=col_widths,
+                 row_heights=row_heights, nheader=nheader, breaklevel=breaklevel)
 
 
 def from_strings(rows, parstyle={}):
@@ -443,3 +456,35 @@ def test_10():
     m.set_parstyle(3, center) # center "b"
     assert m.get_parstyle(1) == right
     assert m.get_parstyle(3) == center
+
+
+def test_11():
+    """col_widths preserved by set_cellattr, insert_rows, remove_rows"""
+    widths = [100.0, 200.0]
+    t = from_strings([["a", "b"], ["c", "d"]])
+    t = t.set_col_widths(widths)
+
+    t2 = t.set_cellattr(0, 0, 0, 1, border_left='none')
+    assert t2.col_widths == widths, "set_cellattr must preserve col_widths"
+
+    t3 = t.insert_rows(1, 1)
+    assert t3.col_widths == widths, "insert_rows must preserve col_widths"
+
+    t4 = t.remove_rows(1, 1)
+    assert t4.col_widths == widths, "remove_rows must preserve col_widths"
+
+
+def test_12():
+    """col_widths adjusted by insert_cols, remove_cols"""
+    widths = [100.0, 200.0, 300.0]
+    t = from_strings([["a", "b", "c"], ["d", "e", "f"]])
+    t = t.set_col_widths(widths)
+
+    t2 = t.remove_cols(1, 1)
+    assert t2.col_widths == [100.0, 300.0], f"unexpected: {t2.col_widths}"
+
+    t3 = t.insert_cols(1, 1)
+    assert len(t3.col_widths) == 4
+    assert t3.col_widths[0] == 100.0
+    assert t3.col_widths[2] == 200.0
+    assert t3.col_widths[3] == 300.0
