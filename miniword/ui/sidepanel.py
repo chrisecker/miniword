@@ -15,9 +15,6 @@ COL_HOVER  = wx.Colour(234, 234, 230)
 _ICONS_DIR = Path(__file__).resolve().parent.parent / "icons"
 
 
-def _svg_bundle(name):
-    return wx.BitmapBundle.FromSVGFile(str(_ICONS_DIR / name), (24, 24))
-
 
 class IconButton(wx.Panel):
 
@@ -32,7 +29,9 @@ class IconButton(wx.Panel):
         self.active   = False
         self.hover    = False
         self.SetToolTip(label)
-        self._bmp = _svg_bundle(f'{key}.svg')
+        icon_px = self.FromDIP(24)
+        self._bmp = wx.BitmapBundle.FromSVGFile(
+            str(_ICONS_DIR / f'{key}.svg'), wx.Size(icon_px, icon_px))
         self.Bind(wx.EVT_PAINT,        self._paint)
         self.Bind(wx.EVT_LEFT_UP,      lambda e: self.callback(self))
         self.Bind(wx.EVT_ENTER_WINDOW, lambda e: self._set_hover(True))
@@ -54,9 +53,9 @@ class IconButton(wx.Panel):
         dc.Clear()
         dc.SetPen(wx.Pen(COL_BORDER, 1))
         dc.DrawLine(0, 0, 0, h)
-        bmp = self._bmp.GetBitmap(self.FromDIP(wx.Size(24, 24)))
-        bw, bh = bmp.GetSize()
-        dc.DrawBitmap(bmp, (w - bw) // 2, (h - bh) // 2)
+        icon_px = self.FromDIP(24)
+        bmp = self._bmp.GetBitmap(wx.Size(icon_px, icon_px))
+        dc.DrawBitmap(bmp, (w - icon_px) // 2, (h - icon_px) // 2)
 
 
 class RightStrip(wx.Panel):
@@ -113,40 +112,3 @@ class RightStrip(wx.Panel):
         if self.active_btn:
             self.active_btn.set_active(False)
             self.active_btn = None
-
-
-class SearchBar(wx.Panel):
-    """Floating search bar shown at the bottom of the canvas (Ctrl+F)."""
-
-    def __init__(self, parent, on_close):
-        super().__init__(parent, style=wx.BORDER_NONE)
-        self.on_close = on_close
-        self.SetBackgroundColour(wx.Colour(255, 255, 253))
-        sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.field = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER, size=(220, -1))
-        close_btn = wx.Button(self, label="✕", size=(24, 24), style=wx.BORDER_NONE)
-        close_btn.SetBackgroundColour(wx.Colour(255, 255, 253))
-        close_btn.Bind(wx.EVT_BUTTON, lambda e: self.on_close())
-        self.field.Bind(wx.EVT_KEY_DOWN, self._on_key)
-        sizer.Add(wx.StaticText(self, label="Search:"), 0,
-                  wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 8)
-        sizer.Add(self.field, 1, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 4)
-        sizer.Add(close_btn, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 4)
-        self.SetSizer(sizer)
-        self.Bind(wx.EVT_PAINT, self._paint)
-
-    def _paint(self, _):
-        dc = wx.PaintDC(self)
-        w  = self.GetClientSize()[0]
-        dc.SetPen(wx.Pen(COL_BORDER, 1))
-        dc.DrawLine(0, 0, w, 0)
-
-    def _on_key(self, event):
-        if event.GetKeyCode() == wx.WXK_ESCAPE:
-            self.on_close()
-        else:
-            event.Skip()
-
-    def focus(self):
-        self.field.SetFocus()
-        self.field.SelectAll()

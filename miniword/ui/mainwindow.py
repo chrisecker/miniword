@@ -7,7 +7,7 @@ from .settingsinspector import SettingsInspector
 from .documentview import DocumentView
 from ..images import Image, ImageInspector
 from ..tables.table_panel import TablePanel
-from .sidepanel import RightStrip, SearchBar, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
+from .sidepanel import RightStrip, STRIP_W, PANEL_W, BG_CANVAS, BG_PANEL
 from .icons import ICONS_DIR
 
 from ..images import image_editors  # registers editors
@@ -343,18 +343,10 @@ class MainFrame(wx.Frame, ViewBase):
         self._inspector_book.Hide()
         self._panel_key = None
 
-        self._strip = RightStrip(self._base, [
-            ("style",    "Styles"),
-            ("search",   "Search"),
-            ("image",    "Image"),
-            ("table",    "Table"),
-            ("settings", "Settings"),
-        ], self._on_panel_toggle)
-
-        self._search_bar = SearchBar(self._base, self._close_search)
-        self._search_bar.Hide()
+        self._build_strip()
 
         self._base.Bind(wx.EVT_SIZE, lambda e: (e.Skip(), self._layout()))
+        self.Bind(wx.EVT_DPI_CHANGED, self._on_dpi_changed)
         wx.CallAfter(self._layout)
 
     def _on_panel_toggle(self, key):
@@ -455,37 +447,47 @@ class MainFrame(wx.Frame, ViewBase):
         if page_h > 0:
             tv.set_zoom(min(cw / layout.width, ch / page_h))
 
-    def _close_search(self):
-        self._search_bar.Hide()
-        self._layout()
-
     def _layout(self):
         w, h = self._base.GetClientSize()
         if w <= 0 or h <= 0:
             return
-        strip_w  = self.FromDIP(STRIP_W)
-        panel_w  = self.FromDIP(PANEL_W) if self._panel_key is not None else 0
-        search_h = self.FromDIP(34) if self._search_bar.IsShown() else 0
-        canvas_h = h - search_h
-        canvas_w = w - strip_w
-        text_w   = canvas_w - panel_w
+        strip_w = self.FromDIP(STRIP_W)
+        panel_w = self.FromDIP(PANEL_W) if self._panel_key is not None else 0
+        text_w  = w - strip_w - panel_w
 
         self.textview.SetPosition((0, 0))
-        self.textview.SetSize((text_w, canvas_h))
+        self.textview.SetSize((text_w, h))
 
         self._strip.SetPosition((w - strip_w, 0))
         self._strip.SetSize((strip_w, h))
 
         if self._panel_key is not None:
             self._inspector_book.SetPosition((text_w, 0))
-            self._inspector_book.SetSize((panel_w, canvas_h))
-
-        if self._search_bar.IsShown():
-            self._search_bar.SetPosition((0, canvas_h))
-            self._search_bar.SetSize((canvas_w, search_h))
-            self._search_bar.Raise()
+            self._inspector_book.SetSize((panel_w, h))
 
         self._base.Refresh()
+
+    def _build_strip(self):
+        self._strip = RightStrip(self._base, [
+            ("style",    "Styles"),
+            ("search",   "Search"),
+            ("image",    "Image"),
+            ("table",    "Table"),
+            ("settings", "Settings"),
+        ], self._on_panel_toggle)
+
+    def _on_dpi_changed(self, event):
+        active_key = self._strip.active_btn._key if self._strip.active_btn else None
+        self._strip.Destroy()
+        self._build_strip()
+        if active_key:
+            self._strip.activate(active_key)
+        for panel in [self.inspector, self.document_settings,
+                      self.image_inspector, self.table_panel, self._search_panel]:
+            panel.dpi_changed()
+        self.textview.Refresh()
+        self._layout()
+        event.Skip()
 
     def _update_title(self):
         path = getattr(self, '_current_path', None)

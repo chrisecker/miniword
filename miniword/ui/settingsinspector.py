@@ -19,7 +19,10 @@ class SettingsInspector(wx.Panel, ViewBase):
         ViewBase.__init__(self)
         self.SetBackgroundColour(BAR_BG)
         self._updating = False
+        self.model = document
+        self.create()
 
+    def create(self):
         outer = wx.BoxSizer(wx.VERTICAL)
         add_header("SETTINGS", self, outer)
 
@@ -86,9 +89,12 @@ class SettingsInspector(wx.Panel, ViewBase):
         scrolled.SetSizer(padded)
         outer.Add(scrolled, 1, wx.EXPAND)
         self.SetSizer(outer)
-
-        self.model = document
         self._refresh()
+
+    def dpi_changed(self):
+        self.DestroyChildren()
+        self.create()
+        self.Layout()
 
     # ------------------------------------------------------------------
     # ViewBase

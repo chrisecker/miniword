@@ -214,8 +214,12 @@ class SearchPanel(wx.Panel, ViewBase):
         self.textmodel = textview.model
         self.search = Search(self.textmodel)
         self.set_model(self.search)
+        self._current_idx = -1
+        self._update_queued = False
+        self.Bind(wx.EVT_SHOW, self._on_show)
+        self.create()
 
-
+    def create(self):
         dip = self.FromDIP
         content = make_panel(self, "FIND & REPLACE")
 
@@ -274,11 +278,9 @@ class SearchPanel(wx.Panel, ViewBase):
         content.Add(self.count_label, 0, wx.BOTTOM, dip(3))
 
         # Result list
-        self.result_list = SearchResultsList(self, textview)
+        self.result_list = SearchResultsList(self, self.textview)
         self.result_list.on_select = self._on_result_selected
         content.Add(self.result_list, 1, wx.EXPAND)
-
-        self.Bind(wx.EVT_SHOW, self._on_show)
 
         # Bindings
         self.search_ctrl.Bind(wx.EVT_TEXT, self.on_text_changed)
@@ -291,6 +293,18 @@ class SearchPanel(wx.Panel, ViewBase):
         self.cb_regex.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
         self.cb_case.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
         self.cb_word.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
+
+        # Restore search state
+        self.cb_case.SetValue(not self.search.ignorecase)
+        self.cb_regex.SetValue(self.search.use_regex)
+        self.cb_word.SetValue(self.search.whole_word)
+        if self.search.substring:
+            self.search_ctrl.SetValue(self.search.substring)
+
+    def dpi_changed(self):
+        self.DestroyChildren()
+        self.create()
+        self.Layout()
 
     def _on_show(self, event):
         event.Skip()

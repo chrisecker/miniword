@@ -274,12 +274,15 @@ class TablePanel(wx.Panel, ViewBase):
     def __init__(self, parent, view):
         wx.Panel.__init__(self, parent)
         ViewBase.__init__(self)
-        dip = self.FromDIP
         self._view = view
         self._table_index = None
         self._table_box = None
         self.add_model(view)
+        self.Bind(wx.EVT_SHOW, self.on_show)
+        self.create()
 
+    def create(self):
+        dip = self.FromDIP
         sizer = make_panel(self, "TABLES")
 
         # --- Section: Insert ---
@@ -340,7 +343,12 @@ class TablePanel(wx.Panel, ViewBase):
             + self._border_btns
         )
         self._set_table_controls(False)
-        self.Bind(wx.EVT_SHOW, self.on_show)
+
+    def dpi_changed(self):
+        self.DestroyChildren()
+        self.create()
+        self._update_cell_inspector()
+        self.Layout()
 
     def on_show(self, event):
         event.Skip()

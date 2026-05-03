@@ -163,15 +163,21 @@ class Inspector(wx.Frame):
     
 class StyleInspector(InspectorBase):
     sizes = (8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30)
+
     def __init__(self, parent, view, basestyles, *args, **kwds):
         InspectorBase.__init__(self, parent, view)
         self.basestyles = basestyles
-        
-        mainsizer = wx.BoxSizer( wx.VERTICAL )
+        self._state = None
+        self.create()
+        passfocus(self, view)
+        self.add_model(view.model)
+
+    def create(self):
+        view = self._view
+        mainsizer = wx.BoxSizer(wx.VERTICAL)
 
         self.basestyle = BasestyleSelector(self, size=(-1, self.FromDIP(40)))
         self.basestyle.Bind(wx.EVT_CHOICE, self.on_basestyle)
-        stylesheet = view.builder.stylesheet
         self.basestyle.set_stylesheet(self.basestyles)
         self.basestyle.on_redefine_style = self._redefine_style
         self.basestyle.on_create_style   = self._create_style
@@ -179,11 +185,11 @@ class StyleInspector(InspectorBase):
         self.basestyle.on_rename_style   = self._rename_style
         self.basestyle.on_delete_style   = self._delete_style
         mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, self.FromDIP(5))
-        
+
         notebook = wx.Notebook(self)
         notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,
             lambda e: (e.Skip(), wx.CallAfter(view.SetFocus)))
-        
+
         panel, contentsizer = make_tab(notebook, 'Style')
         choices = list(map(str, self.sizes))
 
@@ -192,13 +198,12 @@ class StyleInspector(InspectorBase):
         from .fontctrl import FontCombo
         self.family = FontCombo(panel)
         self.reset_family = ResetButton(panel, ['font_family'])
-        #self.size.SetMinSize((100, -1))
         add_row(contentsizer, self.family, self.reset_family)
         self.family.Bind(wx.EVT_COMBOBOX, self.on_family)
-        
+
         self.size = wx.ComboBox(
-            panel, value = "12", choices=choices,
-            style = wx.CB_DROPDOWN| wx.TE_PROCESS_ENTER
+            panel, value="12", choices=choices,
+            style=wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER
         )
         self.reset_size = ResetButton(panel, ['font_size'])
         self.size.SetMinSize((100, -1))
@@ -214,34 +219,32 @@ class StyleInspector(InspectorBase):
         rowsizer.Add(self.bgcolor, 1, wx.ALL, 5)
         rowsizer.Add(self.reset_colors, 0, wx.ALL, 5)
         contentsizer.Add(rowsizer, 0, wx.EXPAND)
-        
+
         self.color.callback = lambda: self.set_char_properties(
                 color=self.color.get_colour())
-
         self.bgcolor.callback = lambda: self.set_char_properties(
                 bgcolor=self.bgcolor.get_colour())
 
-        self.underline = wx.CheckBox(panel, -1, "Underline",
-                                     style=wx.CHK_3STATE)
+        self.underline = wx.CheckBox(panel, -1, "Underline", style=wx.CHK_3STATE)
         self.reset_underline = ResetButton(panel, ['underline'])
         add_row(contentsizer, self.underline, self.reset_underline)
         self.underline.Bind(
             wx.EVT_CHECKBOX,
-            lambda e:self.set_char_properties(underline=self.underline.GetValue()))
+            lambda e: self.set_char_properties(underline=self.underline.GetValue()))
 
         self.bold = wx.CheckBox(panel, -1, "Bold", style=wx.CHK_3STATE)
         self.reset_bold = ResetButton(panel, ['bold'])
         add_row(contentsizer, self.bold, self.reset_bold)
         self.bold.Bind(
             wx.EVT_CHECKBOX,
-            lambda e:self.set_char_properties(bold=self.bold.GetValue()))
+            lambda e: self.set_char_properties(bold=self.bold.GetValue()))
 
         self.italic = wx.CheckBox(panel, -1, "Italic", style=wx.CHK_3STATE)
         self.reset_italic = ResetButton(panel, ['italic'])
         add_row(contentsizer, self.italic, self.reset_italic)
         self.italic.Bind(
             wx.EVT_CHECKBOX,
-            lambda e:self.set_char_properties(italic=self.italic.GetValue()))
+            lambda e: self.set_char_properties(italic=self.italic.GetValue()))
 
         ### layout tab ###
         panel, contentsizer = make_tab(notebook, 'Layout')
@@ -254,7 +257,7 @@ class StyleInspector(InspectorBase):
         add_row(contentsizer, self.align, self.reset_align)
 
         add_section("Space", panel, contentsizer)
-        
+
         self.space_before = LengthInput(panel, category='typographic')
         self.reset_space_before = ResetButton(panel, ['space_before'])
         add_row2('Before paragraph', panel, contentsizer, self.space_before, self.reset_space_before)
@@ -277,16 +280,13 @@ class StyleInspector(InspectorBase):
         add_row2('First line', panel, contentsizer, self.indent_first, self.reset_first)
         self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
 
-        # - Absatz nicht umbrechen (Keep together / Keep with next - optional)
-        # XXX TODO
-
         ### structure tab ###
         panel, contentsizer = make_tab(notebook, 'Structure')
         self._structure_page = panel
         add_section("Indentation", panel, contentsizer)
 
-        label = wx.StaticText(panel, label='Level') # XXX Identation level
-        self.level = wx.TextCtrl(panel, value='1', size=(50,-1))
+        label = wx.StaticText(panel, label='Level')
+        self.level = wx.TextCtrl(panel, value='1', size=(50, -1))
         self.level.SetEditable(False)
         self.indent = IndentBar(panel)
         self.indent.buttons['indent'].Bind(wx.EVT_BUTTON, self.on_indent)
@@ -299,7 +299,7 @@ class StyleInspector(InspectorBase):
         self.reset_policy = ResetButton(panel, ['fixed_indent'])
         self.policy.Bind(wx.EVT_CHECKBOX, self.on_policy)
         add_row(contentsizer, label, self.policy, self.reset_policy)
-        
+
         label = wx.StaticText(panel, label='Indentation')
         self.indent_position = LengthInput(panel, category='typographic')
         self.reset_indent = ResetButton(panel, ['indent_levels'])
@@ -322,13 +322,13 @@ class StyleInspector(InspectorBase):
         spanel = self.marker_panel = wx.Panel(panel)
         spanelsizer = wx.BoxSizer(wx.VERTICAL)
         spanel.SetSizer(spanelsizer)
-        
+
         add_section("Marker options", spanel, spanelsizer)
-        
+
         label = wx.StaticText(spanel, label="Offset")
         self.marker_pos = LengthInput(spanel, category='typographic')
         self.reset_marker_pos = ResetButton(spanel, ['marker_pos'])
-        self.marker_pos.Bind(EVT_UNIT_CHANGED, self.on_marker_pos)        
+        self.marker_pos.Bind(EVT_UNIT_CHANGED, self.on_marker_pos)
         add_row(spanelsizer, label, self.marker_pos, self.reset_marker_pos)
 
         label = wx.StaticText(spanel, label="Color")
@@ -356,19 +356,19 @@ class StyleInspector(InspectorBase):
         self.bullet = wx.Choice(spanel, choices=defaultbullets)
         self.reset_bullet = ResetButton(spanel, ['marker'])
         self.bullet.Bind(wx.EVT_CHOICE, self.on_bullet)
-        add_row(spanelsizer, label, self.bullet, self.reset_bullet)        
+        add_row(spanelsizer, label, self.bullet, self.reset_bullet)
         contentsizer.Add(spanel, 0, wx.EXPAND, 5)
 
         ### Enumeration options
         spanel = self.enum_panel = wx.Panel(panel)
         spanelsizer = wx.BoxSizer(wx.VERTICAL)
-        spanel.SetSizer(spanelsizer)        
+        spanel.SetSizer(spanelsizer)
         add_section("Enumeration options", spanel, spanelsizer)
 
-        label = wx.StaticText(spanel, label="Number format")        
+        label = wx.StaticText(spanel, label="Number format")
         self.numbering = wx.Choice(
             spanel, choices=["1,2,3", "a,b,c", "A,B,C", "i,ii,iii"])
-        self.numbering.SetSelection(0) # XXX
+        self.numbering.SetSelection(0)
         self.reset_numbering = ResetButton(spanel, ['numbering_style'])
         add_row(spanelsizer, label, self.numbering, self.reset_numbering)
         self.numbering.Bind(wx.EVT_CHOICE, self.on_numbering)
@@ -382,10 +382,9 @@ class StyleInspector(InspectorBase):
 
         self.start_check = wx.CheckBox(spanel, label="Start value")
         self.start_value = wx.TextCtrl(spanel)
-        self.reset_start = ResetButton(spanel, ['--']) # as a placeholder
-        self.start_value.Enable(False) # XXX
-        add_row(spanelsizer, self.start_check, self.start_value,
-                self.reset_start)
+        self.reset_start = ResetButton(spanel, ['--'])
+        self.start_value.Enable(False)
+        add_row(spanelsizer, self.start_check, self.start_value, self.reset_start)
 
         contentsizer.Add(spanel, 0, wx.EXPAND, 5)
 
@@ -419,7 +418,6 @@ class StyleInspector(InspectorBase):
             lambda e: self.set_parproperties(
                 page_break_before=self.page_break_before.GetValue()))
 
-        
         add_section("Semantics", panel, contentsizer)
         self.role = wx.Choice(panel, choices=[lbl for lbl, _ in _ROLES])
         self.reset_role = ResetButton(panel, ['role'])
@@ -429,42 +427,26 @@ class StyleInspector(InspectorBase):
         self.role.Bind(wx.EVT_CHOICE, self.on_role)
 
         ### epilog
-        mainsizer.Add(notebook, 1, wx.EXPAND |wx.ALL, 5)
+        mainsizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 5)
         self.SetSizer(mainsizer)
 
         for resetter in [
-                self.reset_colors,
-                self.reset_family,
-                self.reset_size,
-                self.reset_underline,
-                self.reset_bold,
-                self.reset_italic]:
+                self.reset_colors, self.reset_family, self.reset_size,
+                self.reset_underline, self.reset_bold, self.reset_italic]:
             resetter.callback = self.clear_char_properties
 
         for resetter in [
-                self.reset_align,
-                self.reset_first,
-                self.reset_line_spacing,
-                self.reset_space_before,
-                self.reset_space_after,
-                self.reset_policy,
-                self.reset_indent,
-                self.reset_paragraph_type,
-                self.reset_list_indent,
-                self.reset_marker_pos,
-                self.reset_marker_color,
-                self.reset_marker_size,
-                self.reset_bullet,
-                self.reset_numbering,
-                self.reset_page_break_before,
-                self.reset_block_color,
-                self.reset_block_padding,
-                self.reset_role,
-        ]:
-            resetter.callback = self.clear_parproperties            
+                self.reset_align, self.reset_first, self.reset_line_spacing,
+                self.reset_space_before, self.reset_space_after, self.reset_policy,
+                self.reset_indent, self.reset_paragraph_type, self.reset_list_indent,
+                self.reset_marker_pos, self.reset_marker_color, self.reset_marker_size,
+                self.reset_bullet, self.reset_numbering, self.reset_page_break_before,
+                self.reset_block_color, self.reset_block_padding, self.reset_role]:
+            resetter.callback = self.clear_parproperties
 
-        passfocus(self, view)
-        self.add_model(view.model)
+    def dpi_changed(self):
+        self._state = None
+        InspectorBase.dpi_changed(self)
 
     def on_align(self, event):
         variant = event.name

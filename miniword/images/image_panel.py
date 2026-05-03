@@ -32,7 +32,10 @@ class ImageInspector(wx.Panel, ViewBase):
         self._natural_h    = 1.0
         self._updating     = False
         self._crop_active  = False
+        self.Bind(wx.EVT_SHOW, self.on_show)
+        self.create()
 
+    def create(self):
         dip = self.FromDIP
         sizer = make_panel(self, "IMAGE")
 
@@ -93,7 +96,12 @@ class ImageInspector(wx.Panel, ViewBase):
         sizer.Add(self.btn_unset_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         self._set_inspector_enabled(False)
-        self.Bind(wx.EVT_SHOW, self.on_show)
+
+    def dpi_changed(self):
+        self.DestroyChildren()
+        self.create()
+        self.index_changed(None)
+        self.Layout()
 
     def on_show(self, event):
         event.Skip()

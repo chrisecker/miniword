@@ -50,6 +50,7 @@ class SpinCtrl3(wx.Panel):
 
     def _on_text_enter(self, event):
         raw = self.text.GetValue().strip()
+        old = self._value
         if raw == "":
             self._value = None
         else:
@@ -59,6 +60,8 @@ class SpinCtrl3(wx.Panel):
             except ValueError:
                 pass
         self._update_ui()
+        if self._value != old:
+            self._post_event()
         event.Skip()
 
     def _on_spin(self, event):
