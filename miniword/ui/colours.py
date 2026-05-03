@@ -76,7 +76,11 @@ class ColourManager:
 
 colours = ColourManager()
 
-colours.define('ButtonHover', lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(90))
-colours.define('Highlight',   lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_HOTLIGHT))
-colours.define('WarningRed',  lambda: wx.Colour(200, 0, 0))
-colours.define('CanvasBg',    lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(93))
+colours.define('ButtonNormal',         lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(105))
+colours.define('ButtonHover',          lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(90))
+colours.define('ButtonPress',          lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(82))
+colours.define('ButtonBorder',         lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNSHADOW))
+colours.define('ButtonBorderDisabled', lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNSHADOW).ChangeLightness(140))
+colours.define('Highlight',            lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_HOTLIGHT))
+colours.define('WarningRed',           lambda: wx.Colour(200, 0, 0))
+colours.define('CanvasBg',             lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(93))

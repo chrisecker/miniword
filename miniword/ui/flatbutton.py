@@ -3,32 +3,41 @@ from .colours import colours
 
 
 class FlatButton(wx.Control):
-    def __init__(self, parent, label, size=None):
+    def __init__(self, parent, label, size=None, bordered=False):
         if size is None:
             size = (-1, parent.FromDIP(24))
         super().__init__(parent, size=size, style=wx.BORDER_NONE)
-
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
-
-        self.label = label
-        self.state = 'normal'
+        self.label    = label
+        self.bordered = bordered
+        self.state    = 'normal'
         self.init_colors()
-
-        self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_PAINT,        self.on_paint)
         self.Bind(wx.EVT_ENTER_WINDOW, lambda e: self.set_state('hover'))
         self.Bind(wx.EVT_LEAVE_WINDOW, lambda e: self.set_state('normal'))
         self.Bind(wx.EVT_LEFT_DOWN,    lambda e: self.set_state('press'))
         self.Bind(wx.EVT_LEFT_UP,      self.on_release)
 
     def init_colors(self):
-        colours.set(self, 'colour_normal_bg', 'BTNFACE')
-        colours.set(self, 'colour_normal_fg', 'WINDOWTEXT')
-        colours.set(self, 'colour_hover_bg',  'BTNFACE')
-        colours.set(self, 'colour_hover_fg',  'WINDOWTEXT')
-        colours.set(self, 'colour_press_bg',  'BTNFACE')
-        colours.set(self, 'colour_press_fg',  'WINDOWTEXT')
+        colours.set(self, 'colour_normal_bg',       'ButtonNormal')
+        colours.set(self, 'colour_normal_fg',       'WINDOWTEXT')
+        colours.set(self, 'colour_hover_bg',        'ButtonHover')
+        colours.set(self, 'colour_hover_fg',        'WINDOWTEXT')
+        colours.set(self, 'colour_press_bg',        'ButtonPress')
+        colours.set(self, 'colour_press_fg',        'WINDOWTEXT')
+        colours.set(self, 'colour_disabled_bg',     'BTNFACE')
+        colours.set(self, 'colour_disabled_fg',     'GRAYTEXT')
+        colours.set(self, 'colour_border',          'ButtonBorder')
+        colours.set(self, 'colour_border_disabled', 'ButtonBorderDisabled')
+
+    def Enable(self, enable=True):
+        result = super().Enable(enable)
+        self.Refresh()
+        return result
 
     def set_state(self, state):
+        if not self.IsEnabled():
+            return
         self.state = state
         self.Refresh()
 
@@ -46,13 +55,23 @@ class FlatButton(wx.Control):
 
     def on_paint(self, event):
         dc = wx.AutoBufferedPaintDC(self)
-        bg = getattr(self, f'colour_{self.state}_bg')
-        fg = getattr(self, f'colour_{self.state}_fg')
+        if not self.IsEnabled():
+            bg     = self.colour_disabled_bg
+            fg     = self.colour_disabled_fg
+            border = self.colour_border_disabled
+        else:
+            bg     = getattr(self, f'colour_{self.state}_bg')
+            fg     = getattr(self, f'colour_{self.state}_fg')
+            border = self.colour_border
         dc.SetBackground(wx.Brush(bg))
         dc.Clear()
+        w, h = self.GetSize()
+        if self.bordered:
+            dc.SetPen(wx.Pen(border))
+            dc.SetBrush(wx.TRANSPARENT_BRUSH)
+            dc.DrawRectangle(0, 0, w, h)
         dc.SetFont(self.GetFont())
         dc.SetTextForeground(fg)
-        w, h = self.GetSize()
         tw, th = dc.GetTextExtent(self.label)
         dc.DrawText(self.label, (w - tw) // 2, (h - th) // 2)
 
@@ -64,6 +83,9 @@ class ResetButton(FlatButton):
     def __init__(self, parent, properties=()):
         sz = parent.FromDIP(wx.Size(24, 24))
         super().__init__(parent, label="", size=sz)
+        colours.set(self, 'colour_normal_bg', 'BTNFACE')
+        colours.set(self, 'colour_hover_bg',  'BTNFACE')
+        colours.set(self, 'colour_press_bg',  'BTNFACE')
         colours.set(self, 'colour_normal_fg', 'WarningRed')
         colours.set(self, 'colour_hover_fg',  'Highlight')
         colours.set(self, 'colour_press_fg',  'Highlight')

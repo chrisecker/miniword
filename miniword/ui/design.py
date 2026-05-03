@@ -87,14 +87,7 @@ def add_row2(label, panel, sizer, *widgets):
 
 
 def flat_button(parent, label, size):
-    b = FlatButton(parent, label, size)
-    colours.set(b, 'colour_normal_bg', 'BTNFACE')
-    colours.set(b, 'colour_normal_fg', 'WINDOWTEXT')
-    colours.set(b, 'colour_hover_bg',  'ButtonHover')
-    colours.set(b, 'colour_hover_fg',  'WINDOWTEXT')
-    colours.set(b, 'colour_press_bg',  'ButtonHover')
-    colours.set(b, 'colour_press_fg',  'Highlight')
-    return b
+    return FlatButton(parent, label, size, bordered=True)
 
 
 def muted_button(parent, label, size):
@@ -111,7 +104,6 @@ def muted_button(parent, label, size):
 def text_button(parent, label, size):
     b = FlatButton(parent, label, size)
     colours.set(b, 'colour_normal_bg', 'BTNFACE')
-    colours.set(b, 'colour_normal_fg', 'WINDOWTEXT')
     colours.set(b, 'colour_hover_bg',  'BTNFACE')
     colours.set(b, 'colour_hover_fg',  'Highlight')
     colours.set(b, 'colour_press_bg',  'BTNFACE')
