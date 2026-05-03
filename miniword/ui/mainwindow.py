@@ -165,6 +165,28 @@ class _PreferencesDialog(wx.Dialog):
 # Main window
 # ---------------------------------------------------------------------------
 
+class _FileDropTarget(wx.FileDropTarget):
+    def __init__(self, frame):
+        super().__init__()
+        self._frame = frame
+
+    def OnDropFiles(self, x, y, paths):
+        from ..io import importexport
+        for path in paths:
+            try:
+                doc = importexport.open_file(path)
+            except Exception as e:
+                wx.MessageBox(str(e), "Open", wx.OK | wx.ICON_ERROR, self._frame)
+                continue
+            frame = MainFrame(doc)
+            frame._current_path = path
+            frame._update_title()
+            frame.Show()
+            get_file_history().AddFileToHistory(path)
+            save_file_history()
+        return True
+
+
 class MainFrame(wx.Frame, ViewBase):
 
     _progress_dlg = None
@@ -188,6 +210,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._build_layout()
         self._update_title()
         self.Centre()
+        self.SetDropTarget(_FileDropTarget(self))
 
     def _load_plugins(self):
         tools_items, all_mods = load_plugins()
