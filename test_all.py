@@ -49,8 +49,8 @@ modules = [
     "miniword.ui.searchtool",
     "miniword.ui.documentview",
 
-    # examples
-    "examples.mdfilter",
+    # plugins
+    "miniword.plugins.mdfilter",
 ]
 
 total_n = 0
