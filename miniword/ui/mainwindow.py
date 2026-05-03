@@ -214,16 +214,19 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetDropTarget(_FileDropTarget(self))
 
     def _load_plugins(self):
-        tools_items, all_mods = load_plugins()
+        self._plugin_tools, self._plugin_mods = load_plugins()
+        self._register_plugin_menus()
+
+    def _register_plugin_menus(self):
         bar = self.GetMenuBar()
-        if tools_items:
+        if self._plugin_tools:
             tools_menu = wx.Menu()
             bar.Insert(bar.GetMenuCount() - 1, tools_menu, "&Tools")
-            for name, mod in tools_items:
+            for name, mod in self._plugin_tools:
                 item_id = wx.NewIdRef()
                 tools_menu.Append(item_id, name)
                 self.Bind(wx.EVT_MENU, lambda evt, m=mod: m.run(self), id=item_id)
-        for mod in all_mods:
+        for mod in self._plugin_mods:
             if not hasattr(mod, 'get_menus'):
                 continue
             for menu_name, items in mod.get_menus(self.document):
@@ -384,7 +387,10 @@ class MainFrame(wx.Frame, ViewBase):
         self._build_strip()
 
         self._base.Bind(wx.EVT_SIZE, lambda e: (e.Skip(), self._layout()))
+
         self.Bind(wx.EVT_DPI_CHANGED, self._on_dpi_changed)
+        self.Bind(wx.EVT_DISPLAY_CHANGED, self._on_dpi_changed)
+            
         wx.CallAfter(self._layout)
 
     def _on_panel_toggle(self, key):
@@ -515,6 +521,8 @@ class MainFrame(wx.Frame, ViewBase):
         ], self._on_panel_toggle)
 
     def _on_dpi_changed(self, event):
+        self._build_menu()
+        self._register_plugin_menus()
         active_key = self._strip.active_btn._key if self._strip.active_btn else None
         self._strip.Destroy()
         self._build_strip()
@@ -525,6 +533,7 @@ class MainFrame(wx.Frame, ViewBase):
             panel.dpi_changed()
         self.textview.Refresh()
         self._layout()
+        self.Refresh()
         event.Skip()
 
     def _update_title(self):
