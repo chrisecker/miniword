@@ -123,12 +123,12 @@ normal = updated(
     dict(name="Normal"),
 )
 
-h0 = updated(normal, dict(name="Heading 1", font_size=18, bold=True,
+h0 = updated(normal, dict(name="Heading 1", role="h1", font_size=18, bold=True,
                           page_break_before=True))
-h1 = updated(normal, dict(name="Heading 2", font_size=16, bold=True,
+h1 = updated(normal, dict(name="Heading 2", role="h2", font_size=16, bold=True,
                           color="red"))
-h2 = updated(normal, dict(name="Heading 3", font_size=14, bold=True))
-h3 = updated(normal, dict(name="Heading 4", font_size=12, bold=True))
+h2 = updated(normal, dict(name="Heading 3", role="h3", font_size=14, bold=True))
+h3 = updated(normal, dict(name="Heading 4", role="h4", font_size=12, bold=True))
 
 from .stylesheet import StyleSheet
 

@@ -48,8 +48,6 @@ class DocumentView(WXTextView):
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.set_model(document.textmodel)
-        self.add_model(document.charstyles)
-        self.add_model(document.liststyles)
         self.add_model(document.basestyles)
         self.add_model(document)
 

@@ -10,6 +10,7 @@ from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
 from .colours import colours
 from .icons import ICONS_DIR
+from .outlinepanel import OutlinePanel
 
 from ..images import image_editors  # registers editors
 from ..tables import table_editors  # registers editors
@@ -369,6 +370,8 @@ class MainFrame(wx.Frame, ViewBase):
 
         from .searchtool import SearchPanel
         self._search_panel = SearchPanel(self._inspector_book, self.textview)
+        self._outline_panel = OutlinePanel(
+            self._inspector_book, self.document, self.textview)
 
         for key, panel in [
             ("style",    self.inspector),
@@ -376,6 +379,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("image",    self.image_inspector),
             ("table",    self.table_panel),
             ("search",   self._search_panel),
+            ("outline",  self._outline_panel),
         ]:
             idx = self._inspector_book.GetPageCount()
             self._inspector_book.AddPage(panel, "")
@@ -404,6 +408,8 @@ class MainFrame(wx.Frame, ViewBase):
             self._inspector_book.Show()
             self._inspector_book.Raise()
             self._mi_panel.Check(True)
+            if key == "outline":
+                self._outline_panel.refresh()
         self._layout()
 
     def _on_preferences(self, _):
@@ -513,6 +519,7 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _build_strip(self):
         self._strip = RightStrip(self._base, [
+            ("outline",  "Outline"),
             ("style",    "Styles"),
             ("search",   "Search"),
             ("image",    "Image"),
@@ -529,7 +536,8 @@ class MainFrame(wx.Frame, ViewBase):
         if active_key:
             self._strip.activate(active_key)
         for panel in [self.inspector, self.document_settings,
-                      self.image_inspector, self.table_panel, self._search_panel]:
+                      self.image_inspector, self.table_panel,
+                      self._search_panel, self._outline_panel]:
             panel.dpi_changed()
         self.textview.Refresh()
         self._layout()
@@ -745,8 +753,6 @@ class MainFrame(wx.Frame, ViewBase):
         self.textview.document = doc
         self.textview.set_model(doc.textmodel)
         self.textview.index = 0
-        self.textview.add_model(doc.charstyles)
-        self.textview.add_model(doc.liststyles)
         self.textview.add_model(doc.basestyles)
         self.textview.add_model(doc)
         self.inspector.remove_model(old_textmodel)
@@ -758,6 +764,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.document_settings._refresh()
         self.image_inspector.blobs = doc.blobs
         self.image_inspector.clear()
+        self._outline_panel.set_document(doc)
 
     def show_right_panel(self, key):
         self._strip.activate(key)
