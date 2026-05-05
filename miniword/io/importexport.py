@@ -84,7 +84,7 @@ def _sniff_txl(path):
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             head = f.read(512)
         return bool(re.match(
-            r'^\[(?:document|basestyles|charstyles|liststyles|blobs)\]',
+            r'^\[(?:document|basestyles|charstyles|liststyles|blobs)\]',  # compat
             head.lstrip()))
     except Exception:
         return False

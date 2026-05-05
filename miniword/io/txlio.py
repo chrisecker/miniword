@@ -6,12 +6,6 @@ File structure (all sections except [document] are optional):
     [basestyles]
     "h1" = {font_size=18, bold, name="Header 1", role="h1"}
 
-    [charstyles]
-    "em" = {bold, name="Emphasis"}
-
-    [liststyles]
-    "bullet" = {name="Bullet list", marker="•"}
-
     [blobs]
     "photo.png" = "base64encodeddata..."
 
@@ -75,19 +69,14 @@ def _extend_tuples(style):
 def save(doc, path):
     parts = []
 
-    # Stylesheet sections — only written when non-empty
-    # Built-in styles that are always present are never written.
-    _skip = {'basestyles': {'normal'}}
-    for name in ('charstyles', 'basestyles', 'liststyles'):
-        ss = getattr(doc, name)
-        skip = _skip.get(name, set())
-        items = [(k, v) for k, v in ss.items() if k not in skip]
-        if items:
-            parts.append('[%s]' % name)
-            for key, style in items:
-                diff = _style_diff(style)
-                parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
-            parts.append('')
+    # basestyles section — only written when non-empty (beyond built-in 'normal')
+    items = [(k, v) for k, v in doc.basestyles.items() if k != 'normal']
+    if items:
+        parts.append('[basestyles]')
+        for key, style in items:
+            diff = _style_diff(style)
+            parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
+        parts.append('')
 
     # Blobs section — only written when non-empty
     if doc.blobs:
@@ -117,11 +106,10 @@ def load(path):
 
     doc = Document()
 
-    # Stylesheets — all optional
-    for attr in ('charstyles', 'basestyles', 'liststyles'):
-        if attr in sections:
-            for key, style in _parse_stylesheet(sections[attr]).items():
-                getattr(doc, attr).set(key, updated(style_default, style))
+    # basestyles — optional (charstyles/liststyles silently ignored for compat)
+    if 'basestyles' in sections:
+        for key, style in _parse_stylesheet(sections['basestyles']).items():
+            doc.basestyles.set(key, updated(style_default, style))
 
     # Blobs — optional
     if 'blobs' in sections:
@@ -215,13 +203,12 @@ def test_00():
 
 
 def test_01():
-    "stylesheets roundtrip"
+    "basestyles roundtrip"
     import tempfile, os
 
     doc = Document()
     doc.textmodel = TextModel("Hi")
     doc.basestyles.set('h1', {'font_size': 18, 'bold': True})
-    doc.charstyles.set('em', {'italic': True})
 
     with tempfile.NamedTemporaryFile(
             suffix='.txl', delete=False, mode='w') as f:
@@ -231,7 +218,6 @@ def test_01():
         doc2 = Document.load(path)
         assert doc2.basestyles.get('h1')['font_size'] == 18
         assert doc2.basestyles.get('h1')['bold'] == True
-        assert doc2.charstyles.get('em')['italic'] == True
     finally:
         os.unlink(path)
 
