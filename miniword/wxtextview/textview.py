@@ -40,20 +40,29 @@ class NullEditor:
 
     def __init__(self, docview):
         self.docview = docview
-
+        
+    # Events — always return False (not consumed)
     def on_leftdown(self, event): return False
     def on_motion(self, event):   return False
     def on_leftup(self, event):   return False
     def on_key(self, key, event): return False
 
+    # Queries — None means "use DocumentView default"
     def selected(self, i1, i2):   return None
     def adjust_viewport(self):    return None
 
+    # Draw cursor + selection
+    def draw(self, painter):
+        self.docview.draw_cursor(painter)
+        self.docview.draw_selection(painter)
+
     def handle_action(self, action, shift, ctx): return False
 
+    # Clipboard — delegate to docview    
     def copy(self):  self.docview.copy()
     def cut(self):   self.docview.cut()
     def paste(self): self.docview.paste()
+    
 
 
 def _line_starts(model, i1, i2):
@@ -128,8 +137,8 @@ class TextView(ViewBase, Model):
     _scrollrate = 10, 10
     _TextModel = TextModel
 
-    highlights  = []
-    squiggles   = []
+    highlights = []  # list of (i1, i2) or (i1, i2, color)
+    squiggles  = []  # list of (i1, i2) or (i1, i2, color)
     min_zoom    = 0.2
     max_zoom    = 5.0
     zoom_step   = 0.1
@@ -137,6 +146,8 @@ class TextView(ViewBase, Model):
     _pending_range = None
     _inhibit_depth = 0
 
+
+    
     def __init__(self):
         ViewBase.__init__(self)
         self.editor = NullEditor(self)
@@ -166,12 +177,14 @@ class TextView(ViewBase, Model):
         return False
 
     def install_editor(self, editor, texel):
+        """Installs an editor for the texel at positions i1 to i2 in depth d."""        
         editor.install(texel)
         self.editor = editor
         self.notify_views('editor_changed', editor)
         self.refresh()
 
     def reinstall_editor(self, texel):
+        """Called after properties change."""        
         self.editor.reinstall(texel)
 
     def remove_editor(self):
@@ -181,6 +194,8 @@ class TextView(ViewBase, Model):
             self.refresh()
 
     def update_editor(self):
+        """Install, switch, or remove the editor based on current conditions.
+        """        
         index = self.index
         editor = self.editor
         path = get_path(self.model.get_xtexel(), index)
@@ -260,9 +275,9 @@ class TextView(ViewBase, Model):
     def add_undo(self, info, clear_redo=1):
         if info is None:
             return
-        if self._undo_group is not None:
+        if self._undo_groups:
             # Grouping active: collect instead of committing immediately.
-            self._undo_group.append(info)
+            self._undo_groups[-1].append(info)
             return
         if len(self._undoinfo):
             joined = self.join_undo(info, self._undoinfo[0])
@@ -283,6 +298,23 @@ class TextView(ViewBase, Model):
         self._redoinfo.insert(0, info)
         self.notify_views('undo_changed')
 
+    def begin_undo_group(self):
+        """Start collecting undo entries into a single group."""
+        self._undo_groups.append([])
+
+    def end_undo_group(self):
+        """Flush the collected group as one atomic undo entry."""
+        l = self._undo_groups.pop()        
+        n = len(self._undo_groups)
+        if n:
+            # Append entries to the parent group
+            self._undo_groups[n-1].extend(l)
+        else:
+            # Insert into undo stack directly
+            self._undoinfo.insert(0, l)
+            self._redoinfo = []
+            self.notify_views('undo_changed')
+        
     def undocount(self):
         return len(self._undoinfo)
 
@@ -292,28 +324,10 @@ class TextView(ViewBase, Model):
     def clear_undo(self):
         self._undoinfo = []
         self._redoinfo = []
-        self._undo_group = None  # None = not grouping; list = collecting entries
+        self._undo_groups = []
 
-    # ------------------------------------------------------------------
-    # Undo grouping
-    # ------------------------------------------------------------------
 
-    def begin_undo_group(self):
-        """Start collecting undo entries into a single group."""
-        self._undo_group = []
-
-    def end_undo_group(self):
-        """Flush the collected group as one atomic undo entry."""
-        group = self._undo_group
-        self._undo_group = None
-        if not group:
-            return
-        entry = group[0] if len(group) == 1 else group
-        # Insert directly, bypassing join_undo (groups must not be merged).
-        self._undoinfo.insert(0, entry)
-        self._redoinfo = []
-        self.notify_views('undo_changed')
-
+    ### Editing
     def insert(self, i, textmodel):
         self.model.insert(i, textmodel)
         self.index = i+len(textmodel)
@@ -324,6 +338,14 @@ class TextView(ViewBase, Model):
         model = self.model.__class__(text, **style)  
         return self.insert(i, model)
 
+    def type_char(self, char):
+        if self.has_selection():
+            s1, s2 = sorted(self.selection)
+            e1, e2 = self.model.expand_range(s1, s2)
+            self.remove(e1, e2)
+        self.insert_text(self.index, char, **self.get_current_style())
+        self.Refresh()
+    
     def remove(self, i1, i2):
         info = self._remove(i1, i2)
         self.add_undo(info)
@@ -504,31 +526,12 @@ class TextView(ViewBase, Model):
             return 0
         return self.layout.get_index(x, y)
 
-    _current_style = None
 
-    def get_current_style(self):
-        if self._current_style is None:
-            index = self.index
-            if index == 0:
-                self._current_style = dict(self.model.get_style(index))
-            else:
-                self._current_style = dict(self.model.get_style(index - 1))
-        return self._current_style
-
-    def set_current_style(self, **properties):
-        style = self.get_current_style()
-        style.update(properties)
-        self.notify_views('current_style_changed')
-
-    def clear_current_style(self, *keys):
-        style = self.get_current_style()
-        for key in keys:
-            style.pop(key, None)
-        self.notify_views('current_style_changed')
-
+    ### Actions
     handlers = []  # populated after class definition
 
     def _build_ctx(self):
+        # Helper: builds the context for action handling
         model = self.model
         index = self.index
         layout = self.layout
@@ -818,6 +821,89 @@ class TextView(ViewBase, Model):
         else:
             self.selection = selection[0], index
 
+    ### styles
+
+    def fill_style(self, parstyle, style):
+        # In the base implementation we do not use any
+        # parstyle. Therefore we simply return style. Can be overriden
+        # if something more complex is needed.
+        return style
+
+    def get_filled_style(self, i):
+        """Returns the filled style dict for index i."""
+        s = self.model.get_style(i)
+        p = self.model.get_parstyle(i)
+        return self.fill_style(p, s)        
+
+    _current_style = None    
+    def get_current_style(self):
+        """Gets the style for the next insert-operation."""
+        if self._current_style is None:
+            index = self.index
+            if index == 0:
+                self._current_style = dict(self.model.get_style(index))
+            else:
+                self._current_style = dict(self.model.get_style(index - 1))
+        return self._current_style
+
+    def set_current_style(self, **properties):
+        """Sets the style for the next insert-operation."""
+        style = self.get_current_style()
+        self._current_style = style.update(properties)
+        self.notify_views('current_style_changed')
+
+    def clear_current_style(self, *keys):
+        """Clears the style for the next insert-operation."""
+        style = self.get_current_style()
+        for key in keys:
+            style.pop(key, None)
+        self.notify_views('current_style_changed')
+
+    ### Drawing
+    def has_focus(self):
+        return True
+    
+    def draw_background(self, painter):
+        pass
+
+    def draw_highlights(self, painter):
+        for entry in self.highlights:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'yellow'
+            highlight(painter, self.layout, i1, i2, 0, 0, c) 
+
+    def draw_squiggles(self, painter):
+        for entry in self.squiggles:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'red'
+            squiggle(painter, self.layout, i1, i2, 0, 0, c) 
+
+    def draw(self, painter):
+        self.draw_background(painter)
+        self.draw_highlights(painter)
+        self.layout.draw(0, 0, painter)
+        self.draw_squiggles(painter)
+        self.editor.draw(painter)
+
+    def draw_cursor(self, painter):
+        # note that draw_cursor is called by editor
+        if not self.has_focus():
+            return
+        style = self.get_filled_style(self.index).copy()
+        current = self.get_current_style()
+        style.update(current)
+        self.layout.draw_cursor(self.index, 0, 0, painter, style)
+
+    def draw_selection(self, painter):
+        # note that draw_selection is called by editor
+        if not self.has_focus():
+            return
+        for j1, j2 in self.get_selected():
+            self.layout.draw_selection(j1, j2, 0, 0, painter)
+        
+
+
+
 
 def default_handler(view, action, shift, ctx):
     """Fallback handler: implements all standard editing actions."""
@@ -940,9 +1026,7 @@ def default_handler(view, action, shift, ctx):
         j1, j2 = model.expand_range(i, index)
         view.remove(j1, j2)
     else:
-        assert len(action) == 1  # single character
-        ctx.del_selection()
-        view.insert_text(view.index, action, **style)
+        return False # not handled
     return True
 
 
@@ -1083,6 +1167,22 @@ def test_05():
 
 
 def test_06():
+    "grouping undo"
+    view = TestTextView()
+    view.begin_undo_group()
+    view.insert_text(0, 'Hello X')
+    assert view.undocount() == 0
+    assert len(view._undo_groups) == 1
+    view.remove(6, 7)
+    view.insert_text(6, 'world!')
+    view.end_undo_group()
+    assert view.model.get_text() == "Hello world!"
+    assert view.undocount() == 1
+    view.undo()
+    assert view.model.get_text() == ""
+
+    
+def test_07():
     "shift / unshift with undo"
     view = TestTextView()
     view.set_model(TextModel('ab\ncd\nef\n'))
@@ -1101,3 +1201,5 @@ def test_06():
 
     view.undo()        # redo shift → back to original
     assert view.model.get_text() == 'ab\ncd\nef\n'
+
+

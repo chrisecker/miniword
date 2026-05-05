@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 # WxDevice provides a lightweight abstraction layer that keeps device
 # and application specific code isolated from the rest of the
@@ -59,9 +59,10 @@ class WxDevice:
     def clear_caches(self):
         self._cache.clear()
         
-    def create_painter(self, dc):
+    def create_painter(self, dc, origin):
         gc = wx.GraphicsContext.Create(dc)
         gc.Scale(self.zoom, self.zoom)
+        gc.Translate(*origin)
         return gc
 
     def reset_blink(self):

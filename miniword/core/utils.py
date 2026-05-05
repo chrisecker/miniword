@@ -70,6 +70,15 @@ def get_path(tree, i, _offset=0):
     return path
 
 
+
+def updated(default, *styles):
+    """Merges dicts by updating from left to right."""    
+    r = default.copy()
+    for s in styles:
+        r.update(s)
+    return r
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------

@@ -9,7 +9,7 @@ from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
     NewLine, dump
 from ..textmodel.utils import iter_newlines
-from ..textmodel.styles import create_style, updated_style
+from ..textmodel.styles import create_style
 from ..wxtextview.wxdevice import defaultstyle
 
 from .unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
@@ -17,6 +17,8 @@ from .threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
 from .buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
 from .stylemenu import BasestyleSelector
 from ..core.styles import defaultbullets, n_levels, style_default
+from ..core.utils import updated
+
 
 # Display labels and matching format strings for the numbering dropdown.
 _NUMBERING_FORMATS = ['1.', 'a.', 'A.', 'i.']
@@ -963,14 +965,6 @@ def _collect_properties(texel, i1, i2, parstyle, indent, mk_style):
         properties = mk_style(parstyle, s)
         properties['indent'] = indent
     return properties, overrides, parstyle
-
-
-def updated(default, *styles):
-    """Merges dicts by updating from left to right."""    
-    r = default.copy()
-    for s in styles:
-        r.update(s)
-    return r
 
 
 def _mk_style(parstyle, style):

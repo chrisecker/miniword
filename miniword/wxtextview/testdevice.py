@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 class TestDevice:
     # Device is a interface layer to capsule platform dependent
@@ -7,6 +7,9 @@ class TestDevice:
     buffering = False
     zoom = 1.0
 
+    def create_painter(self, dc, origin):
+        return dc
+    
     def get_scale(self, dpi):
         return self.zoom
 

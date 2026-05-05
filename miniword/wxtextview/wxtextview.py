@@ -87,7 +87,7 @@ class WxMixin(wx.ScrolledWindow):
             (26, True, False): 'undo',
             (18, True, False): 'redo',
             (11, True, False): 'del_line_end',
-            (127, True, False): 'del_word_left',
+            (wx.WXK_BACK, True, False): 'del_word_left',
             (1,  True, False): 'select_all',
             (9,  True, False): 'indent',
             (21, True, False): 'dedent',
@@ -129,19 +129,31 @@ class WxMixin(wx.ScrolledWindow):
         if self.editor.on_key(event.GetKeyCode(), event):
             return
         keycode = event.GetKeyCode()
+        ukey = event.GetUnicodeKey()
         ctrl = event.ControlDown()
         shift = event.ShiftDown()
         alt = event.AltDown()
         action = self.actions.get((keycode, ctrl, alt))
-        if action is None:
-            # NOTE: there seems to be a bug in wx - AltGr also triggers Ctrl!
-            if (ctrl and not alt) or keycode < 32:
-                return event.Skip()  # needed for menu
-            action = chr(keycode)
-        self.handle_action(action, shift)
 
+        if action is not None:
+            self.handle_action(action, shift)
+            return
+
+        # Ctrl-Sequences are used for menu shortcuts -> Skip the event
+        # so it is handled by wx. 
+        if ctrl and not alt:
+            # NOTE: AltGr triggers Ctrl in wx and is used only for
+            # text here. We therefore have to exclude this case.
+            event.Skip()
+            return
+
+        if ukey != wx.WXK_NONE:
+            self.type_char(chr(ukey))
+        else:
+            event.Skip()
+        
     # --- clipboard ---
-
+    
     def to_clipboard(self, textmodel):
         for i in range(2):
             # loop is a hack to make clipboard work reliably under linux
@@ -206,9 +218,11 @@ class WxMixin(wx.ScrolledWindow):
         self.select_word(x, y)
         self.SetFocus()
 
+            
     # --- painting ---
 
     def on_paint(self, event):
+        self.ensure_viewport()
         self._update_scroll()
         self.keep_cursor_on_screen()
 
@@ -221,31 +235,25 @@ class WxMixin(wx.ScrolledWindow):
                 return
         else:
             dc = pdc
+
+        spx, spy = self.CalcScrolledPosition((0, 0))
+        ox, oy   = self.content_offset()
+        px, py   = spx + ox, spy + oy
+
         dc.SetBackgroundMode(wx.SOLID)
         dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
         dc.Clear()
         region = self.GetUpdateRegion()
         rx, ry, rw, rh = region.Box
         dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
-        painter = device.create_painter(dc)
+        painter = device.create_painter(dc, origin=(px, py))
 
-        scale = self.scale
-        layout = self.layout
-
-        px, py = self.CalcScrolledPosition((0, 0))
-        ox, oy = self.content_offset()
-        x = (px + ox) / scale
-        y = (py + oy) / scale
-
-        layout.draw(x, y, painter)
-
-        if wx.Window.FindFocus() is self:
-            layout.draw_cursor(self.index, x, y, painter,
-                               self.model.defaultstyle)
-        for j1, j2 in self.get_selected():
-            layout.draw_selection(j1, j2, x, y, painter)
+        self.draw(painter)
         dc = None
         painter = None
+
+    def has_focus(self):
+        return wx.Window.FindFocus() is self and self.index <= len(self.layout)
 
     # --- scroll ---
 
@@ -333,6 +341,9 @@ class WXTextView(WxMixin, TextView):
             self.model,
             device=WxDevice(),
             maxw=self._maxw)
+
+
+
 
 
 

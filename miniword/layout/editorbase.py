@@ -30,38 +30,6 @@ import wx
 from ..textmodel.texeltree import iter_childs
 
 
-class NullEditor:
-    """Null-object editor active when no real editor is installed.
-
-    Implements the full editor protocol with harmless defaults so that
-    DocumentView can always call editor methods unconditionally.
-    """
-    is_null = True
-
-    def __init__(self, docview):
-        self.docview = docview
-
-    # Events — always return False (not consumed)
-    def on_leftdown(self, event):  return False
-    def on_motion(self, event):    return False
-    def on_leftup(self, event):    return False
-    def on_key(self, key, event):  return False
-    def handle_action(self, action, shift, ctx): return False
-
-    # Draw — default cursor + selection
-    def draw(self, painter):
-        self.docview.draw_cursor(painter)
-        self.docview.draw_selection(painter)
-
-    # Queries — None means "use DocumentView default"
-    def selected(self, i1, i2):    return None
-    def adjust_viewport(self):     return None
-
-    # Clipboard — delegate to docview
-    def copy(self):  self.docview.copy()
-    def cut(self):   self.docview.cut()
-    def paste(self): self.docview.paste()
-
 
 class TexelEditor:
     """Base class for all texel editors.

@@ -2,14 +2,13 @@
 from ..wxtextview.wxtextview import WXTextView
 from ..textmodel.utils import iter_newlines
 from ..layout.builder import Factory, Builder
-from ..layout.editorbase import NullEditor
 from ..layout.cairodevice import CairoDevice
 from ..layout.annotation import highlight, squiggle
 from ..layout.builder import trace
 from ..core.texels import BR
 from ..textmodel.texeltree import iter_childs, grouped, Group, \
     provides_childs, length
-from ..core.utils import find_texel, transform, get_path
+from ..core.utils import find_texel, transform, get_path, updated
 
 from contextlib import contextmanager
 
@@ -28,9 +27,6 @@ class DocumentView(WXTextView):
         oy = (ch - vh) // 2 if vh < ch else 0
         return ox, oy
 
-    highlights = []  # list of (i1, i2) or (i1, i2, color)
-    squiggles  = []  # list of (i1, i2) or (i1, i2, color)
-
     # auto_installable editors listed in priority order (first match wins)
     editor_registry = [] #CursorEditor, MatrixEditor, ImageSizeEditor]
 
@@ -44,7 +40,6 @@ class DocumentView(WXTextView):
         super().__init__(parent)
         if wx.Platform == '__WXMSW__':
             self.SetDoubleBuffered(True)
-        self.editor = NullEditor(self)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.set_model(document.textmodel)
@@ -249,53 +244,6 @@ class DocumentView(WXTextView):
         delta = -1 if reverse else 1
         self.set_parproperties(s1, s2, base=keys[(idx + delta) % len(keys)])
 
-    ### Editor management
-    def install_editor(self, editor, texel):
-        """Installs an editor for the texel at positions i1 to i2 in depth d."""
-        editor.install(texel)
-        self.editor = editor
-        self.notify_views('editor_changed', editor)
-        self.refresh()
-
-    def remove_editor(self):
-        if not self.editor.is_null:
-            self.editor = NullEditor(self)
-            self.notify_views('editor_changed', None)
-            self.refresh()
-
-    def reinstall_editor(self, texel):
-        """Called after properties change."""
-        self.editor.reinstall(texel)
-
-    def update_editor(self):
-        """Install, switch, or remove the editor based on current conditions.
-        """
-        index = self.index
-        editor = self.editor
-        path = get_path(self.model.get_xtexel(), index)
-
-        # 1. Current editor still valid?
-        if not editor.is_null:
-            m = editor.match(self, path)
-            if m is not None:
-                i1, i2, depth, texel = m
-                assert i1 == editor.i1
-                assert i2 == editor.i2
-                self.reinstall_editor(texel)
-                return            
-            self.remove_editor()
-                            
-        # 2. Install new editor (first match from registry wins).
-        for cls in self.editor_registry:
-            if not cls.auto_installable:
-                continue
-            m = cls.match(self, path)
-            if m is not None:
-                i1, i2, depth, texel = m
-                editor = cls(self, i1, i2, depth)
-                self.install_editor(editor, texel)
-                return
-
     def on_leftdclick(self, event):
         index = self.index   # already set by first click
         path = get_path(self.model.texel, index)
@@ -416,20 +364,12 @@ class DocumentView(WXTextView):
     def style_removed(self, stylesheet, key):
         self.clear_caches()
         self.rebuild()
+
+    ### Drawing
+    def draw_background(self, painter):
+        self.layout.draw_background(0, 0, painter)
         
-    ### Events with editor routing
-    def on_leftdown(self, event):
-        if self.editor.on_leftdown(event): return
-        super().on_leftdown(event)
-
-    def on_motion(self, event):
-        if self.editor.on_motion(event): return
-        super().on_motion(event)
-
-    def on_leftup(self, event):
-        if self.editor.on_leftup(event):
-            self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
-
+    ### Events 
     def on_mousewheel(self, event):
         if not event.ControlDown():
             return event.Skip()  # scroll
@@ -463,12 +403,6 @@ class DocumentView(WXTextView):
 
         self.Scroll(max(0, int(new_scroll_x / rx)),
                     max(0, int(new_scroll_y / ry)))        
-
-    def on_char(self, event):
-        if self.editor.on_key(event.GetKeyCode(), event):
-            return
-        super().on_char(event)
-
         
     ### Layout
     def _viewport_start(self):
@@ -592,86 +526,23 @@ class DocumentView(WXTextView):
             self.document.basestyles.set(name, restore_to)
         return (self._undo_stylesheet, name, after_redo, restore_to)
 
-    ### Drawing
-    def on_paint(self, event):
-        self.ensure_viewport()
-        self._update_scroll()
-        self.keep_cursor_on_screen()
-
-        pdc = wx.PaintDC(self)
-        pdc.SetAxisOrientation(True, False)
-        device = self.builder.get_device()
-        if device.buffering:
-            dc = wx.BufferedDC(pdc)
-            if not dc.IsOk():
-                return
-        else:
-            dc = pdc
-
-        layout = self.layout
-
-        spx, spy = self.CalcScrolledPosition((0, 0))
-        ox, oy   = self.content_offset()
-        px, py   = spx + ox, spy + oy
-
-        dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
-        dc.Clear()
-        region = self.GetUpdateRegion()
-        rx, ry, rw, rh = region.Box
-        dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
-        painter = device.create_painter(dc, origin=(px, py))
-
-        layout.draw_background(0, 0, painter)          # 1. white page fills
-
-        for entry in self.highlights:
-            i1, i2 = entry[:2]
-            c = entry[2] if len(entry) > 2 else 'yellow'
-            highlight(painter, layout, i1, i2, 0, 0, c)  # 2. colored backgrounds
-
-        layout.draw(0, 0, painter)                      # 3. text on top
-
-        for entry in self.squiggles:
-            i1, i2 = entry[:2]
-            c = entry[2] if len(entry) > 2 else 'red'
-            squiggle(painter, layout, i1, i2, 0, 0, c)   # 4. lines on top
-
-        self.editor.draw(painter)
-        dc = None
-        painter = None
-
-    def draw_cursor(self, gc):
-        layout = self.layout
-        if wx.Window.FindFocus() is self and self.index <= len(layout):
-            layout.draw_cursor(self.index, 0, 0, gc, self.model.defaultstyle)
-
-    def get_selected(self):
-        if not self.has_selection():
-            return []
-        s1, s2 = sorted(self.selection)
-        result = self.editor.selected(s1, s2)
-        if result is not None:
-            return result
-        return [self.model.expand_range(s1, s2)]
-
-    def draw_selection(self, gc):
-        layout = self.layout
-        for j1, j2 in self.get_selected():
-            if j1 <= len(layout):
-                layout.draw_selection(j1, min(j2, len(layout)), 0, 0, gc)
+    ### Style
+    def fill_style(self, parstyle, style):
+        # We override the simple method of wxtextview, to make use of
+        # the stylesheet and basestyles.
+        stylesheet = self.builder.stylesheet
+        basestyle = stylesheet.get(parstyle.get('base', 'normal'))
+        r = updated(basestyle, parstyle, style)
+        if not 'base' in r:
+            r['base'] = 'normal'
+        return r
+    
 
     ### Cursor and selection
     def set_index(self, index, extend=False, update=True):
         self.builder.device.reset_blink()
         self.ensure_index(index+1)
-        # Selection must be updated before checking editor mode.
-        old = self._index
         WXTextView.set_index(self, index, extend, update)
-        # Remove editors when the cursor moves away.
-        if old != index and not self.editor.is_null:
-            self.remove_editor()
-        # Check and install a new one
-        self.update_editor()
 
     def iter_rows(self):
         # TODO: move this to table editor

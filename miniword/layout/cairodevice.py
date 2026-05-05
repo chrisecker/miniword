@@ -79,7 +79,7 @@ class CairoDevice:
             return dpi / 72.0 * self.zoom
         return self.zoom
 
-    def create_painter(self, dc, origin=(0, 0)):
+    def create_painter(self, dc, origin):
         ctx = wxcairo.ContextFromDC(dc)
 
         if not ctx:
