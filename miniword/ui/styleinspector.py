@@ -374,10 +374,13 @@ class StyleInspector(InspectorBase):
         self.counter.Bind(wx.EVT_CHOICE, self.on_counter)
 
         self.start_check = wx.CheckBox(spanel, label="Start value")
-        self.start_value = wx.TextCtrl(spanel)
-        self.reset_start = ResetButton(spanel, ['--'])
-        self.start_value.Enable(False)
-        add_row(spanelsizer, self.start_check, self.start_value, self.reset_start)
+        self.start_number = wx.TextCtrl(spanel, style=wx.TE_PROCESS_ENTER)
+        self.reset_start = ResetButton(spanel, ['start_number'])
+        self.start_number.Enable(False)
+        add_row(spanelsizer, self.start_check, self.start_number, self.reset_start)
+        self.start_check.Bind(wx.EVT_CHECKBOX, self.on_start_check)
+        self.start_number.Bind(wx.EVT_KILL_FOCUS, self.on_start_number)
+        self.start_number.Bind(wx.EVT_TEXT_ENTER, self.on_start_number)
 
         contentsizer.Add(spanel, 0, wx.EXPAND, 5)
 
@@ -433,8 +436,9 @@ class StyleInspector(InspectorBase):
                 self.reset_space_before, self.reset_space_after, self.reset_policy,
                 self.reset_indent, self.reset_paragraph_type, self.reset_list_indent,
                 self.reset_marker_pos, self.reset_marker_color, self.reset_marker_size,
-                self.reset_bullet, self.reset_numbering, self.reset_page_break_before,
-                self.reset_block_color, self.reset_block_padding, self.reset_role]:
+                self.reset_bullet, self.reset_numbering, self.reset_start,
+                self.reset_page_break_before, self.reset_block_color,
+                self.reset_block_padding, self.reset_role]:
             resetter.callback = self.clear_parproperties
 
     def dpi_changed(self):
@@ -478,6 +482,22 @@ class StyleInspector(InspectorBase):
     def on_counter(self, event):
         value = ['item', 'section'][self.counter.Selection]
         self.set_parproperties(counter=value)
+
+    def on_start_check(self, event):
+        value = self.start_check.Value
+        if not value:
+            self.set_parproperties(start_number=None)
+        else:
+            self.set_parproperties(start_number=1)
+        
+    def on_start_number(self, event):
+        s = self.start_number.Value
+        try:
+            value = max(1, int(s))
+        except:
+            # reset to the old value
+            return self.update()
+        self.set_parproperties(start_number=value)
 
     def set_list_value(self, name, value):
         # Helper
@@ -903,6 +923,15 @@ class StyleInspector(InspectorBase):
         self.counter.SetSelection(0 if counter != 'section' else 1)
         self.reset_counter.set_x('counter' in overrides)
 
+        sn = properties.get('start_number')
+        self.start_number.Enable(sn is not None)
+        self.start_check.SetValue(sn is not None)
+        if sn:
+            self.start_number.SetValue(str(sn))
+        else:
+            self.start_number.SetValue("")
+        self.reset_start.set_x('start_number' in overrides)
+            
         ptype = properties['paragraph_type']
         self.marker_panel.Show(ptype in ("list", "numbered"))
         self.list_panel.Show(ptype == "list")

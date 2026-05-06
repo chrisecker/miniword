@@ -1,7 +1,7 @@
 import wx
 from ..textmodel.viewbase import ViewBase
 from ..textmodel.utils import get_newlines
-from ..layout.counters import format_number
+from ..layout.counters import format_number, set_counter, inc_counter
 from ..core.styles import n_levels
 
 
@@ -25,7 +25,10 @@ def iter_headings(model, stylesheet):
             continue
 
         level  = int(role[1:])
-        indent = getattr(nl, 'indent', 0) or 0
+        indent = merged['fixed_indent']
+        if indent is None:
+            indent = getattr(nl, 'indent', 0) or 0
+        
         ptype  = merged.get('paragraph_type', 'normal')
         ckey   = merged.get('counter', 'item')
 
@@ -34,12 +37,12 @@ def iter_headings(model, stylesheet):
             ns = merged.get('numbering_style', ('1.',) * n_levels)
             if ckey not in counters:
                 counters[ckey] = [0] * n_levels
+            counter = counters[ckey]
             sn = parstyle.get('start_number')
             if sn is not None:
-                counters[ckey][indent] = sn - 1
-            for k in range(indent + 1, n_levels):
-                counters[ckey][k] = 0
-            counters[ckey][indent] += 1
+                set_counter(indent, counter, sn)
+            else:
+                inc_counter(indent, counter)
             counters['item'] = [0] * n_levels
             prefix = format_number(counters[ckey], indent, ns[indent]) + ' '
 

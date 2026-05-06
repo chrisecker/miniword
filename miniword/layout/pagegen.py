@@ -20,7 +20,7 @@ from ..core.papersizes import PAPER_SIZES
 from ..core.document import settings_default
 from .stretchable import justify_line
 from .page import ForceBreakBox, Row, Page
-from .counters import format_number
+from .counters import format_number, set_counter, inc_counter
 from ..tables.table_boxes import TableBox, split_at_height
 
 from copy import copy as shallow_copy
@@ -364,11 +364,12 @@ def generate_pages(texel, i, restartmemo, factory,
                             ckey = r['counter']
                             if ckey not in counters:
                                 counters[ckey] = [0] * n_levels
+                            counter = counters[ckey]
                             sn = r.get('start_number')
                             if sn is not None:
-                                counters[ckey][indent] = sn - 1
+                                set_counter(indent, counter, sn)
                             else:
-                                counters[ckey][indent] += 1
+                                inc_counter(indent, counter)
                             if ckey == 'section':
                                 # a section count clears the item counter
                                 counters['item'] = [0] * n_levels

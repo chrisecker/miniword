@@ -1,6 +1,18 @@
 import re as _re
+from ..core.styles import n_levels
 
 
+def set_counter(indent, counter, value):
+    counter[indent] = value
+    for k in range(indent + 1, n_levels):
+        counter[k] = 0
+
+        
+def inc_counter(indent, counter):
+    value = counter[indent]+1
+    return set_counter(indent, counter, value)
+    
+    
 def _to_roman(n):
     """Convert positive integer to lowercase Roman numeral string."""
     val  = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
