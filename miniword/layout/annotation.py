@@ -71,76 +71,21 @@ def highlight(dc, box, i1, i2, x=0, y=0, color='yellow'):
                 hx1, y1, hx2 - hx1, child.height + child.depth, color, dc)
 
 
-def _squiggle_wx(gc, x, y, width, color):
-    """Draw zigzag on a wx.GraphicsContext."""
-    import wx
-    step = 2.0
-    amp  = 1.5
-    pen  = gc.CreatePen(wx.GraphicsPenInfo(wx.Colour(color)).Width(1))
-    gc.SetPen(pen)
-    gc.SetBrush(wx.TRANSPARENT_BRUSH)
-    path = gc.CreatePath()
-    path.MoveToPoint(x, y)
-    i = 1
-    while True:
-        px = x + step * i
-        py = y + (amp if i % 2 == 1 else -amp)
-        if px >= x + width:
-            path.AddLineToPoint(x + width, py)
-            break
-        path.AddLineToPoint(px, py)
-        i += 1
-    gc.StrokePath(path)
-
-
-def _squiggle_cairo(ctx, x, y, width, color):
-    """Draw zigzag on a Cairo context."""
-    import wx
-    c = wx.Colour(color)
-    ctx.set_source_rgb(c.Red() / 255, c.Green() / 255, c.Blue() / 255)
-    ctx.set_line_width(0.5)
-    step = 2.0
-    amp  = 1.5
-    ctx.move_to(x, y)
-    i = 1
-    while True:
-        px = x + step * i
-        py = y + (amp if i % 2 == 1 else -amp)
-        if px >= x + width:
-            ctx.line_to(x + width, py)
-            break
-        ctx.line_to(px, py)
-        i += 1
-    ctx.stroke()
-
-
 def squiggle(dc, box, i1, i2, x=0, y=0, color='red'):
     """Draw a wavy underline beneath all characters in [i1, i2].
-
-    Draws a zigzag path directly onto dc. Supports both wx.GraphicsContext
-    (WxDevice) and Cairo context (CairoDevice) — detected via duck typing.
-    The wave sits on the text baseline (y + height), with a step of 2 PT
-    and an amplitude of 1.5 PT.  Call *after* layout.draw().
-
-    Args:
-        dc:         Drawing context (wx.GraphicsContext or Cairo context).
-        box:        Root box (typically the layout object).
-        i1, i2:     Index range to annotate (document positions).
-        x, y:       Absolute pixel offset of *box* — same values
-                    passed to box.draw().
-        color:      Line color, any string accepted by wx.Colour.
     """
-    draw = _squiggle_wx if hasattr(dc, 'CreatePath') else _squiggle_cairo
     for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1, i2, x, y):
         hx1 = x1 + px1
         hx2 = x1 + px2
         if hx2 > hx1:
-            draw(dc, hx1, y1 + child.height, hx2 - hx1, color)
+            child.device.draw_squiggle(
+                hx1, y1+child.height+child.depth, hx2-hx1, color, dc)            
 
 
 # --- Tests ---
 
-def test_highlight():
+def test_00():
+    "highlight"
     from ..wxtextview.boxes import TextBox, VBox
     from ..wxtextview.testdevice import TestDevice
 
@@ -169,7 +114,8 @@ def test_highlight():
     assert len(calls) == 2
 
 
-def test_iter_textboxes():
+def test_01():
+    "iter_textboxes"
     # Tests the shared iteration core used by both highlight and squiggle.
     from ..wxtextview.boxes import TextBox, VBox, HBox
     from .stretchable import create_stretchtext

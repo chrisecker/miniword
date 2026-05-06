@@ -327,6 +327,25 @@ class CairoDevice:
         ctx.rectangle(x, y, w, h)
         ctx.fill()
 
+    def draw_squiggle(self, x, y, width, color, ctx):
+        """Draw zigzag line."""
+        c = wx.Colour(color)
+        ctx.set_source_rgb(c.Red() / 255, c.Green() / 255, c.Blue() / 255)
+        ctx.set_line_width(0.5)
+        step = 2.0
+        amp  = 1.5
+        ctx.move_to(x, y)
+        i = 1
+        while True:
+            px = x + step * i
+            py = y + (amp if i % 2 == 1 else -amp)
+            if px >= x + width:
+                ctx.line_to(x + width, py)
+                break
+            ctx.line_to(px, py)
+            i += 1
+        ctx.stroke()
+
     def invert_rect(self, x, y, w, h, ctx):
         """
         Draw a semi-transparent selection rectangle

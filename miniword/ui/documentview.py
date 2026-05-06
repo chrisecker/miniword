@@ -18,14 +18,9 @@ import wx
 
 
 class DocumentView(WXTextView):
+    highlights = []  # list of (i1, i2) or (i1, i2, color)
+    squiggles  = []  # list of (i1, i2) or (i1, i2, color)
 
-    def content_offset(self):
-        cw, ch = self.GetClientSize()
-        vw = int(self.layout.width * self.scale)
-        vh = int(self.layout.height * self.scale)
-        ox = (cw - vw) // 2 if vw < cw else 0
-        oy = (ch - vh) // 2 if vh < ch else 0
-        return ox, oy
 
     # auto_installable editors listed in priority order (first match wins)
     editor_registry = [] #CursorEditor, MatrixEditor, ImageSizeEditor]
@@ -366,8 +361,38 @@ class DocumentView(WXTextView):
         self.rebuild()
 
     ### Drawing
+    def content_offset(self):
+        # We want to document to appear horzontally centered
+        cw, ch = self.GetClientSize()
+        vw = int(self.layout.width * self.scale)
+        vh = int(self.layout.height * self.scale)
+        ox = (cw - vw) // 2 if vw < cw else 0
+        oy = (ch - vh) // 2 if vh < ch else 0
+        return ox, oy
+    
+    def draw(self, painter):
+        # Adding squiggles and highlights to wxtextviews draw()-Method
+        self.draw_background(painter)
+        self.draw_highlights(painter)
+        self.layout.draw(0, 0, painter)
+        self.draw_squiggles(painter)
+        self.editor.draw(painter)
+   
     def draw_background(self, painter):
         self.layout.draw_background(0, 0, painter)
+
+    def draw_highlights(self, painter):
+        for entry in self.highlights:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'yellow'
+            highlight(painter, self.layout, i1, i2, 0, 0, c) 
+
+    def draw_squiggles(self, painter):
+        for entry in self.squiggles:
+            i1, i2 = entry[:2]
+            c = entry[2] if len(entry) > 2 else 'red'
+            squiggle(painter, self.layout, i1, i2, 0, 0, c) 
+        
         
     ### Events 
     def on_mousewheel(self, event):

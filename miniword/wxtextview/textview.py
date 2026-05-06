@@ -137,8 +137,6 @@ class TextView(ViewBase, Model):
     _scrollrate = 10, 10
     _TextModel = TextModel
 
-    highlights = []  # list of (i1, i2) or (i1, i2, color)
-    squiggles  = []  # list of (i1, i2) or (i1, i2, color)
     min_zoom    = 0.2
     max_zoom    = 5.0
     zoom_step   = 0.1
@@ -405,17 +403,21 @@ class TextView(ViewBase, Model):
 
     def indent(self):
         model = self.model
-        s1, s2 = sorted(self.selection) if self.has_selection() else (self.index, self.index)
-        i1 = model.linestart(s1)
-        i2 = model.lineend(s2) + 1
+        if self.has_selection():
+            i1, i2 = sorted(self.selection)
+        else:
+            i1 = i2 = self.index
+        i2 = model.lineend(i2)+1
         old = model.increase_indent(i1, i2)
         self.add_undo((self._set_indents, i1, i2, old))
 
     def dedent(self):
         model = self.model
-        s1, s2 = sorted(self.selection) if self.has_selection() else (self.index, self.index)
-        i1 = model.linestart(s1)
-        i2 = model.lineend(s2) + 1
+        if self.has_selection():
+            i1, i2 = sorted(self.selection)
+        else:
+            i1 = i2 = self.index
+        i2 = model.lineend(i2)+1
         old = model.decrease_indent(i1, i2)
         self.add_undo((self._set_indents, i1, i2, old))
 
@@ -481,15 +483,16 @@ class TextView(ViewBase, Model):
         # index.
         texel = self.model.texel
         new = fun(texel)
-        info = self._set_texel(new)
-        self.add_undo(info)
+        self._set_texel(new)
 
     def _set_texel(self, new):
+        # Helper: exchange the texeltree & add undo
         old = self.model.texel
         self.model.texel = new
         self.index = min(len(self.model), self.index)        
         self.rebuild()
-        return self._set_texel, old
+        info = self._set_texel, old
+        self.add_undo(info)
 
     def get_zoom(self):
         return self._zoom
@@ -861,28 +864,15 @@ class TextView(ViewBase, Model):
 
     ### Drawing
     def has_focus(self):
+        # Dummy. Needs to be overriden by GUI.
         return True
     
     def draw_background(self, painter):
         pass
 
-    def draw_highlights(self, painter):
-        for entry in self.highlights:
-            i1, i2 = entry[:2]
-            c = entry[2] if len(entry) > 2 else 'yellow'
-            highlight(painter, self.layout, i1, i2, 0, 0, c) 
-
-    def draw_squiggles(self, painter):
-        for entry in self.squiggles:
-            i1, i2 = entry[:2]
-            c = entry[2] if len(entry) > 2 else 'red'
-            squiggle(painter, self.layout, i1, i2, 0, 0, c) 
-
     def draw(self, painter):
         self.draw_background(painter)
-        self.draw_highlights(painter)
         self.layout.draw(0, 0, painter)
-        self.draw_squiggles(painter)
         self.editor.draw(painter)
 
     def draw_cursor(self, painter):
