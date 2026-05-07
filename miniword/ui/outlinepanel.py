@@ -53,6 +53,7 @@ def iter_headings(model, stylesheet):
 
 
 class OutlinePanel(SidePanel):
+    delay = 400 # a high delay since this may be costly
 
     def __init__(self, parent, document, textview):
         SidePanel.__init__(self, parent)
