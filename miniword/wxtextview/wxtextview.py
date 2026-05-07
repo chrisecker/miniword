@@ -96,7 +96,10 @@ class WxMixin(wx.ScrolledWindow):
     # --- wx hooks (satisfy TextView abstract interface) ---
 
     def refresh(self):
-        self.Refresh()
+        try:
+            self.Refresh()
+        except RuntimeError: # happens during close
+            pass
 
     def get_client_size(self):
         return self.GetClientSize()
