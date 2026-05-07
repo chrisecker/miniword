@@ -1,9 +1,8 @@
 [basestyles]
-"normal" = {alignment="justify", first_line_indent=14.173228346456694, name="Normal", space_after=22.67716535433071}
-"h0" = {bold, font_size=18, name="Heading 1", page_break_before}
-"h1" = {bold, name="Heading 2", space_after=19.84251968503937}
-"h2" = {bold, font_size=14, name="Heading 3"}
-"h3" = {bold, name="Heading 4"}
+"h1" = {bold, font_size=18, name="Heading 1", page_break_before, role="h1"}
+"h2" = {bold, name="Heading 2", space_after=19.84251968503937, role="h2"}
+"h3" = {bold, font_size=14, name="Heading 3", role="h3"}
+"h4" = {bold, name="Heading 4", role="h4"}
 "style0" = {alignment="center", bold, font_size=22.0, name="Title"}
 "style1" = {name="Contents"}
 
@@ -64,7 +63,7 @@ T('NATHANIEL HAWTHORNE.')
 NL
 NL
 T('CONTENTS.')
-NL({base="h0"})
+NL({base="h1"})
 NL
 T('Chap.')
 TAB
@@ -1207,9 +1206,9 @@ T('Whale Song.')
 NL
 NL
 T('CHAPTER I.')
-NL({base="h0"})
-T('LOOMINGS.')
 NL({base="h1"})
+T('LOOMINGS.')
+NL({base="h2"})
 T('Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world. It is a way I have of driving off the spleen, and regulating the circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing up the rear of every funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires a strong moral principle to prevent me from deliberately stepping into the street, and methodically knocking people’s hats off—then, I account it high time to get to sea as soon as I can. This is my substitute for pistol and ball. With a philosophical flourish Cato throws himself upon his sword; I quietly take to the ship. There is nothing surprising in this. If they but knew it, almost all men in their degree, some time or other, cherish very nearly the same feelings towards the ocean with me.')
 NL
 T('There now is your insular city of the Manhattoes, belted round by wharves as Indian isles by coral reefs—commerce surrounds it with her surf. Right and left, the streets take you waterward. Its extreme down-town is the battery, where that noble mole is washed by waves, and cooled by breezes, which a few hours previous were out of sight of land. Look at the crowds of water-gazers there.')
@@ -1246,9 +1245,9 @@ T('By reason of these things, then, the whaling voyage was welcome; the great fl
 NL
 NL
 T('CHAPTER II.')
-NL({base="h0"})
-T('THE CARPET-BAG.')
 NL({base="h1"})
+T('THE CARPET-BAG.')
+NL({base="h2"})
 T('I stuffed a shirt or two into my old carpet-bag, tucked it under my arm, and started for Cape Horn and the Pacific. Quitting the good city of old Manhatto, I duly arrived in New Bedford. It was on a Saturday night in December. Much was I disappointed upon learning that the little packet for Nantucket had already sailed, and that no way of reaching that place would offer, till the following Monday.')
 NL
 T('As most young candidates for the pains and penalties of whaling stop at this same New Bedford, thence to embark on their voyage, it may as well be related that I, for one, had no idea of so doing. For my mind was made up to sail in no other than a Nantucket craft, because there was a fine, boisterous something about everything connected with that famous old island, which amazingly pleased me. Besides though New Bedford has of late been gradually monopolizing the business of whaling, and though in this matter poor old Nantucket is now much behind her, yet Nantucket was her great original—the Tyre of this Carthage;—the place where the first dead American whale was stranded. Where else but from Nantucket did those aboriginal whalemen, the Red-Men, first sally out in canoes to give chase to the Leviathan? And where but from Nantucket, too, did that first adventurous little sloop put forth, partly laden with imported cobble-stones—so goes the story—to throw at the whales, in order to discover when they were nigh enough to risk a harpoon from the bowsprit?')
@@ -1275,9 +1274,9 @@ T('But no more of this blubbering now, we are going a-whaling, and there is plen
 NL
 NL
 T('CHAPTER III.')
-NL({base="h0"})
-T('THE SPOUTER-INN.')
 NL({base="h1"})
+T('THE SPOUTER-INN.')
+NL({base="h2"})
 T('Entering that gable-ended Spouter-Inn, you found yourself in a wide, low, straggling entry with old-fashioned wainscots, reminding one of the bulwarks of some condemned old craft. On one side hung a very large oil-painting so thoroughly besmoked, and every way defaced, that in the unequal cross-lights by which you viewed it, it was only by diligent study and a series of systematic visits to it, and careful inquiry of the neighbors, that you could any way arrive at an understanding of its purpose. Such unaccountable masses of shades and shadows, that at first you almost thought some ambitious young artist, in the time of the New England hags, had endeavored to delineate chaos bewitched. But by dint of much and earnest contemplation, and oft repeated ponderings, and especially by throwing open the little window towards the back of the entry, you at last come to the conclusion that such an idea, however wild, might not be altogether unwarranted.')
 NL
 T('But what most puzzled and confounded you was a long, limber, portentous, black mass of something hovering in the centre of the picture over three blue, dim, perpendicular lines floating in a nameless yeast. A boggy, soggy, squitchy picture truly, enough to drive a nervous man distracted. Yet was there a sort of indefinite, half-attained, unimaginable sublimity about it that fairly froze you to it, till you involuntarily took an oath with yourself to find out what that marvellous painting meant. Ever and anon a bright, but, alas, deceptive idea would dart you through.—It’s the Black Sea in a midnight gale.—It’s the unnatural combat of the four primal elements.—It’s a blasted heath.—It’s a Hyperborean winter scene.—It’s the breaking-up of the ice-bound stream of Time. But at last all these fancies yielded to that one portentous something in the picture’s midst. That once found out, and all the rest were plain. But stop; does it not bear a faint resemblance to a gigantic fish? even the great leviathan himself?')
@@ -1428,9 +1427,9 @@ T('I turned in, and never slept better in my life.')
 NL
 NL
 T('CHAPTER IV.')
-NL({base="h0"})
-T('THE COUNTERPANE.')
 NL({base="h1"})
+T('THE COUNTERPANE.')
+NL({base="h2"})
 T('Upon waking next morning about daylight, I found Queequeg’s arm thrown over me in the most loving and affectionate manner. You had almost thought I had been his wife. The counterpane was of patchwork, full of odd little parti-colored squares and triangles; and this arm of his tattooed all over with an interminable Cretan labyrinth of a figure, no two parts of which were of one precise shade—owing I suppose to his keeping his arm at sea unmethodically in sun and shade, his shirt sleeves irregularly rolled up at various times—this same arm of his, I say, looked for all the world like a strip of that same patchwork quilt. Indeed, partly lying on it as the arm did when I first awoke, I could hardly tell it from the quilt, they so blended their hues together; and it was only by the sense of weight and pressure that I could tell that Queequeg was hugging me.')
 NL
 T('My sensations were strange. Let me try to explain them. When I was a child, I well remember a somewhat similar circumstance that befell me; whether it was a reality or a dream, I never could entirely settle. The circumstance was this. I had been cutting up some caper or other—I think it was trying to crawl up the chimney, as I had seen a little sweep do a few days previous; and my stepmother who, somehow or other, was all the time whipping me, or sending me to bed supperless,—my mother dragged me by the legs out of the chimney and packed me off to bed, though it was only two o’clock in the afternoon of the 21st June, the longest day in the year in our hemisphere. I felt dreadfully. But there was no help for it, so up stairs I went to my little room in the third floor, undressed myself as slowly as possible so as to kill time, and with a bitter sigh got between the sheets.')
@@ -1447,9 +1446,9 @@ T('The rest of his toilet was soon achieved, and he proudly marched out of the r
 NL
 NL
 T('CHAPTER V.')
-NL({base="h0"})
-T('BREAKFAST.')
 NL({base="h1"})
+T('BREAKFAST.')
+NL({base="h2"})
 T('I quickly followed suit, and descending into the bar-room accosted the grinning landlord very pleasantly. I cherished no malice towards him, though he had been skylarking with me not a little in the matter of my bedfellow.')
 NL
 T('However, a good laugh is a mighty good thing, and rather too scarce a good thing; the more’s the pity. So, if any one man, in his own proper person, afford stuff for a good joke to anybody, let him not be backward, but let him cheerfully allow himself to spend and be spent in that way. And the man that has anything bountifully laughable about him, be sure there is more in that man than you perhaps think for.')
@@ -1470,9 +1469,9 @@ T('We will not speak of all Queequeg’s peculiarities here; how he eschewed cof
 NL
 NL
 T('CHAPTER VI.')
-NL({base="h0"})
-T('THE STREET.')
 NL({base="h1"})
+T('THE STREET.')
+NL({base="h2"})
 T('If I had been astonished at first catching a glimpse of so outlandish an individual as Queequeg circulating among the polite society of a civilized town, that astonishment soon departed upon taking my first daylight stroll through the streets of New Bedford.')
 NL
 T('In thoroughfares nigh the docks, any considerable seaport will frequently offer to view the queerest looking nondescripts from foreign parts. Even in Broadway and Chestnut streets, Mediterranean mariners will sometimes jostle the affrighted ladies. Regent street is not unknown to Lascars and Malays; and at Bombay, in the Apollo Green, live Yankees have often scared the natives. But New Bedford beats all Water street and Wapping. In these last-mentioned haunts you see only sailors; but in New Bedford, actual cannibals stand chatting at street corners; savages outright; many of whom yet carry on their bones unholy flesh. It makes a stranger stare.')
@@ -1493,9 +1492,9 @@ T('And the women of New Bedford, they bloom like their own red roses. But roses 
 NL
 NL
 T('CHAPTER VII.')
-NL({base="h0"})
-T('THE CHAPEL.')
 NL({base="h1"})
+T('THE CHAPEL.')
+NL({base="h2"})
 T('In this same New Bedford there stands a Whaleman’s Chapel, and few are the moody fishermen, shortly bound for the Indian Ocean or Pacific, who fail to make a Sunday visit to the spot. I am sure that I did not.')
 NL
 T('Returning from my first morning stroll, I again sallied out upon this special errand. The sky had changed from clear, sunny cold, to driving sleet and mist. Wrapping myself in my shaggy jacket of the cloth called bearskin, I fought my way against the stubborn storm. Entering, I found a small scattered congregation of sailors, and sailors’ wives and widows. A muffled silence reigned, only broken at times by the shrieks of the storm. Each silent worshipper seemed purposely sitting apart from the other, as if each silent grief were insular and incommunicable. The chaplain had not yet arrived; and there these silent islands of men and women sat steadfastly eyeing several marble tablets, with black borders, masoned into the wall on either side the pulpit. Three of them ran something like the following, but I do not pretend to quote:—')
@@ -1590,9 +1589,9 @@ T('It needs scarcely to be told, with what feelings, on the eve of a Nantucket v
 NL
 NL
 T('CHAPTER VIII.')
-NL({base="h0"})
-T('THE PULPIT.')
 NL({base="h1"})
+T('THE PULPIT.')
+NL({base="h2"})
 T('I had not been seated very long ere a man of a certain venerable robustness entered; immediately as the storm-pelted door flew back upon admitting him, a quick regardful eyeing of him by all the congregation, sufficiently attested that this fine old man was the chaplain. Yes, it was the famous Father Mapple, so called by the whalemen, among whom he was a very great favorite. He had been a sailor and a harpooneer in his youth, but for many years past had dedicated his life to the ministry. At the time I now write of, Father Mapple was in the hardy winter of a healthy old age; that sort of old age which seems merging into a second flowering youth, for among all the fissures of his wrinkles, there shone certain mild gleams of a newly developing bloom—the spring verdure peeping forth even beneath February’s snow. No one having previously heard his history, could for the first time behold Father Mapple without the utmost interest, because there were certain engrafted clerical peculiarities about him, imputable to that adventurous maritime life he had led. When he entered I observed that he carried no umbrella, and certainly had not come in his carriage, for his tarpaulin hat ran down with melting sleet, and his great pilot cloth jacket seemed almost to drag him to the floor with the weight of the water it had absorbed. However, hat and coat and overshoes were one by one removed, and hung up in a little space in an adjacent corner; when, arrayed in a decent suit, he quietly approached the pulpit.')
 NL
 T('Like most old fashioned pulpits, it was a very lofty one, and since a regular stairs to such a height would, by its long angle with the floor, seriously contract the already small area of the chapel, the architect, it seemed, had acted upon the hint of Father Mapple, and finished the pulpit without a stairs, substituting a perpendicular side ladder, like those used in mounting a ship from a boat at sea. The wife of a whaling captain had provided the chapel with a handsome pair of red worsted man-ropes for this ladder, which, being itself nicely headed, and stained with a mahogany color, the whole contrivance, considering what manner of chapel it was, seemed by no means in bad taste. Halting for an instant at the foot of the ladder, and with both hands grasping the ornamental knobs of the man-ropes, Father Mapple cast a look upwards, and then with a truly sailor-like but still reverential dexterity, hand over hand, mounted the steps as if ascending the main-top of his vessel.')
@@ -1609,9 +1608,9 @@ T('What could be more full of meaning?—for the pulpit is ever this earth’s f
 NL
 NL
 T('CHAPTER IX.')
-NL({base="h0"})
-T('THE SERMON.')
 NL({base="h1"})
+T('THE SERMON.')
+NL({base="h2"})
 T('Father Mapple rose, and in a mild voice of unassuming authority ordered the scattered people to condense. “Starboard gangway, there! side away to larboard—larboard gangway to starboard! Midships! midships!”')
 NL
 T('There was a low rumbling of heavy sea-boots among the benches, and a still slighter shuffling of women’s shoes, and all was quiet again, and every eye on the preacher.')
@@ -1698,9 +1697,9 @@ T('He said no more, but slowly waving a benediction, covered his face with his h
 NL
 NL
 T('CHAPTER X.')
-NL({base="h0"})
-T('A BOSOM FRIEND.')
 NL({base="h1"})
+T('A BOSOM FRIEND.')
+NL({base="h2"})
 T('Returning to the Spouter-Inn from the Chapel, I found Queequeg there quite alone; he having left the Chapel before the benediction some time. He was sitting on a bench before the fire, with his feet on the stove hearth, and in one hand was holding close up to his face that little negro idol of his; peering hard into its face, and with a jack-knife gently whittling away at its nose, meanwhile humming to himself in his heathenish way.')
 NL
 T('But being now interrupted, he put up the image; and pretty soon, going to the table, took up a large book there, and placing it on his lap began counting the pages with deliberate regularity; at every fiftieth page—as I fancied—stopping a moment, looking vacantly around him, and giving utterance to a long-drawn gurgling whistle of astonishment. He would then begin again at the next fifty; seeming to commence at number one each time, as though he could not count more than fifty, and it was only by such a large number of fifties being found together, that his astonishment at the multitude of pages was excited.')
@@ -1723,9 +1722,9 @@ T('How it is I know not; but there is no place like a bed for confidential discl
 NL
 NL
 T('CHAPTER XI.')
-NL({base="h0"})
-T('NIGHTGOWN.')
 NL({base="h1"})
+T('NIGHTGOWN.')
+NL({base="h2"})
 T('We had lain thus in bed, chatting and napping at short intervals, and Queequeg now and then affectionately throwing his brown tattooed legs over mine, and then drawing them back; so entirely sociable and free and easy were we; when, at last, by reason of our confabulations, what little nappishness remained in us altogether departed, and we felt like getting up again, though day-break was yet some way down the future.')
 NL
 T('Yes, we became very wakeful; so much so that our recumbent position began to grow wearisome, and by little and little we found ourselves sitting up; the clothes well tucked around us, leaning against the head-board with our four knees drawn up close together, and our two noses bending over them, as if our knee-pans were warming-pans. We felt very nice and snug, the more so since it was so chilly out of doors; indeed out of bed-clothes too, seeing that there was no fire in the room. The more so, I say, because truly to enjoy bodily warmth, some small part of you must be cold, for there is no quality in this world that is not what it is merely by contrast. Nothing exists in itself. If you flatter yourself that you are all over comfortable, and have been so a long time, then you cannot be said to be comfortable any more. But if, like Queequeg and me in the bed, the tip of your nose or the crown of your head be slightly chilled, why then, indeed, in the general consciousness you feel most delightfully and unmistakably warm. For this reason a sleeping apartment should never be furnished with a fire, which is one of the luxurious discomforts of the rich. For the height of this sort of deliciousness is to have nothing but the blanket between you and your snugness and the cold of the outer air. Then there you lie like the one warm spark in the heart of an arctic crystal.')
@@ -1736,9 +1735,9 @@ T('Whether it was that this undulating tester rolled the savage away to far dist
 NL
 NL
 T('CHAPTER XII.')
-NL({base="h0"})
-T('BIOGRAPHICAL.')
 NL({base="h1"})
+T('BIOGRAPHICAL.')
+NL({base="h2"})
 T('Queequeg was a native of Rokovoko, an island far away to the West and South. It is not down in any map; true places never are.')
 NL
 T('When a new-hatched savage running wild about his native woodlands in a grass clout, followed by the nibbling goats, as if he were a green sapling; even then, in Queequeg’s ambitious soul, lurked a strong desire to see something more of Christendom than a specimen whaler or two. His father was a High Chief, a King; his uncle a High Priest; and on the maternal side he boasted aunts who were the wives of unconquerable warriors. There was excellent blood in his veins—royal stuff; though sadly vitiated, I fear, by the cannibal propensity he nourished in his untutored youth.')
@@ -1757,9 +1756,9 @@ T('His story being ended with his pipe’s last dying puff, Queequeg embraced me
 NL
 NL
 T('CHAPTER XIII.')
-NL({base="h0"})
-T('WHEELBARROW.')
 NL({base="h1"})
+T('WHEELBARROW.')
+NL({base="h2"})
 T('Next morning, Monday, after disposing of the embalmed head to a barber, for a block, I settled my own and comrade’s bill; using, however, my comrade’s money. The grinning landlord, as well as the boarders, seemed amazingly tickled at the sudden friendship which had sprung up between me and Queequeg—especially as Peter Coffin’s cock and bull stories about him had previously so much alarmed me concerning the very person whom I now companied with.')
 NL
 T('We borrowed a wheelbarrow, and embarking our things, including my own poor carpet-bag, and Queequeg’s canvas sack and hammock, away we went down to “the Moss,” the little Nantucket packet schooner moored at the wharf. As we were going along the people stared; not at Queequeg so much—for they were used to seeing cannibals like him in their streets,—but at seeing him and me upon such confidential terms. But we heeded them not, going along wheeling the barrow by turns, and Queequeg now and then stopping to adjust the sheath on his harpoon barbs. I asked him why he carried such a troublesome thing with him ashore, and whether all whaling ships did not find their own harpoons. To this, in substance, he replied, that though what I hinted was true enough, yet he had a particular affection for his own harpoon, because it was of assured stuff, well tried in many a mortal combat, and deeply intimate with the hearts of whales. In short, like many inland reapers and mowers, who go into the farmers’ meadows armed with their own scythes—though in no wise obliged to furnish them—even so, Queequeg, for his own private reasons, preferred his own harpoon.')
@@ -1792,9 +1791,9 @@ T('Was there ever such unconsciousness? He did not seem to think that he at all 
 NL
 NL
 T('CHAPTER XIV.')
-NL({base="h0"})
-T('NANTUCKET.')
 NL({base="h1"})
+T('NANTUCKET.')
+NL({base="h2"})
 T('Nothing more happened on the passage worthy the mentioning; so, after a fine run, we safely arrived in Nantucket.')
 NL
 T('Nantucket! Take out your map and look at it. See what a real corner of the world it occupies; how it stands there, away off shore, more lonely than the Eddystone lighthouse. Look at it—a mere hillock, and elbow of sand; all beach, without a background. There is more sand there than you would use in twenty years as a substitute for blotting paper. Some gamesome wights will tell you that they have to plant weeds there, they don’t grow naturally; that they import Canada thistles; that they have to send beyond seas for a spile to stop a leak in an oil cask; that pieces of wood in Nantucket are carried about like bits of the true cross in Rome; that people there plant toadstools before their houses, to get under the shade in summer time; that one blade of grass makes an oasis, three blades in a day’s walk a prairie; that they wear quicksand shoes, something like Laplander snow-shoes; that they are so shut up, belted about, every way inclosed, surrounded, and made an utter island of by the ocean, that to their very chairs and tables small clams will sometimes be found adhering, as to the backs of sea turtles. But these extravaganzas only show that Nantucket is no Illinois.')
@@ -1807,9 +1806,9 @@ T('And thus have these naked Nantucketers, these sea hermits, issuing from their
 NL
 NL
 T('CHAPTER XV.')
-NL({base="h0"})
-T('CHOWDER.')
 NL({base="h1"})
+T('CHOWDER.')
+NL({base="h2"})
 T('It was quite late in the evening when the little Moss came snugly to anchor, and Queequeg and I went ashore; so we could attend to no business that day, at least none but a supper and a bed. The landlord of the Spouter-Inn had recommended us to his cousin Hosea Hussey of the Try Pots, whom he asserted to be the proprietor of one of the best kept hotels in all Nantucket, and moreover he had assured us that cousin Hosea, as he called him, was famous for his chowders. In short, he plainly hinted that we could not possibly do better than try pot-luck at the Try Pots. But the directions he had given us about keeping a yellow warehouse on our starboard hand till we opened a white church to the larboard, and then keeping that on the larboard hand till we made a corner three points to the starboard, and that done, then ask the first man we met where the place was: these crooked directions of his very much puzzled us at first, especially as, at the outset, Queequeg insisted that the yellow warehouse—our first point of departure—must be left on the larboard hand, whereas I had understood Peter Coffin to say it was on the starboard. However, by dint of beating about a little in the dark, and now and then knocking up a peaceable inhabitant to inquire the way, we at last came to something which there was no mistaking.')
 NL
 T('Two enormous wooden pots painted black, and suspended by asses’ ears, swung from the cross-trees of an old top-mast, planted in front of an old doorway. The horns of the cross-trees were sawed off on the other side, so that this old top-mast looked not a little like a gallows. Perhaps I was over sensitive to such impressions at the time, but I could not help staring at this gallows with a vague misgiving. A sort of crick was in my neck as I gazed up to the two remaining horns; yes, two of them, one for Queequeg, and one for me. It’s ominous, thinks I. A Coffin my Innkeeper upon landing in my first whaling port; tombstones staring at me in the whalemen’s chapel; and here a gallows! and a pair of prodigious black pots too! Are these last throwing out oblique hints touching Tophet?')
@@ -1844,9 +1843,9 @@ T('“Both,” says I; “and let’s have a couple of smoked herring by way of 
 NL
 NL
 T('CHAPTER XVI.')
-NL({base="h0"})
-T('THE SHIP.')
 NL({base="h1"})
+T('THE SHIP.')
+NL({base="h2"})
 T('In bed we concocted our plans for the morrow. But to my surprise and no small concern, Queequeg now gave me to understand, that he had been diligently consulting Yojo—the name of his black little god—and Yojo had told him two or three times over, and strongly insisted upon it everyway, that instead of our going together among the whaling-fleet in harbor, and in concert selecting our craft; instead of this, I say, Yojo earnestly enjoined that the selection of the ship should rest wholly with me, inasmuch as Yojo purposed befriending us; and, in order to do so, had already pitched upon a vessel, which, if left to myself, I, Ishmael, should infallibly light upon, for all the world as though it had turned out by chance; and in that vessel I must immediately ship myself, for the present irrespective of Queequeg.')
 NL
 T('I have forgotten to mention that, in many things, Queequeg placed great confidence in the excellence of Yojo’s judgment and surprising forecast of things; and cherished Yojo with considerable esteem, as a rather good sort of god, who perhaps meant well enough upon the whole, but in all cases did not succeed in his benevolent designs.')
@@ -2013,9 +2012,9 @@ T('As I walked away, I was full of thoughtfulness; what had been incidentally re
 NL
 NL
 T('CHAPTER XVII.')
-NL({base="h0"})
-T('THE RAMADAN.')
 NL({base="h1"})
+T('THE RAMADAN.')
+NL({base="h2"})
 T('As Queequeg’s Ramadan, or Fasting and Humiliation, was to continue all day, I did not choose to disturb him till towards night-fall; for I cherish the greatest respect towards everybody’s religious obligations, never mind how comical, and could not find it in my heart to undervalue even a congregation of ants worshipping a toad-stool; or those other creatures in certain parts of our earth, who with a degree of footmanism quite unprecedented in other planets, bow down before the torso of a deceased landed proprietor merely on account of the inordinate possessions yet owned and rented in his name.')
 NL
 T('I say, we good Presbyterian Christians should be charitable in these things, and not fancy ourselves so vastly superior to other mortals, pagans and what not, because of their half-crazy conceits on these subjects. There was Queequeg, now, certainly entertaining the most absurd notions about Yojo and his Ramadan;—but what of that? Queequeg thought he knew what he was about, I suppose; he seemed to be content; and there let him rest. All our arguing with him would not avail; let him be, I say: and Heaven have mercy on us all—Presbyterians and Pagans alike—for we are all somehow dreadfully cracked about the head, and sadly need mending.')
@@ -2078,9 +2077,9 @@ T('At last we rose and dressed; and Queequeg, taking a prodigiously hearty break
 NL
 NL
 T('CHAPTER XVIII.')
-NL({base="h0"})
-T('HIS MARK.')
 NL({base="h1"})
+T('HIS MARK.')
+NL({base="h2"})
 T('As we were walking down the end of the wharf towards the ship, Queequeg carrying his harpoon, Captain Peleg in his gruff voice loudly hailed us from his wigwam, saying he had not suspected my friend was a cannibal, and furthermore announcing that he let no cannibals on board that craft, unless they previously produced their papers.')
 NL
 T('“What do you mean by that, Captain Peleg?” said I, now jumping on the bulwarks, and leaving my comrade standing on the wharf.')
@@ -2139,9 +2138,9 @@ T('Bildad said no more, but buttoning up his coat, stalked on deck, where we fol
 NL
 NL
 T('CHAPTER XIX.')
-NL({base="h0"})
-T('THE PROPHET.')
 NL({base="h1"})
+T('THE PROPHET.')
+NL({base="h2"})
 T('“Shipmates, have ye shipped in that ship?”')
 NL
 T('Queequeg and I had just left the Pequod, and were sauntering away from the water, for the moment each occupied with his own thoughts, when the above words were put to us by a stranger, who, pausing before us, levelled his massive forefinger at the vessel in question. He was but shabbily apparelled in faded jacket and patched trowsers; a rag of a black handkerchief investing his neck. A confluent small-pox had in all directions flowed over his face, and left it like the complicated ribbed bed of a torrent, when the rushing waters have been dried up.')
@@ -2214,9 +2213,9 @@ T('I was resolved to satisfy myself whether this ragged Elijah was really doggin
 NL
 NL
 T('CHAPTER XX.')
-NL({base="h0"})
-T('ALL ASTIR.')
 NL({base="h1"})
+T('ALL ASTIR.')
+NL({base="h2"})
 T('A day or two passed, and there was great activity aboard the Pequod. Not only were the old sails being mended, but new sails were coming on board, and bolts of canvas, and coils of rigging; in short, everything betokened that the ship’s preparations were hurrying to a close. Captain Peleg seldom or never went ashore, but sat in his wigwam keeping a sharp look-out upon the hands: Bildad did all the purchasing and providing at the stores; and the men employed in the hold and on the rigging were working till long after night-fall.')
 NL
 T('On the day following Queequeg’s signing the articles, word was given at all the inns where the ship’s company were stopping, that their chests must be on board before night, for there was no telling how soon the vessel might be sailing. So Queequeg and I got down our traps, resolving, however, to sleep ashore till the last. But it seems they always give very long notice in these cases, and the ship did not sail for several days. But no wonder; there was a good deal to be done, and there is no telling how many things to be thought of, before the Pequod was fully equipped.')
@@ -2235,9 +2234,9 @@ T('At last it was given out that some time next day the ship would certainly sai
 NL
 NL
 T('CHAPTER XXI.')
-NL({base="h0"})
-T('GOING ABOARD.')
 NL({base="h1"})
+T('GOING ABOARD.')
+NL({base="h2"})
 T('It was nearly six o’clock, but only grey imperfect misty dawn, when we drew nigh the wharf.')
 NL
 T('“There are some sailors running ahead there, if I see right,” said I to Queequeg, “it can’t be shadows; she’s off by sunrise, I guess; come on!”')
@@ -2316,9 +2315,9 @@ T('It was now clear sunrise. Soon the crew came on board in twos and threes; the
 NL
 NL
 T('CHAPTER XXII.')
-NL({base="h0"})
-T('MERRY CHRISTMAS.')
 NL({base="h1"})
+T('MERRY CHRISTMAS.')
+NL({base="h2"})
 T('At length, towards noon, upon the final dismissal of the ship’s riggers, and after the Pequod had been hauled out from the wharf, and after the ever-thoughtful Charity had come off in a whaleboat, with her last gift—a night-cap for Stubb, the second mate, her brother-in-law, and a spare Bible for the steward—after all this, the two captains, Peleg and Bildad, issued from the cabin, and turning to the chief mate, Peleg said:')
 NL
 T('“Now, Mr. Starbuck, are you sure everything is right? Captain Ahab is all ready—just spoke to him—nothing more to be got from shore, eh? Well, call all hands, then. Muster ’em aft here—blast ’em!”')
@@ -2371,9 +2370,9 @@ T('Ship and boat diverged; the cold, damp night breeze blew between; a screaming
 NL
 NL
 T('CHAPTER XXIII.')
-NL({base="h0"})
-T('THE LEE SHORE.')
 NL({base="h1"})
+T('THE LEE SHORE.')
+NL({base="h2"})
 T('Some chapters back, one Bulkington was spoken of, a tall, new-landed mariner, encountered in New Bedford at the inn.')
 NL
 T('When on that shivering winter’s night, the Pequod thrust her vindictive bows into the cold malicious waves, who should I see standing at her helm but Bulkington! I looked with sympathetic awe and fearfulness upon the man, who in midwinter just landed from a four years’ dangerous voyage, could so unrestingly push off again for still another tempestuous term. The land seemed scorching to his feet. Wonderfullest things are ever the unmentionable; deep memories yield no epitaphs; this six-inch chapter is the stoneless grave of Bulkington. Let me only say that it fared with him as with the storm-tossed ship, that miserably drives along the leeward land. The port would fain give succor; the port is pitiful; in the port is safety, comfort, hearthstone, supper, warm blankets, friends, all that’s kind to our mortalities. But in that gale, the port, the land, is that ship’s direst jeopardy; she must fly all hospitality; one touch of land, though it but graze the keel, would make her shudder through and through. With all her might she crowds all sail off shore; in so doing, fights ’gainst the very winds that fain would blow her homeward; seeks all the lashed sea’s landlessness again; for refuge’s sake forlornly rushing into peril; her only friend her bitterest foe!')
@@ -2384,9 +2383,9 @@ T('But as in landlessness alone resides the highest truth, shoreless, indefinite
 NL
 NL
 T('CHAPTER XXIV.')
-NL({base="h0"})
-T('THE ADVOCATE.')
 NL({base="h1"})
+T('THE ADVOCATE.')
+NL({base="h2"})
 T('As Queequeg and I are now fairly embarked in this business of whaling; and as this business of whaling has somehow come to be regarded among landsmen as a rather unpoetical and disreputable pursuit; therefore, I am all anxiety to convince ye, ye landsmen, of the injustice hereby done to us hunters of whales.')
 NL
 T('In the first place, it may be deemed almost superfluous to establish the fact, that among people at large, the business of whaling is not accounted on a level with what are called the liberal professions. If a stranger were introduced into any miscellaneous metropolitan society, it would but slightly advance the general opinion of his merits, were he presented to the company as a harpooneer, say; and if in emulation of the naval officers he should append the initials S. W. F. (Sperm Whale Fishery) to his visiting card, such a procedure would be deemed pre-eminently presuming and ridiculous.')
@@ -2435,9 +2434,9 @@ T('And, as for me, if, by any possibility, there be any as yet undiscovered prim
 NL
 NL
 T('CHAPTER XXV.')
-NL({base="h0"})
-T('POSTSCRIPT.')
 NL({base="h1"})
+T('POSTSCRIPT.')
+NL({base="h2"})
 T('In behalf of the dignity of whaling, I would fain advance naught but substantiated facts. But after embattling his facts, an advocate who should wholly suppress a not unreasonable surmise, which might tell eloquently upon his cause—such an advocate, would he not be blameworthy?')
 NL
 T('It is well known that at the coronation of kings and queens, even modern ones, a certain curious process of seasoning them for their functions is gone through. There is a saltcellar of state, so called, and there may be a caster of state. How they use the salt, precisely—who knows? Certain I am, however, that a king’s head is solemnly oiled at his coronation, even as a head of salad. Can it be, though, that they anoint it with a view of making its interior run well, as they anoint machinery? Much might be ruminated here, concerning the essential dignity of this regal process, because in common life we esteem but meanly and contemptibly a fellow who anoints his hair, and palpably smells of that anointing. In truth, a mature man who uses hair-oil, unless medicinally, that man has probably got a quoggy spot in him somewhere. As a general rule, he can’t amount to much in his totality.')
@@ -2448,9 +2447,9 @@ T('Think of that, ye loyal Britons! we whalemen supply your kings and queens wit
 NL
 NL
 T('CHAPTER XXVI.')
-NL({base="h0"})
-T('KNIGHTS AND SQUIRES.')
 NL({base="h1"})
+T('KNIGHTS AND SQUIRES.')
+NL({base="h2"})
 T('The chief mate of the Pequod was Starbuck, a native of Nantucket, and a Quaker by descent. He was a long, earnest man, and though born on an icy coast, seemed well adapted to endure hot latitudes, his flesh being hard as twice-baked biscuit. Transported to the Indies, his live blood would not spoil like bottled ale. He must have been born in some time of general drought and famine, or upon one of those fast days for which his state is famous. Only some thirty arid summers had he seen; those summers had dried up all his physical superfluousness. But this, his thinness, so to speak, seemed no more the token of wasting anxieties and cares, than it seemed the indication of any bodily blight. It was merely the condensation of the man. He was by no means ill-looking; quite the contrary. His pure tight skin was an excellent fit; and closely wrapped up in it, and embalmed with inner health and strength, like a revivified Egyptian, this Starbuck seemed prepared to endure for long ages to come, and to endure always, as now; for be it Polar snow or torrid sun, like a patent chronometer, his interior vitality was warranted to do well in all climates. Looking into his eyes, you seemed to see there the yet lingering images of those thousand-fold perils he had calmly confronted through life. A staid, steadfast man, whose life for the most part was a telling pantomime of action, and not a tame chapter of sounds. Yet, for all his hardy sobriety and fortitude, there were certain qualities in him which at times affected, and in some cases seemed well nigh to overbalance all the rest. Uncommonly conscientious for a seaman, and endued with a deep natural reverence, the wild watery loneliness of his life did therefore strongly incline him to superstition; but to that sort of superstition, which in some organizations seems rather to spring, somehow, from intelligence than from ignorance. Outward portents and inward presentiments were his. And if at times these things bent the welded iron of his soul, much more did his far-away domestic memories of his young Cape wife and child, tend to bend him still more from the original ruggedness of his nature, and open him still further to those latent influences which, in some honest-hearted men, restrain the gush of dare-devil daring, so often evinced by others in the more perilous vicissitudes of the fishery. “I will have no man in my boat,” said Starbuck, “who is not afraid of a whale.” By this, he seemed to mean, not only that the most reliable and useful courage was that which arises from the fair estimation of the encountered peril, but that an utterly fearless man is a far more dangerous comrade than a coward.')
 NL
 T('“Aye, aye,” said Stubb, the second mate, “Starbuck, there, is as careful a man as you’ll find anywhere in this fishery.” But we shall ere long see what that word “careful” precisely means when used by a man like Stubb, or almost any other whale hunter.')
@@ -2465,9 +2464,9 @@ T('If, then, to meanest mariners, and renegades and castaways, I shall hereafter
 NL
 NL
 T('CHAPTER XXVII.')
-NL({base="h0"})
-T('KNIGHTS AND SQUIRES.')
 NL({base="h1"})
+T('KNIGHTS AND SQUIRES.')
+NL({base="h2"})
 T('Stubb was the second mate. He was a native of Cape Cod; and hence, according to local usage, was called a Cape-Cod-man. A happy-go-lucky; neither craven nor valiant; taking perils as they came with an indifferent air; and while engaged in the most imminent crisis of the chase, toiling away, calm and collected as a journeyman joiner engaged for the year. Good-humored, easy, and careless, he presided over his whale-boat as if the most deadly encounter were but a dinner, and his crew all invited guests. He was as particular about the comfortable arrangement of his part of the boat, as an old stage-driver is about the snugness of his box. When close to the whale, in the very death-lock of the fight, he handled his unpitying lance coolly and off-handedly, as a whistling tinker his hammer. He would hum over his old rigadig tunes while flank and flank with the most exasperated monster. Long usage had, for this Stubb, converted the jaws of death into an easy chair. What he thought of death itself, there is no telling. Whether he ever thought of it at all, might be a question; but, if he ever did chance to cast his mind that way after a comfortable dinner, no doubt, like a good sailor, he took it to be a sort of call of the watch to tumble aloft, and bestir themselves there, about something which he would find out when he obeyed the order, and not sooner.')
 NL
 T('What, perhaps, with other things, made Stubb such an easygoing, unfearing man, so cheerily trudging off with the burden of life in a world full of grave peddlers, all bowed to the ground with their packs; what helped to bring about that almost impious good-humor of his; that thing must have been his pipe. For, like his nose, his short, black little pipe was one of the regular features of his face. You would almost as soon have expected him to turn out of his bunk without his nose as without his pipe. He kept a whole row of pipes there ready loaded, stuck in a rack, within easy reach of his hand; and, whenever he turned in, he smoked them all out in succession, lighting one from the other to the end of the chapter; then loading them again to be in readiness anew. For, when Stubb dressed, instead of first putting his legs into his trowsers, he put his pipe into his mouth.')
@@ -2488,9 +2487,9 @@ T('Third among the harpooneers was Daggoo, a gigantic, coal-black negro-savage, 
 NL
 NL
 T('CHAPTER XXVIII.')
-NL({base="h0"})
-T('AHAB.')
 NL({base="h1"})
+T('AHAB.')
+NL({base="h2"})
 T('For several days after leaving Nantucket, nothing above hatches was seen of Captain Ahab. The mates regularly relieved each other at the watches, and for aught that could be seen to the contrary, they seemed to be the only commanders of the ship; only they sometimes issued from the cabin with orders so sudden and peremptory, that after all it was plain they but commanded vicariously. Yes, their supreme lord and dictator was there, though hitherto unseen by any eyes not permitted to penetrate into the now sacred retreat of the cabin.')
 NL
 T('Every time I ascended to the deck from my watches below, I instantly gazed aft to mark if any strange face were visible; for my first vague disquietude touching the unknown captain, now in the seclusion of the sea, became almost a perturbation. This was strangely heightened at times by the ragged Elijah’s diabolical incoherences uninvitedly recurring to me, with a subtle energy I could not have before conceived of. But poorly could I withstand them, much as in other moods I was almost ready to smile at the solemn whimsicalities of that outlandish prophet of the wharves. But whatever it was of apprehensiveness or uneasiness—to call it so—which I felt, yet whenever I came to look about me in the ship, it seemed against all warrantry to cherish such emotions. For though the harpooneers, with the great body of the crew, were a far more barbaric, heathenish, and motley set than any of the tame merchant-ship companies which my previous experiences had made me acquainted with, still I ascribed this—and rightly ascribed it—to the fierce uniqueness of the very nature of that wild Scandinavian vocation in which I had so abandonedly embarked. But it was especially the aspect of the three chief officers of the ship, the mates, which was most forcibly calculated to allay these colorless misgivings, and induce confidence and cheerfulness in every presentment of the voyage. Three better, more likely sea-officers and men, each in his own different way, could not readily be found, and they were every one of them Americans; a Nantucketer, a Vineyarder, a Cape man. Now, it being Christmas when the ship shot from out her harbor, for a space we had biting Polar weather, though all the time running away from it to the southward; and by every degree and minute of latitude which we sailed, gradually leaving that merciless winter, and all its intolerable weather behind us. It was one of those less lowering, but still grey and gloomy enough mornings of the transition, when with a fair wind the ship was rushing through the water with a vindictive sort of leaping and melancholy rapidity, that as I mounted to the deck at the call of the forenoon watch, so soon as I levelled my glance towards the taffrail, foreboding shivers ran over me. Reality outran apprehension; Captain Ahab stood upon his quarter-deck.')
@@ -2532,9 +2531,9 @@ T('“I was never served so before without giving a hard blow for it,” muttere
 NL
 NL
 T('CHAPTER XXX.')
-NL({base="h0"})
-T('THE PIPE.')
 NL({base="h1"})
+T('THE PIPE.')
+NL({base="h2"})
 T('When Stubb had departed, Ahab stood for a while leaning over the bulwarks; and then, as had been usual with him of late, calling a sailor of the watch, he sent him below for his ivory stool, and also his pipe. Lighting the pipe at the binnacle lamp and planting the stool on the weather side of the deck, he sat and smoked.')
 NL
 T('In old Norse times, the thrones of the sea-loving Danish kings were fabricated, saith tradition, of the tusks of the narwhale. How could one look at Ahab then, seated on that tripod of bones, without bethinking him of the royalty it symbolized? For a Khan of the plank, and a king of the sea, and a great lord of Leviathans was Ahab.')
@@ -2545,9 +2544,9 @@ T('He tossed the still lighted pipe into the sea. The fire hissed in the waves; 
 NL
 NL
 T('CHAPTER XXXI.')
-NL({base="h0"})
-T('QUEEN MAB.')
 NL({base="h1"})
+T('QUEEN MAB.')
+NL({base="h2"})
 T('Next morning Stubb accosted Flask.')
 NL
 T('“Such a queer dream, King-Post, I never had. You know the old man’s ivory leg, well I dreamed he kicked me with it; and when I tried to kick back, upon my soul, my little man, I kicked my leg right off! And then, presto! Ahab seemed a pyramid, and I, like a blazing fool, kept kicking at it. But what was still more curious, Flask—you know how curious all dreams are—through all this rage that I was in, I somehow seemed to be thinking to myself, that after all, it was not much of an insult, that kick from Ahab. ‘Why,’ thinks I, ‘what’s the row? It’s not a real leg, only a false leg.’ And there’s a mighty difference between a living thump and a dead thump. That’s what makes a blow from the hand, Flask, fifty times more savage to bear than a blow from a cane. The living member—that makes the living insult, my little man. And thinks I to myself all the while, mind, while I was stubbing my silly toes against that cursed pyramid—so confoundedly contradictory was it all, all the while, I say, I was thinking to myself, ‘what’s his leg now, but a cane—a whalebone cane. Yes,’ thinks I, ‘it was only a playful cudgelling—in fact, only a whaleboning that he gave me—not a base kick. Besides,’ thinks I, ‘look at it once; why, the end of it—the foot part—what a small sort of end it is; whereas, if a broad footed farmer kicked me, there’s a devilish broad insult. But this insult is whittled down to a point only.’ But now comes the greatest joke of the dream, Flask. While I was battering away at the pyramid, a sort of badger-haired old merman, with a hump on his back, takes me by the shoulders, and slews me round. ‘What are you ’bout?’ says he. Slid! man, but I was frightened. Such a phiz! But, somehow, next moment I was over the fright. ‘What am I about?’ says I at last. ‘And what business is that of yours, I should like to know, Mr. Humpback? Do you want a kick?’ By the lord, Flask, I had no sooner said that, than he turned round his stern to me, bent over, and dragging up a lot of seaweed he had for a clout—what do you think, I saw?—why thunder alive, man, his stern was stuck full of marlinspikes, with the points out. Says I, on second thoughts, ‘I guess I won’t kick you, old fellow.’ ‘Wise Stubb,’ said he, ‘wise Stubb;’ and kept muttering it all the time, a sort of eating of his own gums like a chimney hag. Seeing he wasn’t going to stop saying over his ‘wise Stubb, wise Stubb,’ I thought I might as well fall to kicking the pyramid again. But I had only just lifted my foot for it, when he roared out, ‘Stop that kicking!’ ‘Halloa,’ says I, ‘what’s the matter now, old fellow?’ ‘Look ye here,’ says he; ‘let’s argue the insult. Captain Ahab kicked ye, didn’t he?’ ‘Yes, he did,’ says I—‘right here it was.’ ‘Very good,’ says he—‘he used his ivory leg, didn’t he?’ ‘Yes, he did,’ says I. ‘Well then,’ says he, ‘wise Stubb, what have you to complain of? Didn’t he kick with right good will? it wasn’t a common pitch pine leg he kicked with, was it? No, you were kicked by a great man, and with a beautiful ivory leg, Stubb. It’s an honor; I consider it an honor. Listen, wise Stubb. In old England the greatest lords think it great glory to be slapped by a queen, and made garter-knights of; but, be your boast, Stubb, that ye were kicked by old Ahab, and made a wise man of. Remember what I say; be kicked by him; account his kicks honors; and on no account kick back; for you can’t help yourself, wise Stubb. Don’t you see that pyramid?’ With that, he all of a sudden seemed somehow, in some queer fashion, to swim off into the air. I snored; rolled over; and there I was in my hammock! Now, what do you think of that dream, Flask?”')
@@ -2562,9 +2561,9 @@ T('“What d’ye think of that now, Flask? ain’t there a small drop of someth
 NL
 NL
 T('CHAPTER XXXII.')
-NL({base="h0"})
-T('CETOLOGY.')
 NL({base="h1"})
+T('CETOLOGY.')
+NL({base="h2"})
 T('Already we are boldly launched upon the deep; but soon we shall be lost in its unshored, harborless immensities. Ere that come to pass; ere the Pequod’s weedy hull rolls side by side with the barnacled hulls of the leviathan; at the outset it is but well to attend to a matter almost indispensable to a thorough appreciative understanding of the more special leviathanic revelations and allusions of all sorts which are to follow.')
 NL
 T('It is some systematized exhibition of the whale in his broad genera, that I would now fain put before you. Yet is it no easy task. The classification of the constituents of a chaos, nothing less is here essayed. Listen to what the best and latest authorities have laid down.')
@@ -2661,9 +2660,9 @@ T('Finally: It was stated at the outset, that this system would not be here, and
 NL
 NL
 T('CHAPTER XXXIII.')
-NL({base="h0"})
-T('THE SPECKSNYDER.')
 NL({base="h1"})
+T('THE SPECKSNYDER.')
+NL({base="h2"})
 T('Concerning the officers of the whale-craft, this seems as good a place as any to set down a little domestic peculiarity on ship-board, arising from the existence of the harpooneer class of officers, a class unknown of course in any other marine than the whale-fleet.')
 NL
 T('The large importance attached to the harpooneer’s vocation is evinced by the fact, that originally in the old Dutch Fishery, two centuries and more ago, the command of a whale ship was not wholly lodged in the person now called the captain, but was divided between him and an officer called the Specksnyder. Literally this word means Fat-Cutter; usage, however, in time made it equivalent to Chief Harpooneer. In those days, the captain’s authority was restricted to the navigation and general management of the vessel: while over the whale-hunting department and all its concerns, the Specksnyder or Chief Harpooneer reigned supreme. In the British Greenland Fishery, under the corrupted title of Specksioneer, this old Dutch official is still retained, but his former dignity is sadly abridged. At present he ranks simply as senior Harpooneer; and as such, is but one of the captain’s more inferior subalterns. Nevertheless, as upon the good conduct of the harpooneers the success of a whaling voyage largely depends, and since in the American Fishery he is not only an important officer in the boat, but under certain circumstances (night watches on a whaling ground) the command of the ship’s deck is also his; therefore the grand political maxim of the sea demands, that he should nominally live apart from the men before the mast, and be in some way distinguished as their professional superior; though always, by them, familiarly regarded as their social equal.')
@@ -2680,9 +2679,9 @@ T('But Ahab, my Captain, still moves before me in all his Nantucket grimness and
 NL
 NL
 T('CHAPTER XXXIV.')
-NL({base="h0"})
-T('THE CABIN-TABLE.')
 NL({base="h1"})
+T('THE CABIN-TABLE.')
+NL({base="h2"})
 T('It is noon; and Dough-Boy, the steward, thrusting his pale loaf-of-bread face from the cabin-scuttle, announces dinner to his lord and master; who, sitting in the lee quarter-boat, has just been taking an observation of the sun; and is now mutely reckoning the latitude on the smooth, medallion-shaped tablet, reserved for that daily purpose on the upper part of his ivory leg. From his complete inattention to the tidings, you would think that moody Ahab had not heard his menial. But presently, catching hold of the mizen shrouds, he swings himself to the deck, and in an even, unexhilarated voice, saying, “Dinner, Mr. Starbuck,” disappears into the cabin.')
 NL
 T('When the last echo of his sultan’s step has died away, and Starbuck, the first Emir, has every reason to suppose that he is seated, then Starbuck rouses from his quietude, takes a few turns along the planks, and, after a grave peep into the binnacle, says, with some touch of pleasantness, “Dinner, Mr. Stubb,” and descends the scuttle. The second Emir lounges about the rigging awhile, and then slightly shaking the main brace, to see whether it be all right with that important rope, he likewise takes up the old burden, and with a rapid “Dinner, Mr. Flask,” follows after his predecessors.')
@@ -2707,9 +2706,9 @@ T('In this one matter, Ahab seemed no exception to most American whale captains,
 NL
 NL
 T('CHAPTER XXXV.')
-NL({base="h0"})
-T('THE MAST-HEAD.')
 NL({base="h1"})
+T('THE MAST-HEAD.')
+NL({base="h2"})
 T('It was during the more pleasant weather, that in due rotation with the other seamen my first mast-head came round.')
 NL
 T('In most American whalemen the mast-heads are manned almost simultaneously with the vessel’s leaving her port; even though she may have fifteen thousand miles, and more, to sail ere reaching her proper cruising ground. And if, after a three, four, or five years’ voyage she is drawing nigh home with anything empty in her—say, an empty vial even—then, her mast-heads are kept manned to the last; and not till her skysail-poles sail in among the spires of the port, does she altogether relinquish the hope of capturing one whale more.')
@@ -2740,9 +2739,9 @@ T('There is no life in thee, now, except that rocking life imparted by a gently 
 NL
 NL
 T('CHAPTER XXXVI.')
-NL({base="h0"})
-T('THE QUARTER-DECK.')
 NL({base="h1"})
+T('THE QUARTER-DECK.')
+NL({base="h2"})
 T('(Enter Ahab: Then, all.)')
 NL
 T('It was not a great while after the affair of the pipe, that one morning shortly after breakfast, Ahab, as was his wont, ascended the cabin-gangway to the deck. There most sea-captains usually walk at that hour, as country gentlemen, after the same meal, take a few turns in the garden.')
@@ -2847,9 +2846,9 @@ T('“Now, three to three, ye stand. Commend the murderous chalices! Bestow them
 NL
 NL
 T('CHAPTER XXXVII.')
-NL({base="h0"})
-T('SUNSET.')
 NL({base="h1"})
+T('SUNSET.')
+NL({base="h2"})
 T('The cabin; by the stern windows; Ahab sitting alone, and gazing out.')
 NL
 T('I leave a white and turbid wake; pale waters, paler cheeks, where’er I sail. The envious billows sidelong swell to whelm my track; let them; but first I pass.')
@@ -2862,9 +2861,9 @@ T('’Twas not so hard a task. I thought to find one stubborn, at the least; but
 NL
 NL
 T('CHAPTER XXXVIII.')
-NL({base="h0"})
-T('DUSK.')
 NL({base="h1"})
+T('DUSK.')
+NL({base="h2"})
 T('By the Mainmast; Starbuck leaning against it.')
 NL
 T('My soul is more than matched; she’s overmanned; and by a madman! Insufferable sting, that sanity should ground arms on such a field! But he drilled deep down, and blasted all my reason out of me! I think I see his impious end; but feel that I must help him to it. Will I, nill I, the ineffable thing has tied me to him; tows me with a cable I have no knife to cut. Horrible old man! Who’s over him, he cries;—aye, he would be a democrat to all above; look, how he lords it over all below! Oh! I plainly see my miserable office,—to obey, rebelling; and worse yet, to hate with touch of pity! For in his eyes I read some lurid woe would shrivel me up, had I it. Yet is there hope. Time and tide flow wide. The hated whale has the round watery world to swim in, as the small gold-fish has its glassy globe. His heaven-insulting purpose, God may wedge aside. I would up heart, were it not like lead. But my whole clock’s run down; my heart the all-controlling weight, I have no key to lift again.')
@@ -2875,9 +2874,9 @@ T('Oh, God! to sail with such a heathen crew that have small touch of human moth
 NL
 NL
 T('CHAPTER XXXIX.')
-NL({base="h0"})
-T('FIRST NIGHT-WATCH.')
 NL({base="h1"})
+T('FIRST NIGHT-WATCH.')
+NL({base="h2"})
 T('FORE-TOP.')
 NL
 T('(Stubb solus, and mending a brace.)')
@@ -3133,9 +3132,9 @@ T('*****')
 NL
 NL
 T('CHAPTER XLI.')
-NL({base="h0"})
-T('MOBY DICK.')
 NL({base="h1"})
+T('MOBY DICK.')
+NL({base="h2"})
 T('I, Ishmael, was one of that crew; my shouts had gone up with the rest; my oath had been welded with theirs; and stronger I shouted, and more did I hammer and clinch my oath, because of the dread in my soul. A wild, mystical, sympathetical feeling was in me; Ahab’s quenchless feud seemed mine. With greedy ears I learned the history of that murderous monster against whom I and all the others had taken our oaths of violence and revenge.')
 NL
 T('For some time past, though at intervals only, the unaccompanied, secluded White Whale had haunted those uncivilized seas mostly frequented by the Sperm Whale fishermen. But not all of them knew of his existence; only a few of them, comparatively, had knowingly seen him; while the number who as yet had actually and knowingly given battle to him, was small indeed. For, owing to the large number of whale-cruisers; the disorderly way they were sprinkled over the entire watery circumference, many of them adventurously pushing their quest along solitary latitudes, so as seldom or never for a whole twelvemonth or more on a stretch, to encounter a single news-telling sail of any sort; the inordinate length of each separate voyage; the irregularity of the times of sailing from home; all these, with other circumstances, direct and indirect, long obstructed the spread through the whole world-wide whaling-fleet of the special individualizing tidings concerning Moby Dick. It was hardly to be doubted, that several vessels reported to have encountered, at such or such a time, or on such or such a meridian, a Sperm Whale of uncommon magnitude and malignity, which whale, after doing great mischief to his assailants, had completely escaped them; to some minds it was not an unfair presumption, I say, that the whale in question must have been no other than Moby Dick. Yet as of late the Sperm Whale fishery had been marked by various and not unfrequent instances of great ferocity, cunning, and malice in the monster attacked; therefore it was, that those who by accident ignorantly gave battle to Moby Dick; such hunters, perhaps, for the most part, were content to ascribe the peculiar terror he bred, more, as it were, to the perils of the Sperm Whale fishery at large, than to the individual cause. In that way, mostly, the disastrous encounter between Ahab and the whale had hitherto been popularly regarded.')
@@ -3186,9 +3185,9 @@ T('Here, then, was this grey-headed, ungodly old man, chasing with curses a Job�
 NL
 NL
 T('CHAPTER XLII.')
-NL({base="h0"})
-T('THE WHITENESS OF THE WHALE.')
 NL({base="h1"})
+T('THE WHITENESS OF THE WHALE.')
+NL({base="h2"})
 T('What the white whale was to Ahab, has been hinted; what, at times, he was to me, as yet remains unsaid.')
 NL
 T('Aside from those more obvious considerations touching Moby Dick, which could not but occasionally awaken in any man’s soul some alarm, there was another thought, or rather vague, nameless horror concerning him, which at times by its intensity completely overpowered all the rest; and yet so mystical and well nigh ineffable was it, that I almost despair of putting it in a comprehensible form. It was the whiteness of the whale that above all things appalled me. But how can I hope to explain myself here; and yet, in some dim, random way, explain myself I must, else all these chapters might be naught.')
@@ -3284,9 +3283,9 @@ T('“Tish! the bucket!”')
 NL
 NL
 T('CHAPTER XLIV.')
-NL({base="h0"})
-T('THE CHART.')
 NL({base="h1"})
+T('THE CHART.')
+NL({base="h2"})
 T('Had you followed Captain Ahab down into his cabin after the squall that took place on the night succeeding that wild ratification of his purpose with his crew, you would have seen him go to a locker in the transom, and bringing out a large wrinkled roll of yellowish sea charts, spread them before him on his screwed-down table. Then seating himself before it, you would have seen him intently study the various lines and shadings which there met his eye; and with slow but steady pencil trace additional courses over spaces that before were blank. At intervals, he would refer to piles of old log-books beside him, wherein were set down the seasons and places in which, on various former voyages of various ships, sperm whales had been captured or seen.')
 NL
 T('While thus employed, the heavy pewter lamp suspended in chains over his head, continually rocked with the motion of the ship, and for ever threw shifting gleams and shadows of lines upon his wrinkled brow, till it almost seemed that while he himself was marking out lines and courses on the wrinkled charts, some invisible pencil was also tracing lines and courses upon the deeply marked chart of his forehead.')
@@ -3313,9 +3312,9 @@ T('Often, when forced from his hammock by exhausting and intolerably vivid dream
 NL
 NL
 T('CHAPTER XLV.')
-NL({base="h0"})
-T('THE AFFIDAVIT.')
 NL({base="h1"})
+T('THE AFFIDAVIT.')
+NL({base="h2"})
 T('So far as what there may be of a narrative in this book; and, indeed, as indirectly touching one or two very interesting and curious particulars in the habits of sperm whales, the foregoing chapter, in its earlier part, is as important a one as will be found in this volume; but the leading matter of it requires to be still further and more familiarly enlarged upon, in order to be adequately understood, and moreover to take away any incredulity which a profound ignorance of the entire subject may induce in some minds, as to the natural verity of the main points of this affair.')
 NL
 T('I care not to perform this part of my task methodically; but shall be content to produce the desired impression by separate citations of items, practically or reliably known to me as a whaleman; and from these citations, I take it—the conclusion aimed at will naturally follow of itself.')
@@ -3370,9 +3369,9 @@ T('In the Propontis, as far as I can learn, none of that peculiar substance call
 NL
 NL
 T('CHAPTER XLVI.')
-NL({base="h0"})
-T('SURMISES.')
 NL({base="h1"})
+T('SURMISES.')
+NL({base="h2"})
 T('Though, consumed with the hot fire of his purpose, Ahab in all his thoughts and actions ever had in view the ultimate capture of Moby Dick; though he seemed ready to sacrifice all mortal interests to that one passion; nevertheless it may have been that he was by nature and long habituation far too wedded to a fiery whaleman’s ways, altogether to abandon the collateral prosecution of the voyage. Or at least if this were otherwise, there were not wanting other motives much more influential with him. It would be refining too much, perhaps, even considering his monomania, to hint that his vindictiveness towards the White Whale might have possibly extended itself in some degree to all sperm whales, and that the more monsters he slew by so much the more he multiplied the chances that each subsequently encountered whale would prove to be the hated one he hunted. But if such an hypothesis be indeed exceptionable, there were still additional considerations which, though not so strictly according with the wildness of his ruling passion, yet were by no means incapable of swaying him.')
 NL
 T('To accomplish his object Ahab must use tools; and of all tools used in the shadow of the moon, men are most apt to get out of order. He knew, for example, that however magnetic his ascendency in some respects was over Starbuck, yet that ascendency did not cover the complete spiritual man any more than mere corporeal superiority involves intellectual mastership; for to the purely spiritual, the intellectual but stand in a sort of corporeal relation. Starbuck’s body and Starbuck’s coerced will were Ahab’s, so long as Ahab kept his magnet at Starbuck’s brain; still he knew that for all this the chief mate, in his soul, abhorred his captain’s quest, and could he, would joyfully disintegrate himself from it, or even frustrate it. It might be that a long interval would elapse ere the White Whale was seen. During that long interval Starbuck would ever be apt to fall into open relapses of rebellion against his captain’s leadership, unless some ordinary, prudential, circumstantial influences were brought to bear upon him. Not only that, but the subtle insanity of Ahab respecting Moby Dick was noways more significantly manifested than in his superlative sense and shrewdness in foreseeing that, for the present, the hunt should in some way be stripped of that strange imaginative impiousness which naturally invested it; that the full terror of the voyage must be kept withdrawn into the obscure background (for few men’s courage is proof against protracted meditation unrelieved by action); that when they stood their long night watches, his officers and men must have some nearer things to think of than Moby Dick. For however eagerly and impetuously the savage crew had hailed the announcement of his quest; yet all sailors of all sorts are more or less capricious and unreliable—they live in the varying outer weather, and they inhale its fickleness—and when retained for any object remote and blank in the pursuit, however promissory of life and passion in the end, it is above all things requisite that temporary interests and employments should intervene and hold them healthily suspended for the final dash.')
@@ -3387,9 +3386,9 @@ T('Be all this as it may, his voice was now often heard hailing the three mast-h
 NL
 NL
 T('CHAPTER XLVII.')
-NL({base="h0"})
-T('THE MAT-MAKER.')
 NL({base="h1"})
+T('THE MAT-MAKER.')
+NL({base="h2"})
 T('It was a cloudy, sultry afternoon; the seamen were lazily lounging about the decks, or vacantly gazing over into the lead-colored waters. Queequeg and I were mildly employed weaving what is called a sword-mat, for an additional lashing to our boat. So still and subdued and yet somehow preluding was all the scene, and such an incantation of revery lurked in the air, that each silent sailor seemed resolved into his own invisible self.')
 NL
 T('I was the attendant or page of Queequeg, while busy at the mat. As I kept passing and repassing the filling or woof of marline between the long yarns of the warp, using my own hand for the shuttle, and as Queequeg, standing sideways, ever and anon slid his heavy oaken sword between the threads, and idly looking off upon the water, carelessly and unthinkingly drove home every yarn: I say so strange a dreaminess did there then reign all over the ship and all over the sea, only broken by the intermitting dull sound of the sword, that it seemed as if this were the Loom of Time, and I myself were a shuttle mechanically weaving and weaving away at the Fates. There lay the fixed threads of the warp subject to but one single, ever returning, unchanging vibration, and that vibration merely enough to admit of the crosswise interblending of other threads with its own. This warp seemed necessity; and here, thought I, with my own hand I ply my own shuttle and weave my own destiny into these unalterable threads. Meantime, Queequeg’s impulsive, indifferent sword, sometimes hitting the woof slantingly, or crookedly, or strongly, or weakly, as the case might be; and by this difference in the concluding blow producing a corresponding contrast in the final aspect of the completed fabric; this savage’s sword, thought I, which thus finally shapes and fashions both warp and woof; this easy, indifferent sword must be chance—aye, chance, free will, and necessity—no wise incompatible—all interweavingly working together. The straight warp of necessity, not to be swerved from its ultimate course—its every alternating vibration, indeed, only tending to that; free will still free to ply her shuttle between given threads; and chance, though restrained in its play within the right lines of necessity, and sideways in its motions directed by free will, though thus prescribed to by both, chance by turns rules either, and has the last featuring blow at events.')
@@ -3422,9 +3421,9 @@ T('But at this critical instant a sudden exclamation was heard that took every e
 NL
 NL
 T('CHAPTER XLVIII.')
-NL({base="h0"})
-T('THE FIRST LOWERING.')
 NL({base="h1"})
+T('THE FIRST LOWERING.')
+NL({base="h2"})
 T('The phantoms, for so they then seemed, were flitting on the other side of the deck, and, with a noiseless celerity, were casting loose the tackles and bands of the boat which swung there. This boat had always been deemed one of the spare boats, though technically called the captain’s, on account of its hanging from the starboard quarter. The figure that now stood by its bows was tall and swart, with one white tooth evilly protruding from its steel-like lips. A rumpled Chinese jacket of black cotton funereally invested him, with wide black trowsers of the same dark stuff. But strangely crowning this ebonness was a glistening white plaited turban, the living hair braided and coiled round and round upon his head. Less swart in aspect, the companions of this figure were of that vivid, tiger-yellow complexion peculiar to some of the aboriginal natives of the Manillas;—a race notorious for a certain diabolism of subtilty, and by some honest white mariners supposed to be the paid spies and secret confidential agents on the water of the devil, their lord, whose counting-room they suppose to be elsewhere.')
 NL
 T('While yet the wondering ship’s company were gazing upon these strangers, Ahab cried out to the white-turbaned old man at their head, “All ready there, Fedallah?”')
@@ -3527,9 +3526,9 @@ T('Floating on the waves we saw the abandoned boat, as for one instant it tossed
 NL
 NL
 T('CHAPTER XLIX.')
-NL({base="h0"})
-T('THE HYENA.')
 NL({base="h1"})
+T('THE HYENA.')
+NL({base="h2"})
 T('There are certain queer times and occasions in this strange mixed affair we call life when a man takes this whole universe for a vast practical joke, though the wit thereof he but dimly discerns, and more than suspects that the joke is at nobody’s expense but his own. However, nothing dispirits, and nothing seems worth while disputing. He bolts down all events, all creeds, and beliefs, and persuasions, all hard things visible and invisible, never mind how knobby; as an ostrich of potent digestion gobbles down bullets and gun flints. And as for small difficulties and worryings, prospects of sudden disaster, peril of life and limb; all these, and death itself, seem to him only sly, good-natured hits, and jolly punches in the side bestowed by the unseen and unaccountable old joker. That odd sort of wayward mood I am speaking of, comes over a man only in some time of extreme tribulation; it comes in the very midst of his earnestness, so that what just before might have seemed to him a thing most momentous, now seems but a part of the general joke. There is nothing like the perils of whaling to breed this free and easy sort of genial, desperado philosophy; and with it I now regarded this whole voyage of the Pequod, and the great White Whale its object.')
 NL
 T('“Queequeg,” said I, when they had dragged me, the last man, to the deck, and I was still shaking myself in my jacket to fling off the water; “Queequeg, my fine friend, does this sort of thing often happen?” Without much emotion, though soaked through just like me, he gave me to understand that such things did often happen.')
@@ -3573,9 +3572,9 @@ T('But be all this as it may, certain it is that while the subordinate phantoms 
 NL
 NL
 T('CHAPTER LI.')
-NL({base="h0"})
-T('THE SPIRIT-SPOUT.')
 NL({base="h1"})
+T('THE SPIRIT-SPOUT.')
+NL({base="h2"})
 T('Days, weeks passed, and under easy sail, the ivory Pequod had slowly swept across four several cruising-grounds; that off the Azores; off the Cape de Verdes; on the Plate (so called), being off the mouth of the Rio de la Plata; and the Carrol Ground, an unstaked, watery locality, southerly from St. Helena.')
 NL
 T('It was while gliding through these latter waters that one serene and moonlight night, when all the waves rolled by like scrolls of silver; and, by their soft, suffusing seethings, made what seemed a silvery silence, not a solitude: on such a silent night a silvery jet was seen far in advance of the white bubbles at the bow. Lit up by the moon, it looked celestial; seemed some plumed and glittering god uprising from the sea. Fedallah first descried this jet. For of these moonlight nights, it was his wont to mount to the main-mast head, and stand a look-out there, with the same precision as if it had been day. And yet, though herds of whales were seen by night, not one whaleman in a hundred would venture a lowering for them. You may think with what emotions, then, the seamen beheld this old Oriental perched aloft at such unusual hours; his turban and the moon, companions in one sky. But when, after spending his uniform interval there for several successive nights without uttering a single sound; when, after all this silence, his unearthly voice was heard announcing that silvery, moon-lit jet, every reclining mariner started to his feet as if some winged spirit had lighted in the rigging, and hailed the mortal crew. “There she blows!” Had the trump of judgment blown, they could not have quivered more; yet still they felt no terror; rather pleasure. For though it was a most unwonted hour, yet so impressive was the cry, and so deliriously exciting, that almost every soul on board instinctively desired a lowering.')
@@ -3602,9 +3601,9 @@ T('Terrible old man! thought Starbuck with a shudder, sleeping in this gale, sti
 NL
 NL
 T('CHAPTER LII.')
-NL({base="h0"})
-T('THE ALBATROSS.')
 NL({base="h1"})
+T('THE ALBATROSS.')
+NL({base="h2"})
 T('South-eastward from the Cape, off the distant Crozetts, a good cruising ground for Right Whalemen, a sail loomed ahead, the Goney (Albatross) by name. As she slowly drew nigh, from my lofty perch at the fore-mast-head, I had a good view of that sight so remarkable to a tyro in the far ocean fisheries—a whaler at sea, and long absent from home.')
 NL
 T('As if the waves had been fullers, this craft was bleached like the skeleton of a stranded walrus. All down her sides, this spectral appearance was traced with long channels of reddened rust, while all her spars and her rigging were like the thick branches of trees furred over with hoar-frost. Only her lower sails were set. A wild sight it was to see her long-bearded look-outs at those three mast-heads. They seemed clad in the skins of beasts, so torn and bepatched the raiment that had survived nearly four years of cruising. Standing in iron hoops nailed to the mast, they swayed and swung over a fathomless sea; and though, when the ship slowly glided close under our stern, we six men in the air came so nigh to each other that we might almost have leaped from the mast-heads of one ship to those of the other; yet, those forlorn-looking fishermen, mildly eyeing us as they passed, said not one word to our own look-outs, while the quarter-deck hail was being heard from below.')
@@ -3623,9 +3622,9 @@ T('Were this world an endless plain, and by sailing eastward we could for ever r
 NL
 NL
 T('CHAPTER LIII.')
-NL({base="h0"})
-T('THE GAM.')
 NL({base="h1"})
+T('THE GAM.')
+NL({base="h2"})
 T('The ostensible reason why Ahab did not go on board of the whaler we had spoken was this: the wind and sea betokened storms. But even had this not been the case, he would not after all, perhaps, have boarded her—judging by his subsequent conduct on similar occasions—if so it had been that, by the process of hailing, he had obtained a negative answer to the question he put. For, as it eventually turned out, he cared not to consort, even for five minutes, with any stranger captain, except he could contribute some of that information he so absorbingly sought. But all this might remain inadequately estimated, were not something said here of the peculiar usages of whaling-vessels when meeting each other in foreign seas, and especially on a common cruising-ground.')
 NL
 T('If two strangers crossing the Pine Barrens in New York State, or the equally desolate Salisbury Plain in England; if casually encountering each other in such inhospitable wilds, these twain, for the life of them, cannot well avoid a mutual salutation; and stopping for a moment to interchange the news; and, perhaps, sitting down for a while and resting in concert: then, how much more natural that upon the illimitable Pine Barrens and Salisbury Plains of the sea, two whaling vessels descrying each other at the ends of the earth—off lone Fanning’s Island, or the far away King’s Mills; how much more natural, I say, that under such circumstances these ships should not only interchange hails, but come into still closer, more friendly and sociable contact. And especially would this seem to be a matter of course, in the case of vessels owned in one seaport, and whose captains, officers, and not a few of the men are personally known to each other; and consequently, have all sorts of dear domestic things to talk about.')
@@ -3875,9 +3874,9 @@ T('“‘So help me Heaven, and on my honor the story I have told ye, gentlemen,
 NL
 NL
 T('CHAPTER LV.')
-NL({base="h0"})
-T('OF THE MONSTROUS PICTURES OF WHALES.')
 NL({base="h1"})
+T('OF THE MONSTROUS PICTURES OF WHALES.')
+NL({base="h2"})
 T('I shall ere long paint to you as well as one can without canvas, something like the true form of the whale as he actually appears to the eye of the whaleman when in his own absolute body the whale is moored alongside the whale-ship so that he can be fairly stepped upon there. It may be worth while, therefore, previously to advert to those curious imaginary portraits of him which even down to the present day confidently challenge the faith of the landsman. It is time to set the world right in this matter, by proving such pictures of the whale all wrong.')
 NL
 T('It may be that the primal source of all those pictorial delusions will be found among the oldest Hindoo, Egyptian, and Grecian sculptures. For ever since those inventive but unscrupulous times when on the marble panellings of temples, the pedestals of statues, and on shields, medallions, cups, and coins, the dolphin was drawn in scales of chain-armor like Saladin’s, and a helmeted head like St. George’s; ever since then has something of the same sort of license prevailed, not only in most popular pictures of the whale, but in many scientific presentations of him.')
@@ -3956,9 +3955,9 @@ T('With a frigate’s anchors for my bridle-bitts and fasces of harpoons for spu
 NL
 NL
 T('CHAPTER LVIII.')
-NL({base="h0"})
-T('BRIT.')
 NL({base="h1"})
+T('BRIT.')
+NL({base="h2"})
 T('Steering north-eastward from the Crozetts, we fell in with vast meadows of brit, the minute, yellow substance, upon which the Right Whale largely feeds. For leagues and leagues it undulated round us, so that we seemed to be sailing through boundless fields of ripe and golden wheat.')
 NL
 T('On the second day, numbers of Right Whales were seen, who, secure from the attack of a Sperm Whaler like the Pequod, with open jaws sluggishly swam through the brit, which, adhering to the fringing fibres of that wondrous Venetian blind in their mouths, was in that manner separated from the water that escaped at the lip.')
@@ -3985,9 +3984,9 @@ T('Consider all this; and then turn to this green, gentle, and most docile earth
 NL
 NL
 T('CHAPTER LIX.')
-NL({base="h0"})
-T('SQUID.')
 NL({base="h1"})
+T('SQUID.')
+NL({base="h2"})
 T('Slowly wading through the meadows of brit, the Pequod still held on her way north-eastward towards the island of Java; a gentle air impelling her keel, so that in the surrounding serenity her three tall tapering masts mildly waved to that languid breeze, as three mild palms on a plain. And still, at wide intervals in the silvery night, the lonely, alluring jet would be seen.')
 NL
 T('But one transparent blue morning, when a stillness almost preternatural spread over the sea, however unattended with any stagnant calm; when the long burnished sun-glade on the waters seemed a golden finger laid across them, enjoining some secresy; when the slippered waves whispered together as they softly ran on; in this profound hush of the visible sphere a strange spectre was seen by Daggoo from the main-mast-head.')
@@ -4016,9 +4015,9 @@ T('By some naturalists who have vaguely heard rumors of the mysterious creature,
 NL
 NL
 T('CHAPTER LX.')
-NL({base="h0"})
-T('THE LINE.')
 NL({base="h1"})
+T('THE LINE.')
+NL({base="h2"})
 T('With reference to the whaling scene shortly to be described, as well as for the better understanding of all similar scenes elsewhere presented, I have here to speak of the magical, sometimes horrible whale-line.')
 NL
 T('The line originally used in the fishery was of the best hemp, slightly vapored with tar, not impregnated with it, as in the case of ordinary ropes; for while tar, as ordinarily used, makes the hemp more pliable to the rope-maker, and also renders the rope itself more convenient to the sailor for common ship use; yet, not only would the ordinary quantity too much stiffen the whale-line for the close coiling to which it must be subjected; but as most seamen are beginning to learn, tar in general by no means adds to the rope’s durability or strength, however much it may give it compactness and gloss.')
@@ -4041,9 +4040,9 @@ T('Again: as the profound calm which only apparently precedes and prophesies of 
 NL
 NL
 T('CHAPTER LXI.')
-NL({base="h0"})
-T('STUBB KILLS A WHALE.')
 NL({base="h1"})
+T('STUBB KILLS A WHALE.')
+NL({base="h2"})
 T('If to Starbuck the apparition of the Squid was a thing of portents, to Queequeg it was quite a different object.')
 NL
 T('“When you see him ’quid,” said the savage, honing his harpoon in the bow of his hoisted boat, “then you quick see him ’parm whale.”')
@@ -4094,9 +4093,9 @@ T('“Yes; both pipes smoked out!” and withdrawing his own from his mouth, Stu
 NL
 NL
 T('CHAPTER LXII.')
-NL({base="h0"})
-T('THE DART.')
 NL({base="h1"})
+T('THE DART.')
+NL({base="h2"})
 T('A word concerning an incident in the last chapter.')
 NL
 T('According to the invariable usage of the fishery, the whale-boat pushes off from the ship, with the headsman or whale-killer as temporary steersman, and the harpooneer or whale-fastener pulling the foremost oar, the one known as the harpooneer-oar. Now it needs a strong, nervous arm to strike the first iron into the fish; for often, in what is called a long dart, the heavy implement has to be flung to the distance of twenty or thirty feet. But however prolonged and exhausting the chase, the harpooneer is expected to pull his oar meanwhile to the uttermost; indeed, he is expected to set an example of superhuman activity to the rest, not only by incredible rowing, but by repeated loud and intrepid exclamations; and what it is to keep shouting at the top of one’s compass, while all the other muscles are strained and half started—what that is none know but those who have tried it. For one, I cannot bawl very heartily and work very recklessly at one and the same time. In this straining, bawling state, then, with his back to the fish, all at once the exhausted harpooneer hears the exciting cry—“Stand up, and give it to him!” He now has to drop and secure his oar, turn round on his centre half way, seize his harpoon from the crotch, and with what little strength may remain, he essays to pitch it somehow into the whale. No wonder, taking the whole fleet of whalemen in a body, that out of fifty fair chances for a dart, not five are successful; no wonder that so many hapless harpooneers are madly cursed and disrated; no wonder that some of them actually burst their blood-vessels in the boat; no wonder that some sperm whalemen are absent four years with four barrels; no wonder that to many ship owners, whaling is but a losing concern; for it is the harpooneer that makes the voyage, and if you take the breath out of his body how can you expect to find it there when most wanted!')
@@ -4109,9 +4108,9 @@ T('To insure the greatest efficiency in the dart, the harpooneers of this world 
 NL
 NL
 T('CHAPTER LXIII.')
-NL({base="h0"})
-T('THE CROTCH.')
 NL({base="h1"})
+T('THE CROTCH.')
+NL({base="h2"})
 T('Out of the trunk, the branches grow; out of them, the twigs. So, in productive subjects, grow the chapters.')
 NL
 T('The crotch alluded to on a previous page deserves independent mention. It is a notched stick of a peculiar form, some two feet in length, which is perpendicularly inserted into the starboard gunwale near the bow, for the purpose of furnishing a rest for the wooden extremity of the harpoon, whose other naked, barbed end slopingly projects from the prow. Thereby the weapon is instantly at hand to its hurler, who snatches it up as readily from its rest as a backwoodsman swings his rifle from the wall. It is customary to have two harpoons reposing in the crotch, respectively called the first and second irons.')
@@ -4247,9 +4246,9 @@ T('“Wish, by gor! whale eat him, ’stead of him eat whale. I’m bressed if h
 NL
 NL
 T('CHAPTER LXV.')
-NL({base="h0"})
-T('THE WHALE AS A DISH.')
 NL({base="h1"})
+T('THE WHALE AS A DISH.')
+NL({base="h2"})
 T('That mortal man should feed upon the creature that feeds his lamp, and, like Stubb, eat him by his own light, as you may say; this seems so outlandish a thing that one must needs go a little into the history and philosophy of it.')
 NL
 T('It is upon record, that three centuries ago the tongue of the Right Whale was esteemed a great delicacy in France, and commanded large prices there. Also, that in Henry VIIIth’s time, a certain cook of the court obtained a handsome reward for inventing an admirable sauce to be eaten with barbacued porpoises, which, you remember, are a species of whale. Porpoises, indeed, are to this day considered fine eating. The meat is made into balls about the size of billiard balls, and being well seasoned and spiced might be taken for turtle-balls or veal balls. The old monks of Dunfermline were very fond of them. They had a great porpoise grant from the crown.')
@@ -4266,9 +4265,9 @@ T('But Stubb, he eats the whale by its own light, does he? and that is adding in
 NL
 NL
 T('CHAPTER LXVI.')
-NL({base="h0"})
-T('THE SHARK MASSACRE.')
 NL({base="h1"})
+T('THE SHARK MASSACRE.')
+NL({base="h2"})
 T('When in the Southern Fishery, a captured Sperm Whale, after long and weary toil, is brought alongside late at night, it is not, as a general thing at least, customary to proceed at once to the business of cutting him in. For that business is an exceedingly laborious one; is not very soon completed; and requires all hands to set about it. Therefore, the common usage is to take in all sail; lash the helm a’lee; and then send every one below to his hammock till daylight, with the reservation that, until that time, anchor-watches shall be kept; that is, two and two for an hour, each couple, the crew in rotation shall mount the deck to see that all goes well.')
 NL
 T('But sometimes, especially upon the Line in the Pacific, this plan will not answer at all; because such incalculable hosts of sharks gather round the moored carcase, that were he left so for six hours, say, on a stretch, little more than the skeleton would be visible by morning. In most other parts of the ocean, however, where these fish do not so largely abound, their wondrous voracity can be at times considerably diminished, by vigorously stirring them up with sharp whaling-spades, a procedure notwithstanding, which, in some instances, only seems to tickle them into still greater activity. But it was not thus in the present case with the Pequod’s sharks; though, to be sure, any man unaccustomed to such sights, to have looked over her side that night, would have almost thought the whole round sea was one huge cheese, and those sharks the maggots in it.')
@@ -4281,9 +4280,9 @@ T('“Queequeg no care what god made him shark,” said the savage, agonizingly 
 NL
 NL
 T('CHAPTER LXVII.')
-NL({base="h0"})
-T('CUTTING IN.')
 NL({base="h1"})
+T('CUTTING IN.')
+NL({base="h2"})
 T('It was a Saturday night, and such a Sabbath as followed! Ex officio professors of Sabbath breaking are all whalemen. The ivory Pequod was turned into what seemed a shamble; every sailor a butcher. You would have thought we were offering up ten thousand red oxen to the sea gods.')
 NL
 T('In the first place, the enormous cutting tackles, among other ponderous things comprising a cluster of blocks generally painted green, and which no single man can possibly lift—this vast bunch of grapes was swayed up to the main-top and firmly lashed to the lower mast-head, the strongest point anywhere above a ship’s deck. The end of the hawser-like rope winding through these intricacies, was then conducted to the windlass, and the huge lower block of the tackles was swung over the whale; to this block the great blubber hook, weighing some one hundred pounds, was attached. And now suspended in stages over the side, Starbuck and Stubb, the mates, armed with their long spades, began cutting a hole in the body for the insertion of the hook just above the nearest of the two side-fins. This done, a broad, semicircular line is cut round the hole, the hook is inserted, and the main body of the crew striking up a wild chorus, now commence heaving in one dense crowd at the windlass. When instantly, the entire ship careens over on her side; every bolt in her starts like the nail-heads of an old house in frosty weather; she trembles, quivers, and nods her frighted mast-heads to the sky. More and more she leans over to the whale, while every gasping heave of the windlass is answered by a helping heave from the billows; till at last, a swift, startling snap is heard; with a great swash the ship rolls upwards and backwards from the whale, and the triumphant tackle rises into sight dragging after it the disengaged semicircular end of the first strip of blubber. Now as the blubber envelopes the whale precisely as the rind does an orange, so is it stripped off from the body precisely as an orange is sometimes stripped by spiralizing it. For the strain constantly kept up by the windlass continually keeps the whale rolling over and over in the water, and as the blubber in one strip uniformly peels off along the line called the “scarf,” simultaneously cut by the spades of Starbuck and Stubb, the mates; and just as fast as it is thus peeled off, and indeed by that very act itself, it is all the time being hoisted higher and higher aloft till its upper end grazes the main-top; the men at the windlass then cease heaving, and for a moment or two the prodigious blood-dripping mass sways to and fro as if let down from the sky, and every one present must take good heed to dodge it when it swings, else it may box his ears and pitch him headlong overboard.')
@@ -4292,9 +4291,9 @@ T('One of the attending harpooneers now advances with a long, keen weapon called
 NL
 NL
 T('CHAPTER LXVIII.')
-NL({base="h0"})
-T('THE BLANKET.')
 NL({base="h1"})
+T('THE BLANKET.')
+NL({base="h2"})
 T('I have given no small attention to that not unvexed subject, the skin of the whale. I have had controversies about it with experienced whalemen afloat, and learned naturalists ashore. My original opinion remains unchanged; but it is only an opinion.')
 NL
 T('The question is, what and where is the skin of the whale? Already you know what his blubber is. That blubber is something of the consistence of firm, close-grained beef, but tougher, more elastic and compact, and ranges from eight or ten to twelve and fifteen inches in thickness.')
@@ -4313,9 +4312,9 @@ T('But how easy and how hopeless to teach these fine things! Of erections, how f
 NL
 NL
 T('CHAPTER LXIX.')
-NL({base="h0"})
-T('THE FUNERAL.')
 NL({base="h1"})
+T('THE FUNERAL.')
+NL({base="h2"})
 T('“Haul in the chains! Let the carcase go astern!”')
 NL
 T('The vast tackles have now done their duty. The peeled white body of the beheaded whale flashes like a marble sepulchre; though changed in hue, it has not perceptibly lost anything in bulk. It is still colossal. Slowly it floats more and more away, the water round it torn and splashed by the insatiate sharks, and the air above vexed with rapacious flights of screaming fowls, whose beaks are like so many insulting poniards in the whale. The vast white headless phantom floats further and further from the ship, and every rod that it so floats, what seem square roods of sharks and cubic roods of fowls, augment the murderous din. For hours and hours from the almost stationary ship that hideous sight is seen. Beneath the unclouded and mild azure sky, upon the fair face of the pleasant sea, wafted by the joyous breezes, that great mass of death floats on and on, till lost in infinite perspectives.')
@@ -4330,9 +4329,9 @@ T('Are you a believer in ghosts, my friend? There are other ghosts than the Cock
 NL
 NL
 T('CHAPTER LXX.')
-NL({base="h0"})
-T('THE SPHYNX.')
 NL({base="h1"})
+T('THE SPHYNX.')
+NL({base="h2"})
 T('It should not have been omitted that previous to completely stripping the body of the leviathan, he was beheaded. Now, the beheading of the Sperm Whale is a scientific anatomical feat, upon which experienced whale surgeons very much pride themselves; and not without reason.')
 NL
 T('Consider that the whale has nothing that can properly be called a neck; on the contrary, where his head and body seem to join, there, in that very place, is the thickest part of him. Remember, also, that the surgeon must operate from above, some eight or ten feet intervening between him and his subject, and that subject almost hidden in a discolored, rolling, and oftentimes tumultuous and bursting sea. Bear in mind, too, that under these untoward circumstances he has to cut many feet deep in the flesh; and in that subterraneous manner, without so much as getting one single peep into the ever-contracting gash thus made, he must skilfully steer clear of all adjacent, interdicted parts, and exactly divide the spine at a critical point hard by its insertion into the skull. Do you not marvel, then, at Stubb’s boast, that he demanded but ten minutes to behead a sperm whale?')
@@ -4420,9 +4419,9 @@ T('As, after this interlude, the seamen resumed their work upon the jacket of th
 NL
 NL
 T('CHAPTER LXXII.')
-NL({base="h0"})
-T('THE MONKEY-ROPE.')
 NL({base="h1"})
+T('THE MONKEY-ROPE.')
+NL({base="h2"})
 T('In the tumultuous business of cutting-in and attending to a whale, there is much running backwards and forwards among the crew. Now hands are wanted here, and then again hands are wanted there. There is no staying in any one place; for at one and the same time everything has to be done everywhere. It is much the same with him who endeavors the description of the scene. We must now retrace our way a little. It was mentioned that upon first breaking ground in the whale’s back, the blubber-hook was inserted into the original hole there cut by the spades of the mates. But how did so clumsy and weighty a mass as that same hook get fixed in that hole? It was inserted there by my particular friend Queequeg, whose duty it was, as harpooneer, to descend upon the monster’s back for the special purpose referred to. But in very many cases, circumstances require that the harpooneer shall remain on the whale till the whole flensing or stripping operation is concluded. The whale, be it observed, lies almost entirely submerged, excepting the immediate parts operated upon. So down there, some ten feet below the level of the deck, the poor harpooneer flounders about, half on the whale and half in the water, as the vast mass revolves like a tread-mill beneath him. On the occasion in question, Queequeg figured in the Highland costume—a shirt and socks—in which to my eyes, at least, he appeared to uncommon advantage; and no one had a better chance to observe him, as will presently be seen.')
 NL
 T('Being the savage’s bowsman, that is, the person who pulled the bow-oar in his boat (the second one from forward), it was my cheerful duty to attend upon him while taking that hard-scrabble scramble upon the dead whale’s back. You have seen Italian organ-boys holding a dancing-ape by a long cord. Just so, from the ship’s steep side, did I hold Queequeg down there in the sea, by what is technically called in the fishery a monkey-rope, attached to a strong strip of canvas belted round his waist.')
@@ -4614,9 +4613,9 @@ T('Can you catch the expression of the Sperm Whale’s there? It is the same he 
 NL
 NL
 T('CHAPTER LXXVI.')
-NL({base="h0"})
-T('THE BATTERING-RAM.')
 NL({base="h1"})
+T('THE BATTERING-RAM.')
+NL({base="h2"})
 T('Ere quitting, for the nonce, the Sperm Whale’s head, I would have you, as a sensible physiologist, simply—particularly remark its front aspect, in all its compacted collectedness. I would have you investigate it now with the sole view of forming to yourself some unexaggerated, intelligent estimate of whatever battering-ram power may be lodged there. Here is a vital point; for you must either satisfactorily settle this matter with yourself, or for ever remain an infidel as to one of the most appalling, but not the less true events, perhaps anywhere to be found in all recorded history.')
 NL
 T('You observe that in the ordinary swimming position of the Sperm Whale, the front of his head presents an almost wholly vertical plane to the water; you observe that the lower part of that front slopes considerably backwards, so as to furnish more of a retreat for the long socket which receives the boom-like lower jaw; you observe that the mouth is entirely under the head, much in the same way, indeed, as though your own mouth were entirely under your chin. Moreover you observe that the whale has no external nose; and that what nose he has—his spout hole—is on the top of his head; you observe that his eyes and ears are at the sides of his head, nearly one third of his entire length from the front. Wherefore, you must now have perceived that the front of the Sperm Whale’s head is a dead, blind wall, without a single organ or tender prominence of any sort whatsoever. Furthermore, you are now to consider that only in the extreme, lower, backward sloping part of the front of the head, is there the slightest vestige of bone; and not till you get near twenty feet from the forehead do you come to the full cranial development. So that this whole enormous boneless mass is as one wad. Finally, though, as will soon be revealed, its contents partly comprise the most delicate oil; yet, you are now to be apprised of the nature of the substance which so impregnably invests all that apparent effeminacy. In some previous place I have described to you how the blubber wraps the body of the whale, as the rind wraps an orange. Just so with the head; but with this difference: about the head this envelope, though not so thick, is of a boneless toughness, inestimable by any man who has not handled it. The severest pointed harpoon, the sharpest lance darted by the strongest human arm, impotently rebounds from it. It is as though the forehead of the Sperm Whale were paved with horses’ hoofs. I do not think that any sensation lurks in it.')
@@ -4627,9 +4626,9 @@ T('Now, mark. Unerringly impelling this dead, impregnable, uninjurable wall, and
 NL
 NL
 T('CHAPTER LXXVII.')
-NL({base="h0"})
-T('THE GREAT HEIDELBURGH TUN.')
 NL({base="h1"})
+T('THE GREAT HEIDELBURGH TUN.')
+NL({base="h2"})
 T('Now comes the Baling of the Case. But to comprehend it aright, you must know something of the curious internal structure of the thing operated upon.')
 NL
 T('Regarding the Sperm Whale’s head as a solid oblong, you may, on an inclined plane, sideways divide it into two quoins,\u2060[17] whereof the lower is the bony structure, forming the cranium and jaws, and the upper an unctuous mass wholly free from bones; its broad forward end forming the expanded vertical apparent forehead of the whale. At the middle of the forehead horizontally subdivide this upper quoin, and then you have two almost equal parts, which before were naturally divided by an internal wall of a thick tendinous substance.')
@@ -4648,9 +4647,9 @@ T('Thus much being said, attend now, I pray you, to that marvellous and—in thi
 NL
 NL
 T('CHAPTER LXXVIII.')
-NL({base="h0"})
-T('CISTERN AND BUCKETS.')
 NL({base="h1"})
+T('CISTERN AND BUCKETS.')
+NL({base="h2"})
 T('Nimble as a cat, Tashtego mounts aloft; and without altering his erect posture, runs straight out upon the overhanging main-yard-arm, to the part where it exactly projects over the hoisted Tun. He has carried with him a light tackle called a whip, consisting of only two parts, travelling through a single-sheaved block. Securing this block, so that it hangs down from the yard-arm, he swings one end of the rope, till it is caught and firmly held by a hand on deck. Then, hand-over-hand, down the other part, the Indian drops through the air, till dexterously he lands on the summit of the head. There—still high elevated above the rest of the company, to whom he vivaciously cries—he seems some Turkish Muezzin calling the good people to prayers from the top of a tower. A short-handled sharp spade being sent up to him, he diligently searches for the proper place to begin breaking into the Tun. In this business he proceeds very heedfully, like a treasure-hunter in some old house, sounding the walls to find where the gold is masoned in. By the time this cautious search is over, a stout iron-bound bucket, precisely like a well-bucket, has been attached to one end of the whip; while the other end, being stretched across the deck, is there held by two or three alert hands. These last now hoist the bucket within grasp of the Indian, to whom another person has reached up a very long pole. Inserting this pole into the bucket, Tashtego downward guides the bucket into the Tun, till it entirely disappears; then giving the word to the seamen at the whip, up comes the bucket again, all bubbling like a dairy-maid’s pail of new milk. Carefully lowered from its height, the full-freighted vessel is caught by an appointed hand, and quickly emptied into a large tub. Then re-mounting aloft, it again goes through the same round until the deep cistern will yield no more. Towards the end, Tashtego has to ram his long pole harder and harder, and deeper and deeper into the Tun, until some twenty feet of the pole have gone down.')
 NL
 T('Now, the people of the Pequod had been baling some time in this way; several tubs had been filled with the fragrant sperm; when all at once a queer accident happened. Whether it was that Tashtego, that wild Indian, was so heedless and reckless as to let go for a moment his one-handed hold on the great cabled tackles suspending the head; or whether the place where he stood was so treacherous and oozy; or whether the Evil One himself would have it to fall out so, without stating his particular reasons; how it was exactly, there is no telling now; but, on a sudden, as the eightieth or ninetieth bucket came suckingly up—my God! poor Tashtego—like the twin reciprocating bucket in a veritable well, dropped head-foremost down into this great Tun of Heidelburgh, and with a horrible oily gurgling, went clean out of sight!')
@@ -4683,9 +4682,9 @@ T('Now, had Tashtego perished in that head, it had been a very precious perishin
 NL
 NL
 T('CHAPTER LXXIX.')
-NL({base="h0"})
-T('THE PRAIRE.')
 NL({base="h1"})
+T('THE PRAIRE.')
+NL({base="h2"})
 T('To scan the lines of his face, or feel the bumps on the head of this Leviathan; this is a thing which no Physiognomist or Phrenologist has as yet undertaken. Such an enterprise would seem almost as hopeful as for Lavater to have scrutinized the wrinkles on the Rock of Gibraltar, or for Gall to have mounted a ladder and manipulated the Dome of the Pantheon. Still, in that famous work of his, Lavater not only treats of the various faces of men, but also attentively studies the faces of horses, birds, serpents, and fish; and dwells in detail upon the modifications of expression discernible therein. Nor have Gall and his disciple Spurzheim failed to throw out some hints touching the phrenological characteristics of other beings than man. Therefore, though I am but ill qualified for a pioneer, in the application of these two semi-sciences to the whale, I will do my endeavor. I try all things; I achieve what I can.')
 NL
 T('Physiognomically regarded, the Sperm Whale is an anomalous creature. He has no proper nose. And since the nose is the central and most conspicuous of the features; and since it perhaps most modifies and finally controls their combined expression; hence it would seem that its entire absence, as an external appendage, must very largely affect the countenance of the whale. For as in landscape gardening, a spire, cupola, monument, or tower of some sort, is deemed almost indispensable to the completion of the scene; so no face can be physiognomically in keeping without the elevated open-work belfry of the nose. Dash the nose from Phidias’s marble Jove, and what a sorry remainder! Nevertheless, Leviathan is of so mighty a magnitude, all his proportions are so stately, that the same deficiency which in the sculptured Jove were hideous, in him is no blemish at all. Nay, it is an added grandeur. A nose to the whale would have been impertinent. As on your physiognomical voyage you sail round his vast head in your jolly-boat, your noble conceptions of him are never insulted by the reflection that he has a nose to be pulled. A pestilent conceit, which so often will insist upon obtruding even when beholding the mightiest royal beadle on his throne.')
@@ -4700,9 +4699,9 @@ T('Champollion deciphered the wrinkled granite hieroglyphics. But there is no Ch
 NL
 NL
 T('CHAPTER LXXX.')
-NL({base="h0"})
-T('THE NUT.')
 NL({base="h1"})
+T('THE NUT.')
+NL({base="h2"})
 T('If the Sperm Whale be physiognomically a Sphinx, to the phrenologist his brain seems that geometrical circle which it is impossible to square.')
 NL
 T('In the full-grown creature the skull will measure at least twenty feet in length. Unhinge the lower jaw, and the side view of this skull is as the side view of a moderately inclined plane resting throughout on a level base. But in life—as we have elsewhere seen—this inclined plane is angularly filled up, and almost squared by the enormous superincumbent mass of the junk and sperm. At the high end the skull forms a crater to bed that part of the mass; while under the long floor of this crater—in another cavity seldom exceeding ten inches in length and as many in depth—reposes the mere handful of this monster’s brain. The brain is at least twenty feet from his apparent forehead in life; it is hidden away behind its vast outworks, like the innermost citadel within the amplified fortifications of Quebec. So like a choice casket is it secreted in him, that I have known some whalemen who peremptorily deny that the Sperm Whale has any other brain than that palpable semblance of one formed by the cubic-yards of his sperm magazine. Lying in strange folds, courses, and convolutions, to their apprehensions, it seems more in keeping with the idea of his general might to regard that mystic part of him as the seat of his intelligence.')
@@ -4719,9 +4718,9 @@ T('But leaving this hint to operate as it may with the phrenologists, I would me
 NL
 NL
 T('CHAPTER LXXXI.')
-NL({base="h0"})
-T('THE PEQUOD MEETS THE VIRGIN.')
 NL({base="h1"})
+T('THE PEQUOD MEETS THE VIRGIN.')
+NL({base="h2"})
 T('The predestinated day arrived, and we duly met the ship Jungfrau, Derick De Deer, master, of Bremen.')
 NL
 T('At one time the greatest whaling people in the world, the Dutch and Germans are now among the least; but here and there at very wide intervals of latitude and longitude, you still occasionally meet with their flag in the Pacific.')
@@ -4818,9 +4817,9 @@ T('Oh! many are the Fin-Backs, and many are the Dericks, my friend.')
 NL
 NL
 T('CHAPTER LXXXII.')
-NL({base="h0"})
-T('THE HONOR AND GLORY OF WHALING.')
 NL({base="h1"})
+T('THE HONOR AND GLORY OF WHALING.')
+NL({base="h2"})
 T('There are some enterprises in which a careful disorderliness is the true method.')
 NL
 T('The more I dive into this matter of whaling, and push my researches up to the very spring-head of it, so much the more am I impressed with its great honorableness and antiquity; and especially when I find so many great demi-gods and heroes, prophets of all sorts, who one way or other have shed distinction upon it, I am transported with the reflection that I myself belong, though but subordinately, to so emblazoned a fraternity.')
@@ -4841,9 +4840,9 @@ T('Perseus, St. George, Hercules, Jonah, and Vishnoo! there’s a member-roll fo
 NL
 NL
 T('CHAPTER LXXXIII.')
-NL({base="h0"})
-T('JONAH HISTORICALLY REGARDED.')
 NL({base="h1"})
+T('JONAH HISTORICALLY REGARDED.')
+NL({base="h2"})
 T('Reference was made to the historical story of Jonah and the whale in the preceding chapter. Now some Nantucketers rather distrust this historical story of Jonah and the whale. But then there were some sceptical Greeks and Romans, who, standing out from the orthodox pagans of their times, equally doubted the story of Hercules and the whale, and Arion and the dolphin; and yet their doubting those traditions did not make those traditions one whit the less facts, for all that.')
 NL
 T('One old Sag-Harbor whaleman’s chief reason for questioning the Hebrew story was this:—He had one of those quaint old-fashioned Bibles, embellished with curious, unscientific plates; one of which represented Jonah’s whale with two spouts in his head—a peculiarity only true with respect to a species of the Leviathan (the Right Whale, and the varieties of that order), concerning which the fishermen have this saying, “A penny roll would choke him;” his swallow is so very small. But, to this, Bishop Jebb’s anticipative answer is ready. It is not necessary, hints the Bishop, that we consider Jonah as tombed in the whale’s belly, but as temporarily lodged in some part of his mouth. And this seems reasonable enough in the good Bishop. For truly, the Right Whale’s mouth would accommodate a couple of whist-tables, and comfortably seat all the players. Possibly, too, Jonah might have ensconced himself in a hollow tooth; but, on second thoughts, the Right Whale is toothless.')
@@ -4856,9 +4855,9 @@ T('But all these foolish arguments of old Sag-Harbor only evinced his foolish pr
 NL
 NL
 T('CHAPTER LXXXIV.')
-NL({base="h0"})
-T('PITCHPOLING.')
 NL({base="h1"})
+T('PITCHPOLING.')
+NL({base="h2"})
 T('To make them run easily and swiftly, the axles of carriages are anointed; and for much the same purpose, some whalers perform an analogous operation upon their boat; they grease the bottom. Nor is it to be doubted that as such a procedure can do no harm, it may possibly be of no contemptible advantage; considering that oil and water are hostile; that oil is a sliding thing, and that the object in view is to make the boat slide bravely. Queequeg believed strongly in anointing his boat, and one morning not long after the German ship Jungfrau disappeared, took more than customary pains in that occupation; crawling under its bottom, where it hung over the side, and rubbing in the unctuousness as though diligently seeking to insure a crop of hair from the craft’s bald keel. He seemed to be working in obedience to some particular presentiment. Nor did it remain unwarranted by the event.')
 NL
 T('Towards noon whales were raised; but so soon as the ship sailed down to them, they turned and fled with swift precipitancy; a disordered flight, as of Cleopatra’s barges from Actium.')
@@ -4877,9 +4876,9 @@ T('Again and again to such gamesome talk, the dexterous dart is repeated, the sp
 NL
 NL
 T('CHAPTER LXXXV.')
-NL({base="h0"})
-T('THE FOUNTAIN.')
 NL({base="h1"})
+T('THE FOUNTAIN.')
+NL({base="h2"})
 T('That for six thousand years—and no one knows how many millions of ages before—the great whales should have been spouting all over the sea, and sprinkling and mistifying the gardens of the deep, as with so many sprinkling or mistifying pots; and that for some centuries back, thousands of hunters should have been close by the fountain of the whale, watching these sprinklings and spoutings—that all this should be, and yet, that down to this blessed minute (fifteen and a quarter minutes past one o’clock P.M. of this sixteenth day of December, A. D. 1851), it should still remain a problem, whether these spoutings are, after all, really water, or nothing but vapor—this is surely a noteworthy thing.')
 NL
 T('Let us, then, look at this matter, along with some interesting items contingent. Every one knows that by the peculiar cunning of their gills, the finny tribes in general breathe the air which at all times is combined with the element in which they swim; hence, a herring or a cod might live a century, and never once raise its head above the surface. But owing to his marked internal structure which gives him regular lungs, like a human being’s, the whale can only live by inhaling the disengaged air in the open atmosphere. Wherefore the necessity for his periodical visits to the upper world. But he cannot in any degree breathe through his mouth, for, in his ordinary attitude, the Sperm Whale’s mouth is buried at least eight feet beneath the surface; and what is still more, his windpipe has no connexion with his mouth. No, he breathes through his spiracle alone; and this is on the top of his head.')
@@ -4906,9 +4905,9 @@ T('And how nobly it raises our conceit of the mighty, misty monster, to behold h
 NL
 NL
 T('CHAPTER LXXXVI.')
-NL({base="h0"})
-T('THE TAIL.')
 NL({base="h1"})
+T('THE TAIL.')
+NL({base="h2"})
 T('Other poets have warbled the praises of the soft eye of the antelope, and the lovely plumage of the bird that never alights; less celestial, I celebrate a tail.')
 NL
 T('Reckoning the largest sized Sperm Whale’s tail to begin at that point of the trunk where it tapers to about the girth of a man, it comprises upon its upper surface alone, an area of at least fifty square feet. The compact round body of its root expands into two broad, firm, flat palms or flukes, gradually shoaling away to less than an inch in thickness. At the crotch or junction, these flukes slightly overlap, then sideways recede from each other like wings, leaving a wide vacancy between. In no living thing are the lines of beauty more exquisitely defined than in the crescentic borders of these flukes. At its utmost expansion in the full grown whale, the tail will considerably exceed twenty feet across.')
@@ -4941,9 +4940,9 @@ T('The more I consider this mighty tail, the more do I deplore my inability to e
 NL
 NL
 T('CHAPTER LXXXVII.')
-NL({base="h0"})
-T('THE GRAND ARMADA.')
 NL({base="h1"})
+T('THE GRAND ARMADA.')
+NL({base="h2"})
 T('The long and narrow peninsula of Malacca, extending south-eastward from the territories of Birmah, forms the most southerly point of all Asia. In a continuous line from that peninsula stretch the long islands of Sumatra, Java, Bally, and Timor; which, with many others, form a vast mole, or rampart, lengthwise connecting Asia with Australia, and dividing the long unbroken Indian ocean from the thickly studded oriental archipelagoes. This rampart is pierced by several sally-ports for the convenience of ships and whales; conspicuous among which are the straits of Sunda and Malacca. By the straits of Sunda, chiefly, vessels bound to China from the west, emerge into the China seas.')
 NL
 T('Those narrow straits of Sunda divide Sumatra from Java; and standing midway in that vast rampart of islands, buttressed by that bold green promontory, known to seamen as Java Head; they not a little correspond to the central gateway opening into some vast walled empire: and considering the inexhaustible wealth of spices, and silks, and jewels, and gold, and ivory, with which the thousand islands of that oriental sea are enriched, it seems a significant provision of nature, that such treasures, by the very formation of the land, should at least bear the appearance, however ineffectual, of being guarded from the all-grasping western world. The shores of the Straits of Sunda are unsupplied with those domineering fortresses which guard the entrances to the Mediterranean, the Baltic, and the Propontis. Unlike the Danes, these Orientals do not demand the obsequious homage of lowered top-sails from the endless procession of ships before the wind, which for centuries past, by night and by day, have passed between the islands of Sumatra and Java, freighted with the costliest cargoes of the east. But while they freely waive a ceremonial like this, they do by no means renounce their claim to more solid tribute.')
@@ -5016,9 +5015,9 @@ T('The result of this lowering was somewhat illustrative of that sagacious sayin
 NL
 NL
 T('CHAPTER LXXXVIII.')
-NL({base="h0"})
-T('SCHOOLS AND SCHOOLMASTERS.')
 NL({base="h1"})
+T('SCHOOLS AND SCHOOLMASTERS.')
+NL({base="h2"})
 T('The previous chapter gave account of an immense body or herd of Sperm Whales, and there was also then given the probable cause inducing those vast aggregations.')
 NL
 T('Now, though such great bodies are at times encountered, yet, as must have been seen, even at the present day, small detached bands are occasionally observed, embracing from twenty to fifty individuals each. Such bands are known as schools. They generally are of two sorts; those composed almost entirely of females, and those mustering none but young vigorous males, or bulls, as they are familiarly designated.')
@@ -5043,9 +5042,9 @@ T('Another point of difference between the male and female schools is still more
 NL
 NL
 T('CHAPTER LXXXIX.')
-NL({base="h0"})
-T('FAST-FISH AND LOOSE-FISH.')
 NL({base="h1"})
+T('FAST-FISH AND LOOSE-FISH.')
+NL({base="h2"})
 T('The allusion to the waifs and waif-poles in the last chapter but one, necessitates some account of the laws and regulations of the whale fishery, of which the waif may be deemed the grand symbol and badge.')
 NL
 T('It frequently happens that when several ships are cruising in company, a whale may be struck by one vessel, then escape, and be finally killed and captured by another vessel; and herein are indirectly comprised many minor contingencies, all partaking of this one grand feature. For example,—after a weary and perilous chase and capture of a whale, the body may get loose from the ship by reason of a violent storm; and drifting far away to leeward, be retaken by a second whaler, who, in a calm, snugly tows it alongside, without risk of life or line. Thus the most vexatious and violent disputes would often arise between the fishermen, were there not some written or unwritten, universal, undisputed law applicable to all cases.')
@@ -5082,9 +5081,9 @@ T('What are the Rights of Man and the Liberties of the World but Loose-Fish? Wha
 NL
 NL
 T('CHAPTER XC.')
-NL({base="h0"})
-T('HEADS OR TAILS.')
 NL({base="h1"})
+T('HEADS OR TAILS.')
+NL({base="h2"})
 T('“De balena vero sufficit, si rex habeat caput, et regina caudam.”')
 NL
 T('Bracton, l. 3. c. 3.')
@@ -5131,9 +5130,9 @@ T('There are two royal fish so styled by the English law writers—the whale and
 NL
 NL
 T('CHAPTER XCI.')
-NL({base="h0"})
-T('THE PEQUOD MEETS THE ROSE-BUD.')
 NL({base="h1"})
+T('THE PEQUOD MEETS THE ROSE-BUD.')
+NL({base="h2"})
 T('“In vain it was to rake for Ambergriese in the paunch of this Leviathan, insufferable fetor denying not inquiry.”')
 NL
 T('Sir T. Browne, V. E.')
@@ -5238,9 +5237,9 @@ T('Dropping his spade, he thrust both hands in, and drew out handfuls of somethi
 NL
 NL
 T('CHAPTER XCII.')
-NL({base="h0"})
-T('AMBERGRIS.')
 NL({base="h1"})
+T('AMBERGRIS.')
+NL({base="h2"})
 T('Now this ambergris is a very curious substance, and so important as an article of commerce, that in 1791 a certain Nantucket-born Captain Coffin was examined at the bar of the English House of Commons on that subject. For at that time, and indeed until a comparatively late day, the precise origin of ambergris remained, like amber itself, a problem to the learned. Though the word ambergris is but the French compound for grey amber, yet the two substances are quite distinct. For amber, though at times found on the sea-coast, is also dug up in some far inland soils, whereas ambergris is never found except upon the sea. Besides, amber is a hard, transparent, brittle, odorless substance, used for mouth-pieces to pipes, for beads and ornaments; but ambergris is soft, waxy, and so highly fragrant and spicy, that it is largely used in perfumery, in pastiles, precious candles, hair-powders, and pomatum. The Turks use it in cooking, and also carry it to Mecca, for the same purpose that frankincense is carried to St. Peter’s in Rome. Some wine merchants drop a few grains into claret, to flavor it.')
 NL
 T('Who would think, then, that such fine ladies and gentlemen should regale themselves with an essence found in the inglorious bowels of a sick whale! Yet so it is. By some, ambergris is supposed to be the cause, and by others the effect, of the dyspepsia in the whale. How to cure such a dyspepsia it were hard to say, unless by administering three or four boat loads of Brandreth’s pills, and then running out of harm’s way, as laborers do in blasting rocks.')
@@ -5257,9 +5256,9 @@ T('I partly surmise also, that this wicked charge against whalers may be likewis
 NL
 NL
 T('CHAPTER XCIII.')
-NL({base="h0"})
-T('THE CASTAWAY.')
 NL({base="h1"})
+T('THE CASTAWAY.')
+NL({base="h2"})
 T('It was but some few days after encountering the Frenchman, that a most significant event befell the most insignificant of the Pequod’s crew; an event most lamentable; and which ended in providing the sometimes madly merry and predestinated craft with a living and ever accompanying prophecy of whatever shattered sequel might prove her own.')
 NL
 T('Now, in the whale ship, it is not every one that goes in the boats. Some few hands are reserved called ship-keepers, whose province it is to work the vessel while the boats are pursuing the whale. As a general thing, these ship-keepers are as hardy fellows as the men comprising the boats’ crews. But if there happen to be an unduly slender, clumsy, or timorous wight in the ship, that wight is certain to be made a ship-keeper. It was so in the Pequod with the little negro Pippin by nick-name, Pip by abbreviation. Poor Pip! ye have heard of him before; ye must remember his tambourine on that dramatic midnight, so gloomy-jolly.')
@@ -5290,9 +5289,9 @@ T('For the rest, blame not Stubb too hardly. The thing is common in that fishery
 NL
 NL
 T('CHAPTER XCIV.')
-NL({base="h0"})
-T('A SQUEEZE OF THE HAND.')
 NL({base="h1"})
+T('A SQUEEZE OF THE HAND.')
+NL({base="h2"})
 T('That whale of Stubb’s, so dearly purchased, was duly brought to the Pequod’s side, where all those cutting and hoisting operations previously detailed, were regularly gone through, even to the baling of the Heidelburgh Tun, or Case.')
 NL
 T('While some were occupied with this latter duty, others were employed in dragging away the larger tubs, so soon as filled with the sperm; and when the proper time arrived, this same sperm was carefully manipulated ere going to the try-works, of which anon.')
@@ -5323,9 +5322,9 @@ T('But to learn all about these recondite matters, your best way is at once to d
 NL
 NL
 T('CHAPTER XCV.')
-NL({base="h0"})
-T('THE CASSOCK.')
 NL({base="h1"})
+T('THE CASSOCK.')
+NL({base="h2"})
 T('Had you stepped on board the Pequod at a certain juncture of this post-mortemizing of the whale; and had you strolled forward nigh the windlass, pretty sure am I that you would have scanned with no small curiosity a very strange, enigmatical object, which you would have seen there, lying along lengthwise in the lee scuppers. Not the wondrous cistern in the whale’s huge head; not the prodigy of his unhinged lower jaw; not the miracle of his symmetrical tail; none of these would so surprise you, as half a glimpse of that unaccountable cone,—longer than a Kentuckian is tall, nigh a foot in diameter at the base, and jet-black as Yojo, the ebony idol of Queequeg. And an idol, indeed, it is; or, rather, in old times, its likeness was. Such an idol as that found in the secret groves of Queen Maachah in Judea; and for worshipping which, King Asa, her son, did depose her, and destroyed the idol, and burnt it for an abomination at the brook Kedron, as darkly set forth in the 15th chapter of the first book of Kings.')
 NL
 T('Look at the sailor, called the mincer, who now comes along, and assisted by two allies, heavily backs the grandissimus, as the mariners call it, and with bowed shoulders, staggers off with it as if he were a grenadier carrying a dead comrade from the field. Extending it upon the forecastle deck, he now proceeds cylindrically to remove its dark pelt, as an African hunter the pelt of a boa. This done he turns the pelt inside out, like a pantaloon leg; gives it a good stretching, so as almost to double its diameter; and at last hangs it, well spread, in the rigging, to dry. Ere long, it is taken down; when removing some three feet of it, towards the pointed extremity, and then cutting two slits for arm-holes at the other end, he lengthwise slips himself bodily into it. The mincer now stands before you invested in the full canonicals of his calling. Immemorial to all his order, this investiture alone will adequately protect him, while employed in the peculiar functions of his office.')
@@ -5336,9 +5335,9 @@ T('[20] Bible leaves! Bible leaves! This is the invariable cry from the mates to
 NL
 NL
 T('CHAPTER XCVI.')
-NL({base="h0"})
-T('THE TRY-WORKS.')
 NL({base="h1"})
+T('THE TRY-WORKS.')
+NL({base="h2"})
 T('Besides her hoisted boats, an American whaler is outwardly distinguished by her try-works. She presents the curious anomaly of the most solid masonry joining with oak and hemp in constituting the completed ship. It is as if from the open field a brick-kiln were transported to her planks.')
 NL
 T('The try-works are planted between the foremast and main-mast, the most roomy part of the deck. The timbers beneath are of a peculiar strength, fitted to sustain the weight of an almost solid mass of brick and mortar, some ten feet by eight square, and five in height. The foundation does not penetrate the deck, but the masonry is firmly secured to the surface by ponderous knees of iron bracing it on all sides, and screwing it down to the timbers. On the flanks it is cased with wood, and at top completely covered by a large, sloping, battened hatchway. Removing this hatch we expose the great try-pots, two in number, and each of several barrels’ capacity. When not in use, they are kept remarkably clean. Sometimes they are polished with soapstone and sand, till they shine within like silver punch-bowls. During the night-watches some cynical old sailors will crawl into them and coil themselves away there for a nap. While employed in polishing them—one man in each pot, side by side—many confidential communications are carried on, over the iron lips. It is a place also for profound mathematical meditation. It was in the left hand try-pot of the Pequod, with the soapstone diligently circling round me, that I was first indirectly struck by the remarkable fact, that in geometry all bodies gliding along the cycloid, my soapstone for example, will descend from any point in precisely the same time.')
@@ -5365,9 +5364,9 @@ T('But even Solomon, he says, “the man that wandereth out of the way of unders
 NL
 NL
 T('CHAPTER XCVII.')
-NL({base="h0"})
-T('THE LAMP.')
 NL({base="h1"})
+T('THE LAMP.')
+NL({base="h2"})
 T('Had you descended from the Pequod’s try-works to the Pequod’s forecastle, where the off duty watch were sleeping, for one single moment you would have almost thought you were standing in some illuminated shrine of canonized kings and counsellors. There they lay in their triangular oaken vaults, each mariner a chiselled muteness; a score of lamps flashing upon his hooded eyes.')
 NL
 T('In merchantmen, oil for the sailor is more scarce than the milk of queens. To dress in the dark, and eat in the dark, and stumble in darkness to his pallet, this is his usual lot. But the whaleman, as he seeks the food of light, so he lives in light. He makes his berth an Aladdin’s lamp, and lays him down in it; so that in the pitchiest night the ship’s black hull still houses an illumination.')
@@ -5376,9 +5375,9 @@ T('See with what entire freedom the whaleman takes his handful of lamps—often 
 NL
 NL
 T('CHAPTER XCVIII.')
-NL({base="h0"})
-T('STOWING DOWN AND CLEARING UP.')
 NL({base="h1"})
+T('STOWING DOWN AND CLEARING UP.')
+NL({base="h2"})
 T('Already has it been related how the great leviathan is afar off descried from the mast-head; how he is chased over the watery moors, and slaughtered in the valleys of the deep; how he is then towed alongside and beheaded; and how (on the principle which entitled the headsman of old to the garments in which the beheaded was killed) his great padded surtout becomes the property of his executioner; how, in due time, he is condemned to the pots, and, like Shadrach, Meshach, and Abednego, his spermaceti, oil, and bone pass unscathed through the fire;—but now it remains to conclude the last chapter of this part of the description by rehearsing—singing, if I may—the romantic proceeding of decanting off his oil into the casks and striking them down into the hold, where once again leviathan returns to his native profundities, sliding along beneath the surface as before; but, alas! never more to rise and blow.')
 NL
 T('While still warm, the oil, like hot punch, is received into the six-barrel casks; and while, perhaps, the ship is pitching and rolling this way and that in the midnight sea, the enormous casks are slewed round and headed over, end for end, and sometimes perilously scoot across the slippery deck, like so many land slides, till at last man-handled and stayed in their course; and all round the hoops, rap, rap, go as many hammers as can play upon them, for now, ex officio, every sailor is a cooper.')
@@ -5397,9 +5396,9 @@ T('Oh! the metempsychosis! Oh! Pythagoras, that in bright Greece, two thousand y
 NL
 NL
 T('CHAPTER XCIX.')
-NL({base="h0"})
-T('THE DOUBLOON.')
 NL({base="h1"})
+T('THE DOUBLOON.')
+NL({base="h2"})
 T('Ere now it has been related how Ahab was wont to pace his quarter-deck, taking regular turns at either limit, the binnacle and mainmast; but in the multiplicity of other things requiring narration it has not been added how that sometimes in these walks, when most plunged in his mood, he was wont to pause in turn at each spot, and stand there strangely eyeing the particular object before him. When he halted before the binnacle, with his glance fastened on the pointed needle in the compass, that glance shot like a javelin with the pointed intensity of his purpose; and when resuming his walk he again paused before the mainmast, then, as the same riveted glance fastened upon the riveted gold coin there, he still wore the same aspect of nailed firmness, only dashed with a certain wild longing, if not hopefulness.')
 NL
 T('But one morning, turning to pass the doubloon, he seemed to be newly attracted by the strange figures and inscriptions stamped on it, as though now for the first time beginning to interpret for himself in some monomaniac way whatever significance might lurk in them. And some certain significance lurks in all things, else all things are little worth, and the round world itself but an empty cipher, except to sell by the cartload, as they do hills about Boston, to fill up some morass in the Milky Way.')
@@ -5446,9 +5445,9 @@ T('“Here’s the ship’s navel, this doubloon here, and they are all on fire 
 NL
 NL
 T('CHAPTER C.')
-NL({base="h0"})
-T('LEG AND ARM.')
 NL({base="h1"})
+T('LEG AND ARM.')
+NL({base="h2"})
 NL
 T('THE PEQUOD, OF NANTUCKET, MEETS THE SAMUEL ENDERBY, OF LONDON.')
 NL
@@ -5538,9 +5537,9 @@ T('In a moment he was standing in the boat’s stern, and the Manilla men were s
 NL
 NL
 T('CHAPTER CI.')
-NL({base="h0"})
-T('THE DECANTER.')
 NL({base="h1"})
+T('THE DECANTER.')
+NL({base="h2"})
 T('Ere the English ship fades from sight, be it set down here, that she hailed from London, and was named after the late Samuel Enderby, merchant of that city, the original of the famous whaling house of Enderby & Sons; a house which in my poor whaleman’s opinion, comes not far behind the united royal houses of the Tudors and Bourbons, in point of real historical interest. How long, prior to the year of our Lord 1775, this great whaling house was in existence, my numerous fish-documents do not make plain; but in that year (1775) it fitted out the first English ships that ever regularly hunted the Sperm Whale; though for some score of years previous (ever since 1726) our valiant Coffins and Maceys of Nantucket and the Vineyard had in large fleets pursued that Leviathan, but only in the North and South Atlantic: not elsewhere. Be it distinctly recorded here, that the Nantucketers were the first among mankind to harpoon with civilized steel the great Sperm Whale; and that for half a century they were the only people of the whole globe who so harpooned him.')
 NL
 T('In 1778, a fine ship, the Amelia, fitted out for the express purpose, and at the sole charge of the vigorous Enderbys, boldly rounded Cape Horn, and was the first among the nations to lower a whale-boat of any sort in the great South Sea. The voyage was a skilful and lucky one; and returning to her berth with her hold full of the precious sperm, the Amelia’s example was soon followed by other ships, English and American, and thus the vast Sperm Whale grounds of the Pacific were thrown open. But not content with this good deed, the indefatigable house again bestirred itself: Samuel and all his Sons—how many, their mother only knows—and under their immediate auspices, and partly, I think, at their expense, the British government was induced to send the sloop-of-war Rattler on a whaling voyage of discovery into the South Sea. Commanded by a naval Post-Captain, the Rattler made a rattling voyage of it, and did some service; how much does not appear. But this is not all. In 1819, the same house fitted out a discovery whale ship of their own, to go on a tasting cruise to the remote waters of Japan. That ship—well called the “Syren”—made a noble experimental cruise; and it was thus that the great Japanese Whaling Ground first became generally known. The Syren in this famous voyage was commanded by a Captain Coffin, a Nantucketer.')
@@ -5608,9 +5607,9 @@ T('But no more; enough has been said to show that the old Dutch whalers of two o
 NL
 NL
 T('CHAPTER CII.')
-NL({base="h0"})
-T('A BOWER IN THE ARSACIDES.')
 NL({base="h1"})
+T('A BOWER IN THE ARSACIDES.')
+NL({base="h2"})
 T('Hitherto, in descriptively treating of the Sperm Whale, I have chiefly dwelt upon the marvels of his outer aspect; or separately and in detail upon some few interior structural features. But to a large and thorough sweeping comprehension of him, it behoves me now to unbutton him still further, and untagging the points of his hose, unbuckling his garters, and casting loose the hooks and the eyes of the joints of his innermost bones, set him before you in his ultimatum; that is to say, in his unconditional skeleton.')
 NL
 T('But how now, Ishmael? How is it, that you, a mere oarsman in the fishery, pretend to know aught about the subterranean parts of the whale? Did erudite Stubb, mounted upon your capstan, deliver lectures on the anatomy of the Cetacea; and by help of the windlass, hold up a specimen rib for exhibition? Explain thyself, Ishmael. Can you land a full-grown whale on your deck for examination, as a cook dishes a roast-pig? Surely not. A veritable witness have you hitherto been, Ishmael; but have a care how you seize the privilege of Jonah alone; the privilege of discoursing upon the joists and beams; the rafters, ridge-pole, sleepers, and under-pinnings, making up the frame-work of leviathan; and belike of the tallow-vats, dairy-rooms, butteries, and cheeseries in his bowels.')
@@ -5666,9 +5665,9 @@ T('There are forty and odd vertebræ in all, which in the skeleton are not locke
 NL
 NL
 T('CHAPTER CIV.')
-NL({base="h0"})
-T('THE FOSSIL WHALE.')
 NL({base="h1"})
+T('THE FOSSIL WHALE.')
+NL({base="h2"})
 T('From his mighty bulk the whale affords a most congenial theme whereon to enlarge, amplify, and generally expatiate. Would you, you could not compress him. By good rights he should only be treated of in imperial folio. Not to tell over again his furlongs from spiracle to tail, and the yards he measures about the waist; only think of the gigantic involutions of his intestines, where they lie in him like great cables and hausers coiled away in the subterranean orlop-deck of a line-of-battle-ship.')
 NL
 T('Since I have undertaken to manhandle this Leviathan, it behoves me to approve myself omnisciently exhaustive in the enterprise; not overlooking the minutest seminal germs of his blood, and spinning him out to the uttermost coil of his bowels. Having already described him in most of his present habitatory and anatomical peculiarities, it now remains to magnify him in an archæological, fossiliferous, and antediluvian point of view. Applied to any other creature than the Leviathan—to an ant or a flea—such portly terms might justly be deemed unwarrantably grandiloquent. But when Leviathan is the text, the case is altered. Fain am I to stagger to this emprise under the weightiest words of the dictionary. And here be it said, that whenever it has been convenient to consult one in the course of these dissertations, I have invariably used a huge quarto edition of Johnson, expressly purchased for that purpose; because that famous lexicographer’s uncommon personal bulk more fitted him to compile a lexicon to be used by a whale author like me.')
@@ -5745,9 +5744,9 @@ T('And when that functionary appeared before him, he bade him without delay set 
 NL
 NL
 T('CHAPTER CVII.')
-NL({base="h0"})
-T('THE CARPENTER.')
 NL({base="h1"})
+T('THE CARPENTER.')
+NL({base="h2"})
 T('Seat thyself sultanically among the moons of Saturn, and take high abstracted man alone; and he seems a wonder, a grandeur, and a woe. But from the same point, take mankind in mass, and for the most part, they seem a mob of unnecessary duplicates, both contemporary and hereditary. But most humble though he was, and far from furnishing an example of the high, humane abstraction; the Pequod’s carpenter was no duplicate; hence, he now comes in person on this stage.')
 NL
 T('Like all sea-going ship carpenters, and more especially those belonging to whaling vessels, he was, to a certain off-handed, practical extent, alike experienced in numerous trades and callings collateral to his own; the carpenter’s pursuit being the ancient and outbranching trunk of all those numerous handicrafts which more or less have to do with wood as an auxiliary material. But, besides the application to him of the generic remark above, this carpenter of the Pequod was singularly efficient in those thousand nameless mechanical emergencies continually recurring in a large ship, upon a three or four years’ voyage, in uncivilized and far-distant seas. For not to speak of his readiness in ordinary duties:—repairing stove boats, sprung spars, reforming the shape of clumsy-bladed oars, inserting bull’s eyes in the deck, or new tree-nails in the side planks, and other miscellaneous matters more directly pertaining to his special business; he was moreover unhesitatingly expert in all manner of conflicting aptitudes, both useful and capricious.')
@@ -5762,9 +5761,9 @@ T('Yet, as previously hinted, this omnitooled, open-and-shut carpenter, was, aft
 NL
 NL
 T('CHAPTER CVIII.')
-NL({base="h0"})
-T('AHAB AND THE CARPENTER.')
 NL({base="h1"})
+T('AHAB AND THE CARPENTER.')
+NL({base="h2"})
 T('THE DECK—FIRST NIGHT WATCH')
 NL
 T('(Carpenter standing before his vice-bench, and by the light of two lanterns busily filing the ivory joist for the leg, which joist is firmly fixed in the vice. Slabs of ivory, leather straps, pads, screws, and various tools of all sorts lying about the bench. Forward, the red flame of the forge is seen, where the blacksmith is at work.)')
@@ -5843,9 +5842,9 @@ T('Well, well, well! Stubb knows him best of all, and Stubb always says he’s q
 NL
 NL
 T('CHAPTER CIX.')
-NL({base="h0"})
-T('AHAB AND STARBUCK IN THE CABIN.')
 NL({base="h1"})
+T('AHAB AND STARBUCK IN THE CABIN.')
+NL({base="h2"})
 T('According to usage they were pumping the ship next morning; and lo! no inconsiderable oil came up with the water; the casks below must have sprung a bad leak. Much concern was shown; and Starbuck went down into the cabin to report this unfavorable affair.\u2060[21]')
 NL
 T('[21] In Sperm-whalemen with any considerable quantity of oil on board, it is a regular semi-weekly duty to conduct a hose into the hold, and drench the casks with sea-water; which afterwards, at varying intervals, is removed by the ship’s pumps. Hereby the casks are sought to be kept damply tight; while by the changed character of the withdrawn water, the mariners readily detect any serious leakage in the precious cargo.')
@@ -5888,9 +5887,9 @@ T('It were perhaps vain to surmise exactly why it was, that as respecting Starbu
 NL
 NL
 T('CHAPTER CX.')
-NL({base="h0"})
-T('QUEEQUEG IN HIS COFFIN.')
 NL({base="h1"})
+T('QUEEQUEG IN HIS COFFIN.')
+NL({base="h2"})
 T('Upon searching, it was found that the casks last struck into the hold were perfectly sound, and that the leak must be further off. So, it being calm weather, they broke out deeper and deeper, disturbing the slumbers of the huge ground-tier butts; and from that black midnight sending those gigantic moles into the daylight above. So deep did they go; and so ancient, and corroded, and weedy the aspect of the lowermost puncheons, that you almost looked next for some mouldy corner-stone cask containing coins of Captain Noah, with copies of the posted placards, vainly warning the infatuated old world from the flood. Tierce after tierce, too, of water, and bread, and beef, and shooks of staves, and iron bundles of hoops, were hoisted out, till at last the piled decks were hard to get about; and the hollow hull echoed under foot, as if you were treading over empty catacombs, and reeled and rolled in the sea like an air-freighted demijohn. Top-heavy was the ship as a dinnerless student with all Aristotle in his head. Well was it that the Typhoons did not visit them then.')
 NL
 T('Now, at this time it was that my poor pagan companion, and fast bosom-friend, Queequeg, was seized with a fever, which brought him nigh to his endless end.')
@@ -5931,9 +5930,9 @@ T('With a wild whimsiness, he now used his coffin for a sea-chest; and emptying 
 NL
 NL
 T('CHAPTER CXI.')
-NL({base="h0"})
-T('THE PACIFIC.')
 NL({base="h1"})
+T('THE PACIFIC.')
+NL({base="h2"})
 T('When gliding by the Bashee isles we emerged at last upon the great South Sea; were it not for other things, I could have greeted my dear Pacific with uncounted thanks, for now the long supplication of my youth was answered; that serene ocean rolled eastwards from me a thousand leagues of blue.')
 NL
 T('There is, one knows not what sweet mystery about this sea, whose gently awful stirrings seem to speak of some hidden soul beneath; like those fabled undulations of the Ephesian sod over the buried Evangelist St. John. And meet it is, that over these sea-pastures, wide-rolling watery prairies and Potters’ Fields of all four continents, the waves should rise and fall, and ebb and flow unceasingly; for here, millions of mixed shades and shadows, drowned dreams, somnambulisms, reveries; all that we call lives and souls, lie dreaming, dreaming, still; tossing like slumberers in their beds; the ever-rolling waves but made so by their restlessness.')
@@ -5944,9 +5943,9 @@ T('But few thoughts of Pan stirred Ahab’s brain, as standing like an iron stat
 NL
 NL
 T('CHAPTER CXII.')
-NL({base="h0"})
-T('THE BLACKSMITH.')
 NL({base="h1"})
+T('THE BLACKSMITH.')
+NL({base="h2"})
 T('Availing himself of the mild, summer-cool weather that now reigned in these latitudes, and in preparation for the peculiarly active pursuits shortly to be anticipated, Perth, the begrimed, blistered old blacksmith, had not removed his portable forge to the hold again, after concluding his contributory work for Ahab’s leg, but still retained it on deck, fast lashed to ringbolts by the foremast; being now almost incessantly invoked by the headsmen, and harpooneers, and bowsmen to do some little job for them; altering, or repairing, or new shaping their various weapons and boat furniture. Often he would be surrounded by an eager circle, all waiting to be served; holding boat-spades, pike-heads, harpoons, and lances, and jealously watching his every sooty movement, as he toiled. Nevertheless, this old man’s was a patient hammer wielded by a patient arm. No murmur, no impatience, no petulence did come from him. Silent, slow, and solemn; bowing over still further his chronically broken back, he toiled away, as if toil were life itself, and the heavy beating of his hammer the heavy beating of his heart. And so it was.—Most miserable!')
 NL
 T('A peculiar walk in this old man, a certain slight but painful appearing yawing in his gait, had at an early period of the voyage excited the curiosity of the mariners. And to the importunity of their persisted questionings he had finally given in; and so it came to pass that every one now knew the shameful story of his wretched fate.')
@@ -5965,9 +5964,9 @@ T('Hearkening to these voices, East and West, by early sun-rise, and by fall of 
 NL
 NL
 T('CHAPTER CXIII.')
-NL({base="h0"})
-T('THE FORGE.')
 NL({base="h1"})
+T('THE FORGE.')
+NL({base="h2"})
 T('With matted beard, and swathed in a bristling shark-skin apron, about mid-day, Perth was standing between his forge and anvil, the latter placed upon an iron-wood log, with one hand holding a pike-head in the coals, and with the other at his forge’s lungs, when Captain Ahab came along, carrying in his hand a small rusty-looking leathern bag. While yet a little distance from the forge, moody Ahab paused; till at last, Perth, withdrawing his iron from the fire, began hammering it upon the anvil—the red mass sending off the sparks in thick hovering flights, some of which flew close to Ahab.')
 NL
 T('“Are these thy Mother Carey’s chickens, Perth? they are always flying in thy wake; birds of good omen, too, but not to all;—look here, they burn; but thou—thou liv’st among them without a scorch.”')
@@ -6026,9 +6025,9 @@ T('At one extremity the rope was unstranded, and the separate spread yarns were 
 NL
 NL
 T('CHAPTER CXIV.')
-NL({base="h0"})
-T('THE GILDER.')
 NL({base="h1"})
+T('THE GILDER.')
+NL({base="h2"})
 T('Penetrating further and further into the heart of the Japanese cruising ground, the Pequod was soon all astir in the fishery. Often, in mild, pleasant weather, for twelve, fifteen, eighteen, and twenty hours on the stretch, they were engaged in the boats, steadily pulling, or sailing, or paddling after the whales, or for an interlude of sixty or seventy minutes calmly awaiting their uprising; though with but small success for their pains.')
 NL
 T('At such times, under an abated sun; afloat all day upon smooth, slow heaving swells; seated in his boat, light as a birch canoe; and so sociably mixing with the soft waves themselves, that like hearth-stone cats they purr against the gunwale; these are the times of dreamy quietude, when beholding the tranquil beauty and brilliancy of the ocean’s skin, one forgets the tiger heart that pants beneath it; and would not willingly remember, that this velvet paw but conceals a remorseless fang.')
@@ -6051,9 +6050,9 @@ T('“I am Stubb, and Stubb has his history; but here Stubb takes oaths that he 
 NL
 NL
 T('CHAPTER CXV.')
-NL({base="h0"})
-T('THE PEQUOD MEETS THE BACHELOR.')
 NL({base="h1"})
+T('THE PEQUOD MEETS THE BACHELOR.')
+NL({base="h2"})
 T('And jolly enough were the sights and the sounds that came bearing down before the wind, some few weeks after Ahab’s harpoon had been welded.')
 NL
 T('It was a Nantucket ship, the Bachelor, which had just wedged in her last cask of oil, and bolted down her bursting hatches; and now, in glad holiday apparel, was joyously, though somewhat vain-gloriously, sailing round among the widely-separated ships on the ground, previous to pointing her prow for home.')
@@ -6084,9 +6083,9 @@ T('And thus, while the one ship went cheerily before the breeze, the other stubb
 NL
 NL
 T('CHAPTER CXVI.')
-NL({base="h0"})
-T('THE DYING WHALE.')
 NL({base="h1"})
+T('THE DYING WHALE.')
+NL({base="h2"})
 T('Not seldom in this life, when, on the right side, fortune’s favorites sail close by us, we, though all adroop before, catch somewhat of the rushing breeze, and joyfully feel our bagging sails fill out. So seemed it with the Pequod. For next day after encountering the gay Bachelor, whales were seen and four were slain; and one of them by Ahab.')
 NL
 T('It was far down the afternoon; and when all the spearings of the crimson fight were done: and floating in the lovely sunset sea and sky, sun and whale both stilly died together; then, such a sweetness and such plaintiveness, such inwreathing orisons curled up in that rosy air, that it almost seemed as if far over from the deep green convent valleys of the Manilla isles, the Spanish land-breeze, wantonly turned sailor, had gone to sea, freighted with these vesper hymns.')
@@ -6103,9 +6102,9 @@ T('“Then hail, for ever hail, O sea, in whose eternal tossings the wild fowl f
 NL
 NL
 T('CHAPTER CXVII.')
-NL({base="h0"})
-T('THE WHALE WATCH.')
 NL({base="h1"})
+T('THE WHALE WATCH.')
+NL({base="h2"})
 T('The four whales slain that evening had died wide apart; one, far to windward; one, less distant, to leeward; one ahead; one astern. These last three were brought alongside ere nightfall; but the windward one could not be reached till morning; and the boat that had killed it lay by its side all night; and that boat was Ahab’s.')
 NL
 T('The waif-pole was thrust upright into the dead whale’s spout-hole; and the lantern hanging from its top, cast a troubled flickering glare upon the black, glossy back, and far out upon the midnight waves, which gently chafed the whale’s broad flank, like soft surf upon a beach.')
@@ -6138,9 +6137,9 @@ T('Both were silent again, as one man. The grey dawn came on, and the slumbering
 NL
 NL
 T('CHAPTER CXVIII.')
-NL({base="h0"})
-T('THE QUADRANT.')
 NL({base="h1"})
+T('THE QUADRANT.')
+NL({base="h2"})
 T('The season for the Line at length drew near; and every day when Ahab, coming from his cabin, cast his eyes aloft, the vigilant helmsman would ostentatiously handle his spokes, and the eager mariners quickly run to the braces, and would stand there with all their eyes centrally fixed on the nailed doubloon; impatient for the order to point the ship’s prow for the equator. In good time the order came. It was hard upon high noon; and Ahab, seated in the bows of his high-hoisted boat, was about taking his wonted daily observation of the sun to determine his latitude.')
 NL
 T('Now, in that Japanese sea, the days in summer are as freshets of effulgences. That unblinkingly vivid Japanese sun seems the blazing focus of the glassy ocean’s immeasurable burning-glass. The sky looks lacquered; clouds there are none; the horizon floats; and this nakedness of unrelieved radiance is as the insufferable splendors of God’s throne. Well that Ahab’s quadrant was furnished with colored glasses, through which to take sight of that solar fire. So, swinging his seated form to the roll of the ship, and with his astrological-looking instrument placed to his eye, he remained in that posture for some moments to catch the precise instant when the sun should gain its precise meridian. Meantime while his whole attention was absorbed, the Parsee was kneeling beneath him on the ship’s deck, and with face thrown up like Ahab’s, was eyeing the same sun with him; only the lids of his eyes half hooded their orbs, and his wild face was subdued to an earthly passionlessness. At length the desired observation was taken; and with his pencil upon his ivory leg, Ahab soon calculated what his latitude must be at that precise instant. Then falling into a moment’s revery, he again looked up towards the sun and murmured to himself: “Thou sea-mark! thou high and mighty Pilot! thou tellest me truly where I am—but canst thou cast the least hint where I shall be? Or canst thou tell where some other thing besides me is this moment living? Where is Moby Dick? This instant thou must be eyeing him. These eyes of mine look into the very eye that is even now beholding him; aye, and into the eye that is even now equally beholding the objects on the unknown, thither side of thee, thou sun!”')
@@ -6159,9 +6158,9 @@ T('“Aye,” cried Stubb, “but sea-coal ashes—mind ye that, Mr. Starbuck—
 NL
 NL
 T('CHAPTER CXIX.')
-NL({base="h0"})
-T('THE CANDLES.')
 NL({base="h1"})
+T('THE CANDLES.')
+NL({base="h2"})
 T('Warmest climes but nurse the cruellest fangs: the tiger of Bengal crouches in spiced groves of ceaseless verdure. Skies the most effulgent but basket the deadliest thunders: gorgeous Cuba knows tornadoes that never swept tame northern lands. So, too, it is, that in these resplendent Japanese seas the mariner encounters the direst of all storms, the Typhoon. It will sometimes burst from out that cloudless sky, like an exploding bomb upon a dazed and sleepy town.')
 NL
 T('Towards evening of that day, the Pequod was torn of her canvas, and bare-poled was left to fight a Typhoon which had struck her directly ahead. When darkness came on, sky and sea roared and split with the thunder, and blazed with the lightning, that showed the disabled masts fluttering here and there with the rags which the first fury of the tempest had left for its after sport.')
@@ -6262,9 +6261,9 @@ T('As in the hurricane that sweeps the plain, men fly the neighborhood of some l
 NL
 NL
 T('CHAPTER CXX.')
-NL({base="h0"})
-T('THE DECK TOWARDS THE END OF THE FIRST NIGHT WATCH.')
 NL({base="h1"})
+T('THE DECK TOWARDS THE END OF THE FIRST NIGHT WATCH.')
+NL({base="h2"})
 T('Ahab standing by the helm. \xa0Starbuck approaching him.')
 NL
 T('“We must send down the main-top-sail yard, sir. The band is working loose, and the lee lift is half-stranded. Shall I strike it, sir?”')
@@ -6305,9 +6304,9 @@ T('“Um, um, um. Stop that thunder! Plenty too much thunder up here. What’s t
 NL
 NL
 T('CHAPTER CXXIII.')
-NL({base="h0"})
-T('THE MUSKET.')
 NL({base="h1"})
+T('THE MUSKET.')
+NL({base="h2"})
 T('During the most violent shocks of the Typhoon, the man at the Pequod’s jaw-bone tiller had several times been reelingly hurled to the deck by its spasmodic motions, even though preventer tackles had been attached to it—for they were slack—because some play to the tiller was indispensable.')
 NL
 T('In a severe gale like this, while the ship is but a tossed shuttle-cock to the blast, it is by no means uncommon to see the needles in the compasses, at intervals, go round and round. It was thus with the Pequod’s; at almost every shock the helmsman had not failed to notice the whirling velocity with which they revolved upon the cards; it is a sight that hardly any one can behold without some sort of unwonted emotion.')
@@ -6336,9 +6335,9 @@ T('“He’s too sound asleep, Mr. Stubb; go thou down, and wake him, and tell h
 NL
 NL
 T('CHAPTER CXXIV.')
-NL({base="h0"})
-T('THE NEEDLE.')
 NL({base="h1"})
+T('THE NEEDLE.')
+NL({base="h2"})
 T('Next morning the not-yet-subsided sea rolled in long slow billows of mighty bulk, and striving in the Pequod’s gurgling track, pushed her on like giants’ palms outspread. The strong, unstaggering breeze abounded so, that sky and air seemed vast outbellying sails; the whole world boomed before the wind. Muffled in the full morning light, the invisible sun was only known by the spread intensity of his place; where his bayonet rays moved on in stacks. Emblazonings, as of crowned Babylonian kings and queens, reigned over everything. The sea was as a crucible of molten gold, that bubblingly leaps with light and heat.')
 NL
 T('Long maintaining an enchanted silence, Ahab stood apart; and every time the tetering ship loweringly pitched down her bowsprit, he turned to eye the bright sun’s rays produced ahead; and when she profoundly settled by the stern, he turned behind, and saw the sun’s rearward place, and how the same yellow rays were blending with his undeviating wake.')
@@ -6383,9 +6382,9 @@ T('In his fiery eyes of scorn and triumph, you then saw Ahab in all his fatal pr
 NL
 NL
 T('CHAPTER CXXV.')
-NL({base="h0"})
-T('THE LOG AND LINE.')
 NL({base="h1"})
+T('THE LOG AND LINE.')
+NL({base="h2"})
 T('While now the fated Pequod had been so long afloat this voyage, the log and line had but very seldom been in use. Owing to a confident reliance upon other means of determining the vessel’s place, some merchantmen, and many whalemen, especially when cruising, wholly neglect to heave the log; though at the same time, and frequently more for form’s sake than anything else, regularly putting down upon the customary slate the course steered by the ship, as well as the presumed average rate of progression every hour. It had been thus with the Pequod. The wooden reel and angular log attached hung, long untouched, just beneath the railing of the after bulwarks. Rains and spray had damped it; sun and wind had warped it; all the elements had combined to rot a thing that hung so idly. But heedless of all this, his mood seized Ahab, as he happened to glance upon the reel, not many hours after the magnet scene, and he remembered how his quadrant was no more, and recalled his frantic oath about the level log and line. The ship was sailing plungingly; astern the billows rolled in riots.')
 NL
 T('“Forward, there! Heave the log!”')
@@ -6446,9 +6445,9 @@ T('“There go two daft ones now,” muttered the old Manxman. “One daft with 
 NL
 NL
 T('CHAPTER CXXVI.')
-NL({base="h0"})
-T('THE LIFE-BUOY.')
 NL({base="h1"})
+T('THE LIFE-BUOY.')
+NL({base="h2"})
 T('Steering now south-eastward by Ahab’s levelled steel, and her progress solely determined by Ahab’s level log and line; the Pequod held on her path towards the Equator. Making so long a passage through such unfrequented waters, descrying no ships, and ere long, sideways impelled by unvarying trade winds, over waves monotonously mild; all these seemed the strange calm things preluding some riotous and desperate scene.')
 NL
 T('At last, when the ship drew near to the outskirts, as it were, of the Equatorial fishing-ground, and in the deep darkness that goes before the dawn, was sailing by a cluster of rocky islets; the watch—then headed by Flask—was startled by a cry so plaintively wild and unearthly—like half-articulated wailings of the ghosts of all Herod’s murdered Innocents—that one and all, they started from their reveries, and for the space of some moments stood, or sat, or leaned all transfixedly listening, like the carved Roman slave, while that wild cry remained within hearing. The Christian or civilized part of the crew said it was mermaids, and shuddered; but the pagan harpooneers remained unappalled. Yet the grey Manxman—the oldest mariner of all—declared that the wild thrilling sounds that were heard, were the voices of newly drowned men in the sea.')
@@ -6489,9 +6488,9 @@ T('“He goes off in a huff. The whole he can endure; at the parts he baulks. No
 NL
 NL
 T('CHAPTER CXXVII.')
-NL({base="h0"})
-T('THE DECK.')
 NL({base="h1"})
+T('THE DECK.')
+NL({base="h2"})
 T('The coffin laid upon two line-tubs, between the vice-bench and the open hatchway; the Carpenter calking its seams; the string of twisted oakum slowly unwinding from a large roll of it placed in the bosom of his frock.—Ahab comes slowly from the cabin-gangway, and hears Pip following him.')
 NL
 T('“Back, lad; I will be with ye again presently. He goes! Not this hand complies with my humor more genially than that boy.—Middle aisle of a church! What’s here?”')
@@ -6540,9 +6539,9 @@ T('“There’s a sight! There’s a sound! The greyheaded woodpecker tapping th
 NL
 NL
 T('CHAPTER CXXVIII.')
-NL({base="h0"})
-T('THE PEQUOD MEETS THE RACHEL.')
 NL({base="h1"})
+T('THE PEQUOD MEETS THE RACHEL.')
+NL({base="h2"})
 T('Next day, a large ship, the Rachel, was descried, bearing directly down upon the Pequod, all her spars thickly clustering with men. At the time the Pequod was making good speed through the water; but as the broad-winged windward stranger shot nigh to her, the boastful sails all fell together as blank bladders that are burst, and all life fled from the smitten hull.')
 NL
 T('“Bad news; she brings bad news,” muttered the old Manxman. But ere her commander, who, with trumpet to mouth, stood up in his boat; ere he could hopefully hail, Ahab’s voice was heard.')
@@ -6583,9 +6582,9 @@ T('But by her still halting course and winding, woful way, you plainly saw that 
 NL
 NL
 T('CHAPTER CXXIX.')
-NL({base="h0"})
-T('THE CABIN.')
 NL({base="h1"})
+T('THE CABIN.')
+NL({base="h2"})
 T('(Ahab moving to go on deck; Pip catches him by the hand to follow.)')
 NL
 T('“Lad, lad, I tell thee thou must not follow Ahab now. The hour is coming when Ahab would not scare thee from him, yet would not have thee by him. There is that in thee, poor lad, which I feel too curing to my malady. Like cures like; and for this hunt, my malady becomes my most desired health. Do thou abide below here, where they shall serve thee, as if thou wert the captain. Aye, lad, thou shalt sit here in my own screwed chair; another screw to it, thou must be.”')
@@ -6608,9 +6607,9 @@ T('“Here he this instant stood; I stand in his air,—but I’m alone. Now wer
 NL
 NL
 T('CHAPTER CXXX.')
-NL({base="h0"})
-T('THE HAT.')
 NL({base="h1"})
+T('THE HAT.')
+NL({base="h2"})
 T('And now that at the proper time and place, after so long and wide a preliminary cruise, Ahab,—all other whaling waters swept—seemed to have chased his foe into an ocean-fold, to slay him the more securely there; now, that he found himself hard by the very latitude and longitude where his tormenting wound had been inflicted; now that a vessel had been spoken which on the very day preceding had actually encountered Moby Dick;—and now that all his successive meetings with various ships contrastingly concurred to show the demoniac indifference with which the white whale tore his hunters, whether sinning or sinned against; now it was that there lurked a something in the old man’s eyes, which it was hardly sufferable for feeble souls to see. As the unsetting polar star, which through the livelong, arctic, six months’ night sustains its piercing, steady, central gaze; so Ahab’s purpose now fixedly gleamed down upon the constant midnight of the gloomy crew. It domineered above them so, that all their bodings, doubts, misgivings, fears, were fain to hide beneath their souls, and not sprout forth a single spear or leaf.')
 NL
 T('In this foreshadowing interval too, all humor, forced or natural, vanished. Stubb no more strove to raise a smile; Starbuck no more strove to check one. Alike, joy and sorrow, hope and fear, seemed ground to finest dust, and powdered, for the time, in the clamped mortar of Ahab’s iron soul. Like machines, they dumbly moved about the deck, ever conscious that the old man’s despot eye was on them.')
@@ -6643,9 +6642,9 @@ T('An eagle flew thrice round Tarquin’s head, removing his cap to replace it, 
 NL
 NL
 T('CHAPTER CXXXI.')
-NL({base="h0"})
-T('THE PEQUOD MEETS THE DELIGHT.')
 NL({base="h1"})
+T('THE PEQUOD MEETS THE DELIGHT.')
+NL({base="h2"})
 T('The intense Pequod sailed on; the rolling waves and days went by; the life-buoy-coffin still lightly swung; and another ship, most miserably misnamed the Delight, was descried. As she drew nigh, all eyes were fixed upon her broad beams, called shears, which, in some whaling-ships, cross the quarter-deck at the height of eight or nine feet; serving to carry the spare, unrigged, or disabled boats.')
 NL
 T('Upon the stranger’s shears were beheld the shattered, white ribs, and some few splintered planks, of what had once been a whale-boat; but you now saw through this wreck, as plainly as you see through the peeled, half-unhinged, and bleaching skeleton of a horse.')
@@ -6672,9 +6671,9 @@ T('“Ha! yonder! look yonder, men!” cried a foreboding voice in her wake. “
 NL
 NL
 T('CHAPTER CXXXII.')
-NL({base="h0"})
-T('THE SYMPHONY.')
 NL({base="h1"})
+T('THE SYMPHONY.')
+NL({base="h2"})
 T('It was a clear steel-blue day. The firmaments of air and sea were hardly separable in that all-pervading azure; only, the pensive air was transparently pure and soft, with a woman’s look, and the robust and man-like sea heaved with long, strong, lingering swells, as Samson’s chest in his sleep.')
 NL
 T('Hither, and thither, on high, glided the snow-white wings of small, unspeckled birds; these were the gentle thoughts of the feminine air; but to and fro in the deeps, far down in the bottomless blue, rushed mighty leviathans, sword-fish, and sharks; and these were the strong, troubled, murderous thinkings of the masculine sea.')

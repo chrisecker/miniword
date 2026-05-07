@@ -1,5 +1,5 @@
 import wx
-from ..textmodel.viewbase import ViewBase
+from .sidepanel import SidePanel
 from ..textmodel.utils import get_newlines
 from ..layout.counters import format_number, set_counter, inc_counter
 from ..core.styles import n_levels
@@ -52,16 +52,19 @@ def iter_headings(model, stylesheet):
         yield index, level, prefix + text, start
 
 
-class OutlinePanel(wx.Panel, ViewBase):
+class OutlinePanel(SidePanel):
 
     def __init__(self, parent, document, textview):
-        wx.Panel.__init__(self, parent)
-        ViewBase.__init__(self)
+        SidePanel.__init__(self, parent)
         self._textview   = textview
         self._basestyles = document.basestyles
         self._entries    = []   # [(par_start, wx.TreeItemId)] sorted by par_start
-        self._timer      = wx.Timer(self)
 
+        self.add_model(document.textmodel)
+        self.add_model(document.basestyles)
+        self.create()
+
+    def create(self):
         self._tree = wx.TreeCtrl(self,
             style=wx.TR_HAS_BUTTONS | wx.TR_NO_LINES |
                   wx.TR_FULL_ROW_HIGHLIGHT | wx.TR_HIDE_ROOT)
@@ -72,43 +75,12 @@ class OutlinePanel(wx.Panel, ViewBase):
         self.SetSizer(sizer)
 
         self._tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self._on_activate)
-        self._tree.Bind(wx.EVT_MOTION,       self._on_hover)
         self._tree.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
-        self.Bind(wx.EVT_TIMER, lambda _: self.refresh())
-
-        self.add_model(document.textmodel)
-        self.add_model(document.basestyles)
-
-    # --- ViewBase handlers ----------------------------------------------
-
-    def inserted(self, model, i, n):
-        self._schedule_refresh()
-
-    def removed(self, model, i, removed):
-        self._schedule_refresh()
-
-    def properties_changed(self, model, i1, i2):
-        self._schedule_refresh()
-
-    def model_changed(self, model):
-        self._schedule_refresh()
-
-    def _schedule_refresh(self):
-        self._timer.StartOnce(400)
-
-    # --- Document switch ------------------------------------------------
-
-    def set_document(self, document):
-        for model in list(self._models):
-            self.remove_model(model)
-        self._basestyles = document.basestyles
-        self.add_model(document.textmodel)
-        self.add_model(document.basestyles)
-        wx.CallAfter(self.refresh)
-
+        self._tree.Bind(wx.EVT_MOTION, self._on_hover)
+        
     # --- Tree building --------------------------------------------------
 
-    def refresh(self):
+    def update(self):
         model = self._textview.model
         tree  = self._tree
         tree.DeleteAllItems()
@@ -176,7 +148,3 @@ class OutlinePanel(wx.Panel, ViewBase):
                 wx.SYS_COLOUR_HIGHLIGHT).ChangeLightness(self._HOVER_LIGHTNESS)
             self._tree.SetItemBackgroundColour(item, colour)
 
-    # --- DPI ------------------------------------------------------------
-
-    def dpi_changed(self):
-        pass

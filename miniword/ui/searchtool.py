@@ -3,12 +3,20 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from ..textmodel.modelbase import Model
 from ..textmodel.properties import overridable_property
+from .sidepanel import SidePanel
 from .colours import colours
 from .design import muted_button, flat_button, make_panel
 
 
 class Search(ViewBase, Model):
-    # Search model
+    """
+    Search model
+
+    When the model is changed, the search is invalidated but not
+    updated. Updates need an explicit call to get_results() or
+    update().
+    """
+    
     results = overridable_property('results')
     _results = ()
     substring = ""
@@ -213,20 +221,17 @@ class SearchResultsList(wx.VListBox):
         return row + 1
 
 
-class SearchPanel(wx.Panel, ViewBase):
+class SearchPanel(SidePanel):
     _current_idx = -1
-    _update_queued = False
+    delay = 100
 
     def __init__(self, parent, textview):
-        wx.Panel.__init__(self, parent)
-        ViewBase.__init__(self)
+        SidePanel.__init__(self, parent)
         self.textview = textview
         self.textmodel = textview.model
         self.search = Search(self.textmodel)
         self.set_model(self.search)
         self._current_idx = -1
-        self._update_queued = False
-        self.Bind(wx.EVT_SHOW, self._on_show)
         self.create()
 
     def create(self):
@@ -243,8 +248,8 @@ class SearchPanel(wx.Panel, ViewBase):
         btn_prev.SetMinSize((btn_w, -1))
         btn_next.SetMinSize((btn_w, -1))
         sr.Add(self.search_ctrl, 1, wx.EXPAND)
-        sr.Add(btn_prev, 0, wx.EXPAND | wx.LEFT, dip(2))
-        sr.Add(btn_next, 0, wx.EXPAND | wx.LEFT, dip(2))
+        sr.Add(btn_prev, 0, wx.EXPAND | wx.LEFT, dip(4))
+        sr.Add(btn_next, 0, wx.EXPAND)
         content.Add(sr, 0, wx.EXPAND | wx.BOTTOM, dip(4))
 
         # Replace field
@@ -311,17 +316,9 @@ class SearchPanel(wx.Panel, ViewBase):
         if self.search.substring:
             self.search_ctrl.SetValue(self.search.substring)
 
-    def dpi_changed(self):
-        self.DestroyChildren()
-        self.create()
-        self.Layout()
-
-    def _on_show(self, event):
-        event.Skip()
-        if event.IsShown():
-            if not self.search.valide:
-                self.update()
-        else:
+    def update_visible(self):
+        super().update_visible()
+        if not self.visible:
             self.textview.highlights = []
             self.textview.Refresh()
 
@@ -331,18 +328,13 @@ class SearchPanel(wx.Panel, ViewBase):
         self.update()
 
     def results_changed(self, model):
-        if not self.IsShownOnScreen():
-            return  # search.valide is already False; update on next show
-        if self._update_queued:
-            return
-        self._update_queued = True
-        wx.CallAfter(self.update)
+        if self.visible:
+            self.queue_update()
 
     def update(self):
         results = self.search.get_results()
         self._current_idx = min(self._current_idx, len(results) - 1)
         self.result_list.set_results(results)
-        self._update_queued = False
         if self._current_idx >= 0:
             self.result_list.SetSelection(self._current_idx)
         self._update_highlights()
@@ -417,7 +409,6 @@ class SearchPanel(wx.Panel, ViewBase):
             self.result_list.SetSelection(self._current_idx)
             self.result_list.goto_index(self._current_idx)
         self._update_count_label()
-        self._update_queued = True
 
     def _replace_all(self, event=None):
         results = self.search.get_results()

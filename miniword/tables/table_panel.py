@@ -1,8 +1,8 @@
 import wx
 from wx.lib.newevent import NewEvent
 
-from ..textmodel.viewbase import ViewBase
 from ..textmodel.texeltree import length
+from ..ui.sidepanel import SidePanel
 from ..ui.threestate import ColourButton
 from ..ui.icons import icon
 from ..ui.design import muted_button, make_panel, add_section
@@ -266,17 +266,13 @@ _BORDER_PRESETS = [
 ]
 
 
-class TablePanel(wx.Panel, ViewBase):
+class TablePanel(SidePanel):
     """Inspector panel for inserting and editing tables."""
 
     def __init__(self, parent, view):
-        wx.Panel.__init__(self, parent)
-        ViewBase.__init__(self)
+        SidePanel.__init__(self, parent)
         self._view = view
-        self._table_index = None
-        self._table_box = None
         self.add_model(view)
-        self.Bind(wx.EVT_SHOW, self.on_show)
         self.create()
 
     def create(self):
@@ -342,16 +338,8 @@ class TablePanel(wx.Panel, ViewBase):
         )
         self._set_table_controls(False)
 
-    def dpi_changed(self):
-        self.DestroyChildren()
-        self.create()
+    def update(self):
         self._update_cell_inspector()
-        self.Layout()
-
-    def on_show(self, event):
-        event.Skip()
-        if event.IsShown():
-            self._update_cell_inspector()
 
     def _on_insert(self, event):
         if event.cols == 0:
@@ -359,17 +347,6 @@ class TablePanel(wx.Panel, ViewBase):
         table = empty_table(event.rows, event.cols)
         self._view.insert_texel(self._view.index, table)
 
-    def editor_changed(self, view, editor):
-        pass
-
-    def index_changed(self, model):
-        self._update_cell_inspector()
-
-    def selection_changed(self, model):
-        self._update_cell_inspector()
-
-    def properties_changed(self, model, *args, **kwargs):
-        self._update_cell_inspector()
 
     def _set_table_controls(self, enabled):
         for w in self._table_controls:

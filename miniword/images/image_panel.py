@@ -4,25 +4,22 @@ from .images import Image
 from ..ui.documentview import get_path
 from .image_editors import ImageCropEditor
 from ..textmodel.texeltree import grouped
-from ..textmodel.viewbase import ViewBase
+from ..ui.sidepanel import SidePanel
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from ..ui.design import flat_button, make_panel, add_section, add_row
 from ..ui.flatbutton import ResetButton
 
 
-class ImageInspector(wx.Panel, ViewBase):
+class ImageInspector(SidePanel):
     """Image Tool: insert new images and inspect/edit existing ones.
 
     Top section (always active):   insert a new image from a file.
     Bottom section (active only when cursor is on an Image texel):
         replace, resize, and crop the image.
-
-    Registers itself on the DocumentView to receive editor_changed signals.
     """
 
     def __init__(self, parent, view):
-        wx.Panel.__init__(self, parent)
-        ViewBase.__init__(self)
+        SidePanel.__init__(self, parent)
         self._view = view
         self.add_model(view)
         self.add_model(view.model)
@@ -32,7 +29,6 @@ class ImageInspector(wx.Panel, ViewBase):
         self._natural_h    = 1.0
         self._updating     = False
         self._crop_active  = False
-        self.Bind(wx.EVT_SHOW, self.on_show)
         self.create()
 
     def create(self):
@@ -97,16 +93,12 @@ class ImageInspector(wx.Panel, ViewBase):
 
         self._set_inspector_enabled(False)
 
-    def dpi_changed(self):
-        self.DestroyChildren()
-        self.create()
-        self.index_changed(None)
-        self.Layout()
-
-    def on_show(self, event):
-        event.Skip()
-        if event.IsShown():
-            self.index_changed(None)
+    def update(self):
+        texel = self._get_image_texel()
+        if texel is not None:
+            self.refresh(texel)
+        else:
+            self.clear()
 
     # ------------------------------------------------------------------
 
@@ -242,19 +234,6 @@ class ImageInspector(wx.Panel, ViewBase):
         """Return the Image texel at the current cursor position, or None."""
         return next((t for _, _, t in get_path(self._view.model.texel, self._view.index)
                      if isinstance(t, Image)), None)
-
-    def index_changed(self, view):
-        texel = self._get_image_texel()
-        if texel is not None:
-            self.refresh(texel)
-        else:
-            self.clear()
-
-    def properties_changed(self, model, i1, i2):
-        if self._blob_id is not None:
-            texel = self._get_image_texel()
-            if texel is not None:
-                self.refresh(texel)
 
     def _on_crop_toggle(self, event):
         if not self._crop_active:

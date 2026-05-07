@@ -4,7 +4,7 @@
 import wx
 from .design import make_tab, add_section, add_row, add_row2
 from .flatbutton import FlatButton, ResetButton
-from .inspectors import InspectorBase
+from .sidepanel import SidePanel
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
     NewLine, dump
@@ -154,16 +154,18 @@ class Inspector(wx.Frame):
         framesizer.Fit(self)
 
     
-class StyleInspector(InspectorBase):
+class StyleInspector(SidePanel):
     sizes = (8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30)
+    _state = None
 
-    def __init__(self, parent, view, basestyles, *args, **kwds):
-        InspectorBase.__init__(self, parent, view)
+    def __init__(self, parent, view, basestyles):
+        SidePanel.__init__(self, parent)
+        self._view = view
         self.basestyles = basestyles
-        self._state = None
+        self.add_model(view)
+        self.add_model(view.model)
         self.create()
         passfocus(self, view)
-        self.add_model(view.model)
 
     def create(self):
         view = self._view
@@ -443,7 +445,7 @@ class StyleInspector(InspectorBase):
 
     def dpi_changed(self):
         self._state = None
-        InspectorBase.dpi_changed(self)
+        SidePanel.dpi_changed(self)
 
     def on_align(self, event):
         variant = event.name
@@ -545,9 +547,8 @@ class StyleInspector(InspectorBase):
     def on_line_spacing(self, event):
         self.set_parproperties(line_spacing=event.value)
 
-    def model_changed(self, *args):
-        self._needs_update = True
-        
+
+
     def set_properties(self, **properties):
         with self.model.atomic():
             for i1, i2 in self.get_range():
@@ -734,7 +735,7 @@ class StyleInspector(InspectorBase):
         return [view.expand_lines(i, i)]
 
     _stylenames = ()
-    _state = None
+
     def update(self, event=None):
         textview = self.model
         textmodel = textview.model

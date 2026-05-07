@@ -1,5 +1,6 @@
 import wx
 from pathlib import Path
+from ..textmodel.viewbase import ViewBase
 from .colours import colours
 
 PANEL_W    = 300
@@ -109,3 +110,49 @@ class RightStrip(wx.Panel):
         if self.active_btn:
             self.active_btn.set_active(False)
             self.active_btn = None
+
+
+class SidePanel(wx.Panel, ViewBase):
+    visible = False
+    delay = 20 # Update is delayed by this time (milli seconds)
+    
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent)
+        ViewBase.__init__(self)
+        self._timer = wx.Timer(self)
+        self.Bind(wx.EVT_SHOW, self.on_show)
+        self.Bind(wx.EVT_TIMER, lambda _: self.update())
+
+    def on_show(self, event):
+        self.update_visible()
+        event.Skip()
+        
+    def dpi_changed(self):
+        # Called from parent widget
+        self.DestroyChildren()
+        self.create()
+        self.Layout()
+        self.update_visible()
+
+    def update_visible(self):
+        """Update the visibility flag."""
+        # Called from parent widget or from on_show
+        self.visible = self.IsShownOnScreen()
+        if self.visible:
+            self.update()
+
+    def queue_update(self):
+        # can be called when lazy updates are needed (e.g. for model changes)
+        self._timer.StartOnce(self.delay)
+
+    def model_changed(self, model):
+        if self.visible:
+            self.queue_update()
+
+    ### Derived classes need to implement the following methods
+    def create(self):
+        pass
+
+    def update(self):
+        pass
+    

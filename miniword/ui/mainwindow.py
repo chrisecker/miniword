@@ -398,18 +398,20 @@ class MainFrame(wx.Frame, ViewBase):
         wx.CallAfter(self._layout)
 
     def _on_panel_toggle(self, key):
+        book = self._inspector_book
         if key is None:
             self._panel_key = None
-            self._inspector_book.Hide()
-            self._mi_panel.Check(False)
+            book.Hide()             
         else:
             self._panel_key = key
-            self._inspector_book.SetSelection(self._inspector_pages[key])
-            self._inspector_book.Show()
-            self._inspector_book.Raise()
-            self._mi_panel.Check(True)
-            if key == "outline":
-                self._outline_panel.refresh()
+            pageno = self._inspector_pages[key]
+            book.SetSelection(pageno)
+            book.Show()
+            book.Raise()
+            page = book.GetPage(pageno)
+            page.update_visible()
+        # update menu item            
+        self._mi_panel.Check(key is not None)
         self._layout()
 
     def _on_preferences(self, _):

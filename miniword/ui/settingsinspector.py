@@ -1,6 +1,6 @@
 import wx
-from ..textmodel.viewbase import ViewBase
 from .colours import colours
+from .sidepanel import SidePanel
 from .design import add_header, add_section, add_row
 
 from .unitentry import LengthInput, EVT_UNIT_CHANGED
@@ -12,15 +12,14 @@ from ..core.papersizes import PAPER_SIZES
 PAPER_CHOICES = list(PAPER_SIZES) + ['custom']
 
 
-class SettingsInspector(wx.Panel, ViewBase):
+class SettingsInspector(SidePanel):
     """Inspector panel for document settings (page setup, metadata)."""
 
     def __init__(self, parent, document):
-        wx.Panel.__init__(self, parent)
-        ViewBase.__init__(self)
+        SidePanel.__init__(self, parent)
         colours.set(self, 'BackgroundColour', 'BTNFACE')
         self._updating = False
-        self.model = document
+        self.add_model(document)
         self.create()
 
     def create(self):
@@ -92,16 +91,7 @@ class SettingsInspector(wx.Panel, ViewBase):
         self.SetSizer(outer)
         self._refresh()
 
-    def dpi_changed(self):
-        self.DestroyChildren()
-        self.create()
-        self.Layout()
-
-    # ------------------------------------------------------------------
-    # ViewBase
-    # ------------------------------------------------------------------
-
-    def setting_changed(self, doc, name, old):
+    def update(self):
         self._refresh()
 
     # ------------------------------------------------------------------
