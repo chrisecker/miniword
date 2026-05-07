@@ -556,7 +556,7 @@ class DocumentView(WXTextView):
         # We override the simple method of wxtextview, to make use of
         # the stylesheet and basestyles.
         stylesheet = self.builder.stylesheet
-        basestyle = stylesheet.get(parstyle.get('base', 'normal'))
+        basestyle = stylesheet.get(parstyle.get('base', 'normal')) or stylesheet.get('normal')
         r = updated(basestyle, parstyle, style)
         if not 'base' in r:
             r['base'] = 'normal'
