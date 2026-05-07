@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 
 from copy import copy as shallow_copy
@@ -247,7 +247,7 @@ def groups(l):
            is_homogeneous(__return__)
            calc_length(l) == calc_length(__return__)
            #out("groups check: ok")
-           #is_list_efficient(__return__) # XXX
+           #is_list_efficient(__return__) 
            depth(__return__[0]) == depth(l[0])+1
 
     """
@@ -872,7 +872,6 @@ def is_elementlist(l):
     """Returns True if *l* is a list of Elements.
     """
     if not type(l) in (tuple, list):
-        print("not a list or tuple", type(l), l.__class__) # XXX remove this
         return False
     return not False in [isinstance(x, Texel) for x in l]
 
