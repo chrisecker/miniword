@@ -44,6 +44,11 @@ class ImageEditor(TexelEditor):
     def get_cursor(self, handle_id):
         return self._CURSOR_MAP.get(handle_id, wx.CURSOR_SIZING)
 
+    def draw_cursor(self, painter):
+        # supress the drawing of a cursor!
+        pass
+        
+
 class ImageSizeEditor(ImageEditor):
     """Resize images by dragging handles on the image border.
 
