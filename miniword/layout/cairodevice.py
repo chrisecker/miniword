@@ -386,11 +386,11 @@ def test_00():
 
 def test_01():
     app = wx.App(False)
-    dc = wx.MemoryDC()
+    bmp = wx.Bitmap(1, 1)
+    dc = wx.MemoryDC(bmp)
 
     # MapMode should be 1 (MM_TEXT)
     assert dc.GetMapMode() == 1
-    gc = wx.GraphicsContext.Create(dc)
 
     ppi_x, ppi_y = dc.GetPPI()
     if ppi_x == 0:
@@ -430,8 +430,8 @@ def test_02():
 
     app = wx.App(False)
 
-    dc = wx.MemoryDC()
-    gc = wx.GraphicsContext.Create(dc)
+    bmp = wx.Bitmap(1, 1)
+    dc = wx.MemoryDC(bmp)
 
     font = wx.Font(
         12, wx.FONTFAMILY_SWISS,
