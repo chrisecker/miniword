@@ -124,6 +124,8 @@ class SidePanel(wx.Panel, ViewBase):
         self.Bind(wx.EVT_TIMER, lambda _: self.update())
 
     def on_show(self, event):
+        if not self:
+            return
         self.update_visible()
         event.Skip()
         
