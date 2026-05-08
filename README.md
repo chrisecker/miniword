@@ -8,26 +8,23 @@ A minimal word processor in python. In development but already great.
 
 - Real WYSIWYG editing (no HTML layer, no embedded browser)
 - Lightweight and fast startup
-- Minimal dependencies (wxPython + Cairo)
 - Clean, simple file format (human-readable, diff-friendly, git-friendly, AI-friendly)
 - Good Markdown support
 - Extensible via Python-plugins
 
 ## Dependencies
 
-Miniword is developed under Linux. In principle it should run under Windows and Mac as well.
+Miniword is developed under Linux. In principle it should run under Windows and Mac as well. 
 
-The following dependencies are required:
+Dependencies vary between platforms and prefered features. You always need Python >= 3.9 and wxPython >= 4.0.
 
-- Python >= 3.9
-- wxPython >= 4.0
-- Cairo >= 1.2
-
-On Debian all dependencies are installed by
-
-```
-sudo apt install python3-wxgtk4.0 python3-cairo
-```
+| Dependency | Linux    | Windows  | macOS    | Notes                                      |
+| ---------- | -------- | -------- | -------- | ------------------------------------------ |
+| pycairo    | required | —        | required | system library                             |
+| cairocffi  | —        | required | —        | alternative to pycairo; required on Windows |
+| fontconfig | required | —        | required | system CLI-tool                            |
+| uharfbuzz  | optional | optional | optional | needed for ligatures and non-Latin scripts |
+| fonttools  | —        | optional | —        | needed for non-Latin scripts on Windows    |
 
 ## Running without installation
 
@@ -39,14 +36,26 @@ Alternatively, double-click `miniword.py` in your file explorer.
 
 ## Install (Linux)
 
-Install all dependencies. Then
+Install all dependencies:
+
+```
+sudo apt install python3-wxgtk4.0 python3-cairo fontconfig
+```
+
+For ligature support and non-Latin scripts install uharfbuzz:                                                                                                                              
+
+```
+pip install uharfbuzz
+```
+
+Then install miniword:
 
 ```
 cd miniword
 pip install .
 ```
 
-If you want to register MiniWord to the desktop (you probably will)
+If you want to register MiniWord to the desktop (you probably will):
 
 ```
 cp miniword/icons/miniword.svg ~/.local/share/icons/
@@ -55,19 +64,25 @@ cp miniword.desktop ~/.local/share/applications/
 
 ## Install (Windows)
 
-Installation on Windows is possible, but more challenging. You should use cairocffi instead of pycairo:
+No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`.
 
 ```
 pip install cairocffi
+pip install uharfbuzz fonttools   # optional: ligatures, non-Latin scripts
 ```
-
-No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`.
 
 MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:\Users\<you>\AppData\Roaming\miniword\`).
 
-**Note** that MiniWord is not yet **optimised** for Windows. While it mostly works, GUI is is less pretty and it takes a bit longer to start up.
+**Note** that MiniWord is not yet **optimised** for Windows. While it mostly works, the GUI is less polished and startup takes a bit longer.
 
 ## Install (macOS)
+
+On macOS, `fontconfig` must be installed via Homebrew:
+
+```
+brew install fontconfig
+pip install uharfbuzz   # optional: ligatures and non-Latin scripts
+```
 
 MiniWord stores its configuration and plugins in `~/Library/Application Support/miniword/`.
 
