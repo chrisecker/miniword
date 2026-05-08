@@ -1,5 +1,4 @@
 import sys
-import subprocess
 import wx
 import wx.lib.wxcairo as wxcairo
 try:
@@ -15,6 +14,7 @@ except ImportError:
 
 
 from ..core.units import mm, cm, pt, inch
+from ..core.fontfinder import resolve_font_path, find_fallback_info
 from ..wxtextview.cache import LRUCache
 
 
@@ -29,51 +29,6 @@ def filled(style, defaultstyle=defaultstyle):
     new = defaultstyle.copy()
     new.update(style)
     return new
-
-
-_font_path_cache = {}
-_fallback_info_cache = {}  # codepoint -> (path, family) | (None, None)
-
-def resolve_font_path(family, bold, italic):
-    key = (family, bold, italic)
-    if key in _font_path_cache:
-        return _font_path_cache[key]
-    pattern = family
-    if bold and italic:
-        pattern += ':bold:italic'
-    elif bold:
-        pattern += ':bold'
-    elif italic:
-        pattern += ':italic'
-    try:
-        result = subprocess.run(
-            ['fc-match', pattern, '--format=%{file}'],
-            capture_output=True, text=True, timeout=2)
-        path = result.stdout.strip() or None
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        path = None
-    _font_path_cache[key] = path
-    return path
-
-
-def find_fallback_info(codepoint):
-    if codepoint in _fallback_info_cache:
-        return _fallback_info_cache[codepoint]
-    try:
-        result = subprocess.run(
-            ['fc-match', f':charset={codepoint:04x}', '--format=%{file}\t%{family}'],
-            capture_output=True, text=True, timeout=2)
-        line = result.stdout.strip()
-        if '\t' in line:
-            path, family = line.split('\t', 1)
-            family = family.split(',')[0].strip()
-            info = (path or None, family or None)
-        else:
-            info = (None, None)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        info = (None, None)
-    _fallback_info_cache[codepoint] = info
-    return info
 
 
 def set_font(ctx, style):
