@@ -1,42 +1,64 @@
 ﻿# -*- coding: utf-8 -*-
 
+import re
+
 from .testdevice import TESTDEVICE
 from .boxes import TabulatorBox, TextBox, EmptyTextBox, NewlineBox, Row
+
+
+_KINSOKU_START = (
+    '、。，．！？）」』】〕〉》…‥ー゛゜'   # punctuation that cannot start a line
+    'ぁぃぅぇぉっゃゅょゎ'                  # small hiragana
+    'ァィゥェォッャュョヮヵヶ'               # small katakana
+)
+
+# Zero-width match at a valid line-break opportunity:
+#   - after a space (Latin word break)
+#   - after a CJK character, unless followed by a kinsoku-start character
+# Kinsoku-end characters (opening brackets etc.) are outside CJK ideograph
+# ranges and therefore never produce a match via the lookbehind — implicitly
+# handled.
+_BREAK_RE = re.compile(
+    r'(?<= )'
+    r'|(?<=['
+    '一-鿿'   # CJK Unified Ideographs
+    '぀-ヿ'   # Hiragana + Katakana (starts at U+3040, not U+3000)
+    '가-힯'   # Hangul
+    '㐀-䶿'   # CJK Extension A
+    r'])'
+    r'(?![' + re.escape(_KINSOKU_START) + r'])'
+)
 
 
 
 
 def find_goodbreak(box, maxw):
-    """Search good break position at or before maxw, returns None
-       (i.e. no good split position possible) otherwise. If 
-       box.width <= maxw then len(box) is returned.
-    """    
-    if (not isinstance(box, TextBox)) or maxw <= 0:
-        # no good split is possible
+    """Search good break position at or before maxw, returns None if no good
+    split position is possible. If box.width <= maxw, len(box) is returned.
+
+    Recognises both Latin word boundaries (spaces) and CJK character
+    boundaries, including Japanese kinsoku rules.
+    """
+    if not isinstance(box, TextBox) or maxw <= 0:
         return None
-
-    if box.width<=maxw:
-        # split is not necessary
+    if box.width <= maxw:
         return len(box)
-
     text = box.text
     if not text:
         return None
 
     measure = box.measure
-    width = 0
-    ws = measure(' ')[0]
-    i = 0
-    for word in text.split(' '):
-        w = measure(word)[0]
-        if width+w <= maxw:
-            i += len(word)+1
-            width += w+ws
-            continue
-        if i==0:
-            return None
-        return min(len(text), i)
-    return None
+    last_fit = None
+    for m in _BREAK_RE.finditer(text):
+        pos = m.start()
+        # For space breaks the trailing space is included in pos but not in
+        # the visual width check (it will be at line-end and irrelevant).
+        check_pos = pos - 1 if pos > 0 and text[pos - 1] == ' ' else pos
+        if measure(text[:check_pos])[0] <= maxw:
+            last_fit = pos
+        else:
+            break   # widths are monotonically non-decreasing
+    return last_fit
 
     
 def find_anybreak(box, maxw):
@@ -89,8 +111,10 @@ def simple_linewrap(boxes, maxw, maxw2=None, wordwrap=True):
             line.append(box)
             w += box.width
 
-            if isinstance(box, TextBox) and ' ' in box.text:
-                last_space = (len(line) - 1, box.text.rindex(' ') + 1)
+            if isinstance(box, TextBox):
+                matches = list(_BREAK_RE.finditer(box.text))
+                if matches:
+                    last_space = (len(line) - 1, matches[-1].start())
             continue
 
         # Try to break box
@@ -217,6 +241,21 @@ def test_01():
         "[[TB('ff gg'), TB('h')], [TB('h ii j')], [TB('j')]]"
 
     
+
+
+def test_02():
+    "CJK line breaking with kinsoku rules"
+    # Break after every CJK character
+    box = TextBox("中文日本語")
+    assert find_goodbreak(box, 0) is None
+    assert find_goodbreak(box, 1) == 1
+    assert find_goodbreak(box, 4) == 4
+    assert find_goodbreak(box, 5) == 5   # fits
+
+    # Kinsoku: no break before '。' (line-start prohibited)
+    # "日本。語": valid breaks only at pos 1 (after '日'), not at pos 2 (before '。')
+    box = TextBox("日本。語")
+    assert find_goodbreak(box, 2) == 1   # pos 2 blocked by kinsoku → fall back to pos 1
 
 
 def profile_00():
