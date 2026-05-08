@@ -11,6 +11,11 @@ try:
     _HB_AVAILABLE = True
 except ImportError:
     _HB_AVAILABLE = False
+    print(
+        'Warning: uharfbuzz not found — complex-script shaping and font '
+        'fallback disabled.  Install with: pip install uharfbuzz',
+        file=sys.stderr,
+    )
 
 
 from ..core.units import mm, cm, pt, inch
