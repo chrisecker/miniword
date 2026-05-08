@@ -121,4 +121,4 @@ cp examples/*.py ~/.config/miniword/plugins
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 â€“ see LICENSE for details. Contact me if you need something else.
+This project is licensed under the GNU General Public License v3.0 - see LICENSE for details. Contact me if you need something else.
