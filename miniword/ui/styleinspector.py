@@ -662,8 +662,8 @@ class StyleInspector(SidePanel):
             # Undo entry: delete the new style (restore_to=None means delete).
             view.add_undo((view._undo_stylesheet, new_name, None, new_style))
             view.document.basestyles.set(new_name, new_style)
-            pi1, pi2 = self.get_parrange()
-            self.model.set_parproperties(pi1, pi2, base=new_name)
+            for pi1, pi2 in self.get_parrange():
+                self.model.set_parproperties(pi1, pi2, base=new_name)
             self._clear_overrides(overrides - {'base'})
 
     def _revert_style(self, overrides):
