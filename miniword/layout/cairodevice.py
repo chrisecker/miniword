@@ -1,4 +1,5 @@
 import sys
+import subprocess
 import wx
 import wx.lib.wxcairo as wxcairo
 try:
@@ -6,6 +7,11 @@ try:
 except ImportError:
     import cairo
 import time
+try:
+    import uharfbuzz as hb
+    _HB_AVAILABLE = True
+except ImportError:
+    _HB_AVAILABLE = False
 
 
 from ..core.units import mm, cm, pt, inch
@@ -23,6 +29,30 @@ def filled(style, defaultstyle=defaultstyle):
     new = defaultstyle.copy()
     new.update(style)
     return new
+
+
+_font_path_cache = {}
+
+def resolve_font_path(family, bold, italic):
+    key = (family, bold, italic)
+    if key in _font_path_cache:
+        return _font_path_cache[key]
+    pattern = family
+    if bold and italic:
+        pattern += ':bold:italic'
+    elif bold:
+        pattern += ':bold'
+    elif italic:
+        pattern += ':italic'
+    try:
+        result = subprocess.run(
+            ['fc-match', pattern, '--format=%{file}'],
+            capture_output=True, text=True, timeout=2)
+        path = result.stdout.strip() or None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        path = None
+    _font_path_cache[key] = path
+    return path
 
 
 def set_font(ctx, style):
@@ -59,6 +89,8 @@ class CairoDevice:
         self._temp_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)
         self._temp_ctx = cairo.Context(self._temp_surface)
         self._temp_ctx.set_font_options(self._make_font_options())
+        self._hb_fonts = {}
+        self._current_style = defaultstyle
         self.reset_blink()
 
     @staticmethod
@@ -70,6 +102,43 @@ class CairoDevice:
 
     def clear_caches(self):
         self._cache.clear()
+        self._hb_fonts.clear()
+
+    def _get_hb_font(self, style):
+        if not _HB_AVAILABLE:
+            return None
+        key = (style['font_family'], style['bold'], style['italic'], style['font_size'])
+        if key in self._hb_fonts:
+            return self._hb_fonts[key]
+        path = resolve_font_path(style['font_family'], style['bold'], style['italic'])
+        font = None
+        if path:
+            try:
+                with open(path, 'rb') as f:
+                    data = f.read()
+                face = hb.Face(hb.Blob(data))
+                font = hb.Font(face)
+                font.scale = (int(style['font_size'] * 64), int(style['font_size'] * 64))
+            except Exception:
+                font = None
+        self._hb_fonts[key] = font
+        return font
+
+    def _shape(self, text, hb_font):
+        buf = hb.Buffer()
+        buf.add_str(text)
+        buf.guess_segment_properties()
+        hb.shape(hb_font, buf)
+        return buf.glyph_infos or [], buf.glyph_positions or []
+
+    def _to_cairo_glyphs(self, infos, positions, x, y):
+        glyphs = []
+        cx, cy = x, y
+        for info, pos in zip(infos, positions):
+            glyphs.append((info.codepoint, cx + pos.x_offset / 64.0, cy - pos.y_offset / 64.0))
+            cx += pos.x_advance / 64.0
+            cy -= pos.y_advance / 64.0
+        return glyphs
 
     def reset_blink(self):
         self._blink_reference_time = time.time()
@@ -121,6 +190,7 @@ class CairoDevice:
         set_font(self._temp_ctx, _style)
         self._current_underline = _style.get('underline', False)
         self._current_bgcolor = _style.get('bgcolor', 'white')
+        self._current_style = _style
 
     def measure(self, text, style):
         key = (text, tuple(sorted(style.items())))
@@ -133,31 +203,35 @@ class CairoDevice:
         _style = filled(style)
         set_font(ctx, _style)
 
-        extents = ctx.text_extents(text)
-        xb, yb, w, h, xa, ya = extents
         fe = ctx.font_extents()
-        ascent  = fe[0]  # distance baseline -> top (positive value)
-        descent = fe[1]  # distance baseline -> bottom (positive value)
-        line_h  = fe[2]  # recommended line height (ascent + descent
-                         # + internal leading)
+        descent = fe[1]
+        line_h  = fe[2]
+
+        hb_font = self._get_hb_font(_style)
+        if hb_font is not None:
+            _, hb_pos = self._shape(text, hb_font)
+            xa = sum(p.x_advance for p in hb_pos) / 64.0
+        else:
+            xa = ctx.text_extents(text)[4]
+
         result = (xa, line_h, descent)
 
         self._cache.set(key, result)
         return result
 
     def measure_parts(self, text, style):
-        """
-        Measure partial text extents in PT.
-        Returns list of cumulative widths for each character.
-        """
-        ctx = self._temp_ctx
+        """Returns list of cumulative advance widths for each character prefix."""
         _style = filled(style)
+        hb_font = self._get_hb_font(_style)
+        if hb_font is not None:
+            widths = []
+            for i in range(1, len(text) + 1):
+                _, hb_pos = self._shape(text[:i], hb_font)
+                widths.append(sum(p.x_advance for p in hb_pos) / 64.0)
+            return widths
+        ctx = self._temp_ctx
         set_font(ctx, _style)
-        widths = []
-        for i in range(1, len(text) + 1):
-            extents = ctx.text_extents(text[:i])
-            widths.append(extents[4])
-        return widths
+        return [ctx.text_extents(text[:i])[4] for i in range(1, len(text) + 1)]
 
     def intersects(self, ctx, rect):
         """
@@ -221,16 +295,20 @@ class CairoDevice:
         line_h  = fe[2]
         descent = fe[1]
 
-        # Measure each string and compute starting x positions
-        positions = []   # (text, tx, advance_width)
+        hb_font = self._get_hb_font(self._current_style)
+
+        runs = []   # (text, tx, xa, infos, hb_pos)
         cur_x = x
         for text in strings:
-            xa = ctx.text_extents(text)[4]
-            positions.append((text, cur_x, xa))
+            if hb_font is not None:
+                infos, hb_pos = self._shape(text, hb_font)
+                xa = sum(p.x_advance for p in hb_pos) / 64.0
+            else:
+                infos, hb_pos = None, None
+                xa = ctx.text_extents(text)[4]
+            runs.append((text, cur_x, xa, infos, hb_pos))
             cur_x += xa + spacing
 
-        # Total span: covers all strings and the inter-string gaps,
-        # but not a trailing gap after the last string.
         total_width = cur_x - spacing - x
 
         # 1. Draw bgcolor as one block
@@ -250,21 +328,29 @@ class CairoDevice:
 
         # 2. Draw all text strings
         baseline_y = self._snap_baseline(ctx, y + line_h)
-        for text, tx, _ in positions:
-            ctx.move_to(tx, baseline_y)
-            ctx.show_text(text)
+        for text, tx, _, infos, hb_pos in runs:
+            if infos is not None:
+                ctx.show_glyphs(self._to_cairo_glyphs(infos, hb_pos, tx, baseline_y))
+            else:
+                ctx.move_to(tx, baseline_y)
+                ctx.show_text(text)
 
         # 3. Draw underline as one continuous line
         if getattr(self, '_current_underline', False):
             self.draw_underline(x, y, total_width, ctx)
 
     def draw_text(self, text, x, y, ctx):
-        extents = ctx.text_extents(text)
-        xb, yb, w, h, xa, ya = extents
-
         fe      = self._temp_ctx.font_extents()
         line_h  = fe[2]
         descent = fe[1]
+
+        hb_font = self._get_hb_font(self._current_style)
+        if hb_font is not None:
+            infos, hb_pos = self._shape(text, hb_font)
+            xa = sum(p.x_advance for p in hb_pos) / 64.0
+        else:
+            infos, hb_pos = None, None
+            xa = ctx.text_extents(text)[4]
 
         bgcolor = getattr(self, '_current_bgcolor', 'white')
         if wx.Colour(bgcolor) != wx.WHITE:
@@ -280,8 +366,13 @@ class CairoDevice:
             ctx.fill()
             ctx.restore()
 
-        ctx.move_to(x, self._snap_baseline(ctx, y + line_h))
-        ctx.show_text(text)
+        baseline_y = self._snap_baseline(ctx, y + line_h)
+        if infos is not None:
+            ctx.show_glyphs(self._to_cairo_glyphs(infos, hb_pos, x, baseline_y))
+        else:
+            ctx.move_to(x, baseline_y)
+            ctx.show_text(text)
+
         if getattr(self, '_current_underline', False):
             self.draw_underline(x, y, xa, ctx)
 
@@ -379,7 +470,7 @@ def test_00():
     app = wx.App(False)
     device = CairoDevice()
     metrics = device.measure('M', defaultstyle)
-    assert metrics == (8.330078125, 11.4990234375, 2.119140625)
+    assert metrics == (8.328125, 11.4990234375, 2.119140625)
 
 
 def test_01():
@@ -456,7 +547,7 @@ def test_02():
 
     device = CairoDevice()
     width, height, depth = device.measure(text, defaultstyle)
-    assert abs(width  - 333.69) < 1e-2
+    assert abs(width  - 333.75) < 1e-2
     assert abs(height -  11.50) < 1e-2
     assert abs(depth  -   2.12) < 1e-2
 
@@ -618,6 +709,40 @@ class TestApp(wx.App):
         frame = TestFrame()
         frame.Show()
         return True
+
+
+def demo_01():
+    """Render ligature text via HarfBuzz to /tmp/demo_harfbuzz.png.
+
+    Visually check that fi/fl/ffi/ffl appear as ligature glyphs,
+    and that bounding boxes match the shaped advance widths.
+    """
+    app = wx.App(False)
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 700, 260)
+    ctx = cairo.Context(surface)
+    ctx.set_source_rgb(1, 1, 1)
+    ctx.paint()
+
+    device = CairoDevice()
+    style = {**defaultstyle, 'font_size': 32}
+    device.set_style(style, ctx)
+
+    samples = [
+        "fi fl ffi ffl",
+        "office difficult affluent",
+        "Albert Einstein",
+    ]
+    y = 10
+    for text in samples:
+        w, h, d = device.measure(text, style)
+        device.draw_rect(10, y, w, h, ctx)
+        device.draw_text(text, 10, y, ctx)
+        print(f"{text!r:30s}  w={w:.1f}  h={h:.1f}  d={d:.1f}")
+        y += h + d + 10
+
+    path = "/tmp/demo_harfbuzz.png"
+    surface.write_to_png(path)
+    print(f"Saved: {path}")
 
 
 def demo_00():
