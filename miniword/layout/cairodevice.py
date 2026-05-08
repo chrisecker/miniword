@@ -32,6 +32,7 @@ def filled(style, defaultstyle=defaultstyle):
 
 
 _font_path_cache = {}
+_fallback_info_cache = {}  # codepoint -> (path, family) | (None, None)
 
 def resolve_font_path(family, bold, italic):
     key = (family, bold, italic)
@@ -53,6 +54,26 @@ def resolve_font_path(family, bold, italic):
         path = None
     _font_path_cache[key] = path
     return path
+
+
+def find_fallback_info(codepoint):
+    if codepoint in _fallback_info_cache:
+        return _fallback_info_cache[codepoint]
+    try:
+        result = subprocess.run(
+            ['fc-match', f':charset={codepoint:04x}', '--format=%{file}\t%{family}'],
+            capture_output=True, text=True, timeout=2)
+        line = result.stdout.strip()
+        if '\t' in line:
+            path, family = line.split('\t', 1)
+            family = family.split(',')[0].strip()
+            info = (path or None, family or None)
+        else:
+            info = (None, None)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        info = (None, None)
+    _fallback_info_cache[codepoint] = info
+    return info
 
 
 def set_font(ctx, style):
@@ -90,6 +111,7 @@ class CairoDevice:
         self._temp_ctx = cairo.Context(self._temp_surface)
         self._temp_ctx.set_font_options(self._make_font_options())
         self._hb_fonts = {}
+        self._fallback_fonts = {}  # (path, size) -> hb.Font
         self._current_style = defaultstyle
         self.reset_blink()
 
@@ -103,6 +125,7 @@ class CairoDevice:
     def clear_caches(self):
         self._cache.clear()
         self._hb_fonts.clear()
+        self._fallback_fonts.clear()
 
     def _get_hb_font(self, style):
         if not _HB_AVAILABLE:
@@ -139,6 +162,90 @@ class CairoDevice:
             cx += pos.x_advance / 64.0
             cy -= pos.y_advance / 64.0
         return glyphs
+
+    def _get_fallback_hb_font(self, path, size):
+        key = (path, size)
+        if key in self._fallback_fonts:
+            return self._fallback_fonts[key]
+        try:
+            with open(path, 'rb') as f:
+                data = f.read()
+            face = hb.Face(hb.Blob(data))
+            font = hb.Font(face)
+            font.scale = (int(size * 64), int(size * 64))
+        except Exception:
+            font = None
+        self._fallback_fonts[key] = font
+        return font
+
+    def _shape_with_fallback(self, text, hb_font, size):
+        """Shape text, replacing .notdef runs with glyphs from fallback fonts.
+
+        Returns [(cairo_family_or_None, infos, positions), ...].
+        cairo_family_or_None is None for the primary font, or the family name
+        string for a fallback that needs a different Cairo font face.
+        """
+        infos, positions = self._shape(text, hb_font)
+        if not any(info.codepoint == 0 for info in infos):
+            return [(None, infos, positions)]
+
+        runs = []   # [family_or_None, [infos], [positions]]
+        n = len(infos)
+        i = 0
+        while i < n:
+            if infos[i].codepoint != 0:
+                j = i + 1
+                while j < n and infos[j].codepoint != 0:
+                    j += 1
+                if runs and runs[-1][0] is None:
+                    runs[-1][1].extend(infos[i:j])
+                    runs[-1][2].extend(positions[i:j])
+                else:
+                    runs.append([None, list(infos[i:j]), list(positions[i:j])])
+                i = j
+            else:
+                j = i + 1
+                while j < n and infos[j].codepoint == 0:
+                    j += 1
+                text_start = infos[i].cluster
+                text_end = infos[j].cluster if j < n else len(text)
+                segment = text[text_start:text_end]
+
+                family = None
+                fb_infos, fb_pos = list(infos[i:j]), list(positions[i:j])
+                if segment:
+                    path, family = find_fallback_info(ord(segment[0]))
+                    if path and family:
+                        fb_font = self._get_fallback_hb_font(path, size)
+                        if fb_font is not None:
+                            fi, fp = self._shape(segment, fb_font)
+                            fb_infos, fb_pos = list(fi), list(fp)
+                        else:
+                            family = None
+                    else:
+                        family = None
+
+                if runs and runs[-1][0] == family:
+                    runs[-1][1].extend(fb_infos)
+                    runs[-1][2].extend(fb_pos)
+                else:
+                    runs.append([family, fb_infos, fb_pos])
+                i = j
+
+        return [(s, tuple(gi), tuple(gp)) for s, gi, gp in runs]
+
+    def _render_runs(self, runs, x, baseline_y, ctx):
+        cur_x = x
+        for family, infos, pos in runs:
+            if family is not None:
+                ctx.save()
+                set_font(ctx, {**self._current_style, 'font_family': family})
+            glyphs = self._to_cairo_glyphs(infos, pos, cur_x, baseline_y)
+            if glyphs:
+                ctx.show_glyphs(glyphs)
+            cur_x += sum(p.x_advance for p in pos) / 64.0
+            if family is not None:
+                ctx.restore()
 
     def reset_blink(self):
         self._blink_reference_time = time.time()
@@ -209,8 +316,8 @@ class CairoDevice:
 
         hb_font = self._get_hb_font(_style)
         if hb_font is not None:
-            _, hb_pos = self._shape(text, hb_font)
-            xa = sum(p.x_advance for p in hb_pos) / 64.0
+            runs = self._shape_with_fallback(text, hb_font, _style['font_size'])
+            xa = sum(sum(p.x_advance for p in pos) for _, _, pos in runs) / 64.0
         else:
             xa = ctx.text_extents(text)[4]
 
@@ -226,8 +333,8 @@ class CairoDevice:
         if hb_font is not None:
             widths = []
             for i in range(1, len(text) + 1):
-                _, hb_pos = self._shape(text[:i], hb_font)
-                widths.append(sum(p.x_advance for p in hb_pos) / 64.0)
+                runs = self._shape_with_fallback(text[:i], hb_font, _style['font_size'])
+                widths.append(sum(sum(p.x_advance for p in pos) for _, _, pos in runs) / 64.0)
             return widths
         ctx = self._temp_ctx
         set_font(ctx, _style)
@@ -296,17 +403,18 @@ class CairoDevice:
         descent = fe[1]
 
         hb_font = self._get_hb_font(self._current_style)
+        size = self._current_style['font_size']
 
-        runs = []   # (text, tx, xa, infos, hb_pos)
+        segments = []   # (text, tx, xa, runs_or_None)
         cur_x = x
         for text in strings:
             if hb_font is not None:
-                infos, hb_pos = self._shape(text, hb_font)
-                xa = sum(p.x_advance for p in hb_pos) / 64.0
+                sruns = self._shape_with_fallback(text, hb_font, size)
+                xa = sum(sum(p.x_advance for p in pos) for _, _, pos in sruns) / 64.0
             else:
-                infos, hb_pos = None, None
+                sruns = None
                 xa = ctx.text_extents(text)[4]
-            runs.append((text, cur_x, xa, infos, hb_pos))
+            segments.append((text, cur_x, xa, sruns))
             cur_x += xa + spacing
 
         total_width = cur_x - spacing - x
@@ -328,9 +436,9 @@ class CairoDevice:
 
         # 2. Draw all text strings
         baseline_y = self._snap_baseline(ctx, y + line_h)
-        for text, tx, _, infos, hb_pos in runs:
-            if infos is not None:
-                ctx.show_glyphs(self._to_cairo_glyphs(infos, hb_pos, tx, baseline_y))
+        for text, tx, _, sruns in segments:
+            if sruns is not None:
+                self._render_runs(sruns, tx, baseline_y, ctx)
             else:
                 ctx.move_to(tx, baseline_y)
                 ctx.show_text(text)
@@ -346,10 +454,10 @@ class CairoDevice:
 
         hb_font = self._get_hb_font(self._current_style)
         if hb_font is not None:
-            infos, hb_pos = self._shape(text, hb_font)
-            xa = sum(p.x_advance for p in hb_pos) / 64.0
+            runs = self._shape_with_fallback(text, hb_font, self._current_style['font_size'])
+            xa = sum(sum(p.x_advance for p in pos) for _, _, pos in runs) / 64.0
         else:
-            infos, hb_pos = None, None
+            runs = None
             xa = ctx.text_extents(text)[4]
 
         bgcolor = getattr(self, '_current_bgcolor', 'white')
@@ -367,8 +475,8 @@ class CairoDevice:
             ctx.restore()
 
         baseline_y = self._snap_baseline(ctx, y + line_h)
-        if infos is not None:
-            ctx.show_glyphs(self._to_cairo_glyphs(infos, hb_pos, x, baseline_y))
+        if runs is not None:
+            self._render_runs(runs, x, baseline_y, ctx)
         else:
             ctx.move_to(x, baseline_y)
             ctx.show_text(text)
@@ -709,6 +817,36 @@ class TestApp(wx.App):
         frame = TestFrame()
         frame.Show()
         return True
+
+
+def demo_02():
+    """Demo: Fallback fonts. Check that CJK and Greek render in /tmp/demo_fallback.png."""
+    app = wx.App(False)
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 700, 300)
+    ctx = cairo.Context(surface)
+    ctx.set_source_rgb(1, 1, 1)
+    ctx.paint()
+
+    device = CairoDevice()
+    style = {**defaultstyle, 'font_size': 24}
+    device.set_style(style, ctx)
+
+    samples = [
+        "Mixed: Hello 中文 World",
+        "Greek: α β γ δ ε",
+        "Latin + CJK: office 会議 fiend",
+    ]
+    y = 20
+    for text in samples:
+        w, h, d = device.measure(text, style)
+        device.draw_rect(10, y, w, h, ctx)
+        device.draw_text(text, 10, y, ctx)
+        print(f"{text!r:35s}  w={w:.1f}")
+        y += h + d + 10
+
+    path = "/tmp/demo_fallback.png"
+    surface.write_to_png(path)
+    print(f"Saved: {path}")
 
 
 def demo_01():
