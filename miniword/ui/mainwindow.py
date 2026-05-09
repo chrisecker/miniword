@@ -559,13 +559,19 @@ class MainFrame(wx.Frame, ViewBase):
         if hasattr(self, 'textview') and self.textview.undocount() > 0:
             dlg = wx.MessageDialog(
                 self,
-                'There are unsaved changes. Close anyway?',
+                'There are unsaved changes.',
                 'Unsaved Changes',
-                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING,
+                wx.YES_NO | wx.CANCEL | wx.YES_DEFAULT | wx.ICON_WARNING,
             )
+            dlg.SetYesNoCancelLabels("Save", "Discard", "Cancel")
             result = dlg.ShowModal()
             dlg.Destroy()
-            if result != wx.ID_YES:
+            if result == wx.ID_YES:
+                self._on_save(event)
+                if self.textview.undocount() > 0:
+                    event.Veto()
+                    return
+            elif result == wx.ID_CANCEL:
                 event.Veto()
                 return
         builder = getattr(getattr(self, 'textview', None), 'builder', None)
