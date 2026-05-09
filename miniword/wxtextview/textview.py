@@ -851,8 +851,7 @@ class TextView(ViewBase, Model):
 
     def set_current_style(self, **properties):
         """Sets the style for the next insert-operation."""
-        style = self.get_current_style()
-        self._current_style = style.update(properties)
+        self.get_current_style().update(properties)
         self.notify_views('current_style_changed')
 
     def clear_current_style(self, *keys):

@@ -118,6 +118,7 @@ class CairoDevice:
     def set_style(self, style, ctx):
         _style = filled(style)
         set_font(ctx, _style)
+        set_font(self._temp_ctx, _style)
         self._current_underline = _style.get('underline', False)
         self._current_bgcolor = _style.get('bgcolor', 'white')
 
@@ -176,9 +177,9 @@ class CairoDevice:
         return True
 
     def draw_underline(self, x, y, width, ctx):
-        fe = ctx.font_extents()
-        line_h  = fe[2]
-        descent = fe[1]
+        fe        = self._temp_ctx.font_extents()
+        line_h    = fe[2]
+        descent   = fe[1]
         ul_y      = y + line_h + descent * 0.3
         thickness = max(0.5, descent * 0.1)
         ctx.rectangle(x, ul_y, width, thickness)
@@ -216,7 +217,7 @@ class CairoDevice:
         if not strings:
             return
 
-        fe = ctx.font_extents()
+        fe      = self._temp_ctx.font_extents()
         line_h  = fe[2]
         descent = fe[1]
 
@@ -258,16 +259,13 @@ class CairoDevice:
             self.draw_underline(x, y, total_width, ctx)
 
     def draw_text(self, text, x, y, ctx):
-        # Cairo draws text from the baseline upward.
-        # If y is the top edge, y_bearing must be added.
         extents = ctx.text_extents(text)
         xb, yb, w, h, xa, ya = extents
 
-        fe = ctx.font_extents()
-        ascent  = fe[0]  # distance baseline -> top (positive value)
-        descent = fe[1]  # distance baseline -> bottom (positive value)
-        line_h  = fe[2]  # recommended line height (ascent + descent
-                         # + internal leading)
+        fe      = self._temp_ctx.font_extents()
+        line_h  = fe[2]
+        descent = fe[1]
+
         bgcolor = getattr(self, '_current_bgcolor', 'white')
         if wx.Colour(bgcolor) != wx.WHITE:
             c = wx.Colour(bgcolor)
