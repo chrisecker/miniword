@@ -885,8 +885,6 @@ class TextView(ViewBase, Model):
 
     def draw_selection(self, painter):
         # note that draw_selection is called by editor
-        if not self.has_focus():
-            return
         for j1, j2 in self.get_selected():
             self.layout.draw_selection(j1, j2, 0, 0, painter)
         
