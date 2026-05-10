@@ -118,6 +118,18 @@ def export_wildcard():
     return _build_wildcard(_export_filters)
 
 
+def saveas_default_ext(filter_index):
+    """Return the default extension for a saveas_wildcard filter index, or None."""
+    exts = ['txl'] + [e[1][0] for e in _export_filters] + [None]
+    return exts[filter_index] if filter_index < len(exts) else None
+
+
+def export_default_ext(filter_index):
+    """Return the default extension for an export_wildcard filter index, or None."""
+    exts = [e[1][0] for e in _export_filters] + [None]
+    return exts[filter_index] if filter_index < len(exts) else None
+
+
 def _find_entry(path, filters):
     import os
     ext = os.path.splitext(path)[1].lstrip('.').lower()

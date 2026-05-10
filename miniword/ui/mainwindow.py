@@ -653,6 +653,10 @@ class MainFrame(wx.Frame, ViewBase):
             if dlg.ShowModal() != wx.ID_OK:
                 return
             path = dlg.GetPath()
+            if not os.path.splitext(path)[1]:
+                default = importexport.export_default_ext(dlg.GetFilterIndex())
+                if default:
+                    path += '.' + default
         fn = importexport.find_export_filter(path)
         if fn is None:
             wx.MessageBox("No export filter for this file type.",
@@ -684,6 +688,10 @@ class MainFrame(wx.Frame, ViewBase):
             if dlg.ShowModal() != wx.ID_OK:
                 return
             path = dlg.GetPath()
+            if not os.path.splitext(path)[1]:
+                default = importexport.saveas_default_ext(dlg.GetFilterIndex())
+                if default:
+                    path += '.' + default
         ext = os.path.splitext(path)[1].lstrip('.').lower()
         self.document.home_format = ext if ext != 'txl' else 'txl'
         self._current_path = path
@@ -754,6 +762,8 @@ class MainFrame(wx.Frame, ViewBase):
             if dlg.ShowModal() != wx.ID_OK:
                 return
             path = dlg.GetPath()
+            if not os.path.splitext(path)[1] and dlg.GetFilterIndex() == 0:
+                path += '.pdf'
         self.textview.export_pdf(path)
 
     def replace_document(self, doc):
