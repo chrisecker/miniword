@@ -104,14 +104,20 @@ def _doc_to_md(doc):
 
 
 def _table_to_md(table):
-    """Render a Table texel as Markdown table lines."""
+    """Render a Table texel as Markdown table lines.
+
+    MD requires exactly one header row. If nheader==0, an empty header row is
+    inserted. If nheader>1, only the first row is treated as header (lossy).
+    """
     from miniword.textmodel.texeltree import get_text
     n_rows, n_cols = table.nrows, table.ncols
     cell_texels = table.childs[1::2]
     grid = [[get_text(cell_texels[r * n_cols + c])
              for c in range(n_cols)]
             for r in range(n_rows)]
-    widths = [max(max(len(grid[r][c]) for r in range(n_rows)), 3)
+    if table.nheader == 0:
+        grid = [[''] * n_cols] + grid
+    widths = [max(max(len(grid[r][c]) for r in range(len(grid))), 3)
               for c in range(n_cols)]
     def fmt(cells):
         return '| ' + ' | '.join(c.ljust(w) for c, w in zip(cells, widths)) + ' |'
@@ -245,12 +251,9 @@ def _insert_text_block(doc, ptype, indent, runs):
 
 def _insert_table_block(doc, grid):
     from miniword.tables.tables import from_strings as mk_table
-    from copy import copy
     tbl_model = doc.textmodel.create_textmodel()
     table = mk_table(grid)
-    table = copy(table)
-    table.header_rows = 1
-    table.break_level = 1
+    table = table.set_nheader(1)
     tbl_model.texel = table
     pos = len(doc.textmodel.get_text())
     doc.textmodel.insert(pos, tbl_model)
@@ -720,6 +723,11 @@ def _check_md(doc):
             if isinstance(elem, (TableTexel, ImageTexel)):
                 if isinstance(elem, ImageTexel):
                     issues.add("images")
+                elif isinstance(elem, TableTexel):
+                    if elem.nheader == 0:
+                        issues.add("tables without header row (empty header added)")
+                    elif elem.nheader > 1:
+                        issues.add("tables with multiple header rows")
                 continue
             style = getattr(elem, 'style', {})
             for key, val in style.items():
@@ -1036,6 +1044,54 @@ def test_17():
     doc.textmodel.texel = grouped([Text('before '), img, Text(' after'), NL])
     warnings = _check_md(doc)
     assert "images" in warnings
+
+
+def test_18():
+    "check_md warns about tables without header row"
+    from miniword.core.document import Document
+    from miniword.tables.tables import from_strings as mk_table
+    from miniword.textmodel.texeltree import grouped, NL
+
+    doc = Document()
+    table = mk_table([['A', 'B'], ['1', '2']])  # nheader=0 by default
+    doc.textmodel.texel = grouped([table, NL])
+    warnings = _check_md(doc)
+    assert any("without header" in w for w in warnings)
+
+
+def test_19():
+    "table with nheader=0 gets empty header row in MD output"
+    from miniword.core.document import Document
+    from miniword.tables.tables import from_strings as mk_table
+    from miniword.textmodel.texeltree import grouped, NL
+
+    doc = Document()
+    table = mk_table([['A', 'B'], ['1', '2']])  # nheader=0
+    doc.textmodel.texel = grouped([table, NL])
+    md = _doc_to_md(doc)
+    lines = [l for l in md.splitlines() if l.startswith('|')]
+    assert lines[0].replace('|', '').strip() == ''   # empty header
+    assert '---' in lines[1]                          # separator
+    assert 'A' in lines[2]                            # first data row
+
+
+def test_20():
+    "table with nheader=1 roundtrips correctly"
+    from miniword.core.document import Document
+    from miniword.tables.tables import from_strings as mk_table
+    from miniword.textmodel.texeltree import grouped, NL
+
+    doc = Document()
+    table = mk_table([['Name', 'Age'], ['Alice', '30']])
+    table = table.set_nheader(1)
+    doc.textmodel.texel = grouped([table, NL])
+    warnings = _check_md(doc)
+    assert not any("header" in w for w in warnings)
+    md = _doc_to_md(doc)
+    lines = [l for l in md.splitlines() if l.startswith('|')]
+    assert 'Name' in lines[0]
+    assert '---' in lines[1]
+    assert 'Alice' in lines[2]
 
 
 if __name__ == '__main__':

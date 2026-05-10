@@ -12,6 +12,31 @@ import sys
 sys.path.insert(0, "./test")
 
 import types
+
+
+def _patch_wx_app():
+    """Replace wx.App with a singleton so tests can call wx.App() repeatedly."""
+    try:
+        import wx
+        _real_App = wx.App
+        _instance = [None]
+
+        class _SingletonApp(_real_App):
+            def __new__(cls, *args, **kwargs):
+                if _instance[0] is None:
+                    _instance[0] = _real_App.__new__(cls)
+                return _instance[0]
+
+            def __init__(self, *args, **kwargs):
+                if not hasattr(self, '_initialized'):
+                    _real_App.__init__(self, *args, **kwargs)
+                    self._initialized = True
+
+        wx.App = _SingletonApp
+    except ImportError:
+        pass
+
+_patch_wx_app()
 import traceback
 try:
     from StringIO import StringIO

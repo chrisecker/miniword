@@ -910,3 +910,58 @@ def demo_01():
         testing.pyshell(l)
 
     app.MainLoop()
+
+
+def test_00():
+    "open MainFrame, type text, verify document content, close"
+    from ..core.document import Document
+    import wx
+
+    app = wx.App()
+    doc = Document()
+    frame = MainFrame(doc)
+    frame.Show()
+    app.Yield()
+
+    view = frame.textview
+    for ch in "Hello":
+        view.type_char(ch)
+    app.Yield()
+
+    text = doc.textmodel.get_text()
+    assert "Hello" in text, repr(text)
+
+    frame.Destroy()
+    app.Yield()
+
+
+def test_01():
+    "cursor inside table installs CursorEditor, outside removes it"
+    from ..core.document import Document
+    from ..tables.tables import empty_table
+    from ..tables.table_editors import CursorEditor
+    import wx
+
+    app = wx.App()
+    doc = Document()
+    frame = MainFrame(doc)
+    frame.Show()
+    app.Yield()
+
+    view = frame.textview
+    table_offset = view.index
+    view.insert_texel(table_offset, empty_table(2, 2))
+    app.Yield()
+
+    # cursor inside table → CursorEditor
+    view.index = table_offset + 1
+    view.update_editor()
+    assert isinstance(view.editor, CursorEditor), type(view.editor)
+
+    # cursor outside table → NullEditor
+    view.index = table_offset + 6  # past the table
+    view.update_editor()
+    assert view.editor.is_null, type(view.editor)
+
+    frame.Destroy()
+    app.Yield()
