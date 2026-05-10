@@ -58,12 +58,22 @@ class OutlinePanel(SidePanel):
     def __init__(self, parent, document, textview):
         SidePanel.__init__(self, parent)
         self._textview   = textview
+        self._document   = document
         self._basestyles = document.basestyles
         self._entries    = []   # [(par_start, wx.TreeItemId)] sorted by par_start
 
         self.add_model(document.textmodel)
         self.add_model(document.basestyles)
         self.create()
+
+    def set_document(self, doc):
+        self.remove_model(self._document.textmodel)
+        self.remove_model(self._document.basestyles)
+        self._document   = doc
+        self._basestyles = doc.basestyles
+        self.add_model(doc.textmodel)
+        self.add_model(doc.basestyles)
+        self.queue_update()
 
     def create(self):
         self._tree = wx.TreeCtrl(self,
