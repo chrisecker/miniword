@@ -213,13 +213,13 @@ if sys.platform == 'win32':
 
         return None, None
 
-    # Start the preload thread immediately when this module is imported on Windows.
-    # cairodevice imports fontfinder at app startup, so the thread gets maximum
-    # lead time before the user opens a document with non-Latin text.
-    _build_font_link_index()
-
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
+def init_preload():
+    """Start background font-index preload. Call once at startup when HarfBuzz is available."""
+    if sys.platform == 'win32':
+        _build_font_link_index()
 
 def resolve_font_path(family, bold, italic):
     """Return the file path for the best matching font, or None."""

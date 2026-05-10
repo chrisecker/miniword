@@ -19,8 +19,11 @@ except ImportError:
 
 
 from ..core.units import mm, cm, pt, inch
-from ..core.fontfinder import resolve_font_path, find_fallback_info
+from ..core.fontfinder import resolve_font_path, find_fallback_info, init_preload
 from ..wxtextview.cache import LRUCache
+
+if _HB_AVAILABLE:
+    init_preload()
 
 
 # Minimal set of properties required for the device to function
