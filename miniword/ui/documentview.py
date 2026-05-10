@@ -27,7 +27,7 @@ class DocumentView(WXTextView):
 
     min_zoom     = 0.2
     max_zoom     = 5.0
-    zoom_step    = 0.1
+    zoom_factor  = 1.15
     default_zoom = 1.0
 
     def __init__(self, parent, document):
@@ -52,6 +52,8 @@ class DocumentView(WXTextView):
         actions[20, True, False]           = 'cycle_list_type'  # Ctrl+T
         actions[116, False, True]          = 'cycle_basestyle'  # Alt+t
         actions[84,  False, True]          = 'cycle_basestyle'  # Shift+Alt+T
+        actions[wx.WXK_NUMPAD_ADD,      True, False] = 'zoom_in'   # Ctrl+Numpad+
+        actions[wx.WXK_NUMPAD_SUBTRACT, True, False] = 'zoom_out'  # Ctrl+Numpad-
         self.actions = actions
         
     def get_image(self, blob_id):
@@ -173,6 +175,10 @@ class DocumentView(WXTextView):
             self.cycle_list_type(ps1, ps2)
         elif action == 'cycle_basestyle':
             self.cycle_basestyle(ps1, ps2, reverse=shift)
+        elif action == 'zoom_in':
+            self.step_zoom(self.zoom_factor)
+        elif action == 'zoom_out':
+            self.step_zoom(1 / self.zoom_factor)
         elif action in ('copy', 'cut', 'paste'):
             getattr(self.editor, action)()
         else:
@@ -395,13 +401,16 @@ class DocumentView(WXTextView):
             squiggle(painter, self.layout, i1, i2, 0, 0, c) 
         
         
-    ### Events 
+    ### Events
+    def step_zoom(self, factor):
+        self.set_zoom(max(self.min_zoom, min(self.max_zoom, self.get_zoom() * factor)))
+
     def on_mousewheel(self, event):
         if not event.ControlDown():
             return event.Skip()  # scroll
         old_scale = self.scale
-        factor = 1.1 if event.GetWheelRotation() > 0 else 1 / 1.1
-        new_zoom = max(0.2, min(5.0, self.zoom * factor))
+        factor = self.zoom_factor if event.GetWheelRotation() > 0 else 1 / self.zoom_factor
+        new_zoom = max(self.min_zoom, min(self.max_zoom, self.zoom * factor))
 
         cw, ch = self.GetClientSize()
         rx, ry = self._scrollrate

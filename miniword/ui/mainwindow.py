@@ -312,8 +312,8 @@ class MainFrame(wx.Frame, ViewBase):
         view_menu.AppendSeparator()
         self._mi_panel = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
         bar.Append(view_menu, "&View")
-        self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1.15),  id=wx.ID_ZOOM_IN)
-        self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1/1.15), id=wx.ID_ZOOM_OUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('zoom_in'),  id=wx.ID_ZOOM_IN)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('zoom_out'), id=wx.ID_ZOOM_OUT)
         self.Bind(wx.EVT_MENU, lambda _: self.textview.set_zoom(self.textview.default_zoom), id=wx.ID_ZOOM_100)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_width(),  id=self._id_zoom_fit_w)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
@@ -470,11 +470,6 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _on_find(self, _):
         self.show_right_panel("search")
-
-    def _zoom_step(self, factor):
-        tv = self.textview
-        new_zoom = max(tv.min_zoom, min(tv.max_zoom, tv.get_zoom() * factor))
-        tv.set_zoom(new_zoom)
 
     def _zoom_fit_width(self):
         layout = self.textview.layout
