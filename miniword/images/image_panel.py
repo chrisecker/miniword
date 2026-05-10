@@ -23,8 +23,9 @@ class ImageInspector(SidePanel):
         self._view = view
         self.add_model(view)
         self.add_model(view.model)
-        self._blob_id      = None
-        self._current_crop = None
+        self._blob_id       = None
+        self._current_crop  = None
+        self._last_image_dir = ''
         self._natural_w    = 1.0
         self._natural_h    = 1.0
         self._updating     = False
@@ -259,12 +260,14 @@ class ImageInspector(SidePanel):
         """Open file dialog; return (blob_id, bytes) or (None, None)."""
         with wx.FileDialog(
             self, "Choose image",
+            defaultDir=self._last_image_dir,
             wildcard="Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
             if dlg.ShowModal() != wx.ID_OK:
                 return None, None
             path = dlg.GetPath()
+        self._last_image_dir = os.path.dirname(path)
         blob_id = os.path.basename(path)
         base, ext = os.path.splitext(blob_id)
         n = 1

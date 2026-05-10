@@ -192,6 +192,7 @@ class _FileDropTarget(wx.FileDropTarget):
 class MainFrame(wx.Frame, ViewBase):
 
     _progress_dlg = None
+    _current_path = None
 
     def __init__(self, document):
         self.document = document
@@ -542,8 +543,7 @@ class MainFrame(wx.Frame, ViewBase):
         event.Skip()
 
     def _update_title(self):
-        path = getattr(self, '_current_path', None)
-        name = os.path.basename(path) if path else "Untitled"
+        name = os.path.basename(self._current_path) if self._current_path else "Untitled"
         dirty = hasattr(self, 'textview') and self.textview.undocount() > 0
         suffix = ' *' if dirty else ''
         self.SetTitle("MiniWord — " + name + suffix)
@@ -646,6 +646,7 @@ class MainFrame(wx.Frame, ViewBase):
         from ..io import importexport
         with wx.FileDialog(
             self, "Export",
+            defaultDir=self._doc_dir(),
             wildcard=importexport.export_wildcard(),
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:
@@ -664,15 +665,19 @@ class MainFrame(wx.Frame, ViewBase):
         # NOTE: _current_path and home_format are NOT updated — pure export
 
     def _on_save(self, event):
-        if not getattr(self, '_current_path', None):
+        if not self._current_path:
             self._on_saveas(event)
             return
         self._do_save(self._current_path)
+
+    def _doc_dir(self):
+        return os.path.dirname(self._current_path) if self._current_path else ''
 
     def _on_saveas(self, event):
         from ..io import importexport
         with wx.FileDialog(
             self, "Save As",
+            defaultDir=self._doc_dir(),
             wildcard=importexport.saveas_wildcard(),
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:
@@ -742,6 +747,7 @@ class MainFrame(wx.Frame, ViewBase):
     def _on_export_pdf(self, event):
         with wx.FileDialog(
             self, "Export as PDF",
+            defaultDir=self._doc_dir(),
             wildcard="PDF files (*.pdf)|*.pdf|All files (*.*)|*.*",
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:
