@@ -548,7 +548,7 @@ class MainFrame(wx.Frame, ViewBase):
         suffix = ' *' if dirty else ''
         self.SetTitle("MiniWord — " + name + suffix)
         if hasattr(self, '_mi_reload'):
-            self._mi_reload.Enable(bool(path))
+            self._mi_reload.Enable(bool(self._current_path))
 
     def _on_close(self, event):
         if hasattr(self, 'textview') and self.textview.undocount() > 0:
