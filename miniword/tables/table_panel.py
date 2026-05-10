@@ -302,8 +302,8 @@ class TablePanel(SidePanel):
             self._border_btns.append(btn)
         sizer.Add(grid_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
-        # --- Section: Rows & Columns ---
-        add_section("Rows & Columns", self, sizer)
+        # --- Section: Rows && Columns ---
+        add_section("Rows && Columns", self, sizer)
         row_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self._btn_row = wx.Button(self, label="Row ▾")
         self._btn_col = wx.Button(self, label="Column ▾")
@@ -312,6 +312,10 @@ class TablePanel(SidePanel):
         row_sizer.Add(self._btn_row, 1, wx.RIGHT, dip(4))
         row_sizer.Add(self._btn_col, 1)
         sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
+
+        self._chk_header = wx.CheckBox(self, label="Header row")
+        self._chk_header.Bind(wx.EVT_CHECKBOX, self._on_header)
+        sizer.Add(self._chk_header, 0, wx.LEFT | wx.TOP, dip(5))
 
         # --- Section: Cell ---
         add_section("Cell", self, sizer)
@@ -332,7 +336,7 @@ class TablePanel(SidePanel):
         sizer.Add(cell_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         self._table_controls = (
-            [self._btn_row, self._btn_col, self._line_style,
+            [self._btn_row, self._btn_col, self._chk_header, self._line_style,
              self._bgcolor_btn, self._valign]
             + self._border_btns
         )
@@ -357,6 +361,7 @@ class TablePanel(SidePanel):
         self._set_table_controls(table is not None)
         if table is None:
             return
+        self._chk_header.SetValue(table.nheader > 0)
         r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
         cells = table.get_cells()
 
@@ -400,6 +405,17 @@ class TablePanel(SidePanel):
         r1, c1 = table.get_coord(i1)
         r2, c2 = table.get_coord(max(i1, i2))
         return min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2)
+
+    def _on_header(self, event):
+        table, offset = self._find_table_texel()
+        if table is None:
+            return
+        new_table = table.set_nheader(1 if event.IsChecked() else 0)
+        if new_table is table:
+            return
+        with self._view.atomic():
+            self._view.remove(offset, offset + length(table))
+            self._view.insert_texel(offset, new_table)
 
     def _apply_to_table(self, fn):
         """Find table, apply fn(table, r1, c1, r2, c2) → new_table, commit via undo."""
