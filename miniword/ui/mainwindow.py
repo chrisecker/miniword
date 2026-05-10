@@ -437,7 +437,7 @@ class MainFrame(wx.Frame, ViewBase):
         name_lbl = wx.StaticText(dlg, label="MiniWord")
         name_lbl.SetFont(name_lbl.GetFont().Bold().Scaled(1.4))
         info_lbl = wx.StaticText(dlg,
-            label=f"Version {ver}\n\nCopyright \u00a9 2025 C. Ecker")
+            label=f"Version {ver}\n\nCopyright \u00a9 2025 C. Ecker\nLicense: LGPL v3")
         ok_btn = wx.Button(dlg, wx.ID_OK, label="OK")
         ok_btn.SetDefault()
 

@@ -42,10 +42,14 @@ class ImageInspector(SidePanel):
         btn_insert.Bind(wx.EVT_BUTTON, self._on_insert)
         sizer.Add(btn_insert, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
-        # --- Replace ---
+        # --- Replace / Export ---
         self.btn_replace = flat_button(self, "Replace Image\u2026", size=(-1, dip(28)))
         self.btn_replace.Bind(wx.EVT_BUTTON, self._on_replace)
         sizer.Add(self.btn_replace, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
+
+        self.btn_export = flat_button(self, "Export Image\u2026", size=(-1, dip(28)))
+        self.btn_export.Bind(wx.EVT_BUTTON, self._on_export)
+        sizer.Add(self.btn_export, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
         # --- Size ---
         add_section("Size", self, sizer)
@@ -104,7 +108,7 @@ class ImageInspector(SidePanel):
     # ------------------------------------------------------------------
 
     def _set_inspector_enabled(self, enabled, has_crop=False):
-        for w in (self.btn_replace, self.txt_size_x, self.txt_size_y,
+        for w in (self.btn_replace, self.btn_export, self.txt_size_x, self.txt_size_y,
                   self.txt_scale_x, self.txt_scale_y,
                   self.chk_proportional, self.btn_crop, self.btn_unset_crop):
             w.Enable(enabled)
@@ -301,6 +305,28 @@ class ImageInspector(SidePanel):
         self._view.document.blobs[blob_id] = data
         self._blob_id = blob_id
         self._notify()
+
+    def _on_export(self, event):
+        if self._blob_id is None:
+            return
+        data = self._view.document.blobs.get(self._blob_id)
+        if data is None:
+            return
+        ext = os.path.splitext(self._blob_id)[1].lower()
+        wildcard = "Image files (*%s)|*%s|All files (*.*)|*.*" % (ext, ext)
+        with wx.FileDialog(
+            self, "Export Image",
+            defaultDir=self._last_image_dir,
+            defaultFile=self._blob_id,
+            wildcard=wildcard,
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+        ) as dlg:
+            if dlg.ShowModal() != wx.ID_OK:
+                return
+            path = dlg.GetPath()
+        self._last_image_dir = os.path.dirname(path)
+        with open(path, 'wb') as f:
+            f.write(data)
 
 
 def demo_00():
