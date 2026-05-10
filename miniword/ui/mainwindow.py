@@ -965,3 +965,39 @@ def test_01():
 
     frame.Destroy()
     app.Yield()
+
+
+def test_02():
+    "rapid key events arrive in correct order"
+    from ..core.document import Document
+    import wx
+
+    app = wx.App()
+    doc = Document()
+    frame = MainFrame(doc)
+    frame.Show()
+    app.Yield()
+
+    class _FakeKeyEvent:
+        def __init__(self, ch):
+            self._ch = ch
+        def GetKeyCode(self):    return ord(self._ch)
+        def GetUnicodeKey(self): return ord(self._ch)
+        def ControlDown(self):   return False
+        def ShiftDown(self):     return False
+        def AltDown(self):       return False
+        def Skip(self):          pass
+
+    view = frame.textview
+    word = "Hello"
+    for ch in word:
+        view.on_char(_FakeKeyEvent(ch))
+        # no Yield between chars — simulates rapid typing
+
+    app.Yield()
+
+    text = doc.textmodel.get_text().rstrip('\n')
+    assert text == word, repr(text)
+
+    frame.Destroy()
+    app.Yield()

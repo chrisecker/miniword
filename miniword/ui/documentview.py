@@ -502,7 +502,7 @@ class DocumentView(WXTextView):
             # wx.CallAfter to ensure that any necessary yields occur
             # asynchronously after the current event cycle.
 
-            self.builder.build_background()
+            wx.CallAfter(self.builder.build_background)
             self.refresh()
 
     @trace
