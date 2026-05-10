@@ -583,7 +583,16 @@ def demo_00():
     frame = wx.Frame(None, title="TablePanel Demo", size=(300, 500))
 
     class _FakeView:
-        def add_view(self, v): pass
+        index    = 0
+        selection = None
+        def add_view(self, v):       pass
+        def insert_texel(self, i, t): pass
+        def remove(self, i1, i2):    pass
+        def atomic(self):
+            from contextlib import contextmanager
+            @contextmanager
+            def _ctx(): yield
+            return _ctx()
 
     TablePanel(frame, view=_FakeView())
     frame.Show()
