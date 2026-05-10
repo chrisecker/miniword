@@ -25,9 +25,10 @@ class DocumentView(WXTextView):
     # auto_installable editors listed in priority order (first match wins)
     editor_registry = [] #CursorEditor, MatrixEditor, ImageSizeEditor]
 
-    min_zoom = 0.2
-    max_zoom = 5.0
-    zoom_step = 0.1
+    min_zoom     = 0.2
+    max_zoom     = 5.0
+    zoom_step    = 0.1
+    default_zoom = 1.0
 
     def __init__(self, parent, document):
         self.document     = document

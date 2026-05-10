@@ -314,7 +314,7 @@ class MainFrame(wx.Frame, ViewBase):
         bar.Append(view_menu, "&View")
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1.15),  id=wx.ID_ZOOM_IN)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_step(1/1.15), id=wx.ID_ZOOM_OUT)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.set_zoom(self.textview._default_zoom), id=wx.ID_ZOOM_100)
+        self.Bind(wx.EVT_MENU, lambda _: self.textview.set_zoom(self.textview.default_zoom), id=wx.ID_ZOOM_100)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_width(),  id=self._id_zoom_fit_w)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
         self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
