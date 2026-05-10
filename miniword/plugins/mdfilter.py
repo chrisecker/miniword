@@ -691,6 +691,7 @@ def _check_md(doc):
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables.tables import Table as TableTexel
+    from miniword.images.images import Image as ImageTexel
 
     _OK_BASES  = {'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
                   'pre', 'list', 'numbered', 'quote'}
@@ -716,7 +717,9 @@ def _check_md(doc):
             if key not in _OK_PAR:
                 issues.add("paragraph attribute '%s'" % key)
         for elem in elems[:-1]:
-            if isinstance(elem, TableTexel):
+            if isinstance(elem, (TableTexel, ImageTexel)):
+                if isinstance(elem, ImageTexel):
+                    issues.add("images")
                 continue
             style = getattr(elem, 'style', {})
             for key, val in style.items():
@@ -1017,6 +1020,22 @@ def test_16():
     qi = bs.index('quote')
     assert bs[qi - 1] == 'blank'
     assert bs[qi + 1] == 'blank'
+
+
+def test_17():
+    "check_md reports images as a loss"
+    import tempfile, os
+    from miniword.core.document import Document
+    from miniword.images.images import Image as ImageTexel
+    from miniword.textmodel.texeltree import grouped, Text, NL
+    from miniword.io.txlio import save, load
+
+    doc = Document()
+    doc.blobs['photo.png'] = b'\x89PNG'
+    img = ImageTexel('photo.png')
+    doc.textmodel.texel = grouped([Text('before '), img, Text(' after'), NL])
+    warnings = _check_md(doc)
+    assert "images" in warnings
 
 
 if __name__ == '__main__':
