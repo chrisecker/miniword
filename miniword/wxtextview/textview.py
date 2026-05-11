@@ -302,7 +302,9 @@ class TextView(ViewBase, Model):
 
     def end_undo_group(self):
         """Flush the collected group as one atomic undo entry."""
-        l = self._undo_groups.pop()        
+        l = self._undo_groups.pop()
+        if not l:
+            return
         n = len(self._undo_groups)
         if n:
             # Append entries to the parent group
