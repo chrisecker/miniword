@@ -8,7 +8,7 @@
 from ..textmodel.texeltree import length, NewLine, get_text, takeout
 from ..wxtextview.builder import BuilderBase
 from ..wxtextview.wxtextview import WXTextView
-from ..wxtextview.boxes import VBox, get_text
+from ..wxtextview.boxes import VBox, get_text, select_i_by_xy, select_i_by_y
 from ..wxtextview import boxes
 from ..wxtextview.rect import Rect
 
@@ -88,6 +88,44 @@ class Layout(VBox):
         return boxes.get_text(self)[:-1]  # strip end marker
 
 
+class TwoPageLayout(Layout):
+    """Two-column layout: pages are arranged in left/right pairs side by side."""
+    page_gap_h = 20  # horizontal gap between the two pages of a pair
+
+    def append_page(self, page):
+        n = len(self.childs)
+        self.childs.append(page)
+        self.length += len(page)
+        if n % 2 == 0:
+            # Left page: starts a new row
+            self.height += self.page_gap + page.height
+            self.width = max(self.width, page.width * 2 + self.page_gap_h)
+
+    def iter_boxes(self, i, x, y):
+        j1 = i
+        row_y = y + self.page_gap
+        for k, child in enumerate(self.childs):
+            j2 = j1 + len(child)
+            if k % 2 == 0:
+                if k > 0:
+                    prev = self.childs[k - 1]
+                    row_y += prev.height + prev.depth + self.page_gap
+                yield j1, j2, x, row_y, child
+            else:
+                left = self.childs[k - 1]
+                yield j1, j2, x + left.width + self.page_gap_h, row_y, child
+            j1 = j2
+
+    def get_index(self, x, y):
+        items = list(self.iter_boxes(0, 0, 0))
+        # Exact hit: click falls within a page's bounds (handles left vs. right)
+        r = select_i_by_xy(x, y, items)
+        if r is not None:
+            return r
+        # Fallback for clicks in margins/gaps between page rows
+        return select_i_by_y(x, y, items)
+
+
 class Builder(BuilderBase):
     """The Builder operates in two phases:
 
@@ -116,10 +154,11 @@ class Builder(BuilderBase):
     nbefore  = 0
     nrest    = 0
     settings = {}  # document settings dict; set by DocumentView
+    layout_class    = Layout
 
     def __init__(self, model, factory):
         self.model   = model
-        self._layout = Layout([], factory.device)
+        self._layout = self.layout_class([], factory.device)
         self.factory = factory
 
     def clear_caches(self):
@@ -221,7 +260,7 @@ class Builder(BuilderBase):
     def rebuild(self):
         """Rebuild the entire layout from i=0; nothing is reused."""
         if DEBUG: print("rebuild")
-        self._layout = Layout([], self.factory.device)
+        self._layout = self.layout_class([], self.factory.device)
         self.start(restartmemo_from_settings(self.settings), 0, ())
 
     def finish(self):
@@ -300,7 +339,7 @@ class Builder(BuilderBase):
             i_rest, pages_rest = self.rest_memo
             i_rest += delta
 
-        self._layout = Layout(pages_before, self.factory.device)
+        self._layout = self.layout_class(pages_before, self.factory.device)
         self.start(state, i_rest, pages_rest)
 
     def can_finish(self, state):
@@ -405,6 +444,65 @@ def demo_00():
         l.update(globals())
         testing.pyshell(l)
     app.MainLoop()
+
+
+def test_00():
+    "TwoPageLayout: geometry, iter_boxes, rebuild"
+    from ..core.styles import testsheet
+
+    device  = CairoDevice()
+    factory = Factory(testsheet, device=device)
+
+    # Build a two-page layout from scratch
+    layout = TwoPageLayout([], device)
+    assert layout.height == 0
+    assert layout.width  == 0
+
+    # Fake page with known dimensions
+    class FakePage:
+        width = 100; height = 200; depth = 0; length = 10
+        restartmemo = None
+        def __len__(self): return self.length
+        def get_index(self, x, y): return 0
+
+    p0, p1, p2, p3, p4 = [FakePage() for _ in range(5)]
+
+    layout.append_page(p0)
+    assert layout.height == layout.page_gap + 200    # one row
+    assert layout.width  == 100 * 2 + layout.page_gap_h
+
+    layout.append_page(p1)
+    h_after_1 = layout.height
+    assert h_after_1 == layout.page_gap + 200        # still one row
+    assert layout.length == 20
+
+    layout.append_page(p2)
+    assert layout.height == 2 * (layout.page_gap + 200)   # two rows
+
+    layout.append_page(p3)
+    assert layout.height == 2 * (layout.page_gap + 200)   # still two rows
+
+    # iter_boxes: check x/y coordinates
+    boxes = list(layout.iter_boxes(0, 0, 0))
+    assert boxes[0][2] == 0                               # p0: x=0 (left)
+    assert boxes[1][2] == 100 + layout.page_gap_h         # p1: x=left_width+gap
+    assert boxes[0][3] == boxes[1][3]                     # p0, p1: same y (same row)
+    assert boxes[2][3] > boxes[0][3]                     # p2: below p0/p1
+
+    # Reconstruction from pages_before should give same geometry
+    layout2 = TwoPageLayout([p0, p1, p2, p3], device)
+    boxes2 = list(layout2.iter_boxes(0, 0, 0))
+    assert len(boxes2) == 4
+    assert boxes2[0][3] == boxes[0][3]
+    assert boxes2[2][3] == boxes[2][3]
+
+    # get_index: clicking on right page must return an index from page 1
+    gap = layout.page_gap
+    p1_x = 100 + layout.page_gap_h  # x-start of right page
+    idx_left  = layout.get_index(50,        gap + 100)  # mid of left page
+    idx_right = layout.get_index(p1_x + 50, gap + 100)  # mid of right page
+    assert idx_left  < 10   # within p0 (length=10)
+    assert idx_right >= 10  # within p1 (starts at offset 10)
 
 
 def test_01():

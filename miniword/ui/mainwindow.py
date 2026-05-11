@@ -311,7 +311,8 @@ class MainFrame(wx.Frame, ViewBase):
         view_menu.Append(self._id_zoom_fit_w, "Fit to &Text Width\tCtrl+1")
         view_menu.Append(self._id_zoom_fit_p, "Fit to &Page\tCtrl+2")
         view_menu.AppendSeparator()
-        self._mi_panel = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
+        self._mi_panel     = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
+        self._mi_two_page  = view_menu.AppendCheckItem(wx.ID_ANY, "Two-page view")
         bar.Append(view_menu, "&View")
         self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('zoom_in'),  id=wx.ID_ZOOM_IN)
         self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('zoom_out'), id=wx.ID_ZOOM_OUT)
@@ -319,6 +320,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_width(),  id=self._id_zoom_fit_w)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
         self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
+        self.Bind(wx.EVT_MENU, self._on_two_page, self._mi_two_page)
 
         help_menu = wx.Menu()
         help_menu.Append(wx.ID_ABOUT, "&About MiniWord…")
@@ -468,6 +470,9 @@ class MainFrame(wx.Frame, ViewBase):
             self._inspector_book.Hide()
             self._strip.deactivate()
         self._layout()
+
+    def _on_two_page(self, _):
+        self.textview.set_two_page(self._mi_two_page.IsChecked())
 
     def _on_find(self, _):
         self.show_right_panel("search")

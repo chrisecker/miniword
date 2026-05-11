@@ -579,6 +579,11 @@ class DocumentView(WXTextView):
         self.ensure_index(index+1)
         WXTextView.set_index(self, index, extend, update)
 
+    def set_two_page(self, enabled):
+        from ..layout.builder import TwoPageLayout, Layout as SingleLayout
+        self.builder.layout_class = TwoPageLayout if enabled else SingleLayout
+        self.rebuild()
+
     def iter_rows(self):
         # TODO: move this to table editor
         from ..tables import TableBox, TableNavRow
@@ -599,26 +604,27 @@ class DocumentView(WXTextView):
                     yield r1, r2, rx, ry, row
 
     def move_down(self, shift):
-        index  = self.index
-        layout = self.layout
-        x, y   = layout.get_rect(index, 0, 0).items()[:2]
+        index = self.index
+        x, y  = self.layout.get_rect(index, 0, 0).items()[:2]
+        cur_rx = None
         for r1, r2, rx, ry, row in self.iter_rows():
-            if ry > y:
-                i = row.get_index(x - rx, row.height)
+            if cur_rx is not None:
+                i = row.get_index(x - cur_rx, row.height)
                 return self.set_index(r1 + i, shift)
+            if r1 <= index < r2 and ry <= y < ry + row.height + row.depth:
+                cur_rx = rx
 
     def move_up(self, shift):
-        index  = self.index
-        layout = self.layout
-        x, y   = layout.get_rect(index, 0, 0).items()[:2]
-        prev   = None
+        index = self.index
+        x, y  = self.layout.get_rect(index, 0, 0).items()[:2]
+        prev  = None
         for r1, r2, rx, ry, row in self.iter_rows():
-            if ry + row.height + row.depth > y:
-                if not prev:
+            if r1 <= index < r2 and ry <= y < ry + row.height + row.depth:
+                if prev is None:
                     return
-                r1, r2, rx, ry, row = prev
-                i = row.get_index(x - rx, row.height)
-                return self.set_index(r1 + i, shift)
+                pr1, pr2, prx, pry, prow = prev
+                i = prow.get_index(x - rx, prow.height)
+                return self.set_index(pr1 + i, shift)
             prev = r1, r2, rx, ry, row
 
     def move_page_down(self, shift):

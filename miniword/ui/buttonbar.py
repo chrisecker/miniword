@@ -42,7 +42,6 @@ class ButtonBar(wx.Panel):
 
         self.buttons[name] = btn
         self.sizer.Add(btn, 1, wx.EXPAND)
-        self.Layout()
 
     def _make_bitmap(self, svg_name):
         col = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT)
