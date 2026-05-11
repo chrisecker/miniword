@@ -520,8 +520,10 @@ class TextView(ViewBase, Model):
         self.notify_views('maxw_changed')
 
     def insert_newline(self, index, style, parstyle):
+        indent = self.model.get_indent(index)
         tmp = self._TextModel('\n', **style)
         tmp.set_parstyle(0, parstyle)
+        tmp.set_indent(0, indent)
         self.insert(index, tmp)
 
     def compute_index(self, x, y):
