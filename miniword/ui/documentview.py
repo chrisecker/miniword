@@ -603,58 +603,8 @@ class DocumentView(WXTextView):
                 else:
                     yield r1, r2, rx, ry, row
 
-    def find_cell(self, index, y):
-        """Return (ci1, ci2, cx, cy, cell) for the table cell containing index, or None."""
-        from ..tables import TableBox
-        for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
-            if not (p1 <= index < p2):
-                continue
-            for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
-                if not (r1 <= index < r2):
-                    continue
-                for ci1, ci2, cx, cy, child in row.iter_boxes(r1, rx, ry):
-                    if not isinstance(child, TableBox):
-                        continue
-                    tcy = cy
-                    for tr in range(child.n_rows):
-                        next_tcy = tcy + child.row_heights[tr]
-                        if tcy <= y < next_tcy or tr == child.n_rows - 1:
-                            for cell_i1, cell_i2, cell_x, cell_y, cell in child.iter_boxes(ci1, cx, tcy):
-                                if cell_i1 <= index < cell_i2:
-                                    return cell_i1, cell_i2, cell_x, cell_y, cell
-                            return None
-                        tcy = next_tcy
-        return None
-
-    def find_next_cell_line(self, index, y):
-        """Return next line row-tuple within the same cell, or None."""
-        result = self.find_cell(index, y)
-        if result is None:
-            return None
-        cell_i1, cell_i2, cell_x, cell_y, cell = result
-        found = False
-        for lr1, lr2, lrx, lry, line in cell.iter_boxes(cell_i1, cell_x, cell_y):
-            if found:
-                return lr1, lr2, lrx, lry, line
-            if lr1 <= index < lr2:
-                found = True
-        return None
-
-    def find_prev_cell_line(self, index, y):
-        """Return previous line row-tuple within the same cell, or None."""
-        result = self.find_cell(index, y)
-        if result is None:
-            return None
-        cell_i1, cell_i2, cell_x, cell_y, cell = result
-        prev = None
-        for lr1, lr2, lrx, lry, line in cell.iter_boxes(cell_i1, cell_x, cell_y):
-            if lr1 <= index < lr2:
-                return prev
-            prev = lr1, lr2, lrx, lry, line
-        return None
-
     def find_row(self, index):
-        from ..tables import TableBox, TableNavRow
+        from ..tables import TableBox
         _, y = self.layout.get_rect(index, 0, 0).items()[:2]
         for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
             if not (p1 <= index < p2):
@@ -662,66 +612,97 @@ class DocumentView(WXTextView):
             for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
                 if not (r1 <= index < r2):
                     continue
+                in_table = False
                 for ci1, ci2, cx, cy, child in row.iter_boxes(r1, rx, ry):
-                    if isinstance(child, TableBox):
-                        tcy = cy
-                        for tr in range(child.n_rows):
-                            next_tcy = tcy + child.row_heights[tr]
-                            if tcy <= y < next_tcy or tr == child.n_rows - 1:
-                                return r1, r2, cx, tcy, TableNavRow(child, tr)
-                            tcy = next_tcy
-                return r1, r2, rx, ry, row
+                    if not isinstance(child, TableBox):
+                        continue
+                    in_table = True
+                    tcy = cy
+                    for tr in range(child.n_rows):
+                        next_tcy = tcy + child.row_heights[tr]
+                        if tcy <= y < next_tcy or tr == child.n_rows - 1:
+                            for cell_i1, cell_i2, cell_x, cell_y, cell in child.iter_boxes(ci1, cx, tcy):
+                                if not (cell_i1 <= index < cell_i2):
+                                    continue
+                                prev_line = None
+                                for lr1, lr2, lrx, lry, line in cell.iter_boxes(cell_i1, cell_x, cell_y):
+                                    if lr1 <= index < lr2:
+                                        return lr1, lr2, lrx, lry, line
+                                    if lr2 > index:
+                                        break
+                                    prev_line = lr1, lr2, lrx, lry, line
+                                if prev_line:
+                                    return prev_line
+                            return None  # separator within table, not in any cell line
+                        tcy = next_tcy
+                if not in_table:
+                    return r1, r2, rx, ry, row
         return None
 
     def prev_row(self, r1, r2, rx, ry, row):
-        from ..tables import TableNavRow
-        if isinstance(row, TableNavRow):
-            tb, tr = row._table, row._r
-            if tr > 0:
-                return r1, r2, rx, ry - tb.row_heights[tr - 1], TableNavRow(tb, tr - 1)
-            before_i = r1 - 1
-        else:
-            before_i = r1 - 1
-        return None if before_i < 0 else self.find_row(before_i)
+        before_i = r1 - 1
+        if before_i < 0:
+            return None
+        result = self.find_row(before_i)
+        # Separator position returns None; step back one more to exit the separator
+        if result is None and before_i > 0:
+            result = self.find_row(before_i - 1)
+        return result
 
     def next_row(self, r1, r2, rx, ry, row):
-        from ..tables import TableNavRow
-        if isinstance(row, TableNavRow):
-            tb, tr = row._table, row._r
-            if tr + 1 < tb.n_rows:
-                return r1, r2, rx, ry + tb.row_heights[tr], TableNavRow(tb, tr + 1)
-            after_i = r2
-        else:
-            after_i = r2
-        return None if after_i >= length(self.model.texel) else self.find_row(after_i)
+        n = length(self.model.texel)
+        after_i = r2
+        if after_i >= n:
+            return None
+        result = self.find_row(after_i)
+        # Separator maps back to same row; step forward one to exit the separator
+        if result is not None and result[0] == r1 and after_i + 1 < n:
+            result = self.find_row(after_i + 1)
+        return result
+
+    def _best_in_rows(self, candidates, x):
+        best_i, best_dist = None, float('inf')
+        for r1, r2, rx, ry, row in candidates:
+            i = r1 + row.get_index(x - rx, row.height)
+            cx = self.layout.get_rect(i, 0, 0).items()[0]
+            dist = abs(cx - x)
+            if dist < best_dist:
+                best_dist, best_i = dist, i
+        return best_i
 
     def move_down(self, shift):
         index = self.index
-        x, y  = self.layout.get_rect(index, 0, 0).items()[:2]
-        nxt = self.find_next_cell_line(index, y)
-        if nxt is None:
-            cur = self.find_row(index)
-            if cur is None:
-                return
-            nxt = self.next_row(*cur)
+        x, _  = self.layout.get_rect(index, 0, 0).items()[:2]
+        cur = self.find_row(index)
+        if cur is None:
+            return
+        nxt = self.next_row(*cur)
         if nxt is None:
             return
-        r1, r2, rx, ry, row = nxt
-        self.set_index(r1 + row.get_index(x - rx, row.height), shift)
+        baseline = nxt[3] + nxt[4].height
+        candidates = [nxt]
+        nxt2 = self.next_row(*nxt)
+        while nxt2 is not None and nxt2[3] + nxt2[4].height == baseline:
+            candidates.append(nxt2)
+            nxt2 = self.next_row(*nxt2)
+        self.set_index(self._best_in_rows(candidates, x), shift)
 
     def move_up(self, shift):
         index = self.index
-        x, y  = self.layout.get_rect(index, 0, 0).items()[:2]
-        prv = self.find_prev_cell_line(index, y)
-        if prv is None:
-            cur = self.find_row(index)
-            if cur is None:
-                return
-            prv = self.prev_row(*cur)
+        x, _  = self.layout.get_rect(index, 0, 0).items()[:2]
+        cur = self.find_row(index)
+        if cur is None:
+            return
+        prv = self.prev_row(*cur)
         if prv is None:
             return
-        r1, r2, rx, ry, row = prv
-        self.set_index(r1 + row.get_index(x - rx, row.height), shift)
+        baseline = prv[3] + prv[4].height
+        candidates = [prv]
+        prv2 = self.prev_row(*prv)
+        while prv2 is not None and prv2[3] + prv2[4].height == baseline:
+            candidates.append(prv2)
+            prv2 = self.prev_row(*prv2)
+        self.set_index(self._best_in_rows(candidates, x), shift)
 
     def move_page_down(self, shift):
         index    = self.index
