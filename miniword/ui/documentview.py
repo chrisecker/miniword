@@ -9,6 +9,8 @@ from ..core.texels import BR
 from ..textmodel.texeltree import iter_childs, grouped, Group, \
     provides_childs, length
 from ..core.utils import find_texel, transform, get_path, updated
+from ..wxtextview.editing_modes import text_handler
+from ..wxtextview.textview import default_handler
 
 from contextlib import contextmanager
 
@@ -16,8 +18,52 @@ import wx
 
 
 
+def docview_handler(view, action, shift, ctx):
+    i = ctx.index
+    style = ctx.style
+    model = ctx.model
+    s1 = ctx.s1
+    s2 = ctx.s2
+    ps1, ps2 = view.expand_lines(s1, s2)
+    if action == 'insert_newline' and shift:
+        view.insert_texel(i, BR(style))
+    elif action == 'undo' and shift:
+        view.redo()
+    elif action == 'move_down':
+        view.move_down(shift)
+    elif action == 'move_up':
+        view.move_up(shift)
+    elif action == 'move_page_down':
+        view.move_page_down(shift)
+    elif action == 'move_page_up':
+        view.move_page_up(shift)
+    elif action == 'move_document_end':
+        view.set_index(len(self.layout) - 1, shift)
+    elif action == 'indent_par':
+        view.indent_par(1, ps1, ps2)
+    elif action == 'dedent_par':
+        view.indent_par(-1, ps1, ps2)
+    elif action == 'move_par_up':
+        view.swap_paragraph(-1)
+    elif action == 'move_par_down':
+        view.swap_paragraph(1)
+    elif action == 'cycle_list_type':
+        view.cycle_list_type(ps1, ps2)
+    elif action == 'cycle_basestyle':
+        view.cycle_basestyle(ps1, ps2, reverse=shift)
+    elif action == 'zoom_in':
+        view.step_zoom(view.zoom_factor)
+    elif action == 'zoom_out':
+        view.step_zoom(1 / view.zoom_factor)
+    elif action in ('copy', 'cut', 'paste'):
+        getattr(view.editor, action)()
+    else:
+        return False
+    return True
 
 class DocumentView(WXTextView):
+    handlers = [docview_handler, text_handler, default_handler]
+
     highlights = []  # list of (i1, i2) or (i1, i2, color)
     squiggles  = []  # list of (i1, i2) or (i1, i2, color)
 
@@ -140,50 +186,6 @@ class DocumentView(WXTextView):
         self.add_undo(info)
     
     ### Actions
-    def handle_action(self, action, shift=False):
-        i = self.index
-        style = self.model.get_style(i)
-        model = self.model
-        if self.has_selection():
-            s1, s2 = sorted(self.selection)
-        else:
-            s1 = s2 = i
-        ps1, ps2 = self.expand_lines(s1, s2)
-        if action == 'insert_newline' and shift:
-            self.insert_texel(i, BR(style))
-        elif action == 'undo' and shift:
-            self.redo()
-        elif action == 'move_down':
-            self.move_down(shift)
-        elif action == 'move_up':
-            self.move_up(shift)
-        elif action == 'move_page_down':
-            self.move_page_down(shift)
-        elif action == 'move_page_up':
-            self.move_page_up(shift)
-        elif action == 'move_document_end':
-            self.set_index(len(self.layout) - 1, shift)
-        elif action == 'indent_par':
-            self.indent_par(1, ps1, ps2)
-        elif action == 'dedent_par':
-            self.indent_par(-1, ps1, ps2)
-        elif action == 'move_par_up':
-            self.swap_paragraph(-1)
-        elif action == 'move_par_down':
-            self.swap_paragraph(1)
-        elif action == 'cycle_list_type':
-            self.cycle_list_type(ps1, ps2)
-        elif action == 'cycle_basestyle':
-            self.cycle_basestyle(ps1, ps2, reverse=shift)
-        elif action == 'zoom_in':
-            self.step_zoom(self.zoom_factor)
-        elif action == 'zoom_out':
-            self.step_zoom(1 / self.zoom_factor)
-        elif action in ('copy', 'cut', 'paste'):
-            getattr(self.editor, action)()
-        else:
-            return WXTextView.handle_action(self, action, shift)
-    
     def indent_par(self, direction, i1, i2):
         model = self.model
         if direction > 0:

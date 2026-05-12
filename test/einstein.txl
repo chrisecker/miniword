@@ -3,21 +3,22 @@
 "h2" = {bold, color="red", font_size=16, name="Heading 2", role="h2"}
 "h3" = {bold, font_size=14, name="Heading 3", role="h3"}
 "h4" = {bold, name="Heading 4", role="h4"}
+"style0" = {alignment="justify", first_line_indent=17.007874015748033, name="Body", space_after=14.173228346456694}
 
 [document]
 T('Albert Einstein')
 NL({alignment="center", base="h1", space_after=14.173228346456694})
 T('Albert Einstein was a German-born theoretical physicist who developed the theory of relativity, one of the two pillars of modern physics (alongside quantum mechanics). His work is also known for its influence on the philosophy of science. He is best known to the general public for his mass–energy equivalence formula E = mc^2, which has been dubbed "the world\'s most famous equation". He received the 1921 Nobel Prize in Physics "for his services to theoretical physics, and especially for his discovery of the law of the photoelectric effect", a pivotal step in the development of quantum theory.')
-NL
+NL({base="style0"})
 T('Near the beginning of his career, Einstein thought that Newtonian mechanics was no longer enough to reconcile the laws of classical mechanics with the laws of the electromagnetic field. This led him to develop his special theory of relativity during his time at the Swiss Patent Office in Bern (1902–1909). He subsequently realized that the principle of relativity could be extended to gravitational fields, and published a paper on general relativity in 1916 introducing his theory of gravitation. He continued to deal with problems of statistical mechanics and quantum theory, which led to his explanations of particle theory and the motion of molecules. He also investigated the thermal properties of light and the quantum theory of radiation, the basis of laser, which laid the foundation of the photon theory of light. In 1917, he applied the general theory of relativity to model the structure of the universe.')
-NL
+NL({base="style0", first_line_indent=28.34645669291339, space_after=14.173228346456694})
 T('Einstein moved to Switzerland in 1895 and renounced his German citizenship in 1896. After being stateless for more than five years, he acquired Swiss citizenship in 1901, which he kept for the rest of his life. Except for one year in Prague, he lived in Switzerland between 1895 and 1914.')
-NL
+NL({base="style0", first_line_indent=28.34645669291339, space_after=14.173228346456694})
 T('He received his academic diploma from the Swiss federal polytechnic school (later the Eidgenössische Technische Hochschule, ETH) in Zürich in 1900. Between 1902 and 1909 he was employed in Bern as a patent examiner at the Federal Office for Intellectual Property, the patent office. In 1905, called his annus mirabilis (miracle year), he published four groundbreaking papers, which attracted the attention of the academic world. That year, at the age of 26, he was awarded a Ph.D. by the University of Zurich.')
-NL
+NL({base="style0", first_line_indent=28.34645669291339, space_after=14.173228346456694})
 T('He taught theoretical physics for one year (1908/09) at the University of Bern, for two years (1909–11) at the University of Zurich, and after one year at the Charles University in Prague he returned to his alma mater ETH Zurich between 1912 and 1914, before he left for Berlin, where he was elected to the Prussian Academy of Sciences.')
-NL
+NL({base="style0", first_line_indent=28.34645669291339, space_after=14.173228346456694})
 T('In 1933, while Einstein was visiting the United States, Adolf Hitler came to power. Because of his Jewish background, Einstein did not return to Germany. He settled in the United States and became an American citizen in 1940. On the eve of World War II, he endorsed a letter to President Franklin D. Roosevelt alerting FDR to the potential development of "extremely powerful bombs of a new type" and recommending that the US begin similar research. This eventually led to the Manhattan Project. Einstein supported the Allies, but he generally denounced the idea of using nuclear fission as a weapon. He signed the Russell–Einstein Manifesto with British philosopher Bertrand Russell, which highlighted the danger of nuclear weapons. He was affiliated with the Institute for Advanced Study in Princeton, New Jersey, until his death in 1955.')
-NL
+NL({base="style0", first_line_indent=28.34645669291339, space_after=14.173228346456694})
 T('He published more than 300 scientific papers and more than 150 non-scientific works. His intellectual achievements and originality have made the word "Einstein" synonymous with "genius". Eugene Wigner compared him to his contemporaries, writing that "Einstein\'s understanding was deeper even than Jancsi von Neumann\'s. His mind was both more penetrating and more original".')
-ENDMARK
+ENDMARK({base="style0", first_line_indent=28.34645669291339, space_after=14.173228346456694})

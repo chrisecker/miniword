@@ -326,6 +326,30 @@ class MatrixEditor(TableEditorBase):
         result.texel = from_cells(sub_grid)
         self.docview.to_clipboard(result)
 
+    def handle_action(self, action, shift, ctx):
+        i = ctx.index
+        texel = self.texel
+        row, col = texel.get_coord(i-self.i1)
+        if action == 'move_up':
+            if row > 0:
+                row -= 1
+        elif action == 'move_down':
+            if row < texel.nrows-1:
+                row += 1
+        elif action == 'move_left':
+            if col > 0:
+                col -= 1
+        elif action == 'move_right':
+            if col < texel.ncols-1:
+                col += 1
+        else:
+            return False
+        cells = texel.get_cells()        
+        i = self.i1+cells[row][col].i1
+        self.docview.set_index(i, shift)
+        return True
+        
+
 
 ### Register Editors
 

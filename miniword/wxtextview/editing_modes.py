@@ -17,6 +17,7 @@ def text_handler(view, action, shift, ctx):
     through to the next handler.
     """
     if action == 'move_up':
+        asdsad
         rect = ctx.layout.get_rect(ctx.index, 0, 0)
         i = ctx.layout.get_index(ctx.x, rect.y1 - 1)
         if i is not None:
@@ -38,6 +39,7 @@ def code_handler(view, action, shift, ctx):
     (leading-space insertion). All other actions fall through.
     """
     if action == 'move_up':
+        asdsa
         view.move_cursor_to(ctx.row - 1, ctx.col, shift)
         return True
     elif action == 'move_down':
