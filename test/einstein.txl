@@ -1,5 +1,4 @@
 [basestyles]
-"normal" = {alignment="justify", first_line_indent=17.007874015748033, name="Normal", space_after=14.173228346456694}
 "h1" = {bold, font_size=18, name="Heading 1", page_break_before, role="h1"}
 "h2" = {bold, color="red", font_size=16, name="Heading 2", role="h2"}
 "h3" = {bold, font_size=14, name="Heading 3", role="h3"}
