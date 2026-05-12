@@ -166,19 +166,19 @@ class Builder(BuilderBase):
             return
         try:
             page = next(self.generator)
-            self._layout.append_page(page)
             layout = self._layout
             rest_i, rest = self.rest_memo
+            k2 = len(layout)  # position before appending = start of new page
+            state = page.restartmemo
+            if state is not None and rest and k2 == rest_i:
+                if self.can_finish(state):
+                    return self.finish()
+            layout.append_page(page)
             k2 = len(layout)
             while rest_i < k2 and rest:
                 _ = rest.pop(0)
                 rest_i += len(_)
             self.rest_memo = rest_i, rest
-
-            state  = page.restartmemo
-            if state is not None:
-                if self.can_finish(state):
-                    return self.finish()
         except StopIteration:
             return self.finish()
 
@@ -325,27 +325,19 @@ class Builder(BuilderBase):
         if old_restartmemo is None:
             return False
 
-        # Condition 2: page must start at the correct position
-        if k2 != rest_i:
-            return False
-
-        # Condition 3: RestartMemo must have the same number of rows.
-        # (Simple and fast, but not sufficient in the general case.)
+        # Condition 2: RestartMemo must have the same number of rows.
         n1 = len(old_restartmemo.rows)
         n2 = len(state.rows)
         if n1 != n2:
             return False
 
-        # Condition 4: RestartMemo must have the same length
-        # (sufficient in the simple model here, but insufficient in
-        # general.)
+        # Condition 3: RestartMemo must have the same length.
         n1 = old_restartmemo.get_length()
         n2 = state.get_length()
         if n1 != n2:
             return False
 
-        # Condition 5: numbered-list counter state must match so that
-        # reused rest pages carry the correct counter values.
+        # Condition 4: numbered-list counter state must match.
         if old_restartmemo.counters != state.counters:
             return False
 
@@ -450,9 +442,39 @@ def test_02():
     info = p.restartmemo
     assert info is not None
 
+    # build from page 3 on
     newpages = list(generate_pages(xtexel, i1, info, factory))
     assert len(newpages) > 0
 
+def test_03():
+    "relayout: abort condition reached after page 1"
+    from einstein import get_einstein_model
+    from ..core.styles import testsheet
+
+    model   = get_einstein_model()
+    factory = Factory(testsheet)
+    builder = Builder(model + model, factory)
+    builder.settings = {
+        'paper':         'custom',
+        'paper_width':   100,
+        'paper_height':  20,
+        'margin_top':    1,
+        'margin_right':  1,
+        'margin_bottom': 1,
+        'margin_left':   1,
+    }
+    builder.rebuild()
+    builder.buildto_finish()
+    n_pages = len(builder._layout.childs)
+    assert n_pages >= 2, "Need multiple pages for this test"
+
+    builder.rebuild_range(0, 1, delta=0)  # simulate change of first char
+    builder.buildto_finish()
+    nbefore, n_rebuilt, nrest = builder.get_updatestats()
+    assert nbefore == 0
+    assert n_rebuilt == 1
+    assert nrest == n_pages - 1
+    
 
 def demo_01():
     global DEBUG; DEBUG = True
