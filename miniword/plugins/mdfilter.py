@@ -61,7 +61,7 @@ def _doc_to_md(doc):
         ptype  = ps.get('paragraph_type', 'normal')
         indent = nl.indent
 
-        inline = _elems_to_inline(content)
+        inline = _elems_to_inline(content, doc.blobs)
         if not inline.strip():
             continue  # empty paragraph — skip
 
@@ -128,11 +128,20 @@ def _table_to_md(table):
     return lines
 
 
-def _elems_to_inline(elems):
+def _elems_to_inline(elems, blobs=None):
     """Convert a list of leaf texels (excluding the NL) to Markdown inline."""
     from miniword.textmodel.texeltree import get_text
+    from miniword.images.images import Image as ImageTexel
     segments = []
     for elem in elems:
+        if isinstance(elem, ImageTexel):
+            data = (blobs or {}).get(elem.blob_id, b'')
+            if data:
+                ext  = os.path.splitext(elem.blob_id)[1].lower()
+                mime = _IMG_MIME.get(ext, 'image/png')
+                b64  = base64.b64encode(data).decode('ascii')
+                segments.append('![%s](data:%s;base64,%s)' % (elem.blob_id, mime, b64))
+            continue
         text = get_text(elem)
         if not text:
             continue
@@ -170,6 +179,11 @@ def _load(path):
 # --- built-in parser --------------------------------------------------------
 
 import re
+import os
+import base64
+
+_IMG_MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+             '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml'}
 
 _ATX_RE    = re.compile(r'^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
 _UL_RE     = re.compile(r'^(\s*)[-*+]\s+(.*)')
@@ -722,7 +736,10 @@ def _check_md(doc):
         for elem in elems[:-1]:
             if isinstance(elem, (TableTexel, ImageTexel)):
                 if isinstance(elem, ImageTexel):
-                    issues.add("images")
+                    if elem.scale_x != 1.0 or elem.scale_y != 1.0:
+                        issues.add("image size/scale")
+                    if elem.crop is not None:
+                        issues.add("image crop")
                 elif isinstance(elem, TableTexel):
                     if elem.nheader == 0:
                         issues.add("tables without header row (empty header added)")
@@ -1031,19 +1048,35 @@ def test_16():
 
 
 def test_17():
-    "check_md reports images as a loss"
-    import tempfile, os
+    "images are exported as base64 data URIs; scale/crop loss is warned"
     from miniword.core.document import Document
     from miniword.images.images import Image as ImageTexel
     from miniword.textmodel.texeltree import grouped, Text, NL
-    from miniword.io.txlio import save, load
 
     doc = Document()
     doc.blobs['photo.png'] = b'\x89PNG'
+
+    # default scale — no warnings
     img = ImageTexel('photo.png')
     doc.textmodel.texel = grouped([Text('before '), img, Text(' after'), NL])
     warnings = _check_md(doc)
-    assert "images" in warnings
+    assert "images" not in warnings
+    assert "image size/scale" not in warnings
+    md = _doc_to_md(doc)
+    assert '![photo.png](data:image/png;base64,' in md
+    assert 'before' in md and 'after' in md
+
+    # non-default scale — warns
+    img_scaled = ImageTexel('photo.png', scale_x=0.5, scale_y=0.5)
+    doc.textmodel.texel = grouped([img_scaled, NL])
+    warnings = _check_md(doc)
+    assert "image size/scale" in warnings
+
+    # crop set — warns
+    img_cropped = ImageTexel('photo.png', crop=(10, 10, 100, 100))
+    doc.textmodel.texel = grouped([img_cropped, NL])
+    warnings = _check_md(doc)
+    assert "image crop" in warnings
 
 
 def test_18():
