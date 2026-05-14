@@ -45,6 +45,7 @@ class FlatButton(wx.Control):
         self.set_state('hover')
         evt = wx.CommandEvent(wx.wxEVT_BUTTON, self.GetId())
         self.GetEventHandler().ProcessEvent(evt)
+        self.set_state('normal')
 
     def DoGetBestSize(self):
         dc = wx.ClientDC(self)
