@@ -93,22 +93,23 @@ class _TableGrid(wx.Panel):
 
     def _on_motion(self, event):
         col, row = self._hit(event.GetX(), event.GetY())
-        if col == 0:
-            return  # cursor in gap between cells — keep last selection
-        if col != self._col or row != self._row:
+        if col != 0 and (col != self._col or row != self._row):
             self._col = col
             self._row = row
-            self.Refresh()
+            wx.CallAfter(self.Refresh)
+        event.Skip()
 
     def _on_click(self, event):
         if self._col > 0:
             wx.PostEvent(self, TableCreatedEvent(cols=self._col, rows=self._row))
+        event.Skip()
 
     def _on_leave(self, event):
         if self._col:
             self._col = 0
             self._row = 0
-            self.Refresh()
+            wx.CallAfter(self.Refresh)
+        event.Skip()
 
 
 class _CustomItem(wx.Panel):
@@ -142,35 +143,55 @@ class _CustomItem(wx.Panel):
         wx.PostEvent(self, TableCreatedEvent(cols=0, rows=0))
 
 
-class _TablePopup(wx.PopupTransientWindow):
+def _make_table_popup_content(popup, width):
+    """Shared setup: grid + separator + custom item, returns (grid, custom)."""
+    popup.custom = _CustomItem(popup)
+    target_w = width or popup.custom.GetBestSize().width
+    popup.grid = _TableGrid(popup, target_w)
+    separator  = wx.StaticLine(popup)
+    sizer = wx.BoxSizer(wx.VERTICAL)
+    sizer.Add(popup.grid,   0, wx.EXPAND)
+    sizer.Add(separator,    0, wx.EXPAND)
+    sizer.Add(popup.custom, 0, wx.EXPAND)
+    popup.SetSizer(sizer)
+    popup.Fit()
+
+
+class _TablePopup(wx.PopupWindow):
+    """Grid popup for table insertion.
+
+    Uses wx.PopupWindow instead of wx.PopupTransientWindow so that it
+    receives keyboard focus on all platforms (PopupTransientWindow cannot
+    become the key window on macOS).  Click-outside dismiss is handled
+    via EVT_ACTIVATE rather than the transient mechanism.
+    """
+
     def __init__(self, parent, width):
         super().__init__(parent, wx.BORDER_SIMPLE)
         colours.set(self, 'BackgroundColour', 'BTNFACE')
-
-        # Measure label width so the grid matches it exactly
-        self.custom = _CustomItem(self)
-        if width:
-            target_w = width
-        else:
-            target_w    = self.custom.GetBestSize().width
-
-        self.grid   = _TableGrid(self, target_w)
-        separator   = wx.StaticLine(self)
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.grid,   0, wx.EXPAND)
-        sizer.Add(separator,   0, wx.EXPAND)
-        sizer.Add(self.custom, 0, wx.EXPAND)
-        self.SetSizer(sizer)
-        self.Fit()
-
+        _make_table_popup_content(self, width)
+        self.Bind(wx.EVT_ACTIVATE,  self._on_activate)
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
+
+    def _on_activate(self, event):
+        if not event.GetActive():
+            self.Dismiss()
+        event.Skip()
 
     def _on_key(self, event):
         if event.GetKeyCode() == wx.WXK_ESCAPE:
             self.Dismiss()
         else:
             event.Skip()
+
+    def Popup(self):
+        self.Show()
+        self.Raise()
+        self.grid.SetFocus()
+
+    def Dismiss(self):
+        self.Hide()
+        wx.CallAfter(self.Destroy)
 
 
 class CustomTableDialog(wx.Dialog):
