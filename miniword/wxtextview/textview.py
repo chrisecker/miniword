@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from .testdevice import TestDevice
+from .boxes import prev_row, next_row
 from ..textmodel.viewbase import ViewBase, overridable_property
 from ..textmodel.modelbase import Model
 from ..textmodel.textmodel import dump_range
@@ -758,6 +759,18 @@ class TextView(ViewBase, Model):
         col = local_i - find_weight(el, row, 2)
         return row, col
 
+    def move_up(self, shift=False):
+        x = self.layout.get_rect(self.index, 0, 0).x1
+        i = _navigate(self.layout, self.index, x, prev_row)
+        if i is not None:
+            self.set_index(i, shift)
+
+    def move_down(self, shift=False):
+        x = self.layout.get_rect(self.index, 0, 0).x1
+        i = _navigate(self.layout, self.index, x, next_row)
+        if i is not None:
+            self.set_index(i, shift)
+
     def move_cursor_to(self, row, col, extend=False, update=True):
         model = self.model
         el, off = get_localroot(model.texel, self.index)
@@ -894,6 +907,26 @@ class TextView(ViewBase, Model):
         
 
 
+
+
+def _navigate(layout, i, x, row_fn):
+    first = row_fn(layout, i)
+    if first is None:
+        return None
+    target_y, candidates, cur = first[3], [first], first
+    while True:
+        nxt = row_fn(layout, cur[0])
+        if nxt is None or nxt[3] != target_y:
+            break
+        candidates.append(nxt)
+        cur = nxt
+    best_i, best_dist = None, float('inf')
+    for r1, r2, rx, ry, row in candidates:
+        j = r1 + row.get_index(x - rx, row.height)
+        dist = abs(layout.get_rect(j, 0, 0).x1 - x)
+        if dist < best_dist:
+            best_dist, best_i = dist, j
+    return best_i
 
 
 def default_handler(view, action, shift, ctx):

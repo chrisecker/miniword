@@ -29,10 +29,10 @@ def docview_handler(view, action, shift, ctx):
         view.insert_texel(i, BR(style))
     elif action == 'undo' and shift:
         view.redo()
-    elif action == 'move_down':
-        view.move_down(shift)
-    elif action == 'move_up':
-        view.move_up(shift)
+    #elif action == 'move_down': # XXX auskommentiert um textview zu testen
+    #    view.move_down(shift)
+    #elif action == 'move_up': # XXX auskommentiert um textview zu testen
+    #    view.move_up(shift)
     elif action == 'move_page_down':
         view.move_page_down(shift)
     elif action == 'move_page_up':

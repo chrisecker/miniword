@@ -731,9 +731,12 @@ def find_row(layout, i):
     def _find(box, offset, x0, y0):
         for j1, j2, x, y, child in box.iter_boxes(offset, x0, y0):
             if j1 <= i < j2:
+                deeper = _find(child, j1, x, y)
+                if deeper is not None:
+                    return deeper
                 if isinstance(child, Row):
                     return j1, j2, x, y, child
-                return _find(child, j1, x, y)
+                return None
     return _find(layout, 0, 0, 0)
 
 
