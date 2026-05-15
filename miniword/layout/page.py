@@ -1,4 +1,4 @@
-from ..wxtextview.boxes import Box, TextBox, NewlineBox, select_i_by_x, \
+from ..wxtextview.boxes import Box, TextBox, NewlineBox, Row, select_i_by_x, \
     select_i_by_y, get_text
 from ..wxtextview.testdevice import TESTDEVICE
 from ..core.units import mm, cm, pt
@@ -7,68 +7,6 @@ from ..core.units import mm, cm, pt
 
 class ForceBreakBox(NewlineBox):
     """Sentinel box for a forced line break (BR texel)."""
-
-    
-class Row(Box):
-    """Box representing a single typeset line.
-
-    Extends boxes.Row with optional padding (top, bottom, left, right)
-    and an optional bullet marker (decoration).
-    """
-    marker = None
-    offset = 0
-
-    def __init__(self, childs, left=0, right=0, top=0, bottom=0,
-                 device=TESTDEVICE):
-        if device is not None:
-            self.device = device
-        self.start  = left, top
-        self.childs = childs
-        assert childs
-        self.length = sum(len(child) for child in childs)
-        self.width  = sum(child.width for child in childs) + left + right
-        self.height = max(child.height for child in childs) + top
-        self.depth  = max(child.depth  for child in childs) + bottom
-
-    def __len__(self):
-        return self.length
-
-    def iter_boxes(self, i, x, y):
-        left, top = self.start
-        height = self.height
-        y += top
-        x += left
-        j1 = i
-        for child in self.childs:
-            j2 = j1 + len(child)
-            yield j1, j2, x, y + height - child.height, child
-            x  += child.width
-            j1  = j2
-
-    def set_marker(self, marker, offset, style):
-        self.marker = marker
-        self.offset = offset
-        self.style  = style
-
-    def draw(self, x, y, gc):
-        Box.draw(self, x, y, gc)
-        if not self.marker:
-            return
-        device = self.device
-        self.device.set_style(self.style, gc)
-        left, top = self.start
-
-        # When scaling we adjust y so the marker baseline matches the
-        # row baseline. This looks fine for moderate scale factors
-        # (< 1.3). For larger factors it may be better to keep the
-        # glyph centre point constant instead.
-        markerheight = self.device.measure(self.marker, self.style)[1]
-        dy = self.height - markerheight
-        device.draw_text(self.marker, x + self.offset + left, y + top + dy, gc)
-
-    def get_index(self, x, y):
-        items = self.iter_boxes(0, 0, 0)
-        return select_i_by_x(x, y, items)
 
 
 class Page(Box):

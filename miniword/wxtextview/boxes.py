@@ -530,8 +530,59 @@ class HBox(ChildBox):
         return select_i_by_x(x, y, items)        
 
 
-class Row(HBox):
-    pass
+class Row(Box):
+    marker = None
+    offset = 0
+
+    def __init__(self, childs, device=TESTDEVICE, left=0, right=0, top=0, bottom=0):
+        if device is not None:
+            self.device = device
+        self.start  = left, top
+        self.childs = childs
+        assert childs
+        self.length = sum(len(c) for c in childs)
+        self.width  = sum(c.width for c in childs) + left + right
+        self.height = max(c.height for c in childs) + top
+        self.depth  = max(c.depth  for c in childs) + bottom
+
+    def __len__(self):
+        return self.length
+
+    def __repr__(self):
+        return self.__class__.__name__ + repr(list(self.childs))
+
+    def from_childs(self, childs):
+        return [self.__class__(childs, self.device)]
+
+    def iter_boxes(self, i, x, y):
+        left, top = self.start
+        height = self.height
+        x += left
+        y += top
+        j1 = i
+        for child in self.childs:
+            j2 = j1 + len(child)
+            yield j1, j2, x, y + height - child.height, child
+            x  += child.width
+            j1  = j2
+
+    def set_marker(self, marker, offset, style):
+        self.marker = marker
+        self.offset = offset
+        self.style  = style
+
+    def draw(self, x, y, dc):
+        Box.draw(self, x, y, dc)
+        if not self.marker:
+            return
+        left, top = self.start
+        markerheight = self.device.measure(self.marker, self.style)[1]
+        dy = self.height - markerheight
+        self.device.set_style(self.style, dc)
+        self.device.draw_text(self.marker, x + self.offset + left, y + top + dy, dc)
+
+    def get_index(self, x, y):
+        return select_i_by_x(x, y, self.iter_boxes(0, 0, 0))
 
 
 class VBox(ChildBox):
@@ -674,9 +725,35 @@ def check_box(box, texel=None):
     return True
     
 
+def find_row(layout, i):
+    if not (0 <= i < len(layout)):
+        return None
+    def _find(box, offset, x0, y0):
+        for j1, j2, x, y, child in box.iter_boxes(offset, x0, y0):
+            if j1 <= i < j2:
+                if isinstance(child, Row):
+                    return j1, j2, x, y, child
+                return _find(child, j1, x, y)
+    return _find(layout, 0, 0, 0)
+
+
+def prev_row(layout, i):
+    info = find_row(layout, i)
+    if info is None:
+        return None
+    return find_row(layout, info[0] - 1)
+
+
+def next_row(layout, i):
+    info = find_row(layout, i)
+    if info is None:
+        return None
+    return find_row(layout, info[1])
+
+
 def _create_testobjects(s):
     from ..textmodel.textmodel import TextModel
-    texel = TextModel(s).texel    
+    texel = TextModel(s).texel
     box = TextBox(s)
     return box, texel
 
@@ -838,3 +915,28 @@ def test_07():
     assert find_text_pos(0, text, {}, device) == 0
     assert find_text_pos(1, text, {}, device) == 1
     assert find_text_pos(100, text, {}, device) == n
+
+
+def test_08():
+    "find_row, prev_row, next_row"
+    b1, _ = _create_testobjects("01")
+    b2, _ = _create_testobjects("34")
+    row1 = Row([b1, NewlineBox()])   # len=3, positions 0..2
+    row2 = Row([b2, NewlineBox()])   # len=3, positions 3..5
+    layout = VBox([row1, row2])
+
+    assert find_row(layout, 0)[:2] == (0, 3)
+    assert find_row(layout, 2)[:2] == (0, 3)
+    assert find_row(layout, 3)[:2] == (3, 6)
+    assert find_row(layout, 5)[:2] == (3, 6)
+    assert find_row(layout, 6) is None
+
+    assert prev_row(layout, 0) is None
+    assert prev_row(layout, 2) is None
+    assert prev_row(layout, 3)[:2] == (0, 3)
+    assert prev_row(layout, 5)[:2] == (0, 3)
+
+    assert next_row(layout, 0)[:2] == (3, 6)
+    assert next_row(layout, 2)[:2] == (3, 6)
+    assert next_row(layout, 3) is None
+    assert next_row(layout, 5) is None
