@@ -762,13 +762,13 @@ class TextView(ViewBase, Model):
     def move_up(self, shift=False):
         x = self.layout.get_rect(self.index, 0, 0).x1
         i = _navigate(self.layout, self.index, x, prev_row)
-        if i is not None:
+        if i is not None and i >= self.model.get_start(self.index):
             self.set_index(i, shift)
 
     def move_down(self, shift=False):
         x = self.layout.get_rect(self.index, 0, 0).x1
         i = _navigate(self.layout, self.index, x, next_row)
-        if i is not None:
+        if i is not None and i < self.model.get_end(self.index):
             self.set_index(i, shift)
 
     def move_cursor_to(self, row, col, extend=False, update=True):

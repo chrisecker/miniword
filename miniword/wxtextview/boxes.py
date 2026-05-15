@@ -741,17 +741,17 @@ def find_row(layout, i):
 
 
 def prev_row(layout, i):
-    info = find_row(layout, i)
-    if info is None:
+    cur = find_row(layout, i)
+    if cur is None:
         return None
-    return find_row(layout, info[0] - 1)
+    return find_row(layout, cur[0] - 1)
 
 
 def next_row(layout, i):
-    info = find_row(layout, i)
-    if info is None:
+    cur = find_row(layout, i)
+    if cur is None:
         return None
-    return find_row(layout, info[1])
+    return find_row(layout, cur[1])
 
 
 def _create_testobjects(s):

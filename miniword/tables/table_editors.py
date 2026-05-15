@@ -12,6 +12,7 @@ long as it matches.
 
 
 import wx
+from ..wxtextview.boxes import find_row, prev_row, next_row
 from ..layout.editorbase import TexelEditor
 from .tables import Table, from_cells
 from .table_boxes import TableBox
@@ -239,7 +240,43 @@ class CursorEditor(TableEditorBase):
                         result = None
         return result
 
+    def handle_action(self, action, shift, ctx):
+        if action not in ('move_up', 'move_down'):
+            return False
+        i = ctx.index
+        texel = self.texel
+        row, col = texel.get_coord(i - self.i1)
+        cells = texel.get_cells()
 
+        if action == 'move_up':
+            prev = prev_row(ctx.layout, i)
+            if prev is not None and prev[0] >= ctx.model.get_start(i):
+                self.docview.move_up(shift)
+                return True
+            if row == 0:
+                return False
+            row -= 1
+            target_i = self.i1 + cells[row][col].i2 - 2  # last content pos in cell above
+        else:
+            nxt = next_row(ctx.layout, i)
+            if nxt is not None and nxt[1] <= ctx.model.get_end(i):
+                self.docview.move_down(shift)
+                return True
+            if row == texel.nrows - 1:
+                return False
+            row += 1
+            target_i = self.i1 + cells[row][col].i1  # first content pos in cell below
+
+        x = ctx.layout.get_rect(i, 0, 0).x1
+        row_info = find_row(ctx.layout, target_i)
+        if row_info is None:
+            return False
+        r1, r2, rx, ry, row_box = row_info
+        j = r1 + row_box.get_index(x - rx, row_box.height)
+        self.docview.set_index(j, shift)
+        return True
+
+    
 class MatrixEditor(TableEditorBase):
     """
     Editor for matrix like selections which can span several cells.

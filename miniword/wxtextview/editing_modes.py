@@ -26,7 +26,6 @@ def code_handler(view, action, shift, ctx):
     (leading-space insertion). All other actions fall through.
     """
     if action == 'move_up':
-        asdsa
         view.move_cursor_to(ctx.row - 1, ctx.col, shift)
         return True
     elif action == 'move_down':
