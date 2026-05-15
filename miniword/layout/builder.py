@@ -51,6 +51,7 @@ class Layout(VBox):
     """Simple single-column layout containing pages."""
     is_finished = False
     page_gap = 12  # visual gap between pages (screen only; PDF/print unaffected)
+    pages_per_row = 1
 
     def append_page(self, page):
         self.height += self.page_gap  # gap before every page, including the first
@@ -91,6 +92,7 @@ class Layout(VBox):
 class TwoPageLayout(Layout):
     """Two-column layout: pages are arranged in left/right pairs side by side."""
     page_gap_h = 20  # horizontal gap between the two pages of a pair
+    pages_per_row = 2
 
     def append_page(self, page):
         n = len(self.childs)
@@ -236,24 +238,34 @@ class Builder(BuilderBase):
             self.build_step()
             callback()
 
+    def _row_complete(self):
+        n = len(self._layout.childs)
+        return n % self._layout.pages_per_row == 0
+
     @trace
     def buildto_index(self, i, callback=NOOP):
         layout = self._layout
-        while len(layout) < i and not layout.is_finished:
+        while not layout.is_finished:
+            if len(layout) >= i and self._row_complete():
+                break
             self.build_step()
             callback()
 
     @trace
     def buildto_page(self, i, callback=NOOP):
         layout = self._layout
-        while len(layout.childs) < i + 1 and not layout.is_finished:
+        while not layout.is_finished:
+            if len(layout.childs) >= i + 1 and self._row_complete():
+                break
             self.build_step()
             callback()
 
     @trace
     def buildto_y(self, y, callback=NOOP):
         layout = self._layout
-        while layout.height+layout.depth < y and not layout.is_finished:
+        while not layout.is_finished:
+            if layout.height + layout.depth >= y and self._row_complete():
+                break
             self.build_step()
             callback()
         
