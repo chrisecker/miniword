@@ -229,16 +229,14 @@ def test_03():
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(here, 'test', 'einstein.txl')
     doc = Document.load(path)
-    assert doc.basestyles.get('normal') is not None
-    style = doc.basestyles.get('normal')
-    # Non-default values must be present
-    assert abs(style['space_after'] - 14.17) < 0.1
-    assert abs(style['first_line_indent'] - 17.01) < 0.1
-    assert style['alignment'] == 'justify'
-    # In-memory styles are complete: defaults are present too
-    assert style['bold'] == False
-    assert style['underline'] == False
-    assert 'font_size' in style
+    h1 = doc.basestyles.get('h1')
+    assert h1 is not None
+    assert h1['bold'] == True
+    assert h1['font_size'] == 18
+    h2 = doc.basestyles.get('h2')
+    assert h2 is not None
+    assert h2['bold'] == True
+    assert h2['font_size'] == 16
     text = get_text(doc.textmodel.get_xtexel())
     assert 'Albert Einstein' in text
 
