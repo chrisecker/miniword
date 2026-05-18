@@ -218,6 +218,15 @@ class WxMixin(wx.ScrolledWindow):
         if self.try_install_click_editor():
             return
         x, y = self.window_to_content(event.Position)
+        i = self.compute_index(x, y)
+        if i is not None:
+            style = self.model.get_style(max(0, i - 1))
+            href = style.get('href', '')
+            if href:
+                import webbrowser
+                webbrowser.open(href)
+                self.SetFocus()
+                return
         self.select_word(x, y)
         self.SetFocus()
 

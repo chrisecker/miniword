@@ -516,6 +516,20 @@ class CairoDevice:
         ctx.rectangle(x, y, w, h)
         ctx.fill()
 
+    def begin_link(self, href, ctx):
+        if href:
+            try:
+                ctx.tag_begin(cairo.TAG_LINK, "uri='%s'" % href.replace("'", "%27"))
+            except AttributeError:
+                pass
+
+    def end_link(self, href, ctx):
+        if href:
+            try:
+                ctx.tag_end(cairo.TAG_LINK)
+            except AttributeError:
+                pass
+
     def draw_bitmap(self, bitmap, x, y, width, height, ctx):
         """Draw a cairo.ImageSurface scaled to (width, height) at (x, y)."""
         if bitmap is None:

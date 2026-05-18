@@ -343,8 +343,11 @@ class _TextBoxBase(Box):
         return self, i, x1, y0
 
     def draw(self, x, y, dc):
+        href = self.style.get('href', '')
         self.device.set_style(self.style, dc)
+        self.device.begin_link(href, dc)
         self.device.draw_text(self.text, x, y, dc)
+        self.device.end_link(href, dc)
 
     def draw_selection(self, i1, i2, x, y, dc):
         measure = self.measure

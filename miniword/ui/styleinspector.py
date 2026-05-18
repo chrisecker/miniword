@@ -241,6 +241,13 @@ class StyleInspector(SidePanel):
             wx.EVT_CHECKBOX,
             lambda e: self.set_char_properties(italic=self.italic.GetValue()))
 
+        add_section("Link", panel, contentsizer)
+        self.href = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
+        self.reset_href = ResetButton(panel, ['href'])
+        add_row(contentsizer, self.href, self.reset_href)
+        for binder in (wx.EVT_TEXT_ENTER, wx.EVT_KILL_FOCUS):
+            self.href.Bind(binder, self.on_href)
+
         ### layout tab ###
         panel, contentsizer = make_tab(notebook, 'Layout')
 
@@ -598,6 +605,13 @@ class StyleInspector(SidePanel):
             return self.update()
         self.set_char_properties(font_size=font_size)
 
+    def on_href(self, event=None):
+        val = self.href.GetValue().strip()
+        if val:
+            self.set_char_properties(href=val)
+        else:
+            self.clear_char_properties('href')
+
     def on_family(self, event=None):
         name = self.family.GetFontName()
         self.set_char_properties(font_family=name)
@@ -793,6 +807,11 @@ class StyleInspector(SidePanel):
                 widget.Set3StateValue(wx.CHK_UNDETERMINED)
             else:
                 widget.SetValue(value)
+
+        href = properties.get('href') or ''
+        if self.href.GetValue() != href:
+            self.href.SetValue(href)
+        self.reset_href.set_x('href' in overrides)
 
         family = properties['font_family']
         self.family.SetFontName(family or '')

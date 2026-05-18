@@ -47,6 +47,7 @@ text_default = {
     "strike":       False,
     "color":        "black",
     "bgcolor":      "white",
+    "href":         "",
     # "letter_spacing":    0,        # normal
     # "vertical_position": "normal"  # normal / superscript / subscript
 }

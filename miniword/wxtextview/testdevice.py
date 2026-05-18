@@ -49,5 +49,11 @@ class TestDevice:
     def draw_blinkingrect(self, x, y, w, h, dc):
         pass
 
+    def begin_link(self, href, dc):
+        pass
+
+    def end_link(self, href, dc):
+        pass
+
 
 TESTDEVICE = TestDevice()

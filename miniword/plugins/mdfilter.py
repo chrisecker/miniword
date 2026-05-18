@@ -148,6 +148,7 @@ def _elems_to_inline(elems, blobs=None):
         props = getattr(elem, 'style', {})
         bold   = props.get('bold',   False)
         italic = props.get('italic', False)
+        href   = props.get('href',   '')
         code   = props.get('font_family', '').lower() in ('courier', 'courier new',
                                                            'monospace', 'consolas')
         if code:
@@ -158,6 +159,8 @@ def _elems_to_inline(elems, blobs=None):
             text = '**' + text + '**'
         elif italic:
             text = '*' + text + '*'
+        if href:
+            text = '[%s](%s)' % (text, href)
         segments.append(text)
     return ''.join(segments)
 
@@ -408,7 +411,8 @@ def _parse_inline(text):
         r'|(\*{2}[^\s*](?:[^*]*[^\s*])?\*{2})'         # bold **
         r'|(\*[^\s*](?:[^*]*[^\s*])?\*)'               # italic *  (single char: *a*)
         r'|(__[^\s_](?:[^_]*[^\s_])?__)'               # bold __
-        r'|(_[^\s_](?:[^_]*[^\s_])?_)',                # italic _  (single char: _a_)
+        r'|(_[^\s_](?:[^_]*[^\s_])?_)'                 # italic _  (single char: _a_)
+        r'|(\[([^\]]+)\]\(([^)]+)\))',                  # link [text](url)
         re.DOTALL
     )
     for m in pattern.finditer(text):
@@ -421,6 +425,11 @@ def _parse_inline(text):
             parts.append((raw[3:-3], {'bold': True, 'italic': True}))
         elif raw.startswith('**') or raw.startswith('__'):
             parts.append((raw[2:-2], {'bold': True}))
+        elif raw.startswith('['):
+            link_text, url = m.group(8), m.group(9)
+            inner = _parse_inline(link_text)
+            for t, p in inner:
+                parts.append((t, dict(p, href=url)))
         else:
             parts.append((raw[1:-1], {'italic': True}))
         pos = m.end()
@@ -629,6 +638,13 @@ class _DocBuilder:
             for child in node.get('children', []):
                 self._visit(child)
             self._cur_props = old
+        elif t == 'link':
+            url = node.get('attrs', {}).get('url', '')
+            old = self._cur_props
+            self._cur_props = dict(old, href=url)
+            for child in node.get('children', []):
+                self._visit(child)
+            self._cur_props = old
         elif t == 'codespan':
             self._append(node.get('raw', ''), {'font_family': 'Courier New'})
         elif t == 'softbreak' or t == 'linebreak':
@@ -714,7 +730,7 @@ def _check_md(doc):
                   'pre', 'list', 'numbered', 'quote'}
     _OK_PTYPES = {'normal', 'list', 'numbered'}
     _OK_PAR    = {'base', 'paragraph_type'}
-    _OK_CHAR   = {'bold', 'italic', 'font_family'}
+    _OK_CHAR   = {'bold', 'italic', 'font_family', 'href'}
     _MONO      = {'courier', 'courier new', 'monospace', 'consolas',
                   'lucida console'}
 
@@ -1125,6 +1141,35 @@ def test_20():
     assert 'Name' in lines[0]
     assert '---' in lines[1]
     assert 'Alice' in lines[2]
+
+
+def test_21():
+    "hyperlink import and export roundtrip"
+    md_in = "Visit [Python](https://python.org) today.\n"
+    pars = _parse(md_in)
+    assert len(pars) == 1
+    runs = pars[0][3]
+    link_runs = [(t, p) for t, p in runs if p.get('href')]
+    assert len(link_runs) == 1
+    assert link_runs[0][0] == 'Python'
+    assert link_runs[0][1]['href'] == 'https://python.org'
+
+    md_out = _doc_to_md(_load_builtin(md_in))
+    assert '[Python](https://python.org)' in md_out
+
+
+def test_22():
+    "hyperlink with bold text roundtrips correctly"
+    md_in = "See [**bold link**](https://example.com).\n"
+    pars = _parse(md_in)
+    runs = pars[0][3]
+    link_runs = [(t, p) for t, p in runs if p.get('href')]
+    assert link_runs
+    assert all(p.get('bold') for _, p in link_runs)
+    assert all(p.get('href') == 'https://example.com' for _, p in link_runs)
+
+    md_out = _doc_to_md(_load_builtin(md_in))
+    assert '[**bold link**](https://example.com)' in md_out
 
 
 if __name__ == '__main__':
