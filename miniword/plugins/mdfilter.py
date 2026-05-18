@@ -29,8 +29,9 @@ def _doc_to_md(doc):
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
 
-    texel    = doc.textmodel.get_xtexel()
+    texel          = doc.textmodel.get_xtexel()
     parts          = []
+    footnotes      = []
     prev_block_key = None
     in_pre         = False
 
@@ -61,7 +62,7 @@ def _doc_to_md(doc):
         ptype  = ps.get('paragraph_type', 'normal')
         indent = nl.indent
 
-        inline = _elems_to_inline(content, doc.blobs)
+        inline = _elems_to_inline(content, doc.blobs, footnotes)
         if not inline.strip():
             continue  # empty paragraph — skip
 
@@ -100,6 +101,11 @@ def _doc_to_md(doc):
         prev_block_key = block_key
 
     close_pre()
+    if footnotes:
+        from miniword.textmodel.texeltree import get_text
+        parts.append('')
+        for n, fn in enumerate(footnotes, 1):
+            parts.append('[^%d]: %s' % (n, get_text(fn.content)))
     return '\n'.join(parts) + '\n'
 
 
@@ -128,12 +134,18 @@ def _table_to_md(table):
     return lines
 
 
-def _elems_to_inline(elems, blobs=None):
+def _elems_to_inline(elems, blobs=None, footnotes=None):
     """Convert a list of leaf texels (excluding the NL) to Markdown inline."""
     from miniword.textmodel.texeltree import get_text
     from miniword.images.images import Image as ImageTexel
+    from miniword.footnotes.footnotes import Footnote as FootnoteTexel
     segments = []
     for elem in elems:
+        if isinstance(elem, FootnoteTexel):
+            if footnotes is not None:
+                footnotes.append(elem)
+                segments.append('[^%d]' % len(footnotes))
+            continue
         if isinstance(elem, ImageTexel):
             data = (blobs or {}).get(elem.blob_id, b'')
             if data:
@@ -191,6 +203,7 @@ _OL_RE     = re.compile(r'^(\s*)\d+\.\s+(.*)')
 _QUOTE_RE  = re.compile(r'^>\s?(.*)')
 _RULE_RE   = re.compile(r'^[-*_]{3,}\s*$')
 _FENCE_RE  = re.compile(r'^```')
+_FN_DEF_RE = re.compile(r'^\[\^([^\]]+)\]:\s+(.*)')
 
 
 
@@ -242,10 +255,41 @@ def _load_builtin(text):
 
 
 def _insert_text_block(doc, ptype, indent, runs):
+    if any(r[1].get('_footnote') for r in runs):
+        _insert_text_block_with_footnotes(doc, ptype, indent, runs)
+        return
     par_text = ''.join(t for t, _ in runs) + '\n'
     pos = len(doc.textmodel.get_text())
     doc.textmodel.insert(pos, doc.textmodel.create_textmodel(par_text))
     nl_pos = pos + len(par_text) - 1
+    _apply_parstyle(doc, nl_pos, ptype, indent)
+    run_pos = pos
+    for run_text, run_props in runs:
+        if run_props:
+            doc.textmodel.set_properties(run_pos, run_pos + len(run_text), **run_props)
+        run_pos += len(run_text)
+
+
+def _insert_text_block_with_footnotes(doc, ptype, indent, runs):
+    from miniword.footnotes.footnotes import Footnote
+    from miniword.textmodel.texeltree import T, grouped
+    for run_text, run_props in runs:
+        pos = len(doc.textmodel.get_text())
+        if run_props.get('_footnote'):
+            fn = Footnote(T(run_props['_footnote']))
+            fn_model = doc.textmodel.create_textmodel()
+            fn_model.texel = grouped([fn])
+            doc.textmodel.insert(pos, fn_model)
+        elif run_text:
+            doc.textmodel.insert_text(pos, run_text)
+            if run_props:
+                doc.textmodel.set_properties(pos, pos + len(run_text), **run_props)
+    nl_pos = len(doc.textmodel.get_text())
+    doc.textmodel.insert_text(nl_pos, '\n')
+    _apply_parstyle(doc, nl_pos, ptype, indent)
+
+
+def _apply_parstyle(doc, nl_pos, ptype, indent):
     if ptype.startswith('h') or ptype in ('pre', 'list', 'numbered', 'quote'):
         base = ptype
     else:
@@ -256,11 +300,6 @@ def _insert_text_block(doc, ptype, indent, runs):
     doc.textmodel.set_parstyle(nl_pos, ps)
     if indent:
         doc.textmodel.set_indent(nl_pos, indent)
-    run_pos = pos
-    for run_text, run_props in runs:
-        if run_props:
-            doc.textmodel.set_properties(run_pos, run_pos + len(run_text), **run_props)
-        run_pos += len(run_text)
 
 
 def _insert_table_block(doc, grid):
@@ -311,7 +350,20 @@ def _parse_md_paragraphs(text):
     ptype: 'normal' | 'h1'..'h6' | 'list' | 'numbered' | 'pre'
     runs:  list of (text, charprops_dict)
     """
-    lines = text.splitlines()
+    # Collect footnote definitions first; remove their lines from the stream
+    fn_defs = {}
+    clean   = []
+    for line in text.splitlines():
+        m = _FN_DEF_RE.match(line)
+        if m:
+            fn_defs[m.group(1)] = m.group(2)
+        else:
+            clean.append(line)
+    lines = clean
+
+    def pi(t):
+        return _parse_inline(t, fn_defs)
+
     paragraphs = []
     buf = []         # accumulated normal-paragraph lines
     table_buf = []   # accumulated table lines
@@ -320,7 +372,7 @@ def _parse_md_paragraphs(text):
     def flush_buf():
         if buf:
             combined = ' '.join(buf)
-            paragraphs.append(('normal', 0, _parse_inline(combined)))
+            paragraphs.append(('normal', 0, pi(combined)))
             buf.clear()
 
     def flush_table():
@@ -356,28 +408,28 @@ def _parse_md_paragraphs(text):
         if m:
             flush_buf()
             level = len(m.group(1))
-            paragraphs.append(('h%d' % level, 0, _parse_inline(m.group(2))))
+            paragraphs.append(('h%d' % level, 0, pi(m.group(2))))
             continue
 
         m = _UL_RE.match(line)
         if m:
             flush_buf()
             indent = len(m.group(1)) // 2
-            paragraphs.append(('list', indent, _parse_inline(m.group(2))))
+            paragraphs.append(('list', indent, pi(m.group(2))))
             continue
 
         m = _OL_RE.match(line)
         if m:
             flush_buf()
             indent = len(m.group(1)) // 2
-            paragraphs.append(('numbered', indent, _parse_inline(m.group(2))))
+            paragraphs.append(('numbered', indent, pi(m.group(2))))
             continue
 
         m = _QUOTE_RE.match(line)
         if m:
             flush_buf()
             flush_table()
-            paragraphs.append(('quote', 0, _parse_inline(m.group(1))))
+            paragraphs.append(('quote', 0, pi(m.group(1))))
             continue
 
         if line.strip() == '':
@@ -387,7 +439,7 @@ def _parse_md_paragraphs(text):
               and paragraphs and paragraphs[-1][0] in ('list', 'numbered')):
             # continuation line of a list item — append to previous
             prev = paragraphs[-1]
-            extra = _parse_inline(line.strip())
+            extra = pi(line.strip())
             paragraphs[-1] = (prev[0], prev[1], prev[2] + [(' ', {})] + extra)
         else:
             buf.append(line)
@@ -397,9 +449,8 @@ def _parse_md_paragraphs(text):
     return paragraphs
 
 
-def _parse_inline(text):
+def _parse_inline(text, fn_defs=None):
     """Parse inline MD markup into list of (text, charprops)."""
-    # Tokenize by splitting on bold/italic/code markers
     parts = []
     pos   = 0
     pattern = re.compile(
@@ -408,14 +459,19 @@ def _parse_inline(text):
         r'|(\*{2}[^\s*](?:[^*]*[^\s*])?\*{2})'         # bold **
         r'|(\*[^\s*](?:[^*]*[^\s*])?\*)'               # italic *  (single char: *a*)
         r'|(__[^\s_](?:[^_]*[^\s_])?__)'               # bold __
-        r'|(_[^\s_](?:[^_]*[^\s_])?_)',                # italic _  (single char: _a_)
+        r'|(_[^\s_](?:[^_]*[^\s_])?_)'                 # italic _  (single char: _a_)
+        r'|(\[\^[^\]]+\])',                             # footnote reference [^ref]
         re.DOTALL
     )
     for m in pattern.finditer(text):
         if m.start() > pos:
             parts.append((text[pos:m.start()], {}))
         raw = m.group(0)
-        if raw.startswith('`'):
+        if raw.startswith('[^'):
+            ref = raw[2:-1]
+            content = (fn_defs or {}).get(ref, ref)
+            parts.append(('', {'_footnote': content}))
+        elif raw.startswith('`'):
             parts.append((raw[1:-1], {'font_family': 'Courier New'}))
         elif raw.startswith('***') or raw.startswith('___'):
             parts.append((raw[3:-3], {'bold': True, 'italic': True}))
@@ -426,7 +482,7 @@ def _parse_inline(text):
         pos = m.end()
     if pos < len(text):
         parts.append((text[pos:], {}))
-    return [(t, p) for t, p in parts if t]
+    return [(t, p) for t, p in parts if t or p.get('_footnote')]
 
 
 def _github_defs(size, mm):
@@ -733,7 +789,10 @@ def _check_md(doc):
         for key in ps:
             if key not in _OK_PAR:
                 issues.add("paragraph attribute '%s'" % key)
+        from miniword.footnotes.footnotes import Footnote as FootnoteTexel
         for elem in elems[:-1]:
+            if isinstance(elem, FootnoteTexel):
+                continue
             if isinstance(elem, (TableTexel, ImageTexel)):
                 if isinstance(elem, ImageTexel):
                     if elem.scale_x != 1.0 or elem.scale_y != 1.0:
@@ -1125,6 +1184,46 @@ def test_20():
     assert 'Name' in lines[0]
     assert '---' in lines[1]
     assert 'Alice' in lines[2]
+
+
+def test_21():
+    "footnote import: [^ref] anchor resolved to Footnote texel"
+    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine, get_text
+    from miniword.footnotes.footnotes import Footnote
+    md = "Hello[^1] world.\n\n[^1]: Footnote text.\n"
+    doc = _load_builtin(md)
+    fns = [e for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0)
+           for e in elems if isinstance(e, Footnote)]
+    assert len(fns) == 1
+    assert get_text(fns[0].content) == 'Footnote text.'
+
+
+def test_22():
+    "footnote export: Footnote texel → [^n] inline + definition at end"
+    from miniword.core.document import Document
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.textmodel.texeltree import grouped, T
+    from miniword.footnotes.footnotes import Footnote
+    doc = Document()
+    _register_styles(doc)
+    doc.textmodel = TextModel('Hello world.\n')
+    fn = Footnote(T('Note text.'))
+    fn_model = doc.textmodel.create_textmodel()
+    fn_model.texel = grouped([fn])
+    doc.textmodel.insert(5, fn_model)
+    md = _doc_to_md(doc)
+    assert '[^1]' in md
+    assert '[^1]: Note text.' in md
+
+
+def test_23():
+    "footnote roundtrip: import → export preserves anchor and definition"
+    md = "Text with footnote[^a].\n\n[^a]: The note.\n"
+    doc = _load_builtin(md)
+    out = _doc_to_md(doc)
+    assert '[^1]' in out
+    assert '[^1]: The note.' in out
 
 
 if __name__ == '__main__':

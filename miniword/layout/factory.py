@@ -1,8 +1,8 @@
 import logging
 
-from ..wxtextview.builder import Factory as FactoryBase
-from ..wxtextview.testdevice import TESTDEVICE
-from ..wxtextview.boxes import NewlineBox
+from .builderbase import Factory as FactoryBase
+from .testdevice import TESTDEVICE
+from .boxes import NewlineBox
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.texeltree import EMPTYSTYLE
 from ..core.styles import updated, style_default
@@ -58,6 +58,12 @@ class Factory(FactoryBase):
         else:
             w, h = src_w * texel.scale_x, src_h * texel.scale_y
         return [ImageBox(bitmap, w, h, image_data, self.device)]
+
+    def Footnote_handler(self, texel, i1, i2):
+        from ..footnotes.footnotes import FootnoteAnchorBox
+        self.footnote_counter = getattr(self, 'footnote_counter', 0) + 1
+        return [FootnoteAnchorBox(texel, self.footnote_counter,
+                                  self.mk_style({}), self.device)]
 
     def Table_handler(self, texel, i1, i2):
         from ..tables.table_factory import build_table_box

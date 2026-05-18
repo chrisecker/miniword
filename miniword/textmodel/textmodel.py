@@ -15,6 +15,7 @@ from .utils import (
     get_localroot, NotFound, get_newlines, transform_range)
 
 from .modelbase import Model
+from .properties import overridable_property
 import re
 
 
@@ -85,6 +86,9 @@ class TextModel(Model):
 
     """
     defaultstyle = create_style()
+    texel = overridable_property('texel', "Root texel of this model")
+    xtexel = overridable_property('xtexel', "Extended root (texel+endmark)")
+
 
     def create_textmodel(self, text=u'', **properties):
         """Creates a new textmodel with text $text$ and uniform style."""
@@ -103,7 +107,13 @@ class TextModel(Model):
                 l.append(Tabulator(style))
             elif len(part):
                 l.append(Text(part, style))
-        self.texel = grouped(l)
+        self._texel = grouped(l)
+
+    def get_texel(self):
+        return self._texel
+
+    def set_texel(self, value):
+        self._texel = value
 
     def __len__(self):
         return length(self.texel)
@@ -121,14 +131,14 @@ class TextModel(Model):
         texel = self.texel
         return Group([texel, self.ENDMARK])
 
-    def _set_xtexel(self, xtexel):
+    def set_xtexel(self, xtexel):
         """Sets self.texel and self.ENDMARK from xtexel."""
         n = length(xtexel)-1
         assert n>=0 # xtexel must contain ENDMARK, therefore
                     # len(xtexel)>0
         t, e = takeout(xtexel, n, n+1)
-        self.texel = grouped(t)
         self.ENDMARK = grouped(e)
+        self.texel = grouped(t)
 
     def nlines(self):
         """Returns the number of lines."""
@@ -195,9 +205,11 @@ class TextModel(Model):
         else:
             root = self.texel
         try:
-            return i0 + find_weight(root, row, 2) + col
+            start = i0 + find_weight(root, row, 2)
         except NotFound:
-            raise IndexError(row)
+            raise IndexError("row not found: %s" % row)
+        maxcol = self.linelength(start)-1
+        return start+max(0, min(maxcol, col))
 
     def index2position(self, i):
         """Returns (row, col, i0) for index *i*, where i0 is the flow start."""
@@ -276,7 +288,7 @@ class TextModel(Model):
         memo = get_parstyles(texel, i1, i2)
         t = grouped(
             set_parproperties(texel, i1, i2, properties))
-        self._set_xtexel(t)        
+        self.set_xtexel(t)        
         
         # This is controversial: should we restrict the change
         # message to the range occupied by Texel or should we allow +1
@@ -292,7 +304,7 @@ class TextModel(Model):
         t = grouped(
             clear_parproperties(texel, i1, i2, keys))
         assert length(t) == length(texel)
-        self._set_xtexel(t)
+        self.set_xtexel(t)
         self.notify_views('properties_changed', i1, i2)
         return memo    
         
@@ -308,7 +320,7 @@ class TextModel(Model):
 
         t = grouped(
             set_parstyles(texel, i, iterator))
-        self._set_xtexel(t)        
+        self.set_xtexel(t)        
 
         # This is controversial: should we restrict the change
         # message to the range occupied by Texel or should we allow +1
@@ -346,7 +358,7 @@ class TextModel(Model):
             return texel
         texel = self.get_xtexel()
         t = transform_range(texel, i1, i2, fun)
-        self._set_xtexel(grouped(t))
+        self.set_xtexel(grouped(t))
         self.notify_views('properties_changed', i1, i2)
         return old
 

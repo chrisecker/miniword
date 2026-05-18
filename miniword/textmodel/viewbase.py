@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 #
 #		Python GUI - View Base - Generic
 #
@@ -81,4 +81,13 @@ class ViewBase(object):
     def model_destroyed(self, model):
         """Called when an attached model is destroyed."""
         pass
+
+
+class TestView(ViewBase):
+    def __init__(self):
+        self.messages = []
+        ViewBase.__init__(self)
+
+    def model_changed(self, *args):
+        self.messages.append(args)
 

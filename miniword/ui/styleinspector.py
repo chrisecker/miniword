@@ -10,7 +10,7 @@ from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
     NewLine, dump
 from ..textmodel.utils import iter_newlines
 from ..textmodel.styles import create_style
-from ..wxtextview.wxdevice import defaultstyle
+from ..layout.cairodevice import defaultstyle
 
 from .unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from .threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
@@ -453,16 +453,16 @@ class StyleInspector(SidePanel):
     def on_indent(self, event):
         with self.model.atomic():
             for s1, s2 in self.get_parrange():
-                self.model.model.increase_indent(s1, s2)
+                self.model.edit_model.increase_indent(s1, s2)
 
     def on_dedent(self, event):
         with self.model.atomic():
             for s1, s2 in self.get_parrange():
-                self.model.model.decrease_indent(s1, s2)
+                self.model.edit_model.decrease_indent(s1, s2)
 
     def on_policy(self, event):
         if self.policy.GetValue():
-            value = self.model.model.get_indent(self.model.index)
+            value = self.model.edit_model.get_indent(self.model.index)
         else:
             value = None
         self.set_parproperties(fixed_indent=value)
@@ -503,7 +503,7 @@ class StyleInspector(SidePanel):
     def set_list_value(self, name, value):
         # Helper
         view = self.model
-        model = view.model
+        model = view.edit_model
         indent = model.get_indent(view.index)
         parstyle = model.get_parstyle(view.index)
         properties = self.mk_style(parstyle, {})
@@ -616,7 +616,7 @@ class StyleInspector(SidePanel):
         which keys belong to which layer.
         """
         view  = self.model
-        model = view.model
+        model = view.edit_model
         index = view.index
         char_keys = set(model.get_style(max(0, index - 1)).keys()) & overrides
         par_keys  = set(model.get_parstyle(index).keys()) & overrides
@@ -688,7 +688,7 @@ class StyleInspector(SidePanel):
     def _delete_style(self, name):
         """Delete a style and remap all uses to 'normal' (undo-able)."""
         view = self.model
-        textmodel = view.model
+        textmodel = view.edit_model
         texel = textmodel.get_xtexel()
         old_style = view.document.basestyles.get(name).copy()
         with view.atomic():
@@ -737,7 +737,7 @@ class StyleInspector(SidePanel):
 
     def update(self, event=None):
         textview = self.model
-        textmodel = textview.model
+        textmodel = textview.edit_model
         
         index = textview.index
         index_style = textmodel.get_style(max(0, index-1)) # XXX warum -1 ???

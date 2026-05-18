@@ -11,9 +11,9 @@
 #
 
 
-from ..wxtextview.testdevice import TESTDEVICE
-from ..wxtextview.boxes import TextBox
-from ..wxtextview.linewrap import simple_linewrap
+from .testdevice import TESTDEVICE
+from .boxes import TextBox
+from .linewrap import simple_linewrap
 from ..core.units import mm, cm, pt
 from ..core.styles import updated, n_levels
 from ..core.papersizes import PAPER_SIZES
@@ -22,12 +22,15 @@ from .stretchable import justify_line
 from .page import ForceBreakBox, Row, Page
 from .counters import format_number, set_counter, inc_counter
 from ..tables.table_boxes import TableBox, split_at_height
+from ..footnotes.footnotes import FootnoteAnchorBox, to_superscript
 
 from copy import copy as shallow_copy
 
 
 # Needed for testing
 A4 = 210 * mm, 297 * mm
+
+MAX_FOOTNOTES = 0.10  # max fraction of page height reserved for footnotes
 
 
 class DraftNode:
@@ -40,11 +43,12 @@ class DraftNode:
     - hit-testing and selection work on box geometry
     """
 
-    rows        = ()
-    decorations = ()
-    footnotes   = ()
-    floats      = ()
-    parent      = None
+    rows            = ()
+    decorations     = ()
+    footnotes       = ()
+    footnote_height = 0
+    floats          = ()
+    parent          = None
     startspage  = True
     x = y = None
 
@@ -65,12 +69,25 @@ class DraftNode:
         """Can the current page hold row or do we need to create a new page?"""
         if not self.rows:
             # always accept first row even if oversized
-            return True  
+            return True
         natural = row.height + row.depth
         advance = natural * line_spacing
         border_top, _, border_bottom, _ = self.border
-        max_y = self.geometry[1] - border_top - border_bottom
+        max_y = self.geometry[1] - border_top - border_bottom - self.footnote_height
         return self.y + before + advance <= max_y
+
+    def can_addfootnote(self, row, line_spacing=1.0, is_last_page=False):
+        """Can this footnote row still fit within the footnote area?"""
+        page_height = self.geometry[1] - self.border[0] - self.border[2]
+        limit = page_height if is_last_page else page_height * MAX_FOOTNOTES
+        advance = (row.height + row.depth) * line_spacing
+        return self.footnote_height + advance <= limit
+
+    def add_footnote(self, row, line_spacing=1.0):
+        """Reserve space and record a footnote row."""
+        advance = (row.height + row.depth) * line_spacing
+        self.footnote_height += advance
+        self.footnotes += (row,)
 
     def add_row(self, row, line_spacing, before):
         """Add row to the draft page."""
@@ -111,14 +128,15 @@ class DraftNode:
         return r
 
     def create_newpage(self):
-        """Create  an empty new page."""
+        """Create an empty new page."""
         draft = self.create_child()
-        draft.startspage = True
+        draft.startspage    = True
         draft.init_xy()
-        draft.rows        = ()
-        draft.decorations = ()
-        draft.floats      = ()
-        draft.footnotes   = ()
+        draft.rows          = ()
+        draft.decorations   = ()
+        draft.floats        = ()
+        draft.footnotes     = ()
+        draft.footnote_height = 0
         return draft
 
     def fix_draft(self, device):
@@ -146,9 +164,10 @@ class DraftNode:
         for i, node in enumerate(nodes):
             if node.startspage:
                 if i > 0:
-                    # Flush the last page
+                    # Flush the completed page
                     page = Page(memo.rows, self.geometry, device)
                     page.decorations = memo.decorations
+                    page.footnote_rows = _position_footnotes(memo.footnotes, memo)
                     pages.append(page)
                 memo = RestartMemo()
                 memo.geometry = node.geometry
@@ -157,6 +176,7 @@ class DraftNode:
             memo.decorations += node.decorations
             memo.floats += node.floats
             memo.footnotes += node.footnotes
+            memo.footnote_height = node.footnote_height
             memo.y = node.y
 
         return pages, memo
@@ -168,13 +188,14 @@ class RestartMemo:
     Also used as the return value of fix_draft() to describe spillover
     content that did not fit on the last completed page.
     """
-    rows        = ()
-    decorations = ()
-    footnotes   = ()
-    floats      = ()
-    parent      = None
-    y           = None
-    counters    = {}   # dict: numbering_style -> list[int] of length n_levels
+    rows            = ()
+    decorations     = ()
+    footnotes       = ()
+    footnote_height = 0
+    floats          = ()
+    parent          = None
+    y               = None
+    counters        = {}   # dict: numbering_style -> list[int] of length n_levels
 
     # defaults for testing
     geometry    = A4
@@ -187,13 +208,14 @@ class RestartMemo:
         return n
 
     def start_draft(self):
-        node             = DraftNode()
-        node.rows        = self.rows
-        node.decorations = self.decorations
-        node.floats      = self.floats
-        node.footnotes   = self.footnotes
-        node.geometry    = self.geometry
-        node.border      = self.border
+        node                 = DraftNode()
+        node.rows            = self.rows
+        node.decorations     = self.decorations
+        node.floats          = self.floats
+        node.footnotes       = self.footnotes
+        node.footnote_height = self.footnote_height
+        node.geometry        = self.geometry
+        node.border          = self.border
         node.init_xy()
         if self.y is not None:
             node.y = self.y
@@ -273,6 +295,46 @@ def place_longtable(box, draft, device):
 
 
 
+def _position_footnotes(fn_rows, memo):
+    """Return (x, y, row) tuples for footnote rows stacked above the bottom margin."""
+    if not fn_rows:
+        return ()
+    border_top, _, border_bottom, border_left = memo.border
+    total_h = sum(row.height + row.depth for row in fn_rows)
+    y = memo.geometry[1] - border_bottom - total_h
+    result = []
+    for row in fn_rows:
+        result.append((border_left, y, row))
+        y += row.height + row.depth
+    return tuple(result)
+
+
+def render_footnote_rows(fn_texel, factory, line_width, number=None):
+    """Render a Footnote texel's content into a list of Row objects."""
+    from ..wxtextview.boxes import TextBox
+    boxes = [b for b in factory.create_all(fn_texel.content)
+             if not isinstance(b, FootnoteAnchorBox)]
+    if not boxes:
+        return []
+    if number is not None:
+        label = TextBox(to_superscript(number) + ' ',
+                        factory.mk_style({}), factory.device)
+        boxes = [label] + list(boxes)
+    lines = simple_linewrap(boxes, line_width, line_width)
+    return [Row(line, device=factory.device) for line in lines]
+
+
+def place_pending_footnotes(fn_rows, draft, is_last_page=False):
+    """Place as many footnote rows as possible onto draft; return unplaced rows."""
+    remaining = []
+    for row in fn_rows:
+        if draft.can_addfootnote(row, is_last_page=is_last_page):
+            draft.add_footnote(row)
+        else:
+            remaining.append(row)
+    return remaining
+
+
 def generate_pages(texel, i, restartmemo, factory,
                    footnotes=None, floats=None, allow_page_breaks=True):
     """Generator producing a stream of pages.
@@ -299,6 +361,9 @@ def generate_pages(texel, i, restartmemo, factory,
     margin     = state.border  # top right bottom left
     page_width = state.geometry[0]
     factory.line_width = page_width - margin[1] - margin[3]
+    factory.footnote_counter = 0
+
+    pending_fn_rows = []
 
     for i1, i2, boxlist in factory.generate_boxes(texel, j):
         draft = state.start_draft()
@@ -378,6 +443,8 @@ def generate_pages(texel, i, restartmemo, factory,
 
                     if not draft.can_addrow(row, line_spacing, before):
                         draft = draft.create_newpage()
+                        pending_fn_rows = place_pending_footnotes(
+                            pending_fn_rows, draft)
 
                     text_width = row.width
                     if alignment == 'left':
@@ -395,6 +462,15 @@ def generate_pages(texel, i, restartmemo, factory,
                     row.width = line_width + x
                     y_before  = draft.y
                     draft.add_row(row, line_spacing, before)
+                    for box in line:
+                        if isinstance(box, FootnoteAnchorBox):
+                            for fn_row in render_footnote_rows(
+                                    box.fn_texel, factory, line_width_rest,
+                                    number=box.number):
+                                if draft.can_addfootnote(fn_row):
+                                    draft.add_footnote(fn_row)
+                                else:
+                                    pending_fn_rows.append(fn_row)
                     if r.get('block_color'):
                         pad = r.get('block_padding') or 0
                         draft.decorations += ((
@@ -425,11 +501,13 @@ def generate_pages(texel, i, restartmemo, factory,
     if state.rows:
         if allow_page_breaks:
             draft = state.start_draft()
+            place_pending_footnotes(pending_fn_rows, draft, is_last_page=True)
             draft = draft.create_newpage()
             pages, _ = draft.fix_draft(device)
         else:
             page = Page(state.rows, state.geometry, device)
             page.decorations = state.decorations
+            page.footnote_rows = _position_footnotes(state.footnotes, state)
             pages = [page]
         for page in pages:
             yield page

@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 from ..textmodel.texeltree import EMPTYSTYLE
 from .testdevice import TESTDEVICE
@@ -637,6 +637,7 @@ class VGroup(VBox):
         return VGroup(l, device=self.device)
 
 
+    
 def replace_boxes(box, i1, i2, stuff):
     # Recursively replace everything between $i1$ and $i2$ by
     # $stuff$. Insertion is done at the depth of the first box which
@@ -842,10 +843,10 @@ def test_05():
     r = t.get_cursorrect(0, 0, 0, {})
     assert r.items() == (0, 0, 1, 1)
 
-    from .wxdevice import WxDevice
+    from .cairodevice import CairoDevice
     import wx
     app = wx.App()
-    device = WxDevice()
+    device = CairoDevice()
     t = TextBox('0123456789', device=device)
     r = t.get_cursorrect(1, 0, 0, {})
     x1, y1, x2, y2 = r.items()
@@ -856,10 +857,10 @@ def test_05():
     
 def test_06():
     "get_index"
-    from .wxdevice import WxDevice
+    from .cairodevice import CairoDevice
     import wx
     app = wx.App(redirect=False)
-    device = WxDevice()
+    device = CairoDevice()
     t1 = TextBox('Ein m�nnlicher Briefmark erlebte', device=device)
     t2 = TextBox('Was Sch�nes, bevor er klebte.', device=device)
     par = VBox([t1, t2])

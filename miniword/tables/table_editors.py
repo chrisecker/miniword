@@ -1,19 +1,19 @@
-"""We define two Editors for tables. Default is CursorEditor, which is
-only valid when the selection is inside one table cell. When several
-cells are included in the selection, textview changes to MatrixEditor.
+"""We define two controllers for tables. Default is CursorController, which
+is only valid when the selection is inside one table cell. When several
+cells are included in the selection, the editor switches to MatrixController.
 
-When the Selection is inside one Cell both Editors match. This
-ambiguity is solved by the preference (CursorEditor registers first
-and therefore has the heigher priority) or by the User (there will be
-a selection-button in the editor panel. The selected editor remains as
+When the selection is inside one cell both controllers match. This
+ambiguity is solved by the preference (CursorController registers first
+and therefore has the heigher priority) or by the user (there will be
+a selection-button in the editor panel. The selected controller remains as
 long as it matches.
 
 """
 
 
 import wx
-from ..wxtextview.boxes import find_row, prev_row, next_row
-from ..texteditor.boxeditor import BoxEditor
+from ..layout.boxes import find_row, prev_row, next_row
+from ..texteditor.boxcontroller import BoxController
 from .tables import Table, from_cells
 from .table_boxes import TableBox
 
@@ -88,8 +88,8 @@ def is_multi_cell(texel, i1, i2):
     return r1 != r2 or c1 != c2
 
 
-class TableEditorBase(BoxEditor):
-    """Base class for table editors. """
+class TableControllerBase(BoxController):
+    """Base class for table controllers. """
 
     _drag_orig_widths = None
     _preview_widths   = None
@@ -100,8 +100,8 @@ class TableEditorBase(BoxEditor):
 
         Raises: IndexError when no Box is found.
         """
-        layout = self.textview.layout
-        index = self.textview.index
+        layout = self.editor.canvas.layout
+        index = self.editor.index
 
         def visit(p1, p2, x, y, box):
             if not (p1 <= index < p2):
@@ -131,7 +131,7 @@ class TableEditorBase(BoxEditor):
             return None
         if not (0 <= y <= tb.height):
             return None
-        hit_r = _HIT_RADIUS / self.textview.zoom
+        hit_r = _HIT_RADIUS / self.editor.canvas.zoom
         sep_x = 0
         for col, cw in enumerate(tb.col_widths):
             sep_x += cw
@@ -190,7 +190,7 @@ class TableEditorBase(BoxEditor):
         widths = self._preview_widths if self._preview_widths is not None else \
             tb.col_widths
         orig   = self._drag_orig_widths or tb.col_widths
-        zoom   = self.textview.zoom
+        zoom   = self.editor.canvas.zoom
         x      = 0
         for c, cw in enumerate(widths):
             x_col = x
@@ -210,16 +210,16 @@ class TableEditorBase(BoxEditor):
     def commit(self):
         widths = self._preview_widths
         if widths is not None:
-            self.textview.set_texel_attributes(
+            self.editor.set_texel_attributes(
                 self.i1, self.texel, col_widths=widths)
 
     def get_handles(self):
         return iter([])
 
 
-class CursorEditor(TableEditorBase):
+class CursorController(TableControllerBase):
     """
-    Editor for selections inside a cell. 
+    Controller for selections inside a cell. 
     """
 
     @classmethod
@@ -229,13 +229,13 @@ class CursorEditor(TableEditorBase):
             if isinstance(texel, Table):
                 sel = view.selection
                 if sel is None or sel[0] == sel[1]:
-                    e = cls(view, i1, i2, depth); e.texel = texel
+                    e = cls(view, texel, i1, i2, depth)
                 else:
                     s1, s2 = sorted(sel)
                     if s1 <= i1 or i2 <= s2:
                         e = None  # selection not inside cell area
                     elif not is_multi_cell(texel, s1-i1, s2-i1):
-                        e = cls(view, i1, i2, depth); e.texel = texel
+                        e = cls(view, texel, i1, i2, depth)
                     else:
                         e = None
         return e
@@ -251,7 +251,7 @@ class CursorEditor(TableEditorBase):
         if action == 'move_up':
             prev = prev_row(ctx.layout, i)
             if prev is not None and prev[0] >= ctx.model.get_start(i):
-                self.textview.move_up(shift)
+                self.editor.move_up(shift)
                 return True
             if row == 0:
                 return False
@@ -260,7 +260,7 @@ class CursorEditor(TableEditorBase):
         else:
             nxt = next_row(ctx.layout, i)
             if nxt is not None and nxt[1] <= ctx.model.get_end(i):
-                self.textview.move_down(shift)
+                self.editor.move_down(shift)
                 return True
             if row == texel.nrows - 1:
                 return False
@@ -273,13 +273,13 @@ class CursorEditor(TableEditorBase):
             return False
         r1, r2, rx, ry, row_box = row_info
         j = r1 + row_box.get_index(x - rx, row_box.height)
-        self.textview.set_index(j, shift)
+        self.editor.set_index(j, shift)
         return True
 
     
-class MatrixEditor(TableEditorBase):
+class MatrixController(TableControllerBase):
     """
-    Editor for matrix like selections which can span several cells.
+    Controller for matrix like selections which can span several cells.
     """
 
     @classmethod
@@ -294,7 +294,7 @@ class MatrixEditor(TableEditorBase):
                 if s1 <= i1 or i2 <= s2:
                     e = None  # selection not inside cell area
                 elif is_multi_cell(texel, s1-i1, s2-i1):
-                    e = cls(view, i1, i2, depth); e.texel = texel
+                    e = cls(view, texel, i1, i2, depth)
         return e
 
     def draw_cursor(self, gc):
@@ -303,9 +303,9 @@ class MatrixEditor(TableEditorBase):
 
     def draw_selection(self, gc):
         """Highlight the rectangular cell block covered by the selection."""
-        if not self.textview.has_selection():
+        if not self.editor.has_selection():
             return
-        s1, s2 = sorted(self.textview.selection)
+        s1, s2 = sorted(self.editor.selection)
         try:
             r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
         except IndexError:
@@ -345,23 +345,23 @@ class MatrixEditor(TableEditorBase):
 
     def copy(self):
         """Rectangular cell copy for multi-cell selections."""
-        if not self.textview.has_selection():
+        if not self.editor.has_selection():
             return
-        s1, s2 = sorted(self.textview.selection)
+        s1, s2 = sorted(self.editor.selection)
         ci1   = self.i0_box
-        model = self.textview.model
+        model = self.editor.target
         i1, i2 = s1 - ci1, s2 - ci1
 
         r1, c1, r2, c2 = self.texel.get_rect(i1, i2)
         if r1 == r2 and c1 == c2:
-            self.textview.to_clipboard(model.copy(ci1 + i1, ci1 + i2))
+            self.editor.canvas.to_clipboard(model.copy(ci1 + i1, ci1 + i2))
             return
 
         cells    = self.texel.get_cells()
         sub_grid = [cells[r][c1:c2 + 1] for r in range(r1, r2 + 1)]
         result   = model.create_textmodel()
         result.texel = from_cells(sub_grid)
-        self.textview.to_clipboard(result)
+        self.editor.canvas.to_clipboard(result)
 
     def handle_action(self, action, shift, ctx):
         i = ctx.index
@@ -383,51 +383,64 @@ class MatrixEditor(TableEditorBase):
             return False
         cells = texel.get_cells()        
         i = self.i1+cells[row][col].i1
-        self.textview.set_index(i, shift)
+        self.editor.set_index(i, shift)
         return True
         
 
 
-### Register Editors
+### Register controllers
 
-from ..texteditor import TextEditor
-TextEditor.editor_registry.append(CursorEditor)
-TextEditor.editor_registry.append(MatrixEditor)
+from ..texteditor.editor import Editor
+Editor.controller_registry.append(CursorController)
+Editor.controller_registry.append(MatrixController)
 
 
 def test_00():
     "_draw_frag_selection calls invert_rect once per selected cell"
     from .table_boxes import mk_box_table
-    from ..wxtextview.testdevice import TestDevice
+    from .tables import from_strings
+    from ..layout.testdevice import TestDevice
     calls = []
     class CountingDevice(TestDevice):
         def invert_rect(self, x, y, w, h, dc):
             calls.append((x, y, w, h))
 
-    table = mk_box_table([['A', 'B', 'C'],
-                          ['D', 'E', 'F'],
-                          ['G', 'H', 'I']], device=CountingDevice())
-    editor = MatrixEditor(None, 0, 0, 0)
+    texts = [['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']]
+    table = mk_box_table(texts, device=CountingDevice())
+    texel = from_strings(texts)
+
+    class FakeLayout:
+        def iter_boxes(self, i, x, y):
+            yield i, i + len(table), x, y, table
+
+    class FakeCanvas:
+        layout = FakeLayout()
+
+    class FakeView:
+        canvas = FakeCanvas()
+        index  = 0
+
+    controller = MatrixController(FakeView(), texel, 0, len(table), 0)
 
     # rows 0-1, cols 0-1 → 4 cells
-    editor._draw_frag_selection(table, 0, 1, 0, 1, (0, 0), None)
+    controller._draw_frag_selection(table, 0, 1, 0, 1, (0, 0), None)
     assert len(calls) == 4
 
     calls.clear()
     # single cell (1,2)
-    editor._draw_frag_selection(table, 1, 1, 2, 2, (0, 0), None)
+    controller._draw_frag_selection(table, 1, 1, 2, 2, (0, 0), None)
     assert len(calls) == 1
 
 
 def test_04():
-    "MatrixEditor.copy"
+    "MatrixController.copy"
     from .table_factory import build_table_box
     from .tables import from_strings, Table
     from ..textmodel.textmodel import TextModel
     from ..textmodel.texeltree import length as texel_length
     from ..layout.factory import Factory
     from ..core.styles import testsheet
-    from ..wxtextview.testdevice import TESTDEVICE
+    from ..layout.testdevice import TESTDEVICE
 
     texts = [['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']]
     table = from_strings(texts)
@@ -437,27 +450,30 @@ def test_04():
     box = build_table_box(table, factory, row_height=14)
 
     copied_model = []
-    class FakeView:
-        layout    = None
-        selection = None
-        def has_selection(self): return self.selection is not None and self.selection[0] != self.selection[1]
+    class FakeLayout:
+        def iter_boxes(self, i, x, y):
+            yield i, i + len(box), x, y, box
+
+    class FakeCanvas:
+        layout = FakeLayout()
         def to_clipboard(self, m):
             copied_model.append(m)
-        def copy(self): pass
 
-    fake_view = FakeView()
-    fake_view.model = model
+    class FakeEditor:
+        index     = 0
+        selection = None
+        target    = model
+        canvas    = FakeCanvas()
+        def has_selection(self):
+            return self.selection is not None and self.selection[0] != self.selection[1]
 
-    editor = MatrixEditor(fake_view, 0, texel_length(table), 0)
-    editor.box    = box
-    editor.i0_box = 0
-    editor.texel  = table
+    controller = MatrixController(FakeEditor(), table, 0, texel_length(table), 0)
 
     s1 = box.offsets[(1, 0)]
     s2 = box.offsets[(2, 1)] + len(box.cells[2][1]) - 1
-    editor.textview.selection = (s1, s2)
+    controller.editor.selection = (s1, s2)
 
-    editor.copy()
+    controller.copy()
     assert len(copied_model) == 1
     result = copied_model[0]
     assert isinstance(result.texel, Table)
@@ -466,24 +482,29 @@ def test_04():
 
 
 def test_05():
-    "MatrixEditor.selected returns absolute positions"
+    "MatrixController.selected returns absolute positions"
     from .tables import from_strings
     from ..textmodel.texeltree import length as texel_length
-    from ..textmodel.textmodel import TextModel
 
     texts = [['A', 'B'], ['C', 'D']]
     table = from_strings(texts)
     offset = 5  # table does NOT start at position 0
 
+    # find_box() needs a real layout to locate the table's box; selected()
+    # itself only depends on texel and i1, so a canned find_box keeps this
+    # test focused without building a full layout.
+    class FakeController(MatrixController):
+        def find_box(self):
+            return self.i1, (0, 0), None
+
     class FakeView:
         selection = None
 
-    editor = MatrixEditor(FakeView(), offset, offset + texel_length(table), 0)
-    editor.texel = table
+    controller = FakeController(FakeView(), table, offset, offset + texel_length(table), 0)
 
     # select the full table (both rows, both cols)
     s1, s2 = offset + 1, offset + texel_length(table) - 1
-    ranges = editor.selected(s1, s2)
+    ranges = controller.selected(s1, s2)
     # all returned positions must be >= offset
     for a, b in ranges:
         assert a >= offset, f"relative position leaked: {a} < offset {offset}"

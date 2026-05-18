@@ -20,7 +20,7 @@ except ImportError:
 
 from ..core.units import mm, cm, pt, inch
 from ..core.fontfinder import resolve_font_path, find_fallback_info, init_preload
-from ..wxtextview.cache import LRUCache
+from .cache import LRUCache
 
 if _HB_AVAILABLE:
     init_preload()
@@ -65,7 +65,6 @@ class CairoDevice:
     # cannot create a Cairo context from it.  Use the plain PaintDC instead
     # and rely on SetDoubleBuffered(True) on the widget for flicker-free drawing.
     buffering = sys.platform != 'win32'
-    zoom = 1.0  # screen_dpi / 72 * user_zoom; updated by DocumentView
     t0 = 0  # time since last movement
 
     def __init__(self):
@@ -213,12 +212,12 @@ class CairoDevice:
     def reset_blink(self):
         self._blink_reference_time = time.time()
 
-    def get_scale(self, dpi):
+    def get_scale(self, dpi, zoom):
         if sys.platform == 'win32':
-            return dpi / 72.0 * self.zoom
-        return self.zoom
+            return dpi / 72.0 * zoom
+        return zoom
 
-    def create_painter(self, dc, origin):
+    def create_painter(self, dc, origin, zoom=1.0):
         ctx = wxcairo.ContextFromDC(dc)
 
         if not ctx:
@@ -239,9 +238,9 @@ class CairoDevice:
         if sys.platform == 'win32':
             _, ppi_y = dc.GetPPI()
             dpi = ppi_y if ppi_y > 0 else 96
-            s = dpi / 72.0 * self.zoom
+            s = dpi / 72.0 * zoom
         else:
-            s = self.zoom
+            s = zoom
         ctx.scale(s, s)
 
         ctx.set_font_options(self._make_font_options())
@@ -449,7 +448,9 @@ class CairoDevice:
 
     def draw_rect(self, x, y, w, h, ctx):
         ctx.set_source_rgb(0.7, 0.7, 0.7)
-        ctx.set_line_width(1.0 / self.zoom)  # constant line width regardless of zoom
+        # one device pixel wide, regardless of the context's scaling
+        lw, _ = ctx.device_to_user_distance(1, 1)
+        ctx.set_line_width(lw)
         ctx.rectangle(x, y, w, h)
         ctx.stroke()
 
@@ -466,7 +467,9 @@ class CairoDevice:
 
     def draw_line(self, x1, y1, x2, y2, width, ctx):
         ctx.set_source_rgb(0, 0, 0)
-        ctx.set_line_width(width / self.zoom)
+        # `width` device pixels wide, regardless of the context's scaling
+        lw, _ = ctx.device_to_user_distance(width, width)
+        ctx.set_line_width(lw)
         ctx.move_to(x1, y1)
         ctx.line_to(x2, y2)
         ctx.stroke()
@@ -696,7 +699,8 @@ class TestPanel(wx.ScrolledWindow):
         print("Zoom:", self.zoom)
         dc.SetUserScale(self.zoom, self.zoom)
         device = CairoDevice()
-        painter = device.create_painter(dc)
+        # dc already has the zoom applied via SetUserScale above
+        painter = device.create_painter(dc, origin=(0, 0))
         draw_testimage(device, painter)
 
     def on_mousewheel(self, evt):

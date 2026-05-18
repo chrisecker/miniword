@@ -2,6 +2,8 @@
 
 
 from ..textmodel import texeltree
+from ..textmodel.viewbase import ViewBase
+from ..textmodel.properties import overridable_property
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import NewLine, Group, Text, length
 from ..textmodel.styles import EMPTYSTYLE
@@ -108,33 +110,51 @@ class Factory:
 
 
 
+class BuilderBase(ViewBase):
+    """
+    The builder is responsible for creating and updating the layout. 
 
-
-
-class BuilderBase:
-    """The builder is responsible for creating and updating the layout. 
-
-    The methods build, insert, remove and update return a tree of boxes (=
-    "layout").
-
-    The length of the box tree is always the length of the model +1,
-    because we add a special box ("end mark").
-
+    The length of layout is always the length of the model +1, because
+    we add a special box ("end mark").
     """
 
+    layout = overridable_property('layout')
     _layout = None
-
-    def rebuild(self):
-        # sets self._layout
-        pass
+    def __init__(self, model):
+        ViewBase.__init__(self)
+        self.model = model
 
     def get_layout(self):
         assert self._layout is not None
         return self._layout
 
-    def rebuild_range(self, i1, i2, delta):
-        pass
+    def inserted(self, model, i, n):
+        self.rebuild_range(i, i, n)
 
+    def removed(self, model, i, text):
+        self.rebuild_range(i, i, -len(text)) # XXX besser wäre i, i+len, -len
+
+    def properties_changed(self, model, i1, i2):
+        self.rebuild_range(i1, i2, 0)
+
+    def assure_finished(self):
+        pass # default: do nothing
+    
+    def assure_index(self, i):
+        pass # default: do nothing
+
+    def assure_rect(self, r):
+        pass # default: do nothing
+                
+    def rebuild(self):
+        raise NotImplemented()
+
+    def rebuild_range(self, i1, i2, delta):
+        raise NotImplemented()
+    
+        
+
+        
 class TestBuilder(BuilderBase):
     """A dummy Builder which enables simple testing."""
     def get_layout(self):

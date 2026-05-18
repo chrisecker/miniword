@@ -4,8 +4,8 @@ Kept separate from table_boxes.py to avoid a circular import:
   table_boxes <- table_factory <- layout.pagegen <- tables.table_boxes
 """
 
-from ..wxtextview.boxes import EmptyTextBox
-from ..wxtextview.testdevice import TESTDEVICE
+from ..layout.boxes import EmptyTextBox
+from ..layout.testdevice import TESTDEVICE
 from ..textmodel.texeltree import length as texel_length, Group, NewLine
 from .table_boxes import CellBox, TableBox, CELL_HPAD, CELL_VPAD
 

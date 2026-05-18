@@ -408,7 +408,7 @@ class TablePanel(SidePanel):
         or (None, None) if the cursor is not inside a table."""
         index = self._view.index
         result = None
-        for abs_i1, abs_i2, node in get_path(self._view.model.texel, index):
+        for abs_i1, abs_i2, node in get_path(self._view.edit_model.texel, index):
             if isinstance(node, Table):
                 result = node, abs_i1
         return result or (None, None)

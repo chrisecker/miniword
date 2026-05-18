@@ -8,13 +8,13 @@ modules = [
     "miniword.textmodel.weights",
     "miniword.textmodel.textmodel",
 
-    # wxtextview
-    "miniword.wxtextview.linewrap",
-    "miniword.wxtextview.markbuffer",
-    "miniword.wxtextview.simplelayout",
-    "miniword.wxtextview.boxes",
-    "miniword.wxtextview.builder",
-    "miniword.wxtextview.wxtextview",
+    # texteditor
+    "miniword.texteditor.actions",
+    "miniword.texteditor.editor",
+    "miniword.texteditor.controller",
+    "miniword.texteditor.boxcontroller",
+    "miniword.texteditor.textcanvas",
+    "miniword.texteditor.undoredo",
 
     # core
     "miniword.core.stylesheet",
@@ -25,9 +25,18 @@ modules = [
     # layout
     "miniword.layout.stretchable",
     "miniword.layout.annotation",
+    "miniword.layout.boxes",
+    "miniword.layout.counters",
     "miniword.layout.cairodevice",
-    "miniword.layout.builder",
+    "miniword.layout.page",
     "miniword.layout.pagegen",
+    "miniword.layout.builder",
+    "miniword.layout.builderbase",
+    "miniword.layout.factory",
+    "miniword.layout.rect",
+    "miniword.layout.cache",
+    "miniword.layout.linewrap",
+    "miniword.layout.simplelayout",     
 
     # io
     "miniword.io.texeltreeformat",
@@ -47,7 +56,6 @@ modules = [
     "miniword.ui.stylemenu",
     "miniword.ui.styleinspector",
     "miniword.ui.searchtool",
-    "miniword.texteditor.texteditor",
 
     # plugins
     "miniword.plugins.mdfilter",

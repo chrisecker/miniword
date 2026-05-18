@@ -5,13 +5,12 @@ class TestDevice:
     # graphics methods.
 
     buffering = False
-    zoom = 1.0
 
-    def create_painter(self, dc, origin):
+    def create_painter(self, dc, origin, zoom=1.0):
         return dc
-    
-    def get_scale(self, dpi):
-        return self.zoom
+
+    def get_scale(self, dpi, zoom):
+        return zoom
 
     def clear_caches(self):
         pass

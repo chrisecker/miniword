@@ -1,627 +1,174 @@
 # -*- coding: utf-8 -*-
 
 
-# The Builder monitors model changes and updates the layout. 
+from ..textmodel import texeltree
+from ..textmodel.viewbase import ViewBase
+from ..textmodel.properties import overridable_property
+from ..textmodel.textmodel import TextModel
+from ..textmodel.texeltree import NewLine, Group, Text, length
+from ..textmodel.styles import EMPTYSTYLE
+from .testdevice import TESTDEVICE
+from .boxes import TextBox, NewlineBox, TabulatorBox, EmptyTextBox, \
+    EndBox, check_box, Box, calc_length
+from .cache import LRUCache
 
 
 
-from ..textmodel.texeltree import length, NewLine, get_text, takeout
-from ..wxtextview.builder import BuilderBase
-from ..wxtextview.wxtextview import WXTextView
-from ..wxtextview.boxes import VBox, get_text, select_i_by_xy, select_i_by_y
-from ..wxtextview import boxes
-from ..wxtextview.rect import Rect
+class Factory:
+    # The Factory object takes a texeltree as an outline to create a
+    # sequence of boxes. For every Texel-Class Factory has a
+    # corresponding handler method of the same name,
+    # e.g. Group_handler for Group-texels. The call signature is
+    # handler(texel, i1, i2), where i1 and i2 denotes the part of
+    # texel for which boxes are generated.
 
-from .pagegen import RestartMemo, generate_pages, restartmemo_from_settings
-from .page import show_page
-from ..core.units import cm, mm
-from ..core.styles import updated
-from .factory import Factory
-from .cairodevice import CairoDevice
+    TextBox = TextBox
+    NewlineBox = NewlineBox
+    TabulatorBox = TabulatorBox
+    EndBox = EndBox
 
-from copy import copy as shallow_copy
-import wx
-import threading
-import queue
-import time
+    parstyle = EMPTYSTYLE
 
-
-
-
-DEBUG = False
-def trace(fn):
-    """Decorator: print method entry, exit and duration."""
-    name = fn.__qualname__
-    def wrapper(*args, **kwargs):
-        if not DEBUG:
-            return fn(*args, **kwargs)
-        t0 = time.perf_counter()
-        print(f">>> {name}")
-        try:
-            return fn(*args, **kwargs)
-        finally:
-            dt = time.perf_counter() - t0
-            print(f"<<< {name}  ({dt*1000:.1f} ms)")
-    wrapper.__name__ = fn.__name__
-    return wrapper
-
-NOOP = lambda: None
-
-class Layout(VBox):
-    """Simple single-column layout containing pages."""
-    is_finished = False
-    page_gap = 12  # visual gap between pages (screen only; PDF/print unaffected)
-    pages_per_row = 1
-
-    def append_page(self, page):
-        self.height += self.page_gap  # gap before every page, including the first
-        self.childs.append(page)
-        self.length += len(page)
-        self.width   = max(self.width, page.width)
-        self.height += page.height  # assumes a specific page geometry
-
-    def iter_boxes(self, i, x, y):
-        j1 = i
-        y += self.page_gap  # initial gap before first page
-        for child in self.childs:
-            j2 = j1 + len(child)
-            yield j1, j2, x, y, child
-            y  += child.height + child.depth + self.page_gap
-            j1  = j2
-
-    def from_childs(self, l):
-        assert False
-
-    def create_group(self, l):
-        assert False
-
-    def draw_background(self, x, y, gc):
-        """Fill the background of every visible page."""
-        device = self.device
-        for j1, j2, x1, y1, child in self.iter_boxes(0, x, y):
-            if device.intersects(gc, Rect(x1, y1,
-                                          x1 + child.width,
-                                          y1 + child.height)):
-                child.draw_background(x1, y1, gc)
-
-    def get_text(self):
-        # For debugging
-        return boxes.get_text(self)[:-1]  # strip end marker
-
-
-class TwoPageLayout(Layout):
-    """Two-column layout: pages are arranged in left/right pairs side by side."""
-    page_gap_h = 20  # horizontal gap between the two pages of a pair
-    pages_per_row = 2
-
-    def append_page(self, page):
-        n = len(self.childs)
-        self.childs.append(page)
-        self.length += len(page)
-        if n % 2 == 0:
-            # Left page: starts a new row
-            self.height += self.page_gap + page.height
-            self.width = max(self.width, page.width * 2 + self.page_gap_h)
-
-    def iter_boxes(self, i, x, y):
-        j1 = i
-        row_y = y + self.page_gap
-        for k, child in enumerate(self.childs):
-            j2 = j1 + len(child)
-            if k % 2 == 0:
-                if k > 0:
-                    prev = self.childs[k - 1]
-                    row_y += prev.height + prev.depth + self.page_gap
-                yield j1, j2, x, row_y, child
-            else:
-                left = self.childs[k - 1]
-                yield j1, j2, x + left.width + self.page_gap_h, row_y, child
-            j1 = j2
-
-    def get_index(self, x, y):
-        items = list(self.iter_boxes(0, 0, 0))
-        # Exact hit: click falls within a page's bounds (handles left vs. right)
-        r = select_i_by_xy(x, y, items)
-        if r is not None:
-            return r
-        # Fallback for clicks in margins/gaps between page rows
-        return select_i_by_y(x, y, items)
-
-
-class Builder(BuilderBase):
-    """The Builder operates in two phases:
-
-    - Initial phase: pages are built synchronously; the GUI freezes.
-    - Background phase: pages are built asynchronously.
-
-    The initial phase ends when all of the following build thresholds
-    are reached:
-    - Total height reaches height_threshold.
-    - Page count reaches pages_threshold.
-
-    The phase also ends when the end of the document is reached.
-
-    Synchronous building can be forced during the background phase via
-    buildto_height and buildto_page, both of which can be called from
-    Update().
-    """
-    _layout         = None
-    layout          = property(BuilderBase.get_layout)
-    # Required by wxtextview:
-    device          = property(lambda self: self.factory.device)
-    stylesheet      = property(lambda self: self.factory.stylesheet)
-    rest_memo       = 0, ()
-    _pending_range  = None  # (j1, j2) while inhibited, else None
-    # Stats for debugging:
-    nbefore  = 0
-    nrest    = 0
-    settings = {}  # document settings dict; set by DocumentView
-    layout_class    = Layout
-
-    def __init__(self, model, factory):
-        self.model   = model
-        self._layout = self.layout_class([], factory.device)
-        self.factory = factory
+    def __init__(self, device=TESTDEVICE):
+        self.device = device
+        self.cache = LRUCache(10000)
 
     def clear_caches(self):
+        self.cache.clear()
         self.device.clear_caches()
-        self.factory.clear_caches()
-        
+
     def get_device(self):
         return self.device
 
-    def create_generator(self, texel, p, state, factory):
-        # Override this method to use a different generator.
-        return generate_pages(texel, p, state, factory)
+    def mk_style(self, style):
+        # This can overriden e.g. to implement style sheets. The
+        # default behaviour is to use the paragraph style and add the
+        # text styles.
+        r = self.parstyle.copy()
+        r.update(style)
+        return r
 
-    generator = None
+    ### Factory methods
+    def create_all(self, texel):
+        # Convenience method
+        return self.create_boxes(texel, 0, length(texel))
 
-    @trace
-    def start(self, state, irest, rest):
-        """Start the update task.
-
-        Missing pages will be appended to the layout, using rest as a
-        shortcut. A new layout must have been created before calling
-        this, containing only the pages prior to the change.
-        """
-        layout = self._layout
-        self.nbefore = len(layout.childs)
-
-        self.rest_memo = irest, rest
-        texel = self.model.get_xtexel()
-        if self.generator is not None:
-            if DEBUG: print("overriding old generator")
-        p = len(layout)
-        self.generator = self.create_generator(
-            texel, p, state, self.factory)
-
-        if not len(self.model):
-            self.buildto_finish()
-
-    def build_step(self):
-        """Advance the active update task by one step.
-
-        Has no effect if the task is already finished.
-        """
-        if self.generator is None:
-            return
+    def create_boxes(self, texel, i1, i2):
+        assert i1>=0
+        assert i2<=length(texel)
+        assert i1<=i2
+        if i1 == i2:
+            return () # XXX Why is this needed?
+        name = texel.__class__.__name__+'_handler'
+        handler = getattr(self, name)
+        #print "calling handler", name, i1, i2
+        l = handler(texel, i1, i2)
         try:
-            page = next(self.generator)
-            layout = self._layout
-            rest_i, rest = self.rest_memo
-            k2 = len(layout)  # position before appending = start of new page
-            state = page.restartmemo
-            if state is not None and rest and k2 == rest_i:
-                if self.can_finish(state):
-                    return self.finish()
-            layout.append_page(page)
-            k2 = len(layout)
-            while rest_i < k2 and rest:
-                _ = rest.pop(0)
-                rest_i += len(_)
-            self.rest_memo = rest_i, rest
-        except StopIteration:
-            return self.finish()
-
-    def build_background(self):
-        """One build step for the async loop: step + Yield + reschedule."""
-        self.build_step()
-        if self.generator is not None:
-            wx.Yield()
-            if self.generator is not None:
-                wx.CallAfter(self.build_background)
-
-    @trace
-    def buildto_finish(self, callback=NOOP):
-        layout = self._layout
-        while not layout.is_finished:
-            self.build_step()
-            callback()
-
-    def _row_complete(self):
-        n = len(self._layout.childs)
-        return n % self._layout.pages_per_row == 0
-
-    @trace
-    def buildto_index(self, i, callback=NOOP):
-        layout = self._layout
-        while not layout.is_finished:
-            if len(layout) >= i and self._row_complete():
-                break
-            self.build_step()
-            callback()
-
-    @trace
-    def buildto_page(self, i, callback=NOOP):
-        layout = self._layout
-        while not layout.is_finished:
-            if len(layout.childs) >= i + 1 and self._row_complete():
-                break
-            self.build_step()
-            callback()
-
-    @trace
-    def buildto_y(self, y, callback=NOOP):
-        layout = self._layout
-        while not layout.is_finished:
-            if layout.height + layout.depth >= y and self._row_complete():
-                break
-            self.build_step()
-            callback()
-        
-    def rebuild(self):
-        """Rebuild the entire layout from i=0; nothing is reused."""
-        if DEBUG: print("rebuild")
-        self._layout = self.layout_class([], self.factory.device)
-        self.start(restartmemo_from_settings(self.settings), 0, ())
-
-    def finish(self):
-        """Clean up, append rest pages, update statistics."""
-        rest_i, rest = self.rest_memo
-        self.nrest = len(rest)
-        if rest:
-            if DEBUG: print("finish: appending %d rest pages" % self.nrest)
-            for page in rest:
-                self._layout.append_page(page)
-            self.rest_memo = 0, ()
-        
-        # Clean up
-        self.generator = None
-
-        # Update counters
-        self.adjust_pages()
-        try:
-            assert len(self._layout) == len(self.model)+1
+            assert calc_length(l) == i2-i1
         except:
-            print("layout:", len(self._layout))
-            print("model:", len(self.model))
+            print("handler=", handler)
             raise
-        self._layout.is_finished = True
-        self.dump_updatestats()
+        return tuple(l)
+        
+    def Group_handler(self, texel, i1, i2):
+        # Handles group texels. Note that the list of childs is
+        # traversed from right to left. This way the "Newline" which
+        # ends a line is handled before the content in the line. This
+        # is important because in order to build boxes for the line
+        # elements, we need the paragraph style which is located in
+        # the NewLine-Texel.
+        r = ()
+        for j1, j2, child in reversed(list(texeltree.iter_childs(texel))):
+            if i1 < j2 and j1 < i2: # overlapp
+                r = self.create_boxes(child, max(0, i1-j1), min(i2, j2)-j1)+r
+        return r
 
-    def adjust_pages(self):
-        # Used here solely to update page numbers.
-        # The call is very fast (≈1 ms for moby), so it is safe to
-        # run after every change.
-        for i, page in enumerate(self._layout.childs):
-            page.adjust(i + 1)
+    def Text_handler(self, texel, i1, i2):
+        return [self.TextBox(texel.text[i1:i2], self.mk_style(texel.style), 
+                             self.device)]
+
+    def Text_handler(self, texel, i1, i2):
+        # Caching version. It is important that dicts do not change!
+        key = texel.text, id(texel.style), id(self.parstyle), i1, i2, self.device
+        try:
+            return self.cache.get(key)
+        except KeyError:
+            pass
+        r = [self.TextBox(texel.text[i1:i2], self.mk_style(texel.style), 
+                          self.device)]
+        self.cache.set(key, r)
+        return r
+
+    def NewLine_handler(self, texel, i1, i2):
+        self.parstyle = texel.parstyle
+        if texel.is_endmark:
+            return [self.EndBox(self.mk_style(texel.style), self.device)]
+        return [self.NewlineBox(self.mk_style(texel.style), self.device)] # XXX: Hmmmm
+
+    def Tabulator_handler(self, texel, i1, i2):
+        return [self.TabulatorBox(self.mk_style(texel.style), self.device)]
+
+
+
+class BuilderBase(ViewBase):
+    """
+    The builder is responsible for creating and updating the layout. 
+
+    The length of layout is always the length of the model +1, because
+    we add a special box ("end mark").
+    """
+
+    layout = overridable_property('layout')
+    _layout = None
+    def __init__(self, model):
+        ViewBase.__init__(self)
+        self.model = model
+
+    def get_layout(self):
+        assert self._layout is not None
+        return self._layout
+
+    def inserted(self, model, i, n):
+        self.rebuild_range(i, i, n)
+
+    def removed(self, model, i, text):
+        self.rebuild_range(i, i, -len(text)) # XXX besser wäre i, i+len, -len
+
+    def properties_changed(self, model, i1, i2):
+        self.rebuild_range(i1, i2, 0)
+
+    def assure_finished(self):
+        pass # default: do nothing
+    
+    def assure_index(self, i):
+        pass # default: do nothing
+
+    def assure_rect(self, r):
+        pass # default: do nothing
+                
+    def rebuild(self):
+        raise NotImplemented()
 
     def rebuild_range(self, i1, i2, delta):
-        layout = self._layout
-        q1 = q2 = k1 = k2 = state = None
+        raise NotImplemented()
+    
+        
 
-        # Note: layout may be incomplete or even empty.
-        for k, (j1, j2, page) in enumerate(layout.iter_childs()):
-            if k1 is None and j2 >= i1:
-                # First dirty page
-                k1 = k
-                q1 = j1
-            if j1 > i2:
-                # First page beyond the changed range
-                k2 = k
-                q2 = j1
-                break
+        
+class TestBuilder(BuilderBase):
+    """A dummy Builder which enables simple testing."""
+    def get_layout(self):
+        return
 
-        if not k1:
-            # k1 is either None (empty layout) or 0 (first page)
-            pages_before = []
-            state = restartmemo_from_settings(self.settings)
-        else:
-            # Shift start left to account for spillover
-            pages = layout.childs
-            while True:
-                state = pages[k1].restartmemo
-                if state and q1 + state.get_length() <= i1:
-                    # i1 must not lie within the spillover region
-                    break
-                k1 -= 1
-                assert k1 >= 0  # The first page must have a RestartMemo
-                                # with length 0.
-                q1 -= len(pages[k1])
-
-            pages_before = layout.childs[:k1]
-
-        if k2 is None:
-            i_rest    = 0
-            pages_rest = []
-        elif layout.is_finished:
-            pages_rest = layout.childs[k2:]
-            i_rest     = q2 + delta
-        else:
-            i_rest, pages_rest = self.rest_memo
-            i_rest += delta
-
-        self._layout = self.layout_class(pages_before, self.factory.device)
-        self.start(state, i_rest, pages_rest)
-
-    def can_finish(self, state):
-        """Update rest_memo and check whether the remaining pages can
-        be reused without further reflow."""
-        layout = self._layout
-        rest_i, rest = self.rest_memo
-
-        k2 = len(layout)
-        if k2 > len(self.model):
-            return True
-
-        if not rest:
-            # No rest pages remain but document is not finished.
-            # Return False so that additional pages are generated.
-            return False
-
-        # Check whether we can short-circuit by reusing the rest.
-        old_restartmemo = rest[0].restartmemo
-
-        # Condition 1: page must have a RestartMemo
-        if old_restartmemo is None:
-            return False
-
-        # Condition 2: RestartMemo must have the same number of rows.
-        n1 = len(old_restartmemo.rows)
-        n2 = len(state.rows)
-        if n1 != n2:
-            return False
-
-        # Condition 3: RestartMemo must have the same length.
-        n1 = old_restartmemo.get_length()
-        n2 = state.get_length()
-        if n1 != n2:
-            return False
-
-        # Condition 4: numbered-list counter state must match.
-        if old_restartmemo.counters != state.counters:
-            return False
-
-        if DEBUG: print("can finish!")
-        return True
-
-    def get_updatestats(self):
-        n      = len(self._layout.childs)
-        nbefore = self.nbefore
-        nrest   = self.nrest
-        return nbefore, n - nrest - nbefore, nrest
-
-    def dump_updatestats(self):
-        if DEBUG: print("pages before %s, pages updated %s, rest %s" %
-              self.get_updatestats())
-
-
-
-
-class MyView(WXTextView):
-    """Simple view for testing."""
-
-    def create_builder(self):
-        from ..core.styles import testsheet
-        factory = Factory(testsheet, device=CairoDevice())
-        builder = Builder(self.model, factory)
-        return builder
-
-    def set_index(self, index, extend=False, update=True):
-        self.builder.device.reset_blink()
-        WXTextView.set_index(self, index, extend, update)
-
-    def iter_rows(self):
-        for p1, p2, px, py, page in self.layout.iter_boxes(0, 0, 0):
-            for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
-                yield r1, r2, rx, ry, row
-
-
-
-def show_pages(layout):
-    """Dump all pages in the layout."""
-    for i, (i1, i2, page) in enumerate(layout.iter_childs()):
-        print("Page", i + 1, "[%s, %s; %s]" %
-              (i1, i2, i1 + length_lines(page.restartmemo.lines)))
-        show_page(page)
-
-
-def demo_00():
-    global DEBUG; DEBUG = True
-    from einstein import get_einstein_model
-    model = get_einstein_model()
-
-    model.set_properties(0, 15, color='red')
-    model.set_parproperties(0, 1000, paragraph_type='list')
-    app   = wx.App(redirect=True)
-    frame = wx.Frame(None)
-    view  = MyView(frame, -1)
-    view.model = model
-    view.builder.device.zoom = 2
-    frame.Show()
-
-    if 1:
-        from ..wxtextview import testing
-        l = locals()
-        l.update(globals())
-        testing.pyshell(l)
-    app.MainLoop()
-
-
-def test_00():
-    "TwoPageLayout: geometry, iter_boxes, rebuild"
-    from ..core.styles import testsheet
-
-    device  = CairoDevice()
-    factory = Factory(testsheet, device=device)
-
-    # Build a two-page layout from scratch
-    layout = TwoPageLayout([], device)
-    assert layout.height == 0
-    assert layout.width  == 0
-
-    # Fake page with known dimensions
-    class FakePage:
-        width = 100; height = 200; depth = 0; length = 10
-        restartmemo = None
-        def __len__(self): return self.length
-        def get_index(self, x, y): return 0
-
-    p0, p1, p2, p3, p4 = [FakePage() for _ in range(5)]
-
-    layout.append_page(p0)
-    assert layout.height == layout.page_gap + 200    # one row
-    assert layout.width  == 100 * 2 + layout.page_gap_h
-
-    layout.append_page(p1)
-    h_after_1 = layout.height
-    assert h_after_1 == layout.page_gap + 200        # still one row
-    assert layout.length == 20
-
-    layout.append_page(p2)
-    assert layout.height == 2 * (layout.page_gap + 200)   # two rows
-
-    layout.append_page(p3)
-    assert layout.height == 2 * (layout.page_gap + 200)   # still two rows
-
-    # iter_boxes: check x/y coordinates
-    boxes = list(layout.iter_boxes(0, 0, 0))
-    assert boxes[0][2] == 0                               # p0: x=0 (left)
-    assert boxes[1][2] == 100 + layout.page_gap_h         # p1: x=left_width+gap
-    assert boxes[0][3] == boxes[1][3]                     # p0, p1: same y (same row)
-    assert boxes[2][3] > boxes[0][3]                     # p2: below p0/p1
-
-    # Reconstruction from pages_before should give same geometry
-    layout2 = TwoPageLayout([p0, p1, p2, p3], device)
-    boxes2 = list(layout2.iter_boxes(0, 0, 0))
-    assert len(boxes2) == 4
-    assert boxes2[0][3] == boxes[0][3]
-    assert boxes2[2][3] == boxes[2][3]
-
-    # get_index: clicking on right page must return an index from page 1
-    gap = layout.page_gap
-    p1_x = 100 + layout.page_gap_h  # x-start of right page
-    idx_left  = layout.get_index(50,        gap + 100)  # mid of left page
-    idx_right = layout.get_index(p1_x + 50, gap + 100)  # mid of right page
-    assert idx_left  < 10   # within p0 (length=10)
-    assert idx_right >= 10  # within p1 (starts at offset 10)
 
 
 def test_01():
-    "generate_pages"
-    from einstein import get_einstein
-    from ..core.styles import testsheet
+    factory = Factory()
+    boxes = factory.create_all(TextModel("123").texel)
+    assert calc_length(boxes) == 3
+    boxes = factory.create_all(TextModel("123\n567").get_xtexel())
+    assert calc_length(boxes) == 8
 
-    xtexel     = get_einstein()
-    restartmemo = RestartMemo()
-    factory    = Factory(testsheet)
-    pages = list(generate_pages(xtexel, 0, restartmemo, factory))
-    assert len(pages) > 0
-
-
-def test_02():
-    "restartmemo"
-    from einstein import get_einstein
-    from ..core.styles import testsheet
-
-    info          = RestartMemo()
-    info.geometry = (100, 10)
-    info.border   = 1, 1, 1, 1
-
-    xtexel  = get_einstein()
-    factory = Factory(testsheet)
-    pages = []
-    i1 = i2 = 0
-    for page in generate_pages(xtexel, 0, info, factory):
-        i2 = i1 + len(page)
-        pages.append((i1, i2, page))
-        i1 = i2
-
-    assert len(pages) >= 4
-    i1, i2, p = pages[3]
-    info = p.restartmemo
-    assert info is not None
-
-    # build from page 3 on
-    newpages = list(generate_pages(xtexel, i1, info, factory))
-    assert len(newpages) > 0
-
-def test_03():
-    "relayout: abort condition reached after page 1"
-    from einstein import get_einstein_model
-    from ..core.styles import testsheet
-
-    model   = get_einstein_model()
-    factory = Factory(testsheet)
-    builder = Builder(model + model, factory)
-    builder.settings = {
-        'paper':         'custom',
-        'paper_width':   100,
-        'paper_height':  20,
-        'margin_top':    1,
-        'margin_right':  1,
-        'margin_bottom': 1,
-        'margin_left':   1,
-    }
-    builder.rebuild()
-    builder.buildto_finish()
-    n_pages = len(builder._layout.childs)
-    assert n_pages >= 2, "Need multiple pages for this test"
-
-    builder.rebuild_range(0, 1, delta=0)  # simulate change of first char
-    builder.buildto_finish()
-    nbefore, n_rebuilt, nrest = builder.get_updatestats()
-    assert nbefore == 0
-    assert n_rebuilt == 1
-    assert nrest == n_pages - 1
     
 
-def demo_01():
-    global DEBUG; DEBUG = True
-    from moby import get_moby_model
-    model = get_moby_model()
 
-    def findall(model, pattern):
-        text = model.get_text()
-        i = -1
-        while True:
-            i = text.find(pattern, i + 1)
-            if i < 0:
-                return
-            yield i
-
-    import styles
-    styles.normal['space_after']        = 0.5 * cm
-    styles.normal['first_line_indent']  = 0.8 * cm
-
-    for i in findall(model, 'CHAPTER'):
-        model.set_parstyle(i, dict(base='h0'))
-
-    model.set_properties(0, 10, text_color='red')
-    app   = wx.App(redirect=True)
-    frame = wx.Frame(None)
-    view  = MyView(frame, -1)
-    view.model = model
-
-    frame.Show()
-    from inspector import Inspector
-    inspector = Inspector(view, None)
-    inspector.Show()
-
-    if 1:
-        from ..wxtextview import testing
-        l = locals()
-        l.update(globals())
-        testing.pyshell(l)
-    app.MainLoop()
-    

@@ -1,5 +1,5 @@
-from ..wxtextview.boxes import Rect, Box, VBox, TextBox, find_text_pos
-from ..wxtextview.testdevice import TESTDEVICE
+from .boxes import Rect, Box, VBox, TextBox, find_text_pos
+from .testdevice import TESTDEVICE
 
 
 class StretchableText(Box):

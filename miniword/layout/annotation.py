@@ -13,8 +13,8 @@
 #     layout.draw(x, y, gc)              # 3. text (no page-fill any more)
 #     squiggle(gc, layout, i1, i2, x, y) # 4. lines on top of text
 
-from ..wxtextview.boxes import _TextBoxBase
-from ..wxtextview.rect import Rect
+from .boxes import _TextBoxBase
+from .rect import Rect
 from .stretchable import StretchableText
 
 
@@ -86,8 +86,8 @@ def squiggle(dc, box, i1, i2, x=0, y=0, color='red'):
 
 def test_00():
     "highlight"
-    from ..wxtextview.boxes import TextBox, VBox
-    from ..wxtextview.testdevice import TestDevice
+    from .boxes import TextBox, VBox
+    from .testdevice import TestDevice
 
     calls = []
 
@@ -117,7 +117,7 @@ def test_00():
 def test_01():
     "iter_textboxes"
     # Tests the shared iteration core used by both highlight and squiggle.
-    from ..wxtextview.boxes import TextBox, VBox, HBox
+    from .boxes import TextBox, VBox, HBox
     from .stretchable import create_stretchtext
 
     t1 = TextBox('01234')

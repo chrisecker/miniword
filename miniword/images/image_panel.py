@@ -153,7 +153,7 @@ class ImageInspector(SidePanel):
         if self._updating or self._blob_id is None:
             return
         index = self._view.index
-        texel = next((t for _, _, t in get_path(self._view.model.texel, index)
+        texel = next((t for _, _, t in get_path(self._view.edit_model.texel, index)
                       if isinstance(t, Image)), None)
         if texel is None:
             return
@@ -237,14 +237,14 @@ class ImageInspector(SidePanel):
 
     def _get_image_texel(self):
         """Return the Image texel at the current cursor position, or None."""
-        return next((t for _, _, t in get_path(self._view.model.texel, self._view.index)
+        return next((t for _, _, t in get_path(self._view.edit_model.texel, self._view.index)
                      if isinstance(t, Image)), None)
 
     def _on_crop_toggle(self, event):
         if not self._crop_active:
             if self._blob_id is not None:
                 index = self._view.index
-                path = get_path(self._view.model.texel, index)
+                path = get_path(self._view.edit_model.texel, index)
                 for depth, (i1, i2, texel) in enumerate(path):
                     if isinstance(texel, Image):
                         editor = ImageCropEditor(self._view, i1, i2, depth)

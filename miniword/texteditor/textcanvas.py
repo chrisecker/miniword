@@ -1,41 +1,46 @@
-# -*- coding: utf-8 -*-
-
-
 import wx
 import string
 
 from ..textmodel import TextModel
 from ..textmodel.styles import updated_style
-from .textview import TextView
-from .wxdevice import WxDevice, defaultstyle
-from .testdevice import TESTDEVICE
-from .simplelayout import Builder
+from ..textmodel.viewbase import overridable_property, ViewBase
 
+from ..layout.cairodevice import CairoDevice, defaultstyle
+from ..layout.testdevice import TESTDEVICE
+from ..layout.simplelayout import SimpleBuilder
 from math import ceil
 import pickle
 
 
 
 
-class WxMixin(wx.ScrolledWindow):
-    """wx-specific layer: rendering, scrolling, clipboard, events.
 
-    Designed to be mixed with TextView (or a subclass) to produce a
-    working wx widget without duplicating that code for every view type.
+class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextCanvas
+    """
+    - Render bei Modelländerungen
+    - Hat Editor als optionales Attribut
+    - Wenn Editor None ist, dann wird auch kein Cursor dargestellt
     """
     _scrollrate = 10, 10
 
-    @property
-    def scale(self):
-        try:
-            dpi = self.GetDPI().y
-        except AttributeError:
-            dpi = wx.ScreenDC().GetPPI()[1]
-        return self.builder.get_device().get_scale(dpi)
+    zoom = overridable_property('zoom')
+    scale = overridable_property('scale')
+    layout = overridable_property('layout')
+    _zoom = 1.0
+    min_zoom    = 0.2
+    max_zoom    = 5.0
+    zoom_factor = 1.1
+    
 
-    def __init__(self, parent, id=-1,
-                 pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):
-        wx.ScrolledWindow.__init__(self, parent, id,
+    def __init__(self, parent, model, builder, editor=None, pos=wx.DefaultPosition,
+                 size=wx.DefaultSize, style=0):
+        ViewBase.__init__(self)
+        self.editor = editor
+        self.model = model
+        if editor is not None:
+            self.add_model(editor)
+        self.builder = builder
+        wx.ScrolledWindow.__init__(self, parent, -1,
                                    pos, size,
                                    style | wx.WANTS_CHARS)
         try:
@@ -50,6 +55,7 @@ class WxMixin(wx.ScrolledWindow):
         self.Bind(wx.EVT_LEFT_UP, self.on_leftup)
         self.Bind(wx.EVT_LEFT_DCLICK, self.on_leftdclick)
         self.Bind(wx.EVT_MOTION, self.on_motion)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.on_mousewheel)
         self.Bind(wx.EVT_KILL_FOCUS, self.on_focus)
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
 
@@ -93,6 +99,28 @@ class WxMixin(wx.ScrolledWindow):
             (21, True, False): 'dedent',
         }
 
+    def ensure_viewport(self):
+        pass
+
+    def get_layout(self):
+        return self.builder.layout
+
+    def get_zoom(self):
+        return self._zoom
+
+    def set_zoom(self, zoom):
+        self._zoom = zoom
+    
+    def get_scale(self):
+        # XXX besser wäre die scale-Berechung direkt in TextView, aber
+        # eine DPI-Berechung lokal! ??
+        
+        try:
+            dpi = self.GetDPI().y
+        except AttributeError:
+            dpi = wx.ScreenDC().GetPPI()[1]
+        return self.builder.get_device().get_scale(dpi, self.zoom)
+    
     # --- wx hooks (satisfy TextView abstract interface) ---
 
     def refresh(self):
@@ -113,7 +141,7 @@ class WxMixin(wx.ScrolledWindow):
     # --- timer / focus ---
 
     def on_blink(self, event):
-        self.Refresh()
+        self.refresh()
 
     def on_destroy(self, event):
         if self.timer.IsRunning():
@@ -121,7 +149,7 @@ class WxMixin(wx.ScrolledWindow):
         event.Skip()
 
     def on_focus(self, event):
-        self.Refresh()
+        self.refresh()
 
     def on_size(self, event):
         self.keep_cursor_on_screen()
@@ -129,7 +157,9 @@ class WxMixin(wx.ScrolledWindow):
     # --- keyboard ---
 
     def on_char(self, event):
-        if self.editor.on_key(event.GetKeyCode(), event):
+        if self.editor is None:
+            return
+        if self.editor.controller.on_key(event.GetKeyCode(), event):
             return
         keycode = event.GetKeyCode()
         ukey = event.GetUnicodeKey()
@@ -139,7 +169,7 @@ class WxMixin(wx.ScrolledWindow):
         action = self.actions.get((keycode, ctrl, alt))
 
         if action is not None:
-            self.handle_action(action, shift)
+            self.editor.controller.handle_action(action, shift)
             return
 
         # Ctrl-Sequences are used for menu shortcuts -> Skip the event
@@ -151,7 +181,7 @@ class WxMixin(wx.ScrolledWindow):
             return
 
         if ukey != wx.WXK_NONE:
-            self.type_char(chr(ukey))
+            self.editor.insert_text(chr(ukey))
         else:
             event.Skip()
         
@@ -192,34 +222,99 @@ class WxMixin(wx.ScrolledWindow):
     # --- mouse ---
 
     def on_motion(self, event):
-        if self.editor.on_motion(event):
+        if self.editor and self.editor.controller.on_motion(event):
             return
         if not event.LeftIsDown():
             return event.Skip()
         x, y = self.window_to_content(event.Position)
         i = self.layout.get_index(x, y)
         if i is not None:
-            self.set_index(i, extend=True)
+            self.editor.set_index(i, extend=True)
+
+    def on_mousewheel(self, event):
+        if not event.ControlDown():
+            return event.Skip()  # let wx handle normal scrolling
+
+        old_scale = self.scale
+        factor = self.zoom_factor if event.GetWheelRotation() > 0 \
+            else 1 / self.zoom_factor
+        new_zoom = max(self.min_zoom, min(self.max_zoom, self.zoom * factor))
+
+        cw, ch = self.GetClientSize()
+        rx, ry = self._scrollrate
+        sx, sy = self.GetViewStart()
+        scroll_x, scroll_y = sx * rx, sy * ry
+
+        # content point currently at the viewport center
+        cx_content = (scroll_x + cw / 2) / old_scale
+        cy_content = (scroll_y + ch / 2) / old_scale
+
+        self.zoom = new_zoom
+        new_scale = self.scale
+
+        # virtual size must be updated before scrolling
+        layout = self.layout
+        self.SetVirtualSize((int(layout.width * new_scale), int(layout.height * new_scale)))
+        self.SetScrollRate(rx, ry)
+
+        # scroll so the content point stays at the viewport center
+        new_scroll_x = cx_content * new_scale - cw / 2
+        new_scroll_y = cy_content * new_scale - ch / 2
+        self.Scroll(max(0, int(new_scroll_x / rx)), max(0, int(new_scroll_y / ry)))
+        self.refresh()
 
     def on_leftdown(self, event):
-        if self.editor.on_leftdown(event):
+        if self.editor.controller.on_leftdown(event):
             return
         x, y = self.window_to_content(event.Position)
-        i = self.compute_index(x, y)
+        i = self.layout.get_index(x, y, self.editor.flow)
         if i is not None:
-            self.set_index(i, extend=event.ShiftDown())
+            self.editor.set_index(i, extend=event.ShiftDown())
         self.SetFocus()
 
     def on_leftup(self, event):
-        if self.editor.on_leftup(event):
+        if self.editor.controller.on_leftup(event):
             self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
 
     def on_leftdclick(self, event):
-        if self.try_install_click_editor():
-            return
+        #if self.try_install_click_editor():
+        #    return
         x, y = self.window_to_content(event.Position)
         self.select_word(x, y)
         self.SetFocus()
+
+    def select_word(self, x, y):
+        editor = self.editor
+        i = self.layout.get_index(x, y, editor.flow)
+        if i is None:
+            return
+        model = editor.target
+        n = len(model)
+        
+        def isalnum(j):
+            return model.get_text(j, j+1).isalnum()
+            
+        try:
+            while not isalnum(i-1):
+                i = i-1
+            while isalnum(i-1):
+                i = i-1
+        except IndexError:
+            i = 0
+        i1 = i
+        i = i1
+        try:
+            while not isalnum(i):
+                i = i+1
+            while isalnum(i):
+                i = i+1
+        except IndexError:
+            i = n
+        i2 = i
+        editor.index = i2
+        editor.selection = (i1, i2)
+
+    
 
             
     # --- painting ---
@@ -249,14 +344,14 @@ class WxMixin(wx.ScrolledWindow):
         region = self.GetUpdateRegion()
         rx, ry, rw, rh = region.Box
         dc.SetClippingRegion(rx - 1, ry - 1, rw + 2, rh + 2)
-        painter = device.create_painter(dc, origin=(px, py))
+        painter = device.create_painter(dc, origin=(px, py), zoom=self.zoom)
 
         self.draw(painter)
         dc = None
         painter = None
 
     def has_focus(self):
-        return wx.Window.FindFocus() is self and self.index <= len(self.layout)
+        return wx.Window.FindFocus() is self
 
     # --- scroll ---
 
@@ -322,234 +417,135 @@ class WxMixin(wx.ScrolledWindow):
         ox, oy = self.content_offset()
         return (x - ox) / scale, (y - oy) / scale
 
-    # --- zoom ---
+    ### Drawing
 
-    def get_zoom(self):
-        return self.builder.get_device().zoom
+    def draw_background(self, painter):
+        pass
 
-    def set_zoom(self, zoom):
-        self.builder.get_device().zoom = zoom
+    def draw(self, painter):
+        # XXX
+        self.builder.assure_index(self.editor.index)
+        
+        self.draw_background(painter)
+        self.layout.draw(0, 0, painter)
+        if self.editor is not None:
+            self.editor.controller.draw(painter)
+
+    def draw_cursor(self, painter):
+        # note that draw_cursor is called by editor
+        if not self.has_focus():
+            return
+        editor = self.editor
+        style = {} # XXX self.get_filled_style(self.index).copy()
+        current = editor.get_current_style()
+        style.update(current)
+        self.layout.draw_cursor(editor.index, 0, 0, painter, style,
+                                flow=editor.flow)
+
+    def draw_selection(self, painter):
+        # note that draw_selection is called by editor
+        for j1, j2 in self.editor.get_selected():
+            self.layout.draw_selection(j1, j2, 0, 0, painter,
+                                       flow=self.editor.flow)
+    def model_changed(self, *args):
         self.refresh()
+    
 
+def test_00():
+    # ListeningBuilder ist ein Hack. Wir testen dass es wirklich  klappt. 
+    model = TextModel()
+    builder = SimpleBuilder(model, maxw=100)
+    assert builder.model.views == [builder]
 
-class WXTextView(WxMixin, TextView):
+    builder.rebuild()
+    s = str(builder.layout)
+    assert s == "SimpleLayout[Paragraph[Row[ENDBOX]]]"
 
-    def __init__(self, parent, id=-1,
-                 pos=wx.DefaultPosition, size=wx.DefaultSize, style=0):
-        WxMixin.__init__(self, parent, id, pos, size, style)
-        TextView.__init__(self)
+    model.insert_text(0, 'Hi Chris!')
+    s = str(builder.layout)
+    assert s == "SimpleLayout[Paragraph[Row[TB('Hi Chris!'), ENDBOX]]]"
 
-    def create_builder(self):
-        return Builder(
-            self.model,
-            device=WxDevice(),
-            maxw=self._maxw)
+def test_01():
+    # Test mit dem richtigen Builder
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+    from ..layout.builder import Builder
+    
+    
+    model = TextModel()
+    factory = Factory(testsheet)
+    builder = Builder(model, factory)
+    print(builder.model.views)
+    assert builder.model.views == [builder]
 
+    builder.rebuild()
+    s = str(builder.layout)
+    #print(s)
+    #assert s == "SimpleLayout[Paragraph[Row[ENDBOX]]]"
 
-
-
-
-
-def init_testing(redirect=True):
-    from .textview import testtext
-    app = wx.App(redirect=redirect)
-    model = TextModel(testtext)
-    model.set_properties(15, 24, fontsize=14)
-    model.set_properties(249, 269, fontsize=14)
-
-    frame = wx.Frame(None)
-    win = wx.Panel(frame)
-    view = WXTextView(win)
-    view.model = model
-    assert view.layout is not None
-    box = wx.BoxSizer(wx.VERTICAL)
-    box.Add(view, 1, wx.ALL | wx.GROW, 1)
-    win.SetSizer(box)
-    win.SetAutoLayout(True)
-    frame.Show()
-    return locals()
-
-def test_02():
-    "setting cursor & selection"
-    ns = init_testing(redirect=True)
-    view = ns['view']
-    view.cursor = 5
-    view.selection = 3, 6
-    return ns
-
-def test_03():
-    "inserting text"
-    ns = init_testing(redirect=False)
-    model = ns['model']
-    view = ns['view']
-    assert view.layout is not None
-
-    model.set_properties(10, 20, fontsize=15)
-    assert view.layout is not None
-
-    n = len(model)
-    text = '\n12345\n'
-    model.insert_text(5, text)
-    model.remove(5, 5 + len(text))
-    assert len(model) == n
-    assert len(view.layout) == n + 1
-    return locals()
-
-def test_04():
-    "insert/remove"
-    ns = init_testing(False)
-    model = ns['model']
-    view = ns['view']
-    text = model.get_text()
-    n = len(model)
-    for i in range(len(text)):
-        model.insert_text(i, 'X')
-        assert len(model) == n+1
-        model.remove(i, i+1)
-        assert len(model) == n
-
-def test_05():
-    "remove"
-    ns = init_testing(redirect=False)
-    model = ns['model']
-    view = ns['view']
-    text = model.get_text()
-    n = len(model)
-    for i in range(len(text)-1):
-        old = model.remove(i, i+1)
-        assert len(model) == n-1
-        model.insert(i, old)
-        assert len(model) == n
-
-def test_09():
-    "linebreak"
-    ns = init_testing(redirect=False)
-    model = ns['model']
-    view = ns['view']
-    text = model.get_text()
-    view.set_maxw(100)
-    return ns
-
-def test_10():
-    "linebreak after insert"
-    ns = init_testing(redirect=False)
-    model = ns['model']
-    view = ns['view']
-    model.remove(0, len(model))
-    model.insert(0, TextModel("123\n"))
-
-    builder = view.builder
-    builder.set_maxw(100)
-    layout = view.layout
-    assert layout.get_info(4, 0, 0)
-    x, y = layout.get_info(3, 0, 0)[-2:]
-    u, v = layout.get_info(4, 0, 0)[-2:]
-    assert u < x
-    assert v > y
-
-def test_11():
-    "relayout after changes"
-    ns = init_testing(redirect=False)
-    model = ns['model']
-    view = ns['view']
-    model.remove(0, len(model))
-    model.insert(0, TextModel("123\n"))
-    assert view.layout.get_index(100, 0) == 3
-
-def test_13():
-    "exception during delete 10.01.2015"
-    ns = init_testing(redirect=False)
-    model = ns['model']
-    view = ns['view']
-    view.index = 271
-    view.selection = (42, 42 + 227)
-    view.cut()
-
-
-def test_14():
-    "join_undo"
-    ns = init_testing(redirect=False)
-    view = ns['view']
-    for i, text in enumerate('abcd'):
-        view.add_undo(view.insert(i, TextModel(text)))
-    assert len(view._undoinfo) == 1
-
-    view._undoinfo = [] # reset undo
-
-    # emulate backspace
-    view.add_undo(view.remove(10, 11))
-    view.add_undo(view.remove(9, 10))
-    assert len(view._undoinfo) == 1
+    model.insert_text(0, 'Hi Chris!')
+    s = str(builder.layout)
+    #assert s == "SimpleLayout[Paragraph[Row[TB('Hi Chris!'), ENDBOX]]]"
 
 def demo_00():
-    "simple demo"
-    ns = test_02()
-    from . import testing
-    testing.pyshell(ns)
-    ns['app'].MainLoop()
+    app = wx.App(redirect=True)
+    model = TextModel()
+    builder = SimpleBuilder(model, device=CairoDevice(), maxw=100)
+    builder.rebuild()
+    
+    from .editor import Editor
+    editor = Editor(model)
 
+    frame = wx.Frame(None)
+    win = wx.Panel(frame)
+    canvas = TextCanvas(win, model, builder, editor)
+    editor.canvas = canvas # XXX zirkuläre Referenz!
+    
+    box = wx.BoxSizer(wx.VERTICAL)
+    box.Add(canvas, 1, wx.ALL | wx.GROW, 1)
+    win.SetSizer(box)
+    win.SetAutoLayout(True)
+    frame.Show()
+
+    editor.root.insert_text(0, 'Hi\nChris!')
+    print(model.get_text())
+    print(str(builder.layout))
+    app.MainLoop()
 
 def demo_01():
-    "colorize demo"
-    app = wx.App(redirect=False)
-    frame = wx.Frame(None)
-    win = wx.Panel(frame)
-    view = WXTextView(win)
-    box = wx.BoxSizer(wx.VERTICAL)
-    box.Add(view, 1, wx.ALL | wx.GROW, 1)
-    win.SetSizer(box)
-    win.SetAutoLayout(True)
-
-    from ..textmodel.textmodel import pycolorize
-    from ..textmodel import texeltree
-    filename = texeltree.__file__.replace('pyc', 'py')
-    rawtext = open(filename, 'rb').read()
-    model = pycolorize(rawtext)
-    view.set_model(model)
-    frame.Show()
-    app.MainLoop()
-
-
-def demo_02():
-    "empty text"
+    from .dev_builder import Builder
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+    
+    
+    
     app = wx.App(redirect=True)
+    model = TextModel()
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = Builder(model, factory)    
+    
+    from .editor import Editor
+    editor = Editor(model)
+
     frame = wx.Frame(None)
     win = wx.Panel(frame)
-    view = WXTextView(win)
+    canvas = TextCanvas(win, model, builder, editor)
+    editor.canvas = canvas # XXX zirkuläre Referenz!
+    
     box = wx.BoxSizer(wx.VERTICAL)
-    box.Add(view, 1, wx.ALL | wx.GROW, 1)
+    box.Add(canvas, 1, wx.ALL | wx.GROW, 1)
     win.SetSizer(box)
     win.SetAutoLayout(True)
-    model = TextModel(u'')
-    view.set_model(model)
     frame.Show()
-    from . import testing
-    testing.pyshell(locals())
+
+    editor.root.insert_text(0, 'Hi\nChris!')
+    print(model.get_text())
+    builder.rebuild()
+    builder.assure_index(len(model))
+    
+    assert builder.model is model
+    print("len:", len(builder.layout))
+    assert len(builder.layout) == len(model)+1
+    builder.layout.dump_boxes(0, 0, 0)
     app.MainLoop()
 
-
-def demo_03():
-    "line break"
-    ns = test_09()
-    from . import testing
-    testing.pyshell(ns)
-    ns['app'].MainLoop()
-
-def benchmark_00():
-    text = ""
-    for i in range(1000):
-        text += "Copy #%d \n" % i
-
-    model = TextModel(u'Hello World!')
-    model.set_properties(6, 11, fontsize=14)
-    model.set_properties(0, 11, bgcolor='yellow')
-    model.insert(len(model), TextModel(text))
-    app = wx.App(False)
-
-    frame = wx.Frame(None)
-    view = WXTextView(frame, -1)
-    view.model = model
-    frame.Show()
-
-    for i in range(100):
-        model.insert_text(1000, "TEXT")

@@ -41,8 +41,8 @@ DocumentView integration sketch:
 import wx
 from copy import copy
 from ..textmodel.texeltree import Single, EMPTYSTYLE, NL
-from ..wxtextview.boxes import Box
-from ..wxtextview.testdevice import TESTDEVICE
+from ..layout.boxes import Box
+from ..layout.testdevice import TESTDEVICE
 
 
 # ---------------------------------------------------------------------------

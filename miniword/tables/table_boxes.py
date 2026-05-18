@@ -2,8 +2,8 @@
 
 """TableBox rendering for Table texels."""
 
-from ..wxtextview.boxes import Box, TextBox, EmptyTextBox, EMPTYSTYLE
-from ..wxtextview.testdevice import TESTDEVICE
+from ..layout.boxes import Box, TextBox, EmptyTextBox, EMPTYSTYLE
+from ..layout.testdevice import TESTDEVICE
 from .tables import from_strings
 
 

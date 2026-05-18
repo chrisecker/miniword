@@ -1,25 +1,26 @@
-"""BoxEditor extends TexelEditor with box, handle and drag support.
+"""BoxController extends ElementController with box, handle and drag support.
 
 Texels and boxes are immutable: every committed change replaces the texel
-and triggers a re-layout, so the cached box becomes stale.  install() is
-therefore called again after each such change to re-query find_box().
+and triggers a re-layout, so a cached box would become stale.  Controllers
+are therefore not mutated in place — match() constructs a fresh instance
+(with current texel, i1, i2, depth) after each such change, which re-queries
+find_box() in __init__.
 
-i1, i2 and depth are assumed to be stable over the editor's lifetime.
+i1, i2 and depth are assumed to be stable over the controller's lifetime.
 """
 
 import wx
 from ..textmodel.texeltree import iter_childs
-from ..wxtextview.textview import TexelEditor
+from .controller import ElementController
 
 
 
-class BoxEditor(TexelEditor):
-    """Base class for all texel editors with wx-specific drag/handle support.
+class BoxController(ElementController):
+    """Base class for all texel controllers with wx-specific drag/handle support.
     """
     auto_installable   = True
 
-    ### set in install
-    texel              = None    # the primary texel being edited
+    ### set in __init__, via find_box()
     box                = None    # the current box
     box_origin         = None    # top-left corner of the box in layout coordinates
     i0_box             = None    # document start position of the box (differs from
@@ -39,13 +40,15 @@ class BoxEditor(TexelEditor):
     # ------------------------------------------------------------------
     # Protocol — must override in subclasses
 
-    def __init__(self, textview, i1, i2, depth):
-        super().__init__(textview, i1, i2, depth)
+    def __init__(self, editor, texel, i1, i2, depth):
+        super().__init__(editor, texel, i1, i2, depth)
+        self.i0_box, self.box_origin, self.box = self.find_box()
 
     def find_box(self):
-        """Return (box, (x0, y0)) — the box and its top-left in document coords.
+        """Return (i0, (x0, y0), box) — the box's document start position,
+        its top-left corner in document coords, and the box itself.
 
-        Called on every paint pass; do not cache.
+        Called once from __init__; do not cache beyond the controller's lifetime.
         """
         raise NotImplementedError()
 
@@ -57,15 +60,6 @@ class BoxEditor(TexelEditor):
         """Yield (name, x, y) for each drag handle in box-local coordinates."""
         raise NotImplementedError
         yield 'nothing', 0, 0
-
-    # ------------------------------------------------------------------
-    # Lifecycle
-
-    def install(self):
-        i0, origin, box = self.find_box()
-        self.i0_box = i0
-        self.box_origin = origin
-        self.box = box
 
     # ------------------------------------------------------------------
     # Drawing
@@ -149,7 +143,7 @@ class BoxEditor(TexelEditor):
         """Convert a window pixel position to box-local document coordinates.
 
         Uses the cached box_origin rather than re-querying find_box(), because
-        the layout is stable between install() and the next model change.
+        the layout is stable for the lifetime of this controller instance.
         """
         x, y = self.textview.window_to_content(pos)
         x0, y0 = self.box_origin
