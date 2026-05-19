@@ -13,6 +13,32 @@ from .simplelayout import Builder
 
 from math import ceil
 import pickle
+import re
+
+
+def slugify(text):
+    """Convert heading text to a GitHub-compatible anchor ID."""
+    text = text.lower().strip()
+    text = re.sub(r'[^\w\s-]', '', text)
+    text = re.sub(r'[\s_]+', '-', text)
+    return text.strip('-')
+
+
+def find_anchor_index(model, anchor_id):
+    """Return the text index of the heading whose slug matches anchor_id, or None."""
+    from ..textmodel.iterators import iter_paragraphs
+    from ..textmodel.texeltree import NewLine, get_text
+    _HEADINGS = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+    for i1, _i2, elems in iter_paragraphs(model.get_xtexel(), 0):
+        nl = elems[-1]
+        if not isinstance(nl, NewLine):
+            continue
+        if nl.parstyle.get('base', '') not in _HEADINGS:
+            continue
+        text = ''.join(get_text(e) for e in elems[:-1])
+        if slugify(text) == anchor_id:
+            return i1
+    return None
 
 
 
@@ -195,6 +221,13 @@ class WxMixin(wx.ScrolledWindow):
         if self.editor.on_motion(event):
             return
         if not event.LeftIsDown():
+            x, y = self.window_to_content(event.Position)
+            i = self.compute_index(x, y)
+            href = ''
+            if i is not None:
+                href = self.model.get_style(max(0, i - 1)).get('href', '')
+            cursor = wx.CURSOR_HAND if href else wx.CURSOR_IBEAM
+            self.SetCursor(wx.Cursor(cursor))
             return event.Skip()
         x, y = self.window_to_content(event.Position)
         i = self.layout.get_index(x, y)
@@ -207,6 +240,19 @@ class WxMixin(wx.ScrolledWindow):
         x, y = self.window_to_content(event.Position)
         i = self.compute_index(x, y)
         if i is not None:
+            if event.ControlDown():
+                style = self.model.get_style(max(0, i - 1))
+                href = style.get('href', '')
+                if href:
+                    if href.startswith('#'):
+                        target = find_anchor_index(self.model, href[1:])
+                        if target is not None:
+                            self.set_index(target)
+                    else:
+                        import webbrowser
+                        webbrowser.open(href)
+                    self.SetFocus()
+                    return
             self.set_index(i, extend=event.ShiftDown())
         self.SetFocus()
 
@@ -218,15 +264,6 @@ class WxMixin(wx.ScrolledWindow):
         if self.try_install_click_editor():
             return
         x, y = self.window_to_content(event.Position)
-        i = self.compute_index(x, y)
-        if i is not None:
-            style = self.model.get_style(max(0, i - 1))
-            href = style.get('href', '')
-            if href:
-                import webbrowser
-                webbrowser.open(href)
-                self.SetFocus()
-                return
         self.select_word(x, y)
         self.SetFocus()
 
@@ -489,6 +526,38 @@ def test_14():
     view.add_undo(view.remove(10, 11))
     view.add_undo(view.remove(9, 10))
     assert len(view._undoinfo) == 1
+
+def test_15():
+    "slugify converts heading text to anchor IDs"
+    assert slugify("Hello World") == "hello-world"
+    assert slugify("Über uns") == "über-uns"
+    assert slugify("Links im Fließtext") == "links-im-fließtext"
+    assert slugify("  spaced  ") == "spaced"
+    assert slugify("foo_bar") == "foo-bar"
+
+
+def test_16():
+    "find_anchor_index locates headings by slug"
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.core.document import Document
+    doc = Document()
+    doc.textmodel = TextModel('')
+    pos = 0
+    for line in ("# Introduction\n", "Some text.\n", "## Details\n"):
+        tm = doc.textmodel.create_textmodel(line)
+        doc.textmodel.insert(pos, tm)
+        pos += len(line)
+    base = 'h1' if True else ''
+    doc.textmodel.set_parstyle(len("# Introduction") , {'base': 'h1'})
+    doc.textmodel.set_parstyle(len("# Introduction\nSome text."), {'base': 'body'})
+    doc.textmodel.set_parstyle(len("# Introduction\nSome text.\n## Details"), {'base': 'h2'})
+
+    i = find_anchor_index(doc.textmodel, 'introduction')
+    assert i == 0
+    i2 = find_anchor_index(doc.textmodel, 'details')
+    assert i2 is not None and i2 > i
+    assert find_anchor_index(doc.textmodel, 'nonexistent') is None
+
 
 def demo_00():
     "simple demo"
