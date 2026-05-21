@@ -705,6 +705,7 @@ class TextView(ViewBase, Model):
     def properties_changed(self, model, i1, i2):
         self.rebuild_range(i1, i2, 0)
         self.refresh()
+        self.notify_views('textmodel_changed')
 
     def inserted(self, model, i, n):
         if not self.editor.is_null:
@@ -722,6 +723,7 @@ class TextView(ViewBase, Model):
                 s2 += n
             self.selection = s1, s2
         self.refresh()
+        self.notify_views('textmodel_changed')
 
     def removed(self, model, i, text):
         if not self.editor.is_null:
@@ -748,6 +750,7 @@ class TextView(ViewBase, Model):
                 s2 = i1
             self.selection = min(s1, m), min(s2, m)
         self.refresh()
+        self.notify_views('textmodel_changed')
 
     def keep_cursor_on_screen(self):
         pass

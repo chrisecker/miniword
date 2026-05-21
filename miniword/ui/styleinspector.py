@@ -163,7 +163,6 @@ class StyleInspector(SidePanel):
         self._view = view
         self.basestyles = basestyles
         self.add_model(view)
-        self.add_model(view.model)
         self.create()
         passfocus(self, view)
 

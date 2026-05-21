@@ -779,8 +779,6 @@ class MainFrame(wx.Frame, ViewBase):
         self.textview.index = 0
         self.textview.add_model(doc.basestyles)
         self.textview.add_model(doc)
-        self.inspector.remove_model(old_textmodel)
-        self.inspector.add_model(doc.textmodel)
         self.inspector.basestyles = doc.basestyles
         self.inspector.basestyle.set_stylesheet(doc.basestyles)
         self.inspector.queue_update()
