@@ -178,7 +178,7 @@ def demo_00():
     import wx
     from ..textmodel.texeltree import grouped, Text
     from ..core.document import Document
-    from ..ui.documentview import DocumentView
+    from ..texteditor import TextEditor
 
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -195,7 +195,7 @@ def demo_00():
 
     app = wx.App(False)
     frame = wx.Frame(None, title="Image Demo", size=(500, 400))
-    view = DocumentView(frame, doc)
+    view = TextEditor(frame, doc)
     view.builder.factory.blobs = doc.blobs
     frame.Show()
     app.MainLoop()

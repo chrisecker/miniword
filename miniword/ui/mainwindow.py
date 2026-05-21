@@ -4,7 +4,7 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from .styleinspector import StyleInspector
 from .settingsinspector import SettingsInspector
-from .documentview import DocumentView
+from ..texteditor import TextEditor
 from ..images import Image, ImageInspector
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
@@ -353,7 +353,7 @@ class MainFrame(wx.Frame, ViewBase):
         outer.Add(self._base, 1, wx.EXPAND)
         self.SetSizer(outer)
 
-        self.textview = DocumentView(self._base, self.document)
+        self.textview = TextEditor(self._base, self.document)
         colours.set(self.textview, 'BackgroundColour', 'CanvasBg')
         self.textview.add_view(self)
 

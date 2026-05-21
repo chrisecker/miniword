@@ -47,7 +47,7 @@ modules = [
     "miniword.ui.stylemenu",
     "miniword.ui.styleinspector",
     "miniword.ui.searchtool",
-    "miniword.ui.documentview",
+    "miniword.texteditor.texteditor",
 
     # plugins
     "miniword.plugins.mdfilter",

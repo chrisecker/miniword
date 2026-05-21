@@ -18,7 +18,7 @@ import wx
 
 
 
-def docview_handler(view, action, shift, ctx):
+def document_handler(view, action, shift, ctx):
     i = ctx.index
     style = ctx.style
     model = ctx.model
@@ -61,8 +61,8 @@ def docview_handler(view, action, shift, ctx):
         return False
     return True
 
-class DocumentView(WXTextView):
-    handlers = [docview_handler, text_handler, default_handler]
+class TextEditor(WXTextView):
+    handlers = [document_handler, text_handler, default_handler]
 
     highlights = []  # list of (i1, i2) or (i1, i2, color)
     squiggles  = []  # list of (i1, i2) or (i1, i2, color)
@@ -248,20 +248,6 @@ class DocumentView(WXTextView):
         delta = -1 if reverse else 1
         self.set_parproperties(s1, s2, base=keys[(idx + delta) % len(keys)])
 
-    def on_leftdclick(self, event):
-        index = self.index   # already set by first click
-        path = get_path(self.model.texel, index)
-        for cls in self.editor_registry:
-            if not cls.click_installable:
-                continue
-            m = cls.match(self, path)
-            if m is not None:
-                i1, i2, depth, texel = m
-                editor = cls(self, i1, i2, depth)
-                self.install_editor(editor, texel)
-                return
-        super().on_leftdclick(event)
-      
     ### Model callbacks & atomic
     _pending_range = None  # (i1, i2, delta) accumulated while inhibited
     _inhibit_depth = 0
@@ -852,7 +838,7 @@ def test_00():
     with redirect_stdout(io.StringIO()):
         app   = _get_test_app()
         frame = wx.Frame(None)
-        view  = DocumentView(frame, doc)
+        view  = TextEditor(frame, doc)
         view.builder.nbefore = 0
         view.builder.nrest = 0
 
@@ -894,7 +880,7 @@ def long_test_01():
         doc  = Document()
         doc.textmodel = get_model()
         doc.basestyles.set('normal', dict(style_default))
-        view = DocumentView(frame, doc)
+        view = TextEditor(frame, doc)
         view.builder.buildto_finish()
 
     # Pretend the viewport extends far below the built layout so the
@@ -912,7 +898,7 @@ def long_test_01():
         def Destroy(self):
             pass
 
-    with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
+    with patch('miniword.texteditor.texteditor.wx.ProgressDialog', TrackingDialog):
         with view.atomic():
             view.properties_changed(view.model, 0, 100)
 
@@ -922,7 +908,7 @@ def long_test_01():
     view.index = len(view.model)
     del ticks[:]
     del dialogs[:]
-    with patch('miniword.documentview.wx.ProgressDialog', TrackingDialog):
+    with patch('miniword.texteditor.texteditor.wx.ProgressDialog', TrackingDialog):
         with view.atomic():
             view.index = len(view.model)
             view.properties_changed(view.model, 0, len(view.model))    
@@ -936,7 +922,7 @@ def demo_00():
     frame = wx.Frame(None)
     doc   = Document()
     doc.textmodel.insert_text(0, "Hello, World!\n")
-    view  = DocumentView(frame, doc)
+    view  = TextEditor(frame, doc)
     frame.Show()
 
     if 1:

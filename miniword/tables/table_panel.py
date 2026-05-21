@@ -7,7 +7,7 @@ from ..ui.threestate import ColourButton
 from ..ui.icons import icon
 from ..ui.design import muted_button, make_panel, add_section
 from ..ui.colours import colours
-from ..ui.documentview import get_path
+from ..core.utils import get_path
 from .tables import Table, empty_table
 
 TableCreatedEvent, EVT_TABLE_CREATED = NewEvent()

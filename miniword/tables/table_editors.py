@@ -13,7 +13,7 @@ long as it matches.
 
 import wx
 from ..wxtextview.boxes import find_row, prev_row, next_row
-from ..layout.boxeditor import BoxEditor
+from ..texteditor.boxeditor import BoxEditor
 from .tables import Table, from_cells
 from .table_boxes import TableBox
 
@@ -390,9 +390,9 @@ class MatrixEditor(TableEditorBase):
 
 ### Register Editors
 
-from ..ui.documentview import DocumentView
-DocumentView.editor_registry.append(CursorEditor)
-DocumentView.editor_registry.append(MatrixEditor)
+from ..texteditor import TextEditor
+TextEditor.editor_registry.append(CursorEditor)
+TextEditor.editor_registry.append(MatrixEditor)
 
 
 def test_00():
@@ -494,7 +494,7 @@ def demo_00():
     """CursorEditor"""
     from .tables import from_strings
     from ..core.document import Document
-    from ..ui.documentview import DocumentView
+    from ..texteditor import TextEditor
 
     doc = Document()
     doc.textmodel.texel = from_strings([['Name',     'City',       'Country'],
@@ -503,7 +503,7 @@ def demo_00():
 
     app   = wx.App(True)
     frame = wx.Frame(None, title='CursorEditor demo', size=(420, 300))
-    view  = DocumentView(frame, doc)
+    view  = TextEditor(frame, doc)
     frame.Show()
     app.MainLoop()
 
@@ -513,7 +513,7 @@ def demo_01():
     from ..textmodel.texeltree import Text
     from .tables import Table, from_strings
     from ..core.document import Document
-    from ..ui.documentview import DocumentView
+    from ..texteditor import TextEditor
 
     inner = from_strings([['A', 'B'], ['C', 'D']])
     outer = Table(
@@ -527,7 +527,7 @@ def demo_01():
 
     app   = wx.App(True)
     frame = wx.Frame(None, title='Nested table demo', size=(500, 300))
-    view  = DocumentView(frame, doc)
+    view  = TextEditor(frame, doc)
     frame.Show()
     app.MainLoop()
 

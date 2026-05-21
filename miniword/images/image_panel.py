@@ -1,7 +1,7 @@
 import os
 import wx
 from .images import Image
-from ..ui.documentview import get_path
+from ..core.utils import get_path
 from .image_editors import ImageCropEditor
 from ..textmodel.texeltree import grouped
 from ..ui.sidepanel import SidePanel

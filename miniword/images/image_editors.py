@@ -1,5 +1,5 @@
 import wx
-from ..layout.boxeditor import BoxEditor
+from ..texteditor.boxeditor import BoxEditor
 from .images import Image, ImageBox
 
 
@@ -283,17 +283,18 @@ class ImageCropEditor(ImageEditor):
 ### Register ImageSizeEditor. CropEditor does not need to be
 ### registered, because it is not automatically selected.
 
-from ..ui.documentview import DocumentView
-DocumentView.editor_registry.append(ImageSizeEditor)
+from ..texteditor import TextEditor
+TextEditor.editor_registry.append(ImageSizeEditor)
 
-        
+
 def _setup_demo():
     import os
     import wx
     from .images import Image
     from ..textmodel.texeltree import grouped, Text, NL
     from ..core.document import Document
-    from ..ui.documentview import DocumentView
+    from ..texteditor import TextEditor
+    from ..core.utils import get_path, get_texel
 
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     with open(os.path.join(here, 'test', 'red.png'), 'rb') as f:
@@ -303,8 +304,6 @@ def _setup_demo():
     doc.blobs = {'red.png': data}
     doc.textmodel.texel = grouped([Text('Before '), Image('red.png'), Text(' after.'), NL])
 
-    from ..ui.documentview import get_path, get_texel
-
     r = get_path(doc.textmodel.texel, 7)
     for x in r:
         print(x)
@@ -312,28 +311,28 @@ def _setup_demo():
 
     app   = wx.App(True)
     frame = wx.Frame(None, title='ImageSizeEditor demo', size=(420, 300))
-    view  = DocumentView(frame, doc)
+    view  = TextEditor(frame, doc)
     view.builder.factory.blobs = doc.blobs
     return app, frame, view
 
 def demo_00():
     """Image resize"""
-    from ..ui.documentview import get_texel
+    from ..core.utils import get_texel
     app, frame, view = _setup_demo()
     editor = ImageSizeEditor(view, 7, 8, 1)
-    texel = get_texel(view.model.texel, 7, 1)
+    editor.texel = get_texel(view.model.texel, 7, 1)
     view.index = 7
-    view.install_editor(editor, texel)
+    view.install_editor(editor)
     frame.Show()
     app.MainLoop()
 
 def demo_01():
     """Image crop"""
-    from ..ui.documentview import get_texel
+    from ..core.utils import get_texel
     app, frame, view = _setup_demo()
     editor = ImageCropEditor(view, 7, 8, 1)
-    texel = get_texel(view.model.texel, 7, 1)
+    editor.texel = get_texel(view.model.texel, 7, 1)
     view.index = 7
-    view.install_editor(editor, texel)
+    view.install_editor(editor)
     frame.Show()
     app.MainLoop()

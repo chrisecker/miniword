@@ -159,7 +159,7 @@ def test_01():
 # --- Demo ---
 
 def demo_00():
-    """Show highlight and squiggle annotations in a real DocumentView.
+    """Show highlight and squiggle annotations in a real TextEditor.
 
     Opens the Einstein text.  The first six long words found in the
     text are annotated: the first three with yellow highlight, the
@@ -174,7 +174,7 @@ def demo_00():
     import wx
     from einstein import get_einstein_model
     from ..core.document import Document
-    from ..ui.documentview import DocumentView
+    from ..texteditor import TextEditor
     from ..core.styles import testsheet
 
     app = wx.App(True)
@@ -183,7 +183,7 @@ def demo_00():
     doc.basestyles = testsheet
 
     frame = wx.Frame(None, title='Annotation Demo', size=(900, 600))
-    view  = DocumentView(frame, doc)
+    view  = TextEditor(frame, doc)
     view.highlights = []
     view.squiggles  = []
     view.SetBackgroundColour('light grey')

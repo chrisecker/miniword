@@ -414,7 +414,7 @@ def demo_00():
     """Interactive demo: click and shift-click to select cells."""
     import wx
     from ..core.document import Document
-    from ..ui.documentview import DocumentView
+    from ..texteditor import TextEditor
 
     TEXTS = [['Name',     'City',       'Country'],
              ['Einstein', 'Ulm',        'Germany'],
@@ -427,7 +427,7 @@ def demo_00():
 
     app   = wx.App(redirect=False)
     frame = wx.Frame(None, title='Table demo', size=(420, 420))
-    view  = DocumentView(frame, doc)
+    view  = TextEditor(frame, doc)
     frame.Show()
     from ..wxtextview import testing
     testing.pyshell(locals())
