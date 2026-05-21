@@ -1,6 +1,6 @@
 """We define two Editors for tables. Default is CursorEditor, which is
 only valid when the selection is inside one table cell. When several
-cells are included in the selection, docview changes to MatrixEditor.
+cells are included in the selection, textview changes to MatrixEditor.
 
 When the Selection is inside one Cell both Editors match. This
 ambiguity is solved by the preference (CursorEditor registers first
@@ -13,7 +13,7 @@ long as it matches.
 
 import wx
 from ..wxtextview.boxes import find_row, prev_row, next_row
-from ..layout.editorbase import TexelEditor
+from ..layout.boxeditor import BoxEditor
 from .tables import Table, from_cells
 from .table_boxes import TableBox
 
@@ -88,7 +88,7 @@ def is_multi_cell(texel, i1, i2):
     return r1 != r2 or c1 != c2
 
 
-class TableEditorBase(TexelEditor):
+class TableEditorBase(BoxEditor):
     """Base class for table editors. """
 
     _drag_orig_widths = None
@@ -100,8 +100,8 @@ class TableEditorBase(TexelEditor):
 
         Raises: IndexError when no Box is found.
         """
-        layout = self.docview.layout
-        index = self.docview.index
+        layout = self.textview.layout
+        index = self.textview.index
 
         def visit(p1, p2, x, y, box):
             if not (p1 <= index < p2):
@@ -131,7 +131,7 @@ class TableEditorBase(TexelEditor):
             return None
         if not (0 <= y <= tb.height):
             return None
-        hit_r = _HIT_RADIUS / self.docview.zoom
+        hit_r = _HIT_RADIUS / self.textview.zoom
         sep_x = 0
         for col, cw in enumerate(tb.col_widths):
             sep_x += cw
@@ -190,7 +190,7 @@ class TableEditorBase(TexelEditor):
         widths = self._preview_widths if self._preview_widths is not None else \
             tb.col_widths
         orig   = self._drag_orig_widths or tb.col_widths
-        zoom   = self.docview.zoom
+        zoom   = self.textview.zoom
         x      = 0
         for c, cw in enumerate(widths):
             x_col = x
@@ -210,7 +210,7 @@ class TableEditorBase(TexelEditor):
     def commit(self):
         widths = self._preview_widths
         if widths is not None:
-            self.docview.set_texel_attributes(
+            self.textview.set_texel_attributes(
                 self.i1, self.texel, col_widths=widths)
 
     def get_handles(self):
@@ -222,23 +222,23 @@ class CursorEditor(TableEditorBase):
     Editor for selections inside a cell. 
     """
 
-    @staticmethod
-    def match(view, path):
-        result = None
-        for depth, (i1, i2, texel) in enumerate(path):            
+    @classmethod
+    def match(cls, view, path):
+        e = None
+        for depth, (i1, i2, texel) in enumerate(path):
             if isinstance(texel, Table):
                 sel = view.selection
                 if sel is None or sel[0] == sel[1]:
-                    result = i1, i2, depth, texel
+                    e = cls(view, i1, i2, depth); e.texel = texel
                 else:
                     s1, s2 = sorted(sel)
                     if s1 <= i1 or i2 <= s2:
-                        result = None  # selection not inside cell area
+                        e = None  # selection not inside cell area
                     elif not is_multi_cell(texel, s1-i1, s2-i1):
-                        result = i1, i2, depth, texel
+                        e = cls(view, i1, i2, depth); e.texel = texel
                     else:
-                        result = None
-        return result
+                        e = None
+        return e
 
     def handle_action(self, action, shift, ctx):
         if action not in ('move_up', 'move_down'):
@@ -251,7 +251,7 @@ class CursorEditor(TableEditorBase):
         if action == 'move_up':
             prev = prev_row(ctx.layout, i)
             if prev is not None and prev[0] >= ctx.model.get_start(i):
-                self.docview.move_up(shift)
+                self.textview.move_up(shift)
                 return True
             if row == 0:
                 return False
@@ -260,7 +260,7 @@ class CursorEditor(TableEditorBase):
         else:
             nxt = next_row(ctx.layout, i)
             if nxt is not None and nxt[1] <= ctx.model.get_end(i):
-                self.docview.move_down(shift)
+                self.textview.move_down(shift)
                 return True
             if row == texel.nrows - 1:
                 return False
@@ -273,7 +273,7 @@ class CursorEditor(TableEditorBase):
             return False
         r1, r2, rx, ry, row_box = row_info
         j = r1 + row_box.get_index(x - rx, row_box.height)
-        self.docview.set_index(j, shift)
+        self.textview.set_index(j, shift)
         return True
 
     
@@ -282,20 +282,20 @@ class MatrixEditor(TableEditorBase):
     Editor for matrix like selections which can span several cells.
     """
 
-    @staticmethod
-    def match(view, path):
+    @classmethod
+    def match(cls, view, path):
         sel = view.selection
         if sel is None:
             return None
         s1, s2 = sorted(sel)
-        result = None
+        e = None
         for depth, (i1, i2, texel) in enumerate(path):
             if isinstance(texel, Table):
                 if s1 <= i1 or i2 <= s2:
-                    result = None  # selection not inside cell area
+                    e = None  # selection not inside cell area
                 elif is_multi_cell(texel, s1-i1, s2-i1):
-                    result = i1, i2, depth, texel                
-        return result
+                    e = cls(view, i1, i2, depth); e.texel = texel
+        return e
 
     def draw_cursor(self, gc):
         # Do not draw the cursor!
@@ -303,9 +303,9 @@ class MatrixEditor(TableEditorBase):
 
     def draw_selection(self, gc):
         """Highlight the rectangular cell block covered by the selection."""
-        if not self.docview.has_selection():
+        if not self.textview.has_selection():
             return
-        s1, s2 = sorted(self.docview.selection)
+        s1, s2 = sorted(self.textview.selection)
         try:
             r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
         except IndexError:
@@ -345,23 +345,23 @@ class MatrixEditor(TableEditorBase):
 
     def copy(self):
         """Rectangular cell copy for multi-cell selections."""
-        if not self.docview.has_selection():
+        if not self.textview.has_selection():
             return
-        s1, s2 = sorted(self.docview.selection)
+        s1, s2 = sorted(self.textview.selection)
         ci1   = self.i0_box
-        model = self.docview.model
+        model = self.textview.model
         i1, i2 = s1 - ci1, s2 - ci1
 
         r1, c1, r2, c2 = self.texel.get_rect(i1, i2)
         if r1 == r2 and c1 == c2:
-            self.docview.to_clipboard(model.copy(ci1 + i1, ci1 + i2))
+            self.textview.to_clipboard(model.copy(ci1 + i1, ci1 + i2))
             return
 
         cells    = self.texel.get_cells()
         sub_grid = [cells[r][c1:c2 + 1] for r in range(r1, r2 + 1)]
         result   = model.create_textmodel()
         result.texel = from_cells(sub_grid)
-        self.docview.to_clipboard(result)
+        self.textview.to_clipboard(result)
 
     def handle_action(self, action, shift, ctx):
         i = ctx.index
@@ -383,7 +383,7 @@ class MatrixEditor(TableEditorBase):
             return False
         cells = texel.get_cells()        
         i = self.i1+cells[row][col].i1
-        self.docview.set_index(i, shift)
+        self.textview.set_index(i, shift)
         return True
         
 
@@ -455,7 +455,7 @@ def test_04():
 
     s1 = box.offsets[(1, 0)]
     s2 = box.offsets[(2, 1)] + len(box.cells[2][1]) - 1
-    editor.docview.selection = (s1, s2)
+    editor.textview.selection = (s1, s2)
 
     editor.copy()
     assert len(copied_model) == 1

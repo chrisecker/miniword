@@ -31,17 +31,50 @@ def undo(info):
 inf = sys.maxsize
 
 
-class NullEditor:
-    """Always-active no-op editor; keeps the editor slot non-null.
+class TexelEditor:
+    """Base class for element editors.
 
-    Implements the full editor protocol with harmless defaults so that
-    TextView can call editor methods unconditionally without None-checks.
+    Editors are registered in TextView.editor_registry (priority order).
+    Two flags control activation:
+
+      auto_installable  = True   Installed automatically by update_editor()
+                                 when match() returns non-None after a cursor move.
+      click_installable = True   Installed on mouse click via try_install_click_editor().
+
+    Lifecycle:
+      match(view, path) → editor or None   Called to check whether this editor
+                                           applies at the current cursor position.
+                                           Returns a fully initialised instance
+                                           (i1, i2, depth, texel set) or None.
+      install()                            Called once after match() to let the
+                                           editor set up any derived state.
+
+    Editors are removed when:
+      - the cursor moves and match() returns None
+      - the model signals "inserted" or "removed"
+      - the editor calls textview.remove_editor() itself
     """
-    is_null = True
+    is_null           = False
+    auto_installable  = False
+    click_installable = False
 
-    def __init__(self, docview):
-        self.docview = docview
-        
+    i1    = None
+    i2    = None
+    depth = None
+
+    def __init__(self, textview, i1=None, i2=None, depth=None):
+        self.textview = textview
+        self.i1 = i1
+        self.i2 = i2
+        self.depth = depth
+
+    @classmethod
+    def match(cls, view, path):
+        return None
+
+    def install(self):
+        pass
+
     # Events — always return False (not consumed)
     def on_leftdown(self, event): return False
     def on_motion(self, event):   return False
@@ -54,18 +87,27 @@ class NullEditor:
 
     # Draw cursor + selection
     def draw(self, painter):
-        self.docview.draw_cursor(painter)
-        self.docview.draw_selection(painter)
+        self.textview.draw_cursor(painter)
+        self.textview.draw_selection(painter)
 
     def handle_action(self, action, shift, ctx): return False
 
-    # Clipboard — delegate to docview    
-    def copy(self):  self.docview.copy()
-    def cut(self):   self.docview.cut()
-    def paste(self): self.docview.paste()
+    # Clipboard — delegate to textview
+    def copy(self):  self.textview.copy()
+    def cut(self):   self.textview.cut()
+    def paste(self): self.textview.paste()
     
 
+class NullEditor(TexelEditor):
+    """Always-active no-op editor; keeps the editor slot non-null.
 
+    Implements the full editor protocol with harmless defaults so that
+    TextView can call editor methods unconditionally without None-checks.
+    """
+    is_null = True
+
+
+    
 def _line_starts(model, i1, i2):
     """Return list of line-start indices for all lines overlapping [i1, i2]."""
     starts = []
@@ -169,22 +211,15 @@ class TextView(ViewBase, Model):
                 continue
             m = cls.match(self, path)
             if m is not None:
-                i1, i2, depth, texel = m
-                editor = cls(self, i1, i2, depth)
-                self.install_editor(editor, texel)
+                self.install_editor(m)
                 return True
         return False
 
-    def install_editor(self, editor, texel):
-        """Installs an editor for the texel at positions i1 to i2 in depth d."""        
-        editor.install(texel)
+    def install_editor(self, editor):
+        editor.install()
         self.editor = editor
         self.notify_views('editor_changed', editor)
         self.refresh()
-
-    def reinstall_editor(self, texel):
-        """Called after properties change."""        
-        self.editor.reinstall(texel)
 
     def remove_editor(self):
         if not self.editor.is_null:
@@ -193,19 +228,17 @@ class TextView(ViewBase, Model):
             self.refresh()
 
     def update_editor(self):
-        """Install, switch, or remove the editor based on current conditions.
-        """        
-        index = self.index
+        """Install, switch, or remove the editor based on current conditions."""
         editor = self.editor
-        path = get_path(self.model.get_xtexel(), index)
+        path = get_path(self.model.get_xtexel(), self.index)
 
         if not editor.is_null:
             m = editor.match(self, path)
             if m is not None:
-                i1, i2, depth, texel = m
-                assert i1 == editor.i1
-                assert i2 == editor.i2
-                self.reinstall_editor(texel)
+                assert m.i1 == editor.i1
+                assert m.i2 == editor.i2
+                editor.texel = m.texel
+                editor.install()
                 return
             self.remove_editor()
 
@@ -214,9 +247,7 @@ class TextView(ViewBase, Model):
                 continue
             m = cls.match(self, path)
             if m is not None:
-                i1, i2, depth, texel = m
-                editor = cls(self, i1, i2, depth)
-                self.install_editor(editor, texel)
+                self.install_editor(m)
                 return
 
     def create_builder(self):
@@ -1138,6 +1169,7 @@ def test_00():
 
 
 def test_02():
+    "setting index and selection"
     ns = init_testing()
     view = ns['view']
     view.cursor = 5
@@ -1225,5 +1257,70 @@ def test_07():
 
     view.undo()        # redo shift → back to original
     assert view.model.get_text() == 'ab\ncd\nef\n'
+
+
+def _make_range_editor(auto=True, click=False):
+    """Test editor that matches when index is in [3, 7]."""
+    class RangeEditor(TexelEditor):
+        auto_installable  = auto
+        click_installable = click
+
+        @classmethod
+        def match(cls, view, path):
+            if 3 <= view.index <= 7:
+                e = cls(view, 3, 7, 0)
+                e.texel = view.model.texel
+                return e
+            return None
+
+    return RangeEditor
+
+
+def test_08():
+    "auto-installable editor"
+    view = TestTextView()
+    view.set_model(TextModel('hello world'))
+    view.editor_registry = [_make_range_editor()]
+
+    view.set_index(5)
+    assert view.editor.i1 == 3
+    assert view.editor.i2 == 7
+
+    view.set_index(1)
+    assert view.editor.is_null
+
+
+def test_09():
+    "click-installable editor"
+    view = TestTextView()
+    view.set_model(TextModel('hello world'))
+    view.editor_registry = [_make_range_editor(auto=False, click=True)]
+
+    view.set_index(5)
+    assert view.editor.is_null
+
+    assert view.try_install_click_editor()
+    assert view.editor.i1 == 3
+
+    view.set_index(1)
+    assert view.editor.is_null
+
+
+def test_10():
+    "reinstall editor"
+    RangeEditor = _make_range_editor()
+    view = TestTextView()
+    view.set_model(TextModel('hello world'))
+    view.editor_registry = [RangeEditor]
+
+    view.set_index(5)
+    original = view.editor
+    old_texel = original.texel
+
+    view.set_properties(4, 6, fontsize=14)  # changes texel tree
+    view.update_editor()
+
+    assert view.editor is original           # same object
+    assert view.editor.texel is not old_texel  # texel refreshed
 
 

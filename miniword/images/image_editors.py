@@ -1,5 +1,5 @@
 import wx
-from ..layout.editorbase import TexelEditor
+from ..layout.boxeditor import BoxEditor
 from .images import Image, ImageBox
 
 
@@ -27,19 +27,22 @@ _HANDLE_DEFS = [
 ]
 
 
-class ImageEditor(TexelEditor):
-    @staticmethod
-    def match(view, path):
+class ImageEditor(BoxEditor):
+    @classmethod
+    def match(cls, view, path):
         for depth, (i1, i2, texel) in enumerate(path):
             if isinstance(texel, Image):
-                return i1, i2, depth, texel
+                e = cls(view, i1, i2, depth)
+                e.texel = texel
+                return e
+        return None
 
-    def install(self, texel):
-        super().install(texel)
+    def install(self):
+        super().install()
         self.clear_drag()
 
     def find_box(self):
-        return find_image_at(self.docview.layout, self.i1)
+        return find_image_at(self.textview.layout, self.i1)
 
     def get_cursor(self, handle_id):
         return self._CURSOR_MAP.get(handle_id, wx.CURSOR_SIZING)
@@ -67,8 +70,8 @@ class ImageSizeEditor(ImageEditor):
         'NW': wx.CURSOR_SIZENWSE, 'SE': wx.CURSOR_SIZENWSE,
     }
 
-    def install(self, texel):
-        super().install(texel)
+    def install(self):
+        super().install()
         self.state = self.compute_state()
 
     def compute_state(self):
@@ -124,7 +127,7 @@ class ImageSizeEditor(ImageEditor):
 
     def draw_overlay(self, gc):
         bx, by = self.box_origin
-        zoom = self.docview.zoom
+        zoom = self.textview.zoom
         lw = 1.0 / zoom
         (x, y), w, h = self.state
 
@@ -141,7 +144,7 @@ class ImageSizeEditor(ImageEditor):
         new_scale_y = (h / h0) * self.texel.scale_y
         if abs(new_scale_x - self.texel.scale_x) > 1e-6 or \
            abs(new_scale_y - self.texel.scale_y) > 1e-6:
-            self.docview.set_texel_attributes(
+            self.textview.set_texel_attributes(
                 self.i1, self.texel, scale_x=new_scale_x, scale_y=new_scale_y)
         self.state = self.compute_state()
 
@@ -164,11 +167,11 @@ class ImageCropEditor(ImageEditor):
         'T': wx.CURSOR_SIZENS, 'B': wx.CURSOR_SIZENS,
     }
 
-    def install(self, texel):
-        super().install(texel)
+    def install(self):
+        super().install()
         self._src_w = self.box.image_data.width_px
         self._src_h = self.box.image_data.height_px
-        self._preview_crop = list(texel.crop) if texel.crop else [0, 0, 0, 0]
+        self._preview_crop = list(self.texel.crop) if self.texel.crop else [0, 0, 0, 0]
 
     def get_handles(self):
         cl, cr, ct, cb = self._preview_crop
@@ -200,7 +203,7 @@ class ImageCropEditor(ImageEditor):
     def start_drag(self, handle, x, y):
         super().start_drag(handle, x, y)
         self._drag_start_crop = list(self._preview_crop)
-        self.docview.refresh()
+        self.textview.refresh()
 
     def drag_handle(self, handle, dx, dy, shift, ctrl):
         sx, sy = self.texel.scale_x, self.texel.scale_y
@@ -222,7 +225,7 @@ class ImageCropEditor(ImageEditor):
         bx, by = self.box_origin
         sx, sy = self.texel.scale_x, self.texel.scale_y
         sw, sh = self._src_w, self._src_h
-        zoom  = self.docview.zoom
+        zoom  = self.textview.zoom
         lw    = 1.5 / zoom
         hs    = 7.0 / zoom
 
@@ -274,7 +277,7 @@ class ImageCropEditor(ImageEditor):
 
     def commit(self):
         crop = tuple(int(round(v)) for v in self._preview_crop)
-        self.docview.set_texel_attributes(self.i1, self.texel, crop=crop)
+        self.textview.set_texel_attributes(self.i1, self.texel, crop=crop)
 
 
 ### Register ImageSizeEditor. CropEditor does not need to be
