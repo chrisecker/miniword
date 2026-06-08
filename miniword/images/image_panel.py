@@ -2,7 +2,7 @@ import os
 import wx
 from .images import Image
 from ..core.utils import get_path
-from .image_editors import ImageCropEditor
+from .image_controllers import ImageCropController
 from ..textmodel.texeltree import grouped
 from ..ui.sidepanel import SidePanel
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
@@ -247,7 +247,7 @@ class ImageInspector(SidePanel):
                 path = get_path(self._view.edit_model.texel, index)
                 for depth, (i1, i2, texel) in enumerate(path):
                     if isinstance(texel, Image):
-                        editor = ImageCropEditor(self._view, i1, i2, depth)
+                        editor = ImageCropController(self._view, i1, i2, depth)
                         self._view.install_editor(editor, texel)
                         break
         else:

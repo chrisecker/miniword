@@ -12,8 +12,8 @@ from .colours import colours
 from .icons import ICONS_DIR
 from .outlinepanel import OutlinePanel
 
-from ..images import image_editors  # registers editors
-from ..tables import table_editors  # registers editors
+from ..images import image_controllers  # registers controllers
+from ..tables import table_controllers  # registers controllers
 
 
 
@@ -939,10 +939,10 @@ def test_00():
 
 
 def test_01():
-    "cursor inside table installs CursorEditor, outside removes it"
+    "cursor inside table installs CursorController, outside removes it"
     from ..core.document import Document
     from ..tables.tables import empty_table
-    from ..tables.table_editors import CursorEditor
+    from ..tables.table_controllers import CursorController
     import wx
 
     app = wx.App()
@@ -956,10 +956,10 @@ def test_01():
     view.insert_texel(table_offset, empty_table(2, 2))
     app.Yield()
 
-    # cursor inside table → CursorEditor
+    # cursor inside table → CursorController
     view.index = table_offset + 1
     view.update_editor()
-    assert isinstance(view.editor, CursorEditor), type(view.editor)
+    assert isinstance(view.editor, CursorController), type(view.editor)
 
     # cursor outside table → NullEditor
     view.index = table_offset + 6  # past the table

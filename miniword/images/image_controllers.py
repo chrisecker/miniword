@@ -27,7 +27,7 @@ _HANDLE_DEFS = [
 ]
 
 
-class ImageEditor(BoxController):
+class ImageController(BoxController):
     @classmethod
     def match(cls, view, path):
         for depth, (i1, i2, texel) in enumerate(path):
@@ -46,7 +46,7 @@ class ImageEditor(BoxController):
         pass
         
 
-class ImageSizeEditor(ImageEditor):
+class ImageSizeController(ImageController):
     """Resize images by dragging handles on the image border.
 
     During drag only a preview is drawn; the model is not touched.
@@ -143,7 +143,7 @@ class ImageSizeEditor(ImageEditor):
         self.state = self.compute_state()
 
 
-class ImageCropEditor(ImageEditor):
+class ImageCropController(ImageController):
     """Adjust image crop margins by dragging 4 edge handles.
 
     Shows the full image with cropped-out areas dimmed.
@@ -274,11 +274,11 @@ class ImageCropEditor(ImageEditor):
         self.editor.set_texel_attributes(self.i1, self.texel, crop=crop)
 
 
-### Register ImageSizeEditor. CropEditor does not need to be
+### Register ImageSizeController. ImageCropController does not need to be
 ### registered, because it is not automatically selected.
 
 from ..texteditor.editor import Editor
-Editor.controller_registry.append(ImageSizeEditor)
+Editor.controller_registry.append(ImageSizeController)
 
 
 def _setup_demo():
@@ -304,7 +304,7 @@ def _setup_demo():
     print(get_texel(doc.textmodel.texel, 7, 1))
 
     app   = wx.App(True)
-    frame = wx.Frame(None, title='ImageSizeEditor demo', size=(420, 300))
+    frame = wx.Frame(None, title='ImageSizeController demo', size=(420, 300))
     view  = TextEditor(frame, doc)
     view.builder.factory.blobs = doc.blobs
     return app, frame, view
@@ -313,7 +313,7 @@ def demo_00():
     """Image resize"""
     from ..core.utils import get_texel
     app, frame, view = _setup_demo()
-    editor = ImageSizeEditor(view, 7, 8, 1)
+    editor = ImageSizeController(view, 7, 8, 1)
     editor.texel = get_texel(view.model.texel, 7, 1)
     view.index = 7
     view.install_editor(editor)
@@ -324,7 +324,7 @@ def demo_01():
     """Image crop"""
     from ..core.utils import get_texel
     app, frame, view = _setup_demo()
-    editor = ImageCropEditor(view, 7, 8, 1)
+    editor = ImageCropController(view, 7, 8, 1)
     editor.texel = get_texel(view.model.texel, 7, 1)
     view.index = 7
     view.install_editor(editor)
