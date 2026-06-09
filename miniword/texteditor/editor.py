@@ -148,7 +148,7 @@ class Editor(UndoRedo):
         nesting level.  Then shifts the left edge to the start of i1's
         line and the right edge past the NL of i2's line.
         """
-        model = self.edit_model
+        model = self.target
         e1, e2 = model.expand_range(i1, i2)
         s1 = model.linestart(e1)
         s2 = model.lineend(e2) + 1
@@ -170,7 +170,7 @@ class Editor(UndoRedo):
 
     ### Insert & remove
     def insert_text(self, text):
-        new = TextModel(text)
+        new = TextModel(text, **self.current_style)
         i = self.abs_idx(self.index)
         info = self._insert(self.flow, i, new)
         self.add_undo(info)
@@ -196,7 +196,7 @@ class Editor(UndoRedo):
         j1, j2 = self.local_idxs(i1, i2)
         old = self.target.remove(j1, j2)
         self.index = j1
-        return self._insert, flow, j1, old
+        return self._insert, flow, i1, old
     
     def insert_newline(self):
         model = self.target
@@ -212,104 +212,142 @@ class Editor(UndoRedo):
         self.add_undo(info)
     
     ### Styles
-    def clear_styles(self, i1, i2):
+    def clear_styles(self):
+        if not self.has_selection():
+            return
+        j1, j2 = self.selection
+        i1, i2 = self.abs_idxs(j1, j2)        
         model = self.target
-        styles = model.clear_styles(i1, i2)
-        info = self._set_styles, model, i1, styles
+        styles = model.clear_styles(j1, j2)
+        info = self._set_styles, flow, i1, styles
         self.add_undo(info)
 
-    def set_properties(self, i1, i2, **properties):
-        model = self.target
-        styles = model.set_properties(i1, i2, **properties)
-        info = self._set_styles, model, i1, styles
+    def set_properties(self, **properties):
+        if not self.has_selection():
+            return
+        j1, j2 = self.selection
+        i1, i2 = self.abs_idxs(j1, j2)        
+        styles = self.target.set_properties(j1, j2, **properties)
+        info = self._set_styles, self.flow, i1, styles
         self.add_undo(info)
 
-    def clear_properties(self, i1, i2, *keys):
-        model = self.target
-        styles = model.clear_properties(i1-i0, i2-i0, *keys)
-        info = self._set_styles, model, i1, styles
+    def clear_properties(self, *keys):
+        if not self.has_selection():
+            return
+        j1, j2 = self.selection
+        i1, i2 = self.abs_idxs(j1, j2)        
+        styles = self.target.clear_properties(j1, j2, *keys)
+        info = self._set_styles, flow, i1, styles
         self.add_undo(info)
 
-    def _set_styles(self, model, i, styles):
-        self.target = model
-        styles = model.set_styles(i, styles)
-        return self._set_styles, i, styles
+    def _set_styles(self, flow, i, styles):
+        self.switch_target(flow, i)
+        j = self.local_idx(i)
+        styles = self.target.set_styles(j, styles)
+        return self._set_styles, flow, i, styles
 
-    def set_parstyle(self, i, style):        
+    def set_parstyle(self, style):        
         model = self.target
-        styles = model.set_parstyle(i, style)
-        info = self._set_parstyles, model, i, styles
+        j = self.index
+        i = abs_idx(j)
+        styles = model.set_parstyle(j, style)
+        info = self._set_parstyles, self.flow, i, styles
         self.add_undo(info)
 
-    def set_parproperties(self, i1, i2, **properties):
-        model = self.target
-        styles = model.set_parproperties(i1, i2, **properties)
-        info = self._set_parstyles, model, i1, styles
+    def set_parproperties(self, **properties):
+        if not self.has_selection():
+            return
+        j1, j2 = self.selection
+        i1, i2 = self.abs_idxs(j1, j2)        
+        styles = self.target.set_parproperties(j1, j2, **properties)
+        info = self._set_parstyles, self.flow, i1, styles
         self.add_undo(info)
 
-    def clear_parproperties(self, i1, i2, *keys):
-        model = self.target
-        styles = model.clear_parproperties(i1, i2, *keys)
-        info = self._set_parstyles, model, i1, styles
+    def clear_parproperties(self, *keys):
+        if not self.has_selection():
+            return
+        j1, j2 = self.selection
+        i1, i2 = self.abs_idxs(j1, j2)        
+        styles = self.target.clear_parproperties(j1, j2, *keys)
+        info = self._set_parstyles, self.flow, i1, styles
         self.add_undo(info)
 
-    def _set_parstyles(self, model, i, styles):
-        self.target = model
-        styles = model.set_parstyles(i, styles)
+    def _set_parstyles(self, flow, i, styles):
+        self.switch_target(flow, i)
+        j = self.local_idx(i)
+        styles = self.target.set_parstyles(j, styles)
         return self._set_parstyles, i, styles
 
     def get_current_style(self):
         """Gets the style for the next insert-operation."""
+        # XXX current_style ist kein style, sondern einfach ein
+        # Dict. Textmodel wandelt es bei insert um. Ich denke, es
+        # passt so.
         if self._current_style is None:
-            index = self.index
-            if index == 0:
-                self._current_style = dict(self.edit_model.get_style(index))
-            else:
-                self._current_style = dict(self.edit_model.get_style(index - 1))
+            j = self.index
+            if j > 0:
+                j -= 1
+            self._current_style = dict(self.target.get_style(j))
         return self._current_style
-
-    def set_current_style(self, **properties):
+ 
+    def set_current_style(self, properties):
         """Sets the style for the next insert-operation."""
-        self.get_current_style().update(properties)
-        self.notify_views('current_style_changed')
-
-    def clear_current_style(self, *keys):
-        """Clears the style for the next insert-operation."""
-        style = self.get_current_style()
-        for key in keys:
-            style.pop(key, None)
+        if self._current_style == properties:
+            return
+        self._current_style = properties.copy()
         self.notify_views('current_style_changed')
     
     ### Indent
-    def _set_indents(self, model, i1, i2, indents):
-        self.target = model
-        indents = model.set_indents(i1, i2, indents)
-        return self._set_indents, i1, i2, indents
+    def _set_indents(self, flow, i1, i2, indents):
+        j1, j2 = self.local_idxs(i1, i2)
+        self.switch_target(flow, i1)
+        indents = self.target.set_indents(j1, j2, indents)
+        return self._set_indents, flow, i1, i2, indents
 
     def indent(self):
-        model = self.target
-        if self.has_selection():
-            i1, i2 = sorted(self.selection)
+        if not self.has_selection():
+            j1 = j2 = self.index
         else:
-            i1 = i2 = self.index
-        i2 = model.lineend(i2)+1
-        old = model.increase_indent(i1, i2)
-        self.add_undo((self._set_indents, model, i1, i2, old))
+            j1, j2 = sorted(self.selection)
+        j2 = self.target.lineend(j2)+1
+        i1, i2 = self.abs_idxs(j1, j2)
+        old = self.target.increase_indent(j1, j2)
+        self.add_undo((self._set_indents, self.flow, i1, i2, old))
 
     def dedent(self):
-        model = self.target
-        if self.has_selection():
-            i1, i2 = sorted(self.selection)
+        if not self.has_selection():
+            j1 = j2 = self.index
         else:
-            i1 = i2 = self.index
-        i2 = model.lineend(i2)+1
-        old = model.decrease_indent(i1, i2)
-        self.add_undo((self._set_indents, model, i1, i2, old))
-
-    def shift(self, i1, i2, n=4):
-        """Insert n spaces at each line start in index range [i1, i2]."""
+            j1, j2 = sorted(self.selection)
+        j2 = self.target.lineend(j2)+1
+        i1, i2 = self.abs_idxs(j1, j2)
+        old = self.target.decrease_indent(j1, j2)
+        self.add_undo((self._set_indents, self.flow, i1, i2, old))
+        
+    def _line_starts(self, i1, i2):
+        """
+        Helper: Return list of line-start indices for all lines
+        overlapping [i1, i2].
+        """
         model = self.target
-        has_sel = self.has_selection()
+        n = len(model)
+        starts = []
+        ls = model.linestart(i1)
+        while ls <= i2:
+            starts.append(ls)
+            end = model.lineend(ls)
+            if end + 1 >= n:
+                break
+            ls = end + 1
+        return starts
+
+    def shift(self, n=4):
+        """Insert n spaces at each line start in index range [i1, i2]."""
+        # XXX noch nicht angepasst
+        if not self.has_selection():
+            j1 = j2 = self.index
+        else:
+            j1, j2 = sorted(self.selection)
         s1, s2 = self.selection if has_sel else (0, 0)
         index = self.index
         starts = _line_starts(model, i1, i2)
@@ -325,6 +363,7 @@ class Editor(UndoRedo):
         self.add_undo((self._unshift, model, shifted, n))
 
     def _unshift(self, model, starts, n):
+        # XXX noch nicht angepasst
         self.target = model
         has_sel = self.has_selection()
         s1, s2 = self.selection if has_sel else (0, 0)
@@ -346,11 +385,15 @@ class Editor(UndoRedo):
     def unshift(self, i1, i2, n=4):
         """Remove up to n leading spaces from each line start in index range
         [i1, i2]."""
+        # XXX noch nicht angepasst
+        
         model = self.target
         info = self._unshift(model, _line_starts(model, i1, i2), n)
         self.add_undo(info)
 
     def _undo_unshift(self, model, starts, memo, n):
+        # XXX noch nicht angepasst
+        
         self.target = model
         has_sel = self.has_selection()
         s1, s2 = self.selection if has_sel else (0, 0)
@@ -413,7 +456,7 @@ class Editor(UndoRedo):
 
 
 class TestEditor(Editor):
-    # An editor for two flows (root and footnotes).  
+    # An editor for two flows (root and footnotes). For testing only.
     def switch_target(self, flow, index):
         if flow == 0:
             target = self.root
@@ -443,7 +486,7 @@ class TestEditor(Editor):
         for i1, i2, texel in iter_leafes(self.root.texel, 0, True):
             if not isinstance(texel, Footnote):
                 continue
-            n = length(texel.content)
+            n = length(texel.content)-1
             if i < offset+n:
                 return texel, offset, i1
             offset += n
@@ -498,7 +541,7 @@ def test_02():
 
     texel, offset, anchor = editor.find_footnote(0)
     assert offset == 0
-    n = length(texel.content)
+    n = length(texel.content)-1
 
     texel, offset, anchor = editor.find_footnote(100)
     assert offset == 0
@@ -570,6 +613,87 @@ def test_04():
     assert editor.controller is not c
     editor.controller.handle_action('move_line_start', False)
     assert editor.index == 0
+    
+def test_05():
+    "basic editing"
+    from miniword.textmodel.submodel import mk_test, _get_text
+
+    editor = TestEditor()
+    editor.root = mk_test()
+    r = editor.root
+
+    editor.switch_target(1, 102) # switch to 2nd footnote
+    assert _get_text(editor.target.texel)[29:63] == \
+        'Zur Elektrodynamik bewegter Körper'
+
+    # 1. insert text
+    get = lambda i1, i2: editor.target.get_text(i1, i2)
+    editor.index = 29
+    editor.insert_text('XYZ')
+    assert get(29, 35) == 'XYZZur'
+    editor.undo()
+    assert get(29, 32) == 'Zur'
+    editor.redo()
+    assert get(29, 35) == 'XYZZur'
+    editor.undo()
+
+    # 2. properties
+    editor.selection = (29, 63)
+    get = lambda i: editor.target.get_style(i)
+    assert not get(29) 
+    editor.set_properties(italic=True)
+    assert get(29)
+    editor.undo()
+    assert not get(29)
+    editor.redo()
+    assert get(29)
+    editor.undo()
+    assert not get(29)
+
+    # 3. current_style
+    editor.index = 29
+    assert not editor.current_style
+    assert not get(29)
+    editor.current_style = dict(bgcolor='red')
+    editor.insert_text('XYZ')
+    assert get(29)
+    assert editor.current_style
+    editor.undo()
+    assert not get(29)
+    editor.redo()
+    assert get(29)
+    editor.undo()
+    assert not get(29)
+
+    # 4. indent
+    editor.selection = (29, 63)
+    get = lambda i: editor.target.get_indent(i)
+    assert get(29) == 0
+    editor.indent()
+    assert get(29) == 1    
+    editor.undo()
+    print(get(29))
+    assert get(29) == 0
+    editor.redo()
+    assert get(29) == 1
+
+    # 5. dedent
+    editor.dedent()
+    assert get(29) == 0
+    editor.undo()
+    assert get(29) == 1
+    editor.redo()
+    assert get(29) == 0
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
     
     
     
