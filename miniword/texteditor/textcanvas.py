@@ -530,7 +530,7 @@ def demo_01():
     frame = wx.Frame(None)
     win = wx.Panel(frame)
     canvas = TextCanvas(win, model, builder, editor)
-    editor.canvas = canvas # XXX zirkuläre Referenz!
+    editor.canvas = canvas
     
     box = wx.BoxSizer(wx.VERTICAL)
     box.Add(canvas, 1, wx.ALL | wx.GROW, 1)

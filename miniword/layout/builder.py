@@ -484,13 +484,27 @@ def demo_00():
     model.set_parproperties(0, 1000, paragraph_type='list')
     app   = wx.App(redirect=True)
     frame = wx.Frame(None)
-    view  = MyView(frame, -1)
-    view.model = model
-    view.builder.device.zoom = 2
+    
+    from ..texteditor.editor import Editor
+    editor = Editor(model)
+
+    from ..layout.factory import Factory
+    from ..core.styles import testsheet
+
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = Builder(model, factory)
+    builder.rebuild()
+
+    from ..texteditor.textcanvas import TextCanvas
+    canvas = TextCanvas(frame, model, builder, editor)
+    editor.canvas = canvas
+    
     frame.Show()
+    canvas.refresh() # XXX
+
 
     if 1:
-        from ..wxtextview import testing
+        from ..ui import testing
         l = locals()
         l.update(globals())
         testing.pyshell(l)
@@ -639,7 +653,7 @@ def demo_01():
                 return
             yield i
 
-    import styles
+    from ..core import styles
     styles.normal['space_after']        = 0.5 * cm
     styles.normal['first_line_indent']  = 0.8 * cm
 
@@ -647,20 +661,31 @@ def demo_01():
         model.set_parstyle(i, dict(base='h0'))
 
     model.set_properties(0, 10, text_color='red')
+
     app   = wx.App(redirect=True)
     frame = wx.Frame(None)
-    view  = MyView(frame, -1)
-    view.model = model
+    
+    from ..texteditor.editor import Editor
+    editor = Editor(model)
 
+    from ..layout.factory import Factory
+    from ..core.styles import testsheet
+
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = Builder(model, factory)
+    builder.rebuild()
+
+    from ..texteditor.textcanvas import TextCanvas
+    canvas = TextCanvas(frame, model, builder, editor)
+    editor.canvas = canvas
+    
     frame.Show()
-    from inspector import Inspector
-    inspector = Inspector(view, None)
-    inspector.Show()
+    canvas.refresh() # XXX
+
 
     if 1:
-        from ..wxtextview import testing
+        from ..ui import testing
         l = locals()
         l.update(globals())
         testing.pyshell(l)
     app.MainLoop()
-    
