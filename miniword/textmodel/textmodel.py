@@ -343,8 +343,9 @@ class TextModel(Model):
         return self.set_indents(i1, i2, new)
     
     def get_indent(self, i):
-        j = next_newline(self.get_xtexel(), i)
-        return get_texel(self.get_xtexel(), j).indent
+        texel = self.get_xtexel()
+        j = next_newline(texel, i)
+        return get_texel(texel, j).indent
 
     def set_indent(self, i, indent):
         j = next_newline(self.get_xtexel(), i)
