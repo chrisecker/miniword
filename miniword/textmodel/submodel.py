@@ -10,7 +10,7 @@ Submodels are needed for footnotes, floats and captions.
 
 
 from ..textmodel.textmodel import TextModel
-from ..textmodel.texeltree import grouped, Single, Text, NULL_TEXEL, get_text, \
+from ..textmodel.texeltree import grouped, Single, G, T, NULL_TEXEL, get_text, \
     ENDMARK, takeout, length
 from ..textmodel.utils import transform_range
 from copy import copy as shallow_copy
@@ -34,6 +34,7 @@ class SubModel(TextModel):
         t, e = takeout(content, n-1, n)
         self._texel = grouped(t)
         self.ENDMARK = grouped(e)
+        assert self.ENDMARK.is_endmark
 
     def create_textmodel(self, text='', **properties):
         return TextModel(text, **properties)
@@ -68,7 +69,7 @@ class Footnote(Single):
     
 def insert_footnote(model, i, text):
     # for testing: insert a footnote at position i
-    fn = Footnote(Text(text))
+    fn = Footnote(G([T(text), ENDMARK]))
     m = TextModel()
     m.texel = fn
     return model.insert(i, m)
@@ -76,7 +77,7 @@ def insert_footnote(model, i, text):
 def _get_text(texel):
     # for testing: get text containing footnotes in brackets
     if isinstance(texel, Footnote):
-        return "[%s]" % _get_text(texel.content)
+        return "[%s]" % _get_text(texel.content)[:-1]
     if texel.is_single or texel.is_text:
         return texel.text
     return u''.join([_get_text(x) for x in texel.childs])
