@@ -1,4 +1,7 @@
 *~
 *pyc
 __pycache__
-dev_*.py
+dev_*
+*.pdf
+tmp.*
+
