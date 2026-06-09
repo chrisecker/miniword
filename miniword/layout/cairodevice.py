@@ -476,11 +476,9 @@ class CairoDevice:
 
     def draw_blinkingrect(self, x, y, w, h, ctx):
         elapsed = time.time() - self._blink_reference_time
-        if not int(elapsed * 2) % 2:
-            color = wx.BLACK
-        else:
-            color = wx.WHITE
-        c = wx.Colour(color)
+        if int(elapsed * 2) % 2:
+            return
+        c = wx.Colour(wx.BLACK)
         ctx.set_source_rgba(
             c.Red()   / 255,
             c.Green() / 255,
