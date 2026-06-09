@@ -8,6 +8,7 @@ from ..textmodel.viewbase import overridable_property, ViewBase
 from ..layout.cairodevice import CairoDevice, defaultstyle
 from ..layout.testdevice import TESTDEVICE
 from ..layout.simplelayout import SimpleBuilder
+from ..layout.rect import Rect
 from math import ceil
 import pickle
 
@@ -374,39 +375,32 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         self.SetVirtualSize((w, h))
         self.SetScrollRate(*self._scrollrate)
 
+    def get_viewport(self):
+        w, h = self.GetClientSize()
+        x1, y1 = self.window_to_content((0, 0))
+        x2, y2 = self.window_to_content((w, h))
+        return Rect(x1, y1, x2, y2)
+    
     def adjust_viewport(self):
         layout = self.layout
-        scale = self.scale
-
-        if self.index > len(layout):
-            return  # layout not yet rebuilt to cursor position
-        r = layout.get_rect(self.index, 0, 0)
-
-        x1 = r.x1 * scale
-        y1 = r.y1 * scale
-        x2 = r.x2 * scale
-        y2 = r.y2 * scale
-
+        if self.editor.index > len(layout):
+            return
+        cursor = layout.get_rect(self.editor.index, 0, 0)
+        vp = self.get_viewport()
         fw, fh = self._scrollrate
-        width, height = self.GetClientSize()
+        scale = self.scale
+        w, h = self.GetClientSize()
         firstcol, firstrow = self.GetViewStart()
 
-        vx = firstcol * fw
-        vy = firstrow * fh
+        if cursor.y1 <= vp.y1:
+            firstrow = int(cursor.y1 * scale / fh)
+        elif cursor.y2 > vp.y2:
+            firstrow = ceil((cursor.y2 * scale - h) / fh)
 
-        if y1 <= vy:
-            vy = y1
-            firstrow = int(vy / fh)
-        elif y2 > vy + height:
-            vy = y2 - height
-            firstrow = ceil(vy / float(fh))
-
-        if x1 <= vx:
-            vx = x1
-            firstcol = int(vx / fw)
-        elif x2 > vx + width:
-            vx = x2 - width
-            firstcol = ceil(vx / float(fh))
+        if cursor.x1 <= vp.x1:
+            firstcol = int(cursor.x1 * scale / fw)
+        elif cursor.x2 > vp.x2:
+            firstcol = ceil((cursor.x2 * scale - w) / fw)
 
         if (firstcol, firstrow) != self.GetViewStart():
             self.Scroll(firstcol, firstrow)
@@ -425,9 +419,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         pass
 
     def draw(self, painter):
-        # XXX
-        self.builder.assure_index(self.editor.index)
-        
+        self.builder.assure_rect(self.get_viewport())
+        # unnütig! self.builder.assure_index(self.editor.index) # XXX flow?
+                
         self.draw_background(painter)
         self.layout.draw(0, 0, painter)
         if self.editor is not None:
@@ -454,7 +448,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
     
 
 def test_00():
-    # ListeningBuilder ist ein Hack. Wir testen dass es wirklich  klappt. 
+    "simplebuilder as view"
     model = TextModel()
     builder = SimpleBuilder(model, maxw=100)
     assert builder.model.views == [builder]
@@ -468,28 +462,23 @@ def test_00():
     assert s == "SimpleLayout[Paragraph[Row[TB('Hi Chris!'), ENDBOX]]]"
 
 def test_01():
-    # Test mit dem richtigen Builder
+    "pagebuilder as view"
     from ..core.styles import testsheet
     from ..layout.factory import Factory
-    from ..layout.builder import Builder
+    from ..layout.pagebuilder import PageBuilder
     
-    
+    app = wx.App(redirect=False)    
     model = TextModel()
     factory = Factory(testsheet)
-    builder = Builder(model, factory)
-    print(builder.model.views)
+    builder = PageBuilder(model, factory)
     assert builder.model.views == [builder]
 
-    builder.rebuild()
-    s = str(builder.layout)
-    #print(s)
-    #assert s == "SimpleLayout[Paragraph[Row[ENDBOX]]]"
-
     model.insert_text(0, 'Hi Chris!')
-    s = str(builder.layout)
-    #assert s == "SimpleLayout[Paragraph[Row[TB('Hi Chris!'), ENDBOX]]]"
+    builder.assure_finished()
+    assert len(builder.layout)
 
 def demo_00():
+    "Texteditor based on simplebuilder" 
     app = wx.App(redirect=True)
     model = TextModel()
     builder = SimpleBuilder(model, device=CairoDevice(), maxw=100)
@@ -510,19 +499,18 @@ def demo_00():
     frame.Show()
 
     editor.root.insert_text(0, 'Hi\nChris!')
-    print(model.get_text())
-    print(str(builder.layout))
     app.MainLoop()
 
 def demo_01():
-    from ..layout.builder import Builder
+    "Texteditor based on the pages builder"     
+    from ..layout.pagebuilder import PageBuilder
     from ..core.styles import testsheet
     from ..layout.factory import Factory
         
     app = wx.App(redirect=True)
     model = TextModel()
     factory = Factory(testsheet, device=CairoDevice())
-    builder = Builder(model, factory)    
+    builder = PageBuilder(model, factory)    
     
     from .editor import Editor
     editor = Editor(model)
@@ -544,6 +532,5 @@ def demo_01():
     
     assert builder.model is model
     assert len(builder.layout) == len(model)+1
-    builder.layout.dump_boxes(0, 0, 0)
     app.MainLoop()
 

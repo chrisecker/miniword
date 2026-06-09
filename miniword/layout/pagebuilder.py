@@ -29,12 +29,12 @@ def trace(fn):
         if not DEBUG:
             return fn(*args, **kwargs)
         t0 = time.perf_counter()
-        print(f">>> {name}")
         try:
             return fn(*args, **kwargs)
         finally:
-            dt = time.perf_counter() - t0
-            print(f"<<< {name}  ({dt*1000:.1f} ms)")
+            dt = 1000*(time.perf_counter() - t0)
+            if dt>20:
+                print(f"<<< {name}  ({dt:.1f} ms)")
     wrapper.__name__ = fn.__name__
     return wrapper
 
@@ -173,7 +173,7 @@ class TwoPageLayout(Layout):
         return select_i_by_y(x, y, items)
 
 
-class Builder(BuilderBase):
+class PageBuilder(BuilderBase):
     """The Builder operates in two phases:
 
     - Initial phase: pages are built synchronously; the GUI freezes.
@@ -208,15 +208,6 @@ class Builder(BuilderBase):
         self._layout = self.layout_class([], factory.device)
         self.factory = factory
 
-    def inserted(self, model, i, n):
-        self.rebuild_range(i, i, n)
-
-    def removed(self, model, i, text):
-        self.rebuild_range(i, i, -len(text)) # XXX besser wäre i, i+len, -len
-
-    def properties_changed(self, model, i1, i2):
-        self.rebuild_range(i1, i2, 0)
-        
     def clear_caches(self):
         self.device.clear_caches()
         self.factory.clear_caches()
@@ -250,7 +241,7 @@ class Builder(BuilderBase):
             texel, p, state, self.factory)
 
         if not len(self.model):
-            self.buildto_finish()
+            self.assure_finished()
 
     def build_step(self):
         """Advance the active update task by one step.
@@ -286,7 +277,7 @@ class Builder(BuilderBase):
                 wx.CallAfter(self.build_background)
 
     @trace
-    def buildto_finish(self, callback=NOOP):
+    def assure_finished(self, callback=NOOP):
         layout = self._layout
         while not layout.is_finished:
             self.build_step()
@@ -315,14 +306,23 @@ class Builder(BuilderBase):
             callback()
 
     @trace
-    def assure_y(self, y, callback=NOOP):
+    def assure_y(self, y, callback=NOOP): # REPLACE THIS!
         layout = self._layout
         while not layout.is_finished:
             if layout.height + layout.depth >= y and self._row_complete():
                 break
             self.build_step()
             callback()
-        
+
+    @trace
+    def assure_rect(self, rect):
+        layout = self._layout
+        y = rect.y2
+        while not layout.is_finished:
+            if layout.height + layout.depth >= y and self._row_complete():
+                break
+            self.build_step()
+                
     def rebuild(self):
         """Rebuild the entire layout from i=0; nothing is reused."""
         if DEBUG: print("rebuild")
@@ -413,6 +413,7 @@ class Builder(BuilderBase):
 
         self._layout = self.layout_class(pages_before, self.factory.device)
         self.start(state, i_rest, pages_rest)
+        wx.CallAfter(self.build_background)
 
     def can_finish(self, state):
         """Update rest_memo and check whether the remaining pages can
@@ -492,15 +493,16 @@ def demo_00():
     from ..core.styles import testsheet
 
     factory = Factory(testsheet, device=CairoDevice())
-    builder = Builder(model, factory)
+    builder = PageBuilder(model, factory)
     builder.rebuild()
+    builder.build_background()
 
     from ..texteditor.textcanvas import TextCanvas
     canvas = TextCanvas(frame, model, builder, editor)
     editor.canvas = canvas
     
     frame.Show()
-    canvas.refresh() # XXX
+    #canvas.refresh() # XXX
 
 
     if 1:
@@ -616,7 +618,7 @@ def test_03():
 
     model   = get_einstein_model()
     factory = Factory(testsheet)
-    builder = Builder(model + model, factory)
+    builder = PageBuilder(model + model, factory)
     builder.settings = {
         'paper':         'custom',
         'paper_width':   100,
@@ -627,12 +629,12 @@ def test_03():
         'margin_left':   1,
     }
     builder.rebuild()
-    builder.buildto_finish()
+    builder.assure_finished()
     n_pages = len(builder._layout.childs)
     assert n_pages >= 2, "Need multiple pages for this test"
 
     builder.rebuild_range(0, 1, delta=0)  # simulate change of first char
-    builder.buildto_finish()
+    builder.assure_finished()
     nbefore, n_rebuilt, nrest = builder.get_updatestats()
     assert nbefore == 0
     assert n_rebuilt == 1
@@ -672,8 +674,9 @@ def demo_01():
     from ..core.styles import testsheet
 
     factory = Factory(testsheet, device=CairoDevice())
-    builder = Builder(model, factory)
+    builder = PageBuilder(model, factory)
     builder.rebuild()
+    builder.build_background()
 
     from ..texteditor.textcanvas import TextCanvas
     canvas = TextCanvas(frame, model, builder, editor)
@@ -681,7 +684,6 @@ def demo_01():
     
     frame.Show()
     canvas.refresh() # XXX
-
 
     if 1:
         from ..ui import testing

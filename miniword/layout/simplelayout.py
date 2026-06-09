@@ -146,7 +146,6 @@ class SimpleBuilder(BuilderBase, Factory):
         BuilderBase.__init__(self, model)
         assert self.model == model
         assert self in model.views
-        print("model.views=", model.views)
         self._maxw = maxw
         Factory.__init__(self, device)
 

@@ -121,10 +121,10 @@ class Editor(UndoRedo):
                 self.end_selection()
             elif update:
                 self.start_selection()
-            #self.adjust_viewport()
-            #self.refresh()
             if self.canvas is not None:
                 self.canvas.reset_blink()
+                self.canvas.adjust_viewport()
+                self.canvas.refresh()                
             self.notify_views('index_changed')
         #if old != index and not self.editor.is_null:
         #    self.remove_editor()
@@ -367,7 +367,6 @@ class Editor(UndoRedo):
         j2 = self.target.lineend(j2)+1
         i1, i2 = self.abs_idxs(j1, j2)
         old = self.target.increase_indent(j1, j2)
-        print("increase indent: ", j1, j2)
         self.add_undo((self._set_indents, self.flow, i1, i2, old))
 
     def dedent(self):
@@ -728,7 +727,6 @@ def test_05():
     editor.indent()
     assert get(29) == 1    
     editor.undo()
-    print(get(29))
     assert get(29) == 0
     editor.redo()
     assert get(29) == 1
