@@ -99,8 +99,7 @@ def default_handler(action, shift, ctx):
             i = model.linestart(i - 1)
         editor.set_index(i, shift)
     elif action == 'move_up':
-        row, col, i0 = model.index2position(index)
-        print("move_up from:", row, col, i0)
+        row, col, i0 = model.index2position(index)        
         if row>0:
             i = model.position2index(row-1, col, i0)
             editor.set_index(i, shift)
@@ -129,19 +128,18 @@ def default_handler(action, shift, ctx):
         editor.selection = (0, len(model))
     elif action == 'insert_newline':
         editor.insert_newline()
-    elif action == 'backspace':
-        if editor.has_selection():
-            j1, j2 = model.expand_range(ctx.s1 - 1, ctx.s2)
-            editor.remove(e1, e2) if j2 != e2 else editor.remove(j1, j2)
-        elif index > 0:
-            j1, j2 = model.expand_range(index - 1, index)
-            editor.remove(j1, j2)
+    elif action == 'del_left':
+        with editor.atomic():
+            editor.remove()
+            if index > 0:
+                editor.selection = index-1, index
+                editor.remove()
     elif action == 'copy':
-        editor.editor.copy()
+        editor.copy()
     elif action == 'paste':
-        editor.editor.paste()
+        editor.paste()
     elif action == 'cut':
-        editor.editor.cut()
+        editor.cut()
     elif action == 'delete':
         if editor.has_selection():
             ctx.del_selection()
@@ -149,6 +147,7 @@ def default_handler(action, shift, ctx):
             j1, j2 = model.expand_range(index, index + 1)
             editor.remove(j1, j2)
     elif action == 'indent':
+        print("indent")
         editor.indent()
     elif action == 'dedent':
         editor.dedent()
@@ -157,17 +156,8 @@ def default_handler(action, shift, ctx):
     elif action == 'redo':
         editor.redo()
     elif action == 'del_line_end':
-        el, off = get_localroot(model.texel, index)
-        try:
-            i = find_weight(el, row + 1, 2) - 1 + off
-        except Exception:
-            i = length(el) - 1 + off
-        if i == index:
-            i += 1
-        i = min(i, model.get_end(index))
-        j1, j2 = model.expand_range(index, i)
-        editor.to_clipboard(model[j1:j2])
-        editor.remove(j1, j2)
+        editor.selection = index, model.lineend(index)
+        editor.cut()
     elif action == 'del_word_left':
         i = index
         try:
@@ -175,9 +165,9 @@ def default_handler(action, shift, ctx):
             while model.get_text(i-1, i).isalnum():     i -= 1
         except IndexError:
             i = 0
-        i = max(i, model.start(index))
-        j1, j2 = model.expand_range(i, index)
-        editor.remove(j1, j2)
+        i = max(i, model.linestart(index))
+        editor.selection = i, index
+        editor.cut()
     else:
         return False # not handled
     return True

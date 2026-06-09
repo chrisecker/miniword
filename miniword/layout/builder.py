@@ -4,28 +4,18 @@
 # The Builder monitors model changes and updates the layout. 
 
 
-
-from ..textmodel.texeltree import length, NewLine, get_text, takeout
-from .builderbase import BuilderBase
-from .boxes import VBox, get_text, select_i_by_xy, select_i_by_y
-from . import boxes
-from .rect import Rect
-from .testdevice import TESTDEVICE
-from ..textmodel.viewbase import ViewBase
-
-
-
-from .pagegen import RestartMemo, generate_pages, restartmemo_from_settings
-from .page import show_page
 from ..core.units import cm, mm
 from ..core.styles import updated
+from . import boxes
+from .boxes import VBox, select_i_by_xy, select_i_by_y
+from .builderbase import BuilderBase
+from .rect import Rect
+from .pagegen import RestartMemo, generate_pages, restartmemo_from_settings
+from .page import show_page
 from .factory import Factory
 from .cairodevice import CairoDevice
 
-from copy import copy as shallow_copy
 import wx
-import threading
-import queue
 import time
 
 

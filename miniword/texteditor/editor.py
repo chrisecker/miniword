@@ -7,12 +7,15 @@ from ..textmodel.utils import iter_leafes, get_path
 from .undoredo import UndoRedo
 from .controller import NullController
 from .actions import default_handler
-
+from contextlib import contextmanager
+from weakref import WeakKeyDictionary
 
 """
 Note:
 - after change of model or view update_controller has to be called! 
 """
+
+_editor_canvas = WeakKeyDictionary() # {editor: canvas}
 
 class Editor(UndoRedo):
     index = overridable_property('index', 'Position of text cursor')
@@ -23,11 +26,12 @@ class Editor(UndoRedo):
     _current_style = EMPTYSTYLE
     controller = overridable_property('controller')
     _controller = None # will be set in __init__
+    canvas = overridable_property('canvas', 'Optional reference to canvas')
+    _canvas = None
 
     actionhandler = staticmethod(default_handler)
     controller_registry = []
 
-    canvas = None # optional reference to canvas
 
     # the following attributes are set by "switch_target"
     flow = 0
@@ -43,6 +47,12 @@ class Editor(UndoRedo):
         self.update_controller()
         assert self.controller
         super().__init__()
+
+    def set_canvas(self, canvas):
+        _editor_canvas[self] = canvas
+
+    def get_canvas(self):
+        return _editor_canvas.get(self)
 
     def switch_target(self, flow, index):
         """Find the model responsible for flow and index and install it."""
@@ -67,6 +77,15 @@ class Editor(UndoRedo):
         self.flow = flow
         self.notify_views('target_changed')
 
+    @contextmanager
+    def atomic(self):
+        """Group multiple model/stylesheet changes into one layout rebuild."""
+        self.begin_undo_group()
+        try:
+            yield
+        finally:
+            self.end_undo_group()
+    
     def abs_idx(self, j):
         return j + self.offset
 
@@ -99,11 +118,13 @@ class Editor(UndoRedo):
             else:
                 self._current_style = dict(model.get_style(index - 1))
             if extend:
-                self.extend_selection()
+                self.end_selection()
             elif update:
                 self.start_selection()
             #self.adjust_viewport()
             #self.refresh()
+            if self.canvas is not None:
+                self.canvas.reset_blink()
             self.notify_views('index_changed')
         #if old != index and not self.editor.is_null:
         #    self.remove_editor()
@@ -128,7 +149,7 @@ class Editor(UndoRedo):
             return False
         return selection[0] != selection[1]
 
-    def get_selected(self):
+    def selected_ranges(self):
         """Get selected ranges."""
         selection = self.selection
         if selection is None:
@@ -159,8 +180,8 @@ class Editor(UndoRedo):
         index = self.index
         self.selection = index, index
         
-    def extend_selection(self):
-        """Moves the selection endoint to index."""
+    def end_selection(self):
+        """Moves the selection endpoint to index."""
         selection = self.selection
         index = self.index
         if selection is None:
@@ -183,19 +204,26 @@ class Editor(UndoRedo):
         return self._remove, flow, i, i+len(new)
 
     def remove(self):
-        if not self.has_selection():
-            return
-        j1, j2 = self.selection
+        self.begin_undo_group()
+        try:
+            for j1, j2 in reversed(self.selected_ranges()):
+                i1, i2 = self.abs_idxs(j1, j2)
+                self.remove_range(j1, j2)
+        finally:
+            self.end_undo_group()
+
+    def remove_range(self, j1, j2):
         i1, i2 = self.abs_idxs(j1, j2)
         info = self._remove(self.flow, i1, i2)
         self.add_undo(info)
         self.index = j1
-    
+            
     def _remove(self, flow, i1, i2):
         self.switch_target(flow, i1)
         j1, j2 = self.local_idxs(i1, i2)
         old = self.target.remove(j1, j2)
         self.index = j1
+        self.selection = j1, j1
         return self._insert, flow, i1, old
     
     def insert_newline(self):
@@ -210,7 +238,34 @@ class Editor(UndoRedo):
         i = self.abs_idx(index)
         info = self._insert(self.flow, i, tmp)
         self.add_undo(info)
+
+    ### Copy & Paste
+    def _to_clipboard(self, model):
+        if self.canvas is not None:
+            self.canvas.to_clipboard(model)
     
+    def copy(self):
+        if not self.has_selection():
+            return
+        s1, s2 = self.selected_ranges()[0] # XXX Assuming just one region
+        part = self.target[s1:s2]
+        self._to_clipboard(part)
+
+    def paste(self):
+        if self.canvas is None:
+            return
+        new = self.canvas.read_clipboard()
+        if new is None:
+            return
+        i = self.abs_idx(self.index)
+        info = self._insert(self.flow, i, new)
+        self.add_undo(info)
+
+    def cut(self):
+        if self.has_selection():
+            self.copy()
+            self.remove()
+
     ### Styles
     def clear_styles(self):
         if not self.has_selection():
@@ -312,6 +367,7 @@ class Editor(UndoRedo):
         j2 = self.target.lineend(j2)+1
         i1, i2 = self.abs_idxs(j1, j2)
         old = self.target.increase_indent(j1, j2)
+        print("increase indent: ", j1, j2)
         self.add_undo((self._set_indents, self.flow, i1, i2, old))
 
     def dedent(self):

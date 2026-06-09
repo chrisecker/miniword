@@ -85,7 +85,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
             (wx.WXK_PAGEUP,   True,  False): 'move_document_start',
             (wx.WXK_PAGEDOWN, True,  False): 'move_document_end',
             (wx.WXK_RETURN, False, False): 'insert_newline',
-            (wx.WXK_BACK,   False, False): 'backspace',
+            (wx.WXK_BACK,   False, False): 'del_left',
             (wx.WXK_DELETE, False, False): 'delete',
             (3,  True, False): 'copy',
             (22, True, False): 'paste',
@@ -100,6 +100,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         }
 
     def ensure_viewport(self):
+        # XXX weg damit ?
         pass
 
     def get_layout(self):
@@ -119,10 +120,11 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
             dpi = self.GetDPI().y
         except AttributeError:
             dpi = wx.ScreenDC().GetPPI()[1]
-        return self.builder.get_device().get_scale(dpi, self.zoom)
-    
-    # --- wx hooks (satisfy TextView abstract interface) ---
+        return self.builder.device.get_scale(dpi, self.zoom)
 
+    def reset_blink(self):
+        self.builder.device.reset_blink()
+        
     def refresh(self):
         try:
             self.Refresh()
@@ -444,7 +446,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
 
     def draw_selection(self, painter):
         # note that draw_selection is called by editor
-        for j1, j2 in self.editor.get_selected():
+        for j1, j2 in self.editor.selected_ranges():
             self.layout.draw_selection(j1, j2, 0, 0, painter,
                                        flow=self.editor.flow)
     def model_changed(self, *args):
@@ -513,12 +515,10 @@ def demo_00():
     app.MainLoop()
 
 def demo_01():
-    from .dev_builder import Builder
+    from ..layout.builder import Builder
     from ..core.styles import testsheet
     from ..layout.factory import Factory
-    
-    
-    
+        
     app = wx.App(redirect=True)
     model = TextModel()
     factory = Factory(testsheet, device=CairoDevice())
@@ -539,12 +539,10 @@ def demo_01():
     frame.Show()
 
     editor.root.insert_text(0, 'Hi\nChris!')
-    print(model.get_text())
     builder.rebuild()
     builder.assure_index(len(model))
     
     assert builder.model is model
-    print("len:", len(builder.layout))
     assert len(builder.layout) == len(model)+1
     builder.layout.dump_boxes(0, 0, 0)
     app.MainLoop()
