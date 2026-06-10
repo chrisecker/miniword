@@ -224,16 +224,6 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
 
     # --- mouse ---
 
-    def on_motion(self, event):
-        if self.editor and self.editor.controller.on_motion(event):
-            return
-        if not event.LeftIsDown():
-            return event.Skip()
-        x, y = self.window_to_content(event.Position)
-        i = self.layout.get_index(x, y)
-        if i is not None:
-            self.editor.set_index(i, extend=True)
-
     def on_mousewheel(self, event):
         if not event.ControlDown():
             return event.Skip()  # let wx handle normal scrolling
@@ -274,15 +264,27 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         flow = self.layout.get_flow(x, y)
         i = self.layout.get_index(x, y, flow)
         if i is not None:
-            if flow != editor.flow:
-                editor.switch_target(flow, i)
-            editor.set_index(i, extend=event.ShiftDown())
+            editor.switch_target(flow, i)
+            j = editor.local_idx(i)
+            editor.set_index(j, extend=event.ShiftDown())
         self.SetFocus()
 
     def on_leftup(self, event):
         if self.editor.controller.on_leftup(event):
             self.SetCursor(wx.Cursor(wx.CURSOR_IBEAM))
 
+    def on_motion(self, event):
+        editor = self.editor
+        if editor and editor.controller.on_motion(event):
+            return
+        if not event.LeftIsDown():
+            return event.Skip()
+        x, y = self.window_to_content(event.Position)
+        i = self.layout.get_index(x, y, editor.flow)
+        if i is not None:
+            j = editor.local_idx(i)
+            editor.set_index(j, extend=True)
+            
     def on_leftdclick(self, event):
         #if self.try_install_click_editor():
         #    return
@@ -295,6 +297,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         i = self.layout.get_index(x, y, editor.flow)
         if i is None:
             return
+        j = editor.local_idx(i)
+        i = None
         model = editor.target
         n = len(model)
         
@@ -302,24 +306,24 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
             return model.get_text(j, j+1).isalnum()
             
         try:
-            while not isalnum(i-1):
-                i = i-1
-            while isalnum(i-1):
-                i = i-1
+            while not isalnum(j-1):
+                j = j-1
+            while isalnum(j-1):
+                j = j-1
         except IndexError:
-            i = 0
-        i1 = i
-        i = i1
+            j = 0
+        j1 = j
+        j = j1
         try:
-            while not isalnum(i):
-                i = i+1
-            while isalnum(i):
-                i = i+1
+            while not isalnum(j):
+                j = j+1
+            while isalnum(j):
+                j = j+1
         except IndexError:
-            i = n
-        i2 = i
-        editor.index = i2
-        editor.selection = (i1, i2)
+            j = n
+        j2 = j
+        editor.index = j2
+        editor.selection = (j1, j2)
 
     
 
@@ -445,9 +449,11 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
 
     def draw_selection(self, painter):
         # note that draw_selection is called by editor
-        for j1, j2 in self.editor.selected_ranges():
-            self.layout.draw_selection(j1, j2, 0, 0, painter,
-                                       flow=self.editor.flow)
+        editor = self.editor
+        for j1, j2 in editor.selected_ranges():
+            i1, i2 = editor.abs_idxs(j1, j2)
+            self.layout.draw_selection(i1, i2, 0, 0, painter,
+                                       flow=editor.flow)
     def model_changed(self, *args):
         self.refresh()
     

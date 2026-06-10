@@ -72,10 +72,23 @@ class Layout(VBox):
                 j = entry[1]
             y += page.height + page.depth + self.page_gap
 
+    def find_page(self, x, y):
+        for j1, j2, x0, y0, page in self.iter_boxes(0, 0, 0):
+            if y >= y0 and y <= y+page.height:
+                return j1, j2, x0, y0, page
+        raise ValueError("No page contains %f,%f"%(x,y))
+            
     def get_flow(self, x, y):
-        return 0 # XXX for now!
-        # 1. find page
-        # 2. check if x,y is in fn-box
+        try:
+            j1, j2, x0, y0, page = self.find_page(x, y)
+        except ValueError:
+            return 0 # Fallback!        
+        if not page.footnote_rows:
+            return 0
+        _, fy, _ = page.footnote_rows[0]
+        if y-y0>fy:
+            return 1 # in footnote box
+        return 0 # normal text
 
     def get_index(self, x, y, flow=0):
         # XXX Besser wäre
