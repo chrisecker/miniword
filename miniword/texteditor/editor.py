@@ -463,6 +463,7 @@ class Editor(UndoRedo):
         if has_sel: self.selection = (s1, s2)
         return self._unshift, model, starts, n
 
+
     ### Controller
     def XXXtry_install_click_editor(self):
         """Install a click_installable editor at the current index, if any matches.
@@ -538,13 +539,19 @@ class TestEditor(Editor):
         # helper: find the footnode-texel which holds position i in
         # the footnote-flow.
         offset = 0
+        last = None
         for i1, i2, texel in iter_leafes(self.root.texel, 0, True):
             if not isinstance(texel, Footnote):
                 continue
-            n = length(texel.content)-1
+            n = length(texel.content)
             if i < offset+n:
                 return texel, offset, i1
+            last = texel, offset, i1
             offset += n
+        if last is not None and i == offset:
+            # i is the position right after the last character of the
+            # last footnote, ie. a valid cursor position at its end.
+            return last
         raise IndexError(i)
 
     def get_footnotemodel(self, i):
@@ -596,7 +603,7 @@ def test_02():
 
     texel, offset, anchor = editor.find_footnote(0)
     assert offset == 0
-    n = length(texel.content)-1
+    n = length(texel.content)
 
     texel, offset, anchor = editor.find_footnote(100)
     assert offset == 0
@@ -605,14 +612,20 @@ def test_02():
     m = length(texel.content)    
     texel, offset, anchor = editor.find_footnote(102)
     assert offset == n
-    texel, offset, anchor = editor.find_footnote(190)
-    assert offset == n
-    texel, offset, anchor = editor.find_footnote(191)
-    assert offset == n
     texel, offset, anchor = editor.find_footnote(192)
     assert offset == n
+    texel, offset, anchor = editor.find_footnote(193)
+    assert offset == n
+    texel, offset, anchor = editor.find_footnote(194)
+    assert offset == n
+
+    # 195 is the position right after the last character of the last
+    # footnote, ie. a valid end-of-model cursor position.
+    texel, offset, anchor = editor.find_footnote(195)
+    assert offset == n
+
     try:
-        texel, offset, anchor = editor.find_footnote(193)
+        editor.find_footnote(196)
         assert False
     except IndexError:
         pass
@@ -642,11 +655,11 @@ def test_03():
     m = editor.target
     assert isinstance(m, SubModel)
     assert editor.flow == 1
-    assert editor.offset == 101
+    assert editor.offset == 102
     assert editor.anchor == 73
 
     assert editor.abs_idx(0) == editor.offset
-    assert editor.local_idx(101) == 0
+    assert editor.local_idx(102) == 0
     editor.insert_text("XYZ")
 
     t = _get_text(editor.root.texel)
