@@ -15,12 +15,11 @@ def create_ctx(editor):
     ctx.editor = editor
     ctx.model = editor.target
     ctx.index = editor.index
-    #ctx.layout = self.layout
-    #style = self.get_current_style()
-    #parstyle = model.get_parstyle(index)
-    #row, col = self.current_position()
-    #rect = layout.get_rect(index, 0, 0)
-    #x, y = rect.x1, rect.y1
+    if editor.canvas is not None:
+        ctx.layout = editor.canvas.layout
+    else:
+        ctx.layout = editor.layout
+
     if editor.has_selection():
         ctx.s1, ctx.s2 = sorted(editor.selection)
         #e1, e2 = model.expand_range(s1, s2)
@@ -68,10 +67,7 @@ def default_handler(action, shift, ctx):
     editor = ctx.editor
     model = ctx.model
     index = ctx.index
-    if editor.canvas is not None:
-        layout = editor.canvas.layout
-    else:
-        layout = editor.layout
+    layout = ctx.layout
     #row, col = ctx.row, ctx.col
     #x, y = ctx.x, ctx.y
     #style, parstyle = ctx.style, ctx.parstyle
@@ -84,7 +80,7 @@ def default_handler(action, shift, ctx):
         r, c, i0 = model.index2position(index)
         print("index=", index, "row=", r, "col=", c, "i0=", i0)
     elif action == 'dump_boxes':
-        ctx.layout.dump_boxes(0, 0, 0)
+        layout.dump_boxes(0, 0, 0)
     elif action == 'move_word_end':
         i, n = index, len(model)
         try:
@@ -197,27 +193,6 @@ def default_handler(action, shift, ctx):
 
 
 
-def text_handler(action, shift, ctx):
-    """X-coordinate-based movement for wrapped (word-processor) text."""
-    # XXX
-    if action == 'move_up':
-        row, col, i0 = model.index2position(index)        
-        if row>0:
-            i = model.position2index(row-1, col, i0)
-            editor.set_index(i, shift)            
-        return True
-    
-    elif action == 'move_down':
-        row, col, i0 = model.index2position(index)
-        try:
-            i = model.position2index(row+1, col, i0)
-        except IndexError:
-            i = model.lineend(index)
-        editor.set_index(i, shift)
-        return True
-    return False
-
-
 def code_handler(action, shift, ctx):
     """Row/column-based movement and space-indentation for code views.
 
@@ -247,3 +222,72 @@ def code_handler(action, shift, ctx):
         editor.unshift(s1, s2)
         return True
     return False
+
+
+def _build_layout(model):
+    import wx
+    if wx.App.Get() is None:
+        wx.App(False)
+    from .editor import Editor
+    from ..layout.pagebuilder import PageBuilder
+    from ..layout.factory import Factory
+    from ..layout.cairodevice import CairoDevice
+    from ..core.styles import testsheet
+
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = PageBuilder(model, factory)
+    builder.rebuild()
+    builder.assure_index(len(model))
+    return builder.layout
+
+
+def test_00():
+    "move_up / move_down: normal text"
+    from .editor import Editor
+
+    editor = Editor()
+    editor.canvas = None
+    editor.insert_text('Line one\nLine two\nLine three')
+    editor.layout = _build_layout(editor.root)
+
+    editor.index = 12  # column 3 in "Line two"
+    ctx = create_ctx(editor)
+    default_handler('move_up', False, ctx)
+    assert editor.index == 3  # column 3 in "Line one"
+
+    ctx = create_ctx(editor)
+    default_handler('move_down', False, ctx)
+    assert editor.index == 12  # back to "Line two"
+
+    ctx = create_ctx(editor)
+    default_handler('move_down', False, ctx)
+    assert editor.index == 21  # column 3 in "Line three"
+
+    # no row above the first line: index stays unchanged
+    editor.index = 3
+    ctx = create_ctx(editor)
+    default_handler('move_up', False, ctx)
+    assert editor.index == 3
+
+
+def test_01():
+    "move_up / move_down: inside a footnote"
+    from .editor import TestEditor
+    from ..textmodel.submodel import mk_test
+
+    model = mk_test()
+    editor = TestEditor(model)
+    editor.canvas = None
+    editor.layout = _build_layout(model)
+
+    editor.switch_target(1, 10)  # switch into the first footnote
+    assert editor.flow == 1
+    editor.index = 0
+
+    ctx = create_ctx(editor)
+    default_handler('move_down', False, ctx)
+    assert editor.index == 79  # start of the second row
+
+    ctx = create_ctx(editor)
+    default_handler('move_up', False, ctx)
+    assert editor.index == 0  # back to the first row
