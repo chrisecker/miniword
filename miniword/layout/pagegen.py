@@ -311,7 +311,7 @@ def _position_footnotes(fn_rows, memo):
 
 def render_footnote_rows(fn_texel, factory, line_width, number=None):
     """Render a Footnote texel's content into a list of Row objects."""
-    from ..wxtextview.boxes import TextBox
+    from ..layout.boxes import TextBox
     boxes = [b for b in factory.create_all(fn_texel.content)
              if not isinstance(b, FootnoteAnchorBox)]
     if not boxes:

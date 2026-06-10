@@ -589,7 +589,7 @@ def test_01():
     
 def test_02():
     "find_footnote"
-    from miniword.textmodel.submodel import mk_test, _get_text
+    from ..textmodel.submodel import mk_test, _get_text
 
     editor = TestEditor()
     editor.root = mk_test()
@@ -619,7 +619,7 @@ def test_02():
 
 def test_03():
     "target switching"
-    from miniword.textmodel.submodel import mk_test, _get_text
+    from ..textmodel.submodel import mk_test, _get_text
 
     editor = TestEditor()
     editor.root = mk_test()
@@ -671,7 +671,7 @@ def test_04():
     
 def test_05():
     "basic editing"
-    from miniword.textmodel.submodel import mk_test, _get_text
+    from ..textmodel.submodel import mk_test, _get_text
 
     editor = TestEditor()
     editor.root = mk_test()
