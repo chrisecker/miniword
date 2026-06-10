@@ -316,12 +316,15 @@ def render_footnote_rows(fn_texel, factory, line_width, number=None):
              if not isinstance(b, FootnoteAnchorBox)]
     if not boxes:
         return []
-    if number is not None:
-        label = TextBox(to_superscript(number) + ' ',
-                        factory.mk_style({}), factory.device)
-        boxes = [label] + list(boxes)
     lines = simple_linewrap(boxes, line_width, line_width)
-    return [Row(line, device=factory.device) for line in lines]
+    rows = [Row(line, device=factory.device) for line in lines]
+    if rows and number is not None:
+        #label = TextBox(to_superscript(number) + ' ',
+        # factory.mk_style({}), factory.device)
+
+        label = to_superscript(number)
+        rows[0].set_marker(label, -10, {})
+    return rows
 
 
 def place_pending_footnotes(fn_rows, draft, is_last_page=False):
