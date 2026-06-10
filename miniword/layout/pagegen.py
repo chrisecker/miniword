@@ -310,18 +310,29 @@ def _position_footnotes(fn_rows, memo):
 
 
 def render_footnote_rows(fn_texel, factory, line_width, number=None):
-    """Render a Footnote texel's content into a list of Row objects."""
-    from ..layout.boxes import TextBox
-    boxes = [b for b in factory.create_all(fn_texel.content)
-             if not isinstance(b, FootnoteAnchorBox)]
-    if not boxes:
-        return []
-    lines = simple_linewrap(boxes, line_width, line_width)
-    rows = [Row(line, device=factory.device) for line in lines]
-    if rows and number is not None:
-        #label = TextBox(to_superscript(number) + ' ',
-        # factory.mk_style({}), factory.device)
+    """Render a Footnote texel's content into a list of Row objects.
 
+    Reuses generate_pages with allow_page_breaks=False, the same way
+    table_factory.build_cell() renders a table cell's content into rows.
+    """
+    memo = RestartMemo()
+    memo.geometry = (line_width, 10**9)
+    memo.border = (0, 0, 0, 0)
+
+    saved = {k: getattr(factory, k, None)
+             for k in ('line_width', 'parstyle', 'markerstyle', 'indent_level')}
+
+    page = None
+    for page in generate_pages(fn_texel.content, 0, memo, factory,
+                                allow_page_breaks=False, footnotes=[]):
+        pass  # expect exactly one page
+
+    for k, v in saved.items():
+        if v is not None:
+            setattr(factory, k, v)
+
+    rows = [row for _, _, row in page.rows] if page else []
+    if rows and number is not None:
         label = to_superscript(number)
         rows[0].set_marker(label, -10, {})
     return rows
