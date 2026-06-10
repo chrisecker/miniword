@@ -267,12 +267,16 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         self.refresh()
 
     def on_leftdown(self, event):
-        if self.editor.controller.on_leftdown(event):
+        editor = self.editor
+        if editor.controller.on_leftdown(event):
             return
         x, y = self.window_to_content(event.Position)
-        i = self.layout.get_index(x, y, self.editor.flow)
+        flow = self.layout.get_flow(x, y)
+        i = self.layout.get_index(x, y, flow)
         if i is not None:
-            self.editor.set_index(i, extend=event.ShiftDown())
+            if flow != editor.flow:
+                editor.switch_target(flow, i)
+            editor.set_index(i, extend=event.ShiftDown())
         self.SetFocus()
 
     def on_leftup(self, event):
@@ -435,7 +439,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         style = {} # XXX self.get_filled_style(self.index).copy()
         current = editor.get_current_style()
         style.update(current)
-        self.layout.draw_cursor(editor.index, 0, 0, painter, style,
+        i = editor.abs_idx(editor.index)
+        self.layout.draw_cursor(i, 0, 0, painter, style,
                                 flow=editor.flow)
 
     def draw_selection(self, painter):
@@ -532,5 +537,46 @@ def demo_01():
     
     assert builder.model is model
     assert len(builder.layout) == len(model)+1
+    app.MainLoop()
+
+def demo_02():
+    "Footnotes"
+    from ..textmodel.submodel import mk_test, _get_text
+    from ..layout.pagebuilder import PageBuilder
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+        
+    app = wx.App(redirect=True)
+    model = mk_test()
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = PageBuilder(model, factory)    
+    
+    from .editor import TestEditor
+    editor = TestEditor(model)
+
+    frame = wx.Frame(None)
+    win = wx.Panel(frame)
+    canvas = TextCanvas(win, model, builder, editor)
+    editor.canvas = canvas
+    
+    box = wx.BoxSizer(wx.VERTICAL)
+    box.Add(canvas, 1, wx.ALL | wx.GROW, 1)
+    win.SetSizer(box)
+    win.SetAutoLayout(True)
+    frame.Show()
+
+    editor.switch_target(1, 102)
+    builder.rebuild()
+    builder.assure_index(len(model))
+    
+    assert builder.model is model
+    assert len(builder.layout) == len(model)+1
+
+    if 1:
+        from ..ui import testing
+        l = locals()
+        l.update(globals())
+        testing.pyshell(l)
+
     app.MainLoop()
 
