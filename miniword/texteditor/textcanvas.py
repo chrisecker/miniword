@@ -31,6 +31,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
     min_zoom    = 0.2
     max_zoom    = 5.0
     zoom_factor = 1.1
+    hcenter     = True
     
 
     def __init__(self, parent, model, builder, editor=None, pos=wx.DefaultPosition,
@@ -112,6 +113,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
 
     def set_zoom(self, zoom):
         self._zoom = zoom
+
+    def step_zoom(self, factor):
+        self.set_zoom(max(self.min_zoom, min(self.max_zoom, self.zoom * factor)))
     
     def get_scale(self):
         # XXX besser wäre die scale-Berechung direkt in TextView, aber
@@ -136,7 +140,11 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         return self.GetClientSize()
 
     def content_offset(self):
-        return 0, 0
+        # center the document horizontally; vertically it stays top-aligned
+        cw, _ = self.GetClientSize()
+        vw = int(self.layout.width * self.scale)
+        ox = (cw - vw) // 2 if self.hcenter and vw < cw else 0
+        return ox, 0
 
     def keep_cursor_on_screen(self):
         pass
@@ -424,12 +432,10 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
     ### Drawing
 
     def draw_background(self, painter):
-        pass
+        self.layout.draw_background(0, 0, painter)
 
     def draw(self, painter):
         self.builder.assure_rect(self.get_viewport())
-        # unnütig! self.builder.assure_index(self.editor.index) # XXX flow?
-                
         self.draw_background(painter)
         self.layout.draw(0, 0, painter)
         if self.editor is not None:

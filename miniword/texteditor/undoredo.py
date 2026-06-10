@@ -72,6 +72,11 @@ class UndoRedo(Model):
             self._redoinfo = []
             self.notify_views('undo_changed')
         
+    def clear_undo(self):
+        self._undoinfo = []
+        self._redoinfo = []
+        self.notify_views('undo_changed')
+
     def undocount(self):
         return len(self._undoinfo)
 

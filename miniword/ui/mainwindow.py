@@ -4,7 +4,12 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from .styleinspector import StyleInspector
 from .settingsinspector import SettingsInspector
-from ..texteditor import TextEditor
+from ..texteditor.editor import TestEditor
+from ..texteditor.textcanvas import TextCanvas
+from ..layout.pagebuilder import PageBuilder
+from ..layout.factory import Factory
+from ..layout.cairodevice import CairoDevice
+from ..core.styles import testsheet
 from ..images import Image, ImageInspector
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
@@ -294,11 +299,11 @@ class MainFrame(wx.Frame, ViewBase):
         edit_menu.AppendSeparator()
         edit_menu.Append(wx.ID_PREFERENCES, "&Preferences…")
         bar.Append(edit_menu, "&Edit")
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.undo(),  id=wx.ID_UNDO)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.redo(),  id=wx.ID_REDO)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('cut'),   id=wx.ID_CUT)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('copy'),  id=wx.ID_COPY)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('paste'), id=wx.ID_PASTE)
+        self.Bind(wx.EVT_MENU, lambda _: self.editor.undo(),  id=wx.ID_UNDO)
+        self.Bind(wx.EVT_MENU, lambda _: self.editor.redo(),  id=wx.ID_REDO)
+        self.Bind(wx.EVT_MENU, lambda _: self.editor.controller.handle_action('cut', False),   id=wx.ID_CUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.editor.controller.handle_action('copy', False),  id=wx.ID_COPY)
+        self.Bind(wx.EVT_MENU, lambda _: self.editor.controller.handle_action('paste', False), id=wx.ID_PASTE)
         self.Bind(wx.EVT_MENU, self._on_find,        id=wx.ID_FIND)
         self.Bind(wx.EVT_MENU, self._on_preferences, id=wx.ID_PREFERENCES)
 
@@ -314,9 +319,9 @@ class MainFrame(wx.Frame, ViewBase):
         self._mi_panel     = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
         self._mi_two_page  = view_menu.AppendCheckItem(wx.ID_ANY, "Two-page view")
         bar.Append(view_menu, "&View")
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('zoom_in'),  id=wx.ID_ZOOM_IN)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.handle_action('zoom_out'), id=wx.ID_ZOOM_OUT)
-        self.Bind(wx.EVT_MENU, lambda _: self.textview.set_zoom(self.textview.default_zoom), id=wx.ID_ZOOM_100)
+        self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(self.canvas.zoom_factor),       id=wx.ID_ZOOM_IN)
+        self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(1 / self.canvas.zoom_factor),   id=wx.ID_ZOOM_OUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.canvas.set_zoom(1.0),                            id=wx.ID_ZOOM_100)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_width(),  id=self._id_zoom_fit_w)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
         self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
@@ -346,6 +351,18 @@ class MainFrame(wx.Frame, ViewBase):
 
         self.SetMenuBar(bar)
 
+    def _create_editor_canvas(self):
+        factory = Factory(testsheet, device=CairoDevice())
+        builder = PageBuilder(self.document.textmodel, factory)
+        builder.rebuild()
+        builder.assure_index(len(self.document.textmodel))
+        self.editor = TestEditor(self.document.textmodel)
+        self.canvas = TextCanvas(
+            self._base, self.document.textmodel, builder, self.editor)
+        self.editor.canvas = self.canvas
+        colours.set(self.canvas, 'BackgroundColour', 'CanvasBg')
+        self.editor.add_view(self)
+
     def _build_layout(self):
         self._base = wx.Panel(self)
         colours.set(self._base, 'BackgroundColour', 'CanvasBg')
@@ -353,42 +370,12 @@ class MainFrame(wx.Frame, ViewBase):
         outer.Add(self._base, 1, wx.EXPAND)
         self.SetSizer(outer)
 
-        self.textview = TextEditor(self._base, self.document)
-        colours.set(self.textview, 'BackgroundColour', 'CanvasBg')
-        self.textview.add_view(self)
+        self._create_editor_canvas()
 
-        # Inspector container
-        self._inspector_book = wx.Simplebook(self._base)
-        colours.set(self._inspector_book, 'BackgroundColour', 'BTNFACE')
+        # XXX Inspectors/side panels not yet adapted to the new
+        # Editor/Canvas API; disabled for now.
+        self._inspector_book = None
         self._inspector_pages = {}
-
-        self.inspector = StyleInspector(
-            self._inspector_book, self.textview, self.document.basestyles)
-        self.document_settings = SettingsInspector(
-            self._inspector_book, self.document)
-        self.image_inspector = ImageInspector(
-            self._inspector_book, self.textview)
-        self.table_panel = TablePanel(
-            self._inspector_book, self.textview)
-
-        from .searchtool import SearchPanel
-        self._search_panel = SearchPanel(self._inspector_book, self.textview)
-        self._outline_panel = OutlinePanel(
-            self._inspector_book, self.document, self.textview)
-
-        for key, panel in [
-            ("style",    self.inspector),
-            ("settings", self.document_settings),
-            ("image",    self.image_inspector),
-            ("table",    self.table_panel),
-            ("search",   self._search_panel),
-            ("outline",  self._outline_panel),
-        ]:
-            idx = self._inspector_book.GetPageCount()
-            self._inspector_book.AddPage(panel, "")
-            self._inspector_pages[key] = idx
-
-        self._inspector_book.Hide()
         self._panel_key = None
 
         self._build_strip()
@@ -397,11 +384,13 @@ class MainFrame(wx.Frame, ViewBase):
 
         self.Bind(wx.EVT_DPI_CHANGED, self._on_dpi_changed)
         self.Bind(wx.EVT_DISPLAY_CHANGED, self._on_dpi_changed)
-            
+
         wx.CallAfter(self._layout)
 
     def _on_panel_toggle(self, key):
         book = self._inspector_book
+        if book is None:
+            return # XXX side panels not yet adapted to the new Editor/Canvas API
         if key is None:
             self._panel_key = None
             book.Hide()             
@@ -459,6 +448,8 @@ class MainFrame(wx.Frame, ViewBase):
         dlg.Destroy()
 
     def _on_menu_inspector(self, _):
+        if self._inspector_book is None:
+            return # XXX side panels not yet adapted to the new Editor/Canvas API
         if self._mi_panel.IsChecked():
             self._panel_key = "style"
             self._inspector_book.SetSelection(self._inspector_pages["style"])
@@ -472,19 +463,19 @@ class MainFrame(wx.Frame, ViewBase):
         self._layout()
 
     def _on_two_page(self, _):
-        self.textview.set_two_page(self._mi_two_page.IsChecked())
+        pass # XXX TwoPageLayout not yet adapted to flow-based layout
 
     def _on_find(self, _):
         self.show_right_panel("search")
 
     def _zoom_fit_width(self):
-        layout = self.textview.layout
-        cw = self.textview.GetClientSize()[0]
+        layout = self.canvas.layout
+        cw = self.canvas.GetClientSize()[0]
         if layout.width > 0 and cw > 0:
-            self.textview.set_zoom(cw / layout.width)
+            self.canvas.set_zoom(cw / layout.width)
 
     def _zoom_fit_page(self):
-        tv = self.textview
+        tv = self.canvas
         layout = tv.layout
         cw, ch = tv.GetClientSize()
         if layout.width <= 0 or cw <= 0 or ch <= 0:
@@ -508,8 +499,8 @@ class MainFrame(wx.Frame, ViewBase):
         panel_w = self.FromDIP(PANEL_W) if self._panel_key is not None else 0
         text_w  = w - strip_w - panel_w
 
-        self.textview.SetPosition((0, 0))
-        self.textview.SetSize((text_w, h))
+        self.canvas.SetPosition((0, 0))
+        self.canvas.SetSize((text_w, h))
 
         self._strip.SetPosition((w - strip_w, 0))
         self._strip.SetSize((strip_w, h))
@@ -538,25 +529,21 @@ class MainFrame(wx.Frame, ViewBase):
         self._build_strip()
         if active_key:
             self._strip.activate(active_key)
-        for panel in [self.inspector, self.document_settings,
-                      self.image_inspector, self.table_panel,
-                      self._search_panel, self._outline_panel]:
-            panel.dpi_changed()
-        self.textview.Refresh()
+        self.canvas.Refresh()
         self._layout()
         self.Refresh()
         event.Skip()
 
     def _update_title(self):
         name = os.path.basename(self._current_path) if self._current_path else "Untitled"
-        dirty = hasattr(self, 'textview') and self.textview.undocount() > 0
+        dirty = hasattr(self, 'editor') and self.editor.undocount() > 0
         suffix = ' *' if dirty else ''
         self.SetTitle("MiniWord — " + name + suffix)
         if hasattr(self, '_mi_reload'):
             self._mi_reload.Enable(bool(self._current_path))
 
     def _on_close(self, event):
-        if hasattr(self, 'textview') and self.textview.undocount() > 0:
+        if hasattr(self, 'editor') and self.editor.undocount() > 0:
             dlg = wx.MessageDialog(
                 self,
                 'There are unsaved changes.',
@@ -568,13 +555,13 @@ class MainFrame(wx.Frame, ViewBase):
             dlg.Destroy()
             if result == wx.ID_YES:
                 self._on_save(event)
-                if self.textview.undocount() > 0:
+                if self.editor.undocount() > 0:
                     event.Veto()
                     return
             elif result == wx.ID_CANCEL:
                 event.Veto()
                 return
-        builder = getattr(getattr(self, 'textview', None), 'builder', None)
+        builder = getattr(getattr(self, 'canvas', None), 'builder', None)
         if builder is not None:
             builder.generator = None
             builder._layout.is_finished = True  # stop buildto_y immediately
@@ -717,7 +704,7 @@ class MainFrame(wx.Frame, ViewBase):
                               "Save", wx.OK | wx.ICON_ERROR, self)
                 return
             fn(self.document, path)
-        self.textview.clear_undo()
+        self.editor.clear_undo()
         self._update_title()
         get_file_history().AddFileToHistory(path)
         save_file_history()
@@ -733,23 +720,22 @@ class MainFrame(wx.Frame, ViewBase):
         return result == wx.ID_YES
 
     def _on_reload(self, event):
-        if self.textview.undocount() > 0:
+        if self.editor.undocount() > 0:
             wx.MessageBox("Document has been modified. Please save your changes first.",
                           "Reload", wx.OK | wx.ICON_WARNING, self)
             return
-        index = self.textview.index
+        index = self.editor.index
         from ..core.document import Document
         doc = Document.load(self._current_path)
         self.replace_document(doc)
-        self.document = doc
-        self.textview.index = min(index, len(self.textview.model))
+        self.editor.index = min(index, len(self.editor.root))
         self._update_title()
 
     def _on_print(self, event):
         import tempfile, subprocess
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             path = f.name
-        self.textview.export_pdf(path)
+        self._export_pdf(path)
         if sys.platform == "win32":
             os.startfile(path)
         elif sys.platform == "darwin":
@@ -769,24 +755,18 @@ class MainFrame(wx.Frame, ViewBase):
             path = dlg.GetPath()
             if not os.path.splitext(path)[1] and dlg.GetFilterIndex() == 0:
                 path += '.pdf'
-        self.textview.export_pdf(path)
+        self._export_pdf(path)
+
+    def _export_pdf(self, path):
+        # XXX PDF export not yet adapted to the new Editor/Canvas API.
+        wx.MessageBox("PDF export is not yet implemented.",
+                      "Export PDF", wx.OK | wx.ICON_INFORMATION, self)
 
     def replace_document(self, doc):
-        old_textmodel = self.textview.model
+        self.canvas.Destroy()
         self.document = doc
-        self.textview.document = doc
-        self.textview.set_model(doc.textmodel)
-        self.textview.index = 0
-        self.textview.add_model(doc.basestyles)
-        self.textview.add_model(doc)
-        self.inspector.basestyles = doc.basestyles
-        self.inspector.basestyle.set_stylesheet(doc.basestyles)
-        self.inspector.queue_update()
-        self.document_settings.model = doc
-        self.document_settings._refresh()
-        self.image_inspector.blobs = doc.blobs
-        self.image_inspector.clear()
-        self._outline_panel.set_document(doc)
+        self._create_editor_canvas()
+        self._layout()
 
     def show_right_panel(self, key):
         self._strip.activate(key)
@@ -796,10 +776,10 @@ class MainFrame(wx.Frame, ViewBase):
         self.show_right_panel(key)
 
     def _update_undo_ui(self):
-        if not hasattr(self, "textview"):
+        if not hasattr(self, "editor"):
             return
-        self.undo_item.Enable(self.textview.undocount() > 0)
-        self.redo_item.Enable(self.textview.redocount() > 0)
+        self.undo_item.Enable(self.editor.undocount() > 0)
+        self.redo_item.Enable(self.editor.redocount() > 0)
         self._update_title()
 
     def undo_changed(self, *args):
@@ -824,8 +804,8 @@ class MainFrame(wx.Frame, ViewBase):
 
 
     def _get_debug_range(self):
-        if self.textview.has_selection():
-            return sorted(self.textview.selection)
+        if self.editor.has_selection():
+            return sorted(self.editor.selection)
         return None
 
     def _on_debug_console(self, _):
@@ -835,7 +815,7 @@ class MainFrame(wx.Frame, ViewBase):
         testing.pyshell(l)
 
     def _get_debug_texel(self):
-        model = self.textview.model
+        model = self.editor.root
         r = self._get_debug_range()
         if r:
             return model.copy(*r).texel
@@ -850,7 +830,7 @@ class MainFrame(wx.Frame, ViewBase):
         print(serialize(self._get_debug_texel()))
 
     def _on_debug_boxes(self, _):
-        layout = self.textview.builder.layout
+        layout = self.canvas.builder.layout
         r = self._get_debug_range()
         if r:
             i1, i2 = r
@@ -877,10 +857,10 @@ def demo_00():
     frame.Show()
 
     if 1:
-        view = frame.textview
-        inspector = frame.inspector
+        editor = frame.editor
+        canvas = frame.canvas
 
-        from ..wxtextview import testing
+        from . import testing
         l = locals()
         l.update(globals())
         testing.pyshell(l)
@@ -904,10 +884,10 @@ def demo_01():
     frame.Show()
 
     if 1:
-        view = frame.textview
-        inspector = frame.inspector
+        editor = frame.editor
+        canvas = frame.canvas
 
-        from ..wxtextview import testing
+        from . import testing
         l = locals()
         l.update(globals())
         testing.pyshell(l)
@@ -926,9 +906,9 @@ def test_00():
     frame.Show()
     app.Yield()
 
-    view = frame.textview
+    editor = frame.editor
     for ch in "Hello":
-        view.type_char(ch)
+        editor.insert_text(ch)
     app.Yield()
 
     text = doc.textmodel.get_text()
@@ -951,20 +931,18 @@ def test_01():
     frame.Show()
     app.Yield()
 
-    view = frame.textview
-    table_offset = view.index
-    view.insert_texel(table_offset, empty_table(2, 2))
+    editor = frame.editor
+    editor.insert_texel(empty_table(2, 2))
+    editor.insert_text("X") # content after the table
     app.Yield()
 
     # cursor inside table → CursorController
-    view.index = table_offset + 1
-    view.update_editor()
-    assert isinstance(view.editor, CursorController), type(view.editor)
+    editor.index = 1
+    assert isinstance(editor.controller, CursorController), type(editor.controller)
 
-    # cursor outside table → NullEditor
-    view.index = table_offset + 6  # past the table
-    view.update_editor()
-    assert view.editor.is_null, type(view.editor)
+    # cursor outside table → NullController
+    editor.index = 6 # on the "X" after the table
+    assert editor.controller.is_null, type(editor.controller)
 
     frame.Destroy()
     app.Yield()
@@ -991,10 +969,10 @@ def test_02():
         def AltDown(self):       return False
         def Skip(self):          pass
 
-    view = frame.textview
+    canvas = frame.canvas
     word = "Hello"
     for ch in word:
-        view.on_char(_FakeKeyEvent(ch))
+        canvas.on_char(_FakeKeyEvent(ch))
         # no Yield between chars — simulates rapid typing
 
     app.Yield()

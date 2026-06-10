@@ -200,6 +200,13 @@ class Editor(UndoRedo):
         info = self._insert(self.flow, i, new)
         self.add_undo(info)
 
+    def insert_texel(self, texel):
+        new = self.target.create_textmodel()
+        new.texel = texel
+        i = self.abs_idx(self.index)
+        info = self._insert(self.flow, i, new)
+        self.add_undo(info)
+
     def _insert(self, flow, i, new):
         self.switch_target(flow, i)
         j = self.local_idx(i)
