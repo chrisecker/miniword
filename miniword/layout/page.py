@@ -15,7 +15,7 @@ class Page(Box):
     page          = 0
     height        = 0
     decorations   = ()
-    footnote_rows = ()
+    footnote_box  = None
     restartmemo   = None
 
     def __init__(self, rowdata, geometry, device=TESTDEVICE):
@@ -50,15 +50,14 @@ class Page(Box):
             self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
 
     def draw_footnotes(self, x, y, gc):
-        if not self.footnote_rows:
+        box = self.footnote_box
+        if box is None:
             return
-        x0, y0, _ = self.footnote_rows[0]
-        sep_y = y0 - 4   # 4pt gap above the line
-        self.device.draw_line(x + x0, y + sep_y,
-                              x + x0 + self.width * 0.3, y + sep_y,
+        sep_y = box.y - 4   # 4pt gap above the line
+        self.device.draw_line(x + box.x, y + sep_y,
+                              x + box.x + self.width * 0.3, y + sep_y,
                               0.5, gc)
-        for x_, y_, row in self.footnote_rows:
-            row.draw(x + x_, y + y_, gc)
+        box.draw(x + box.x, y + box.y, gc)
 
     def draw(self, x, y, gc):
         Box.draw(self, x, y, gc)
@@ -82,27 +81,27 @@ class Page(Box):
             j1 = j2
 
     def iter_fnboxes(self, i, x, y):
-        j1 = i
-        for x_, y_, row in self.footnote_rows:
-            j2 = j1 + len(row)
-            yield j1, j2, x + x_, y + y_, row
-            j1 = j2
+        box = self.footnote_box
+        if box is None:
+            return
+        for j1, j2, x_, y_, row in box.iter_boxes(0, box.x, box.y):
+            yield i + j1, i + j2, x + x_, y + y_, row
 
     def compute_fnindex(self, x, y):
         """Return local footnote flow index at page-relative (x, y), or None."""
-        j = 0
-        for x_, y_, row in self.footnote_rows:
+        box = self.footnote_box
+        if box is None:
+            return None
+        for j1, j2, x_, y_, row in box.iter_boxes(0, box.x, box.y):
             if y_ <= y < y_ + row.height + row.depth:
-                return j + row.get_index(x - x_, row.height)
-            j += len(row)
+                return j1 + row.get_index(x - x_, row.height)
         return None
 
     def get_flow(self, x, y):
-        if not self.footnote_rows:
+        if self.footnote_box is None:
             return 0
-        # XXX wir brauchen eine footnote-Box!
-        return 0 # XXX
-        
+        return 0 # XXX: footnote_box.y is page-relative; compare against y
+
 
     def draw_mdcursor(self, i, x, y, dc, style):
         for j1, j2, rx, ry, row in self.iter_fnboxes(0, x, y):

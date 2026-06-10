@@ -12,7 +12,7 @@
 
 
 from .testdevice import TESTDEVICE
-from .boxes import TextBox
+from .boxes import TextBox, VBox
 from .linewrap import simple_linewrap
 from ..core.units import mm, cm, pt
 from ..core.styles import updated, n_levels
@@ -167,7 +167,7 @@ class DraftNode:
                     # Flush the completed page
                     page = Page(memo.rows, self.geometry, device)
                     page.decorations = memo.decorations
-                    page.footnote_rows = _position_footnotes(memo.footnotes, memo)
+                    page.footnote_box = _position_footnotes(memo.footnotes, memo)
                     pages.append(page)
                 memo = RestartMemo()
                 memo.geometry = node.geometry
@@ -296,17 +296,15 @@ def place_longtable(box, draft, device):
 
 
 def _position_footnotes(fn_rows, memo):
-    """Return (x, y, row) tuples for footnote rows stacked above the bottom margin."""
+    """Return a VBox with the footnote rows, positioned above the bottom
+    margin, or None if there are no footnotes."""
     if not fn_rows:
-        return ()
-    border_top, _, border_bottom, border_left = memo.border
-    total_h = sum(row.height + row.depth for row in fn_rows)
-    y = memo.geometry[1] - border_bottom - total_h
-    result = []
-    for row in fn_rows:
-        result.append((border_left, y, row))
-        y += row.height + row.depth
-    return tuple(result)
+        return None
+    _, _, border_bottom, border_left = memo.border
+    box = VBox(list(fn_rows), device=fn_rows[0].device)
+    box.x = border_left
+    box.y = memo.geometry[1] - border_bottom - (box.height + box.depth)
+    return box
 
 
 def render_footnote_rows(fn_texel, factory, line_width, number=None):
@@ -521,7 +519,7 @@ def generate_pages(texel, i, restartmemo, factory,
         else:
             page = Page(state.rows, state.geometry, device)
             page.decorations = state.decorations
-            page.footnote_rows = _position_footnotes(state.footnotes, state)
+            page.footnote_box = _position_footnotes(state.footnotes, state)
             pages = [page]
         for page in pages:
             yield page

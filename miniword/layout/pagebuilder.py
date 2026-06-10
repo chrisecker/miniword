@@ -83,10 +83,9 @@ class Layout(VBox):
             j1, j2, x0, y0, page = self.find_page(x, y)
         except ValueError:
             return 0 # Fallback!        
-        if not page.footnote_rows:
+        if page.footnote_box is None:
             return 0
-        _, fy, _ = page.footnote_rows[0]
-        if y-y0>fy:
+        if y-y0 > page.footnote_box.y:
             return 1 # in footnote box
         return 0 # normal text
 
@@ -103,7 +102,8 @@ class Layout(VBox):
             result = page.compute_fnindex(x, y - page_y)
             if result is not None:
                 return j + result
-            j += sum(len(row) for _, _, row in page.footnote_rows)
+            if page.footnote_box is not None:
+                j += len(page.footnote_box)
             page_y += page.height + page.depth + self.page_gap
         return None
 

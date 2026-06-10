@@ -49,6 +49,12 @@ class SimpleLayout(VBox):
     def get_flow(self, x, y):
         return 0
 
+    def prev_row(self, i, flow):
+        return boxes.prev_row(self, i)
+    
+    def next_row(self, i, flow):
+        return boxes.next_row(self, i)
+
     ### add flow-argument to box methods (needed by textview)
     def get_index(self, x, y, flow=0):
         return VBox.get_index(self, x, y)

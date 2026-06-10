@@ -32,7 +32,11 @@ class Editor(UndoRedo):
     actionhandler = staticmethod(default_handler)
     controller_registry = []
 
-
+    # During tests editor might not have a canvas so that access to
+    # layout is not possible. We therefore provide an optional layout
+    # attribut which can be used for testing.
+    layout = None
+    
     # the following attributes are set by "switch_target"
     flow = 0
     offset = 0
