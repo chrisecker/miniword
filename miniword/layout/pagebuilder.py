@@ -107,6 +107,21 @@ class Layout(VBox):
             page_y += page.height + page.depth + self.page_gap
         return None
 
+    def get_rect(self, i, x, y, flow=0):
+        if flow == 0:
+            return VBox.get_rect(self, i, x, y)
+        return self.childs[0].footnote_box.get_rect(i, x, y)
+
+    def prev_row(self, i, flow=0):
+        if flow == 0:
+            return boxes.prev_row(self, i)
+        return boxes.prev_row(self.childs[0].footnote_box, i)
+
+    def next_row(self, i, flow=0):
+        if flow == 0:
+            return boxes.next_row(self, i)
+        return boxes.next_row(self.childs[0].footnote_box, i)
+
     def draw_cursor(self, i, x, y, dc, style, flow=0):
         if flow == 0:
             return VBox.draw_cursor(self, i, x, y, dc, style)

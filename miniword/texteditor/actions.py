@@ -29,14 +29,14 @@ def create_ctx(editor):
         ctx.s1 = ctx.s2 = ctx.e1 = ctx.e2 = ctx.index
     return ctx
 
-def _navigate(layout, i, x, row_fn):
-    # XXX Was macht das? funktioniert es mit Flows?
-    first = row_fn(layout, i)
+def _navigate(layout, i, x, row_fn, flow=0):
+    # row_fn is a bound method, e.g. layout.prev_row or layout.next_row
+    first = row_fn(i, flow)
     if first is None:
         return None
     target_y, candidates, cur = first[3], [first], first
     while True:
-        nxt = row_fn(layout, cur[0])
+        nxt = row_fn(cur[0], flow)
         if nxt is None or nxt[3] != target_y:
             break
         candidates.append(nxt)
@@ -44,7 +44,7 @@ def _navigate(layout, i, x, row_fn):
     best_i, best_dist = None, float('inf')
     for r1, r2, rx, ry, row in candidates:
         j = r1 + row.get_index(x - rx, row.height)
-        dist = abs(layout.get_rect(j, 0, 0).x1 - x)
+        dist = abs(layout.get_rect(j, 0, 0, flow).x1 - x)
         if dist < best_dist:
             best_dist, best_i = dist, j
     return best_i
@@ -124,20 +124,19 @@ def default_handler(action, shift, ctx):
             i = model.linestart(i - 1)
         editor.set_index(i, shift)
     elif action == 'move_up':
-        x = layout.get_rect(index, 0, 0).x1
+        flow = editor.flow
+        x = layout.get_rect(index, 0, 0, flow).x1
         i = editor.abs_idx(index)
-        k = _navigate(layout, i, x, prev_row)
-        editor.set_index(k, shift)
-
-        ##
-
+        k = _navigate(layout, i, x, layout.prev_row, flow)
+        if k is not None:
+            editor.set_index(editor.local_idx(k), shift)
     elif action == 'move_down':
-        row, col, i0 = model.index2position(index)
-        try:
-            i = model.position2index(row+1, col, i0)
-        except IndexError:
-            i = model.lineend(index)
-        editor.set_index(i, shift)            
+        flow = editor.flow
+        x = layout.get_rect(index, 0, 0, flow).x1
+        i = editor.abs_idx(index)
+        k = _navigate(layout, i, x, layout.next_row, flow)
+        if k is not None:
+            editor.set_index(editor.local_idx(k), shift)
     elif action == 'move_line_start':
         editor.set_index(model.linestart(index), shift)
     elif action == 'move_line_end':
