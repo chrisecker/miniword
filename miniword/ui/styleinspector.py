@@ -141,33 +141,20 @@ class PromptingComboBox(wx.ComboBox) :
 
         
 
-class Inspector(wx.Frame):
-    def __init__(self, view, parent, *args, **kwds):    
-        wx.Frame.__init__(self, parent, *args, title='Format',
-                          style=wx.DEFAULT_FRAME_STYLE|wx.FRAME_FLOAT_ON_PARENT
-                          |wx.FRAME_TOOL_WINDOW, **kwds)
-        self.panel = StyleInspector(self, view, view.document.basestyles)
-        framesizer = wx.BoxSizer( wx.VERTICAL )
-        framesizer.Add(self.panel, 1, wx.EXPAND, 0)
-        self.SetSizer(framesizer)
-        self.Layout()
-        framesizer.Fit(self)
-
-    
 class StyleInspector(SidePanel):
     sizes = (8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30)
     _state = None
 
-    def __init__(self, parent, view, basestyles):
+    def __init__(self, parent, editor, basestyles):
         SidePanel.__init__(self, parent)
-        self._view = view
+        self.editor = editor
         self.basestyles = basestyles
-        self.add_model(view)
+        self.add_model(editor)
         self.create()
-        passfocus(self, view)
+        passfocus(self, editor.canvas)
 
     def create(self):
-        view = self._view
+        editor = self.editor
         mainsizer = wx.BoxSizer(wx.VERTICAL)
 
         self.basestyle = BasestyleSelector(self, size=(-1, self.FromDIP(40)))
@@ -182,7 +169,7 @@ class StyleInspector(SidePanel):
 
         notebook = wx.Notebook(self)
         notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,
-            lambda e: (e.Skip(), wx.CallAfter(view.SetFocus)))
+            lambda e: (e.Skip(), wx.CallAfter(editor.canvas.SetFocus)))
 
         panel, contentsizer = make_tab(notebook, 'Style')
         choices = list(map(str, self.sizes))
@@ -451,18 +438,14 @@ class StyleInspector(SidePanel):
         self.set_parproperties(alignment=variant)
         
     def on_indent(self, event):
-        with self.model.atomic():
-            for s1, s2 in self.get_parrange():
-                self.model.edit_model.increase_indent(s1, s2)
+        self._apply_to_ranges(self.get_parrange(), self.editor.indent)
 
     def on_dedent(self, event):
-        with self.model.atomic():
-            for s1, s2 in self.get_parrange():
-                self.model.edit_model.decrease_indent(s1, s2)
+        self._apply_to_ranges(self.get_parrange(), self.editor.dedent)
 
     def on_policy(self, event):
         if self.policy.GetValue():
-            value = self.model.edit_model.get_indent(self.model.index)
+            value = self.editor.target.get_indent(self.editor.index)
         else:
             value = None
         self.set_parproperties(fixed_indent=value)
@@ -502,10 +485,10 @@ class StyleInspector(SidePanel):
 
     def set_list_value(self, name, value):
         # Helper
-        view = self.model
-        model = view.edit_model
-        indent = model.get_indent(view.index)
-        parstyle = model.get_parstyle(view.index)
+        editor = self.editor
+        model = editor.target
+        indent = model.get_indent(editor.index)
+        parstyle = model.get_parstyle(editor.index)
         properties = self.mk_style(parstyle, {})
         fixed = properties.get('fixed_indent')
         if fixed is not None:
@@ -548,47 +531,53 @@ class StyleInspector(SidePanel):
 
 
 
-    def set_properties(self, **properties):
-        with self.model.atomic():
-            for i1, i2 in self.get_range():
-                self.model.set_properties(i1, i2, **properties)
+    def _apply_to_ranges(self, ranges, action):
+        """Run action() once per range, with editor.selection set to that range."""
+        editor = self.editor
+        saved = editor.selection
+        with editor.atomic():
+            for i1, i2 in ranges:
+                editor.selection = (i1, i2)
+                action()
+        if saved is not None:
+            editor.selection = saved
 
     def clear_properties(self, *keys):
-        with self.model.atomic():
-            for i1, i2 in self.get_range():
-                self.model.clear_properties(i1, i2, *keys)
+        self._apply_to_ranges(self.get_range(),
+            lambda: self.editor.clear_properties(*keys))
 
     def set_char_properties(self, **properties):
         """Apply character properties: to the selection, or to the input
         style when there is no selection."""
         ranges = self.get_range()
-        if ranges == [(self.model.index, self.model.index)]:
-            self.model.set_current_style(**properties)
+        if ranges == [(self.editor.index, self.editor.index)]:
+            editor = self.editor
+            editor.current_style = dict(editor.current_style, **properties)
         else:
-            with self.model.atomic():
-                for i1, i2 in ranges:
-                    self.model.set_properties(i1, i2, **properties)
+            self._apply_to_ranges(ranges,
+                lambda: self.editor.set_properties(**properties))
 
     def clear_char_properties(self, *keys):
         """Clear character properties: from the selection, or from the
         input style when there is no selection."""
         ranges = self.get_range()
-        if ranges == [(self.model.index, self.model.index)]:
-            self.model.clear_current_style(*keys)
+        if ranges == [(self.editor.index, self.editor.index)]:
+            editor = self.editor
+            style = dict(editor.current_style)
+            for key in keys:
+                style.pop(key, None)
+            editor.current_style = style
         else:
-            with self.model.atomic():
-                for i1, i2 in ranges:
-                    self.model.clear_properties(i1, i2, *keys)
+            self._apply_to_ranges(ranges,
+                lambda: self.editor.clear_properties(*keys))
 
     def set_parproperties(self, **properties):
-        with self.model.atomic():
-            for i1, i2 in self.get_parrange():
-                self.model.set_parproperties(i1, i2, **properties)
+        self._apply_to_ranges(self.get_parrange(),
+            lambda: self.editor.set_parproperties(**properties))
 
     def clear_parproperties(self, *keys):
-        with self.model.atomic():
-            for i1, i2 in self.get_parrange():
-                self.model.clear_parproperties(i1, i2, *keys)
+        self._apply_to_ranges(self.get_parrange(),
+            lambda: self.editor.clear_parproperties(*keys))
 
     def on_size(self, event=None):
         try:
@@ -615,9 +604,9 @@ class StyleInspector(SidePanel):
         Reads the current char- and par-style from the model to determine
         which keys belong to which layer.
         """
-        view  = self.model
-        model = view.edit_model
-        index = view.index
+        editor  = self.editor
+        model = editor.target
+        index = editor.index
         char_keys = set(model.get_style(max(0, index - 1)).keys()) & overrides
         par_keys  = set(model.get_parstyle(index).keys()) & overrides
         return char_keys, par_keys
@@ -626,7 +615,7 @@ class StyleInspector(SidePanel):
         """Remove *overrides* from the current selection in the text model.
 
         Each call to clear_properties / clear_parproperties adds an undo entry
-        on its own.  Wrap this call inside view.atomic() to group all entries
+        on its own.  Wrap this call inside editor.atomic() to group all entries
         together with any surrounding stylesheet changes.
         """
         char_keys, par_keys = self._split_overrides(overrides)
@@ -642,11 +631,11 @@ class StyleInspector(SidePanel):
         Performs stylesheet update + override removal as a single atomic
         operation (one rebuild, one undo entry).
         """
-        view = self.model
-        old_style = view.document.basestyles.get(name).copy()
-        with view.atomic():
-            view.add_undo((view._undo_stylesheet, name, old_style, new_style))
-            view.document.basestyles.set(name, new_style)
+        editor = self.editor
+        old_style = self.basestyles.get(name).copy()
+        with editor.atomic():
+            editor.add_undo((self._undo_stylesheet, name, old_style, new_style))
+            self.basestyles.set(name, new_style)
             self._clear_overrides(overrides - {'base'})
 
     def _create_style(self, new_name, new_style, overrides):
@@ -656,13 +645,13 @@ class StyleInspector(SidePanel):
         Performs stylesheet insert + base change + override removal as a single
         atomic operation (one rebuild, one undo entry).
         """
-        view = self.model
-        with view.atomic():
+        editor = self.editor
+        with editor.atomic():
             # Undo entry: delete the new style (restore_to=None means delete).
-            view.add_undo((view._undo_stylesheet, new_name, None, new_style))
-            view.document.basestyles.set(new_name, new_style)
-            for pi1, pi2 in self.get_parrange():
-                self.model.set_parproperties(pi1, pi2, base=new_name)
+            editor.add_undo((self._undo_stylesheet, new_name, None, new_style))
+            self.basestyles.set(new_name, new_style)
+            self._apply_to_ranges(self.get_parrange(),
+                lambda: editor.set_parproperties(base=new_name))
             self._clear_overrides(overrides - {'base'})
 
     def _revert_style(self, overrides):
@@ -671,34 +660,43 @@ class StyleInspector(SidePanel):
         Coordinator for the 'Revert to original style' action.
         Groups all override removals into one rebuild and one undo entry.
         """
-        view = self.model
-        with view.atomic():
+        editor = self.editor
+        with editor.atomic():
             self._clear_overrides(overrides)
 
     def _rename_style(self, name, new_label):
         """Change the display name of a style (undo-able)."""
-        view = self.model
-        old_style = view.document.basestyles.get(name).copy()
+        editor = self.editor
+        old_style = self.basestyles.get(name).copy()
         new_style = old_style.copy()
         new_style["name"] = new_label
-        with view.atomic():
-            view.add_undo((view._undo_stylesheet, name, old_style, new_style))
-            view.document.basestyles.set(name, new_style)
+        with editor.atomic():
+            editor.add_undo((self._undo_stylesheet, name, old_style, new_style))
+            self.basestyles.set(name, new_style)
 
     def _delete_style(self, name):
         """Delete a style and remap all uses to 'normal' (undo-able)."""
-        view = self.model
-        textmodel = view.edit_model
+        editor = self.editor
+        textmodel = editor.target
         texel = textmodel.get_xtexel()
-        old_style = view.document.basestyles.get(name).copy()
-        with view.atomic():
-            for j1, j2, _ in iter_newlines(texel, 0):
-                if textmodel.get_parstyle(j1).get('base') == name:
-                    view.set_parproperties(j1, j2, base='normal')
+        old_style = self.basestyles.get(name).copy()
+        ranges = [(j1, j2) for j1, j2, _ in iter_newlines(texel, 0)
+                  if textmodel.get_parstyle(j1).get('base') == name]
+        with editor.atomic():
+            self._apply_to_ranges(ranges,
+                lambda: editor.set_parproperties(base='normal'))
             # Add stylesheet undo last so it's applied first when undoing,
             # ensuring the style exists before paragraph bases are restored.
-            view.add_undo((view._undo_stylesheet, name, old_style, None))
-            view.document.basestyles.delete(name)
+            editor.add_undo((self._undo_stylesheet, name, old_style, None))
+            self.basestyles.delete(name)
+
+    def _undo_stylesheet(self, name, old_style, new_style):
+        """Undo/redo helper for stylesheet edits (see add_undo)."""
+        if old_style is None:
+            self.basestyles.delete(name)
+        else:
+            self.basestyles.set(name, old_style)
+        return self._undo_stylesheet, name, new_style, old_style
 
     def mk_style(self, parstyle, style):
         # Computes the style of a single run of text. Unlike the code
@@ -706,7 +704,7 @@ class StyleInspector(SidePanel):
         # we can use the same code for paragraph and text
         # styles. Further we include defaultstyles which is not done
         # in nbviews (but in wxdevice).
-        stylesheet = self.model.builder.stylesheet
+        stylesheet = self.editor.canvas.builder.stylesheet
         basestyle = stylesheet.get(parstyle.get('base', 'normal')) or {}
         r = updated(style_default, basestyle, parstyle, style)
         if not 'base' in r:
@@ -718,28 +716,29 @@ class StyleInspector(SidePanel):
 
         Returns [(index, index)] when there is no selection (cursor only).
         """
-        selected = self.model.get_selected()
+        selected = self.editor.selected_ranges()
         if not selected:
-            i = self.model.index
+            i = self.editor.index
             return [(i, i)]
         return selected
 
     def get_parrange(self):
         """Return list of (i1, i2) ranges extended to cover complete lines."""
-        view = self.model
-        selected = view.get_selected()
+        editor = self.editor
+        selected = editor.selected_ranges()
+        target = editor.target
         if selected:
-            return [view.expand_lines(i1, i2) for i1, i2 in selected]
-        i = view.index
-        return [view.expand_lines(i, i)]
+            return [target.expand_lines(i1, i2) for i1, i2 in selected]
+        i = editor.index
+        return [target.expand_lines(i, i)]
 
     _stylenames = ()
 
     def update(self, event=None):
-        textview = self.model
-        textmodel = textview.edit_model
-        
-        index = textview.index
+        editor = self.editor
+        textmodel = editor.target
+
+        index = editor.index
         index_style = textmodel.get_style(max(0, index-1)) # XXX warum -1 ???
         index_parstyle = textmodel.get_parstyle(index)
         index_properties = self.mk_style(index_parstyle, index_style)
@@ -747,7 +746,7 @@ class StyleInspector(SidePanel):
         index_indent = textmodel.get_indent(index)
 
 
-        selected = textview.get_selected()
+        selected = editor.selected_ranges()
         if selected:
             properties, overrides = collect_properties(
                 textmodel, *selected[0], self.mk_style)
@@ -761,7 +760,7 @@ class StyleInspector(SidePanel):
                     properties[key] = v1 if v1 == v2 else None
                 indent = min(textmodel.get_indents(s1, s2) + [indent])
         else:
-            current_style = textview.get_current_style()
+            current_style = editor.get_current_style()
             properties = self.mk_style(index_parstyle, current_style)
             overrides = set(current_style.keys()).union(index_parstyle.keys())
             indent = index_indent
