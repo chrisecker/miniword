@@ -514,11 +514,28 @@ def test_05():
         assert b >= offset, f"relative position leaked: {b} < offset {offset}"
 
 
+def _setup_demo(frame, doc):
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+    from ..layout.cairodevice import CairoDevice
+    from ..layout.pagebuilder import PageBuilder
+    from ..texteditor.editor import Editor
+    from ..texteditor.textcanvas import TextCanvas
+
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = PageBuilder(doc.textmodel, factory)
+    builder.rebuild()
+
+    editor = Editor(doc.textmodel)
+    canvas = TextCanvas(frame, doc.textmodel, builder, editor)
+    editor.canvas = canvas
+    return editor, canvas
+
+
 def demo_00():
     """CursorEditor"""
     from .tables import from_strings
     from ..core.document import Document
-    from ..texteditor import TextEditor
 
     doc = Document()
     doc.textmodel.texel = from_strings([['Name',     'City',       'Country'],
@@ -527,7 +544,7 @@ def demo_00():
 
     app   = wx.App(True)
     frame = wx.Frame(None, title='CursorEditor demo', size=(420, 300))
-    view  = TextEditor(frame, doc)
+    _setup_demo(frame, doc)
     frame.Show()
     app.MainLoop()
 
@@ -537,7 +554,6 @@ def demo_01():
     from ..textmodel.texeltree import Text
     from .tables import Table, from_strings
     from ..core.document import Document
-    from ..texteditor import TextEditor
 
     inner = from_strings([['A', 'B'], ['C', 'D']])
     outer = Table(
@@ -551,7 +567,7 @@ def demo_01():
 
     app   = wx.App(True)
     frame = wx.Frame(None, title='Nested table demo', size=(500, 300))
-    view  = TextEditor(frame, doc)
+    _setup_demo(frame, doc)
     frame.Show()
     app.MainLoop()
 
