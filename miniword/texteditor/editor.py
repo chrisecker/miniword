@@ -25,7 +25,8 @@ class Editor(UndoRedo):
     current_style = overridable_property('current_style', 'A style dict')
     _current_style = EMPTYSTYLE
     controller = overridable_property('controller')
-    _controller = None # will be set in __init__
+    _controller = None # computed lazily by get_controller
+    _controller_dirty = True
     canvas = overridable_property('canvas', 'Optional reference to canvas')
     _canvas = None
 
@@ -482,33 +483,50 @@ class Editor(UndoRedo):
 
     def set_controller(self, controller):
         self._controller = controller
+        self._controller_dirty = False
         self.notify_views('controller_changed', controller)
         #self.refresh()
 
     def get_controller(self):
+        # Computed lazily: by the time a controller is actually accessed
+        # (drawing, key/mouse events), the layout has been brought up to
+        # date for the relevant area (e.g. via assure_rect during paint),
+        # so find_box() can succeed even though the layout build itself
+        # is lazy/incremental.
+        if self._controller_dirty:
+            self._controller = self.compute_controller()
+            self._controller_dirty = False
         return self._controller
 
     def update_controller(self):
+        """Mark the controller stale so it gets re-evaluated on next access."""
+        self._controller_dirty = True
+
+    def compute_controller(self):
         """Install, switch, or remove the controller based on current conditions."""
-        controller = self.controller
+        controller = self._controller
         path = get_path(self.target.get_xtexel(), self.index)
 
         if not (controller is None or controller.is_null):
             # Note: Controler is None during init!
             m = controller.match(self, path)
             if m is not None:
-                # The current controller is still matches. We reinstall it.
-                self.controller = m
-                return
+                # The current controller still matches. We reinstall it.
+                return m
 
-        for cls in self.controller_registry:
-            if not cls.auto_installable:
-                continue
-            m = cls.match(self, path)
-            if m is not None:
-                self.controller = m
-                return
-        self.controller = NullController.match(self, path)
+        if self.canvas is not None:
+            # Box controllers need self.canvas.layout, which does not
+            # exist yet during Editor.__init__. The layout build is lazy
+            # and incremental, so make sure it covers the current index
+            # before find_box() walks it.
+            self.canvas.builder.assure_index(self.abs_idx(self.index), self.flow)
+            for cls in self.controller_registry:
+                if not cls.auto_installable:
+                    continue
+                m = cls.match(self, path)
+                if m is not None:
+                    return m
+        return NullController.match(self, path)
 
 
 class TestEditor(Editor):

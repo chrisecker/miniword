@@ -20,7 +20,8 @@ class ElementController:
     Editors are removed when:
       - the cursor moves and match() returns None
       - the model signals "inserted" or "removed"
-      - the editor calls textview.remove_editor() itself
+      - editor.update_controller() re-evaluates match() and installs
+        a different controller (e.g. NullController)
     """
     auto_installable  = False
     click_installable = False
@@ -62,10 +63,10 @@ class ElementController:
         # default: redirect to editor
         return self.editor.actionhandler(action, shift, ctx)
 
-    # Clipboard — delegate to textview
-    def copy(self):  self.textview.copy()
-    def cut(self):   self.textview.cut()
-    def paste(self): self.textview.paste()
+    # Clipboard — delegate to editor
+    def copy(self):  self.editor.copy()
+    def cut(self):   self.editor.cut()
+    def paste(self): self.editor.paste()
     
 
 class NullController(ElementController):
