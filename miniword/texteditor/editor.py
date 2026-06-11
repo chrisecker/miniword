@@ -225,6 +225,17 @@ class Editor(UndoRedo):
         self.selection = j1, j1
         return self._insert, flow, i1, old
     
+    def set_texel_attributes(self, i1, texel, **attributes):
+        """Replace the Single texel at i1 with a clone that has updated attributes."""
+        new_texel = texel
+        for key, value in attributes.items():
+            new_texel = getattr(new_texel, 'set_' + key)(value)
+        new = self.target.create_textmodel()
+        new.texel = new_texel
+        with self.atomic():
+            self.add_undo(self._remove(self.flow, i1, i1+1))
+            self.add_undo(self._insert(self.flow, i1, new))
+
     def insert_newline(self):
         model = self.target
         index = self.index
@@ -472,10 +483,17 @@ class Editor(UndoRedo):
         Returns True if a controller was installed.
         """
         path = get_path(self.target.get_xtexel(), self.index)
+        if self.canvas is not None:
+            # Make sure the layout covers the current index before
+            # find_box() (called from match()) walks it.
+            self.canvas.builder.assure_index(self.abs_idx(self.index), self.flow)
         for cls in self.controller_registry:
             if not cls.click_installable:
                 continue
-            m = cls.match(self, path)
+            try:
+                m = cls.match(self, path)
+            except IndexError:
+                continue
             if m is not None:
                 self.set_controller(m)
                 return True
