@@ -31,6 +31,13 @@ class Page(Box):
     def __len__(self):
         return self.length
 
+    def flowlength(self, flow):
+        if flow == 0:
+            return self.length
+        if self.footnote_box is None:
+            return 0
+        return len(self.footnote_box)
+
     def adjust(self, pagenum):
         """Update page properties that do not affect layout.
 

@@ -53,6 +53,11 @@ class Layout(VBox):
         self.width   = max(self.width, page.width)
         self.height += page.height  # assumes a specific page geometry
 
+    def flowlength(self, flow):
+        if flow == 0:
+            return self.length
+        return sum(page.flowlength(flow) for page in self.childs)
+
     def iter_boxes(self, i, x, y):
         j1 = i
         y += self.page_gap  # initial gap before first page
@@ -321,10 +326,10 @@ class PageBuilder(BuilderBase):
         return n % self._layout.pages_per_row == 0
 
     @trace
-    def assure_index(self, i, callback=NOOP):
+    def assure_index(self, i, flow=0, callback=NOOP):
         layout = self._layout
         while not layout.is_finished:
-            if len(layout) >= i and self._row_complete():
+            if layout.flowlength(flow) >= i and self._row_complete():
                 break
             self.build_step()
             callback()

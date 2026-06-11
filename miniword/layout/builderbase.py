@@ -140,7 +140,7 @@ class BuilderBase(ViewBase):
     def assure_finished(self):
         pass # default: do nothing
     
-    def assure_index(self, i):
+    def assure_index(self, i, flow=0):
         pass # default: do nothing
 
     def assure_rect(self, r):
