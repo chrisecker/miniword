@@ -4,7 +4,7 @@ from .core.document import Document
 from .core.config import get_config
 from .ui.mainwindow import MainFrame
 from .ui.unitentry import LengthInput, UnitPrefs
-from .layout import builder
+from .layout import pagebuilder
 
 
 def _enable_dpi_awareness():
@@ -42,7 +42,7 @@ def _enable_dpi_awareness():
 def main():
     args = sys.argv[1:]
     if '--debug' in args:
-        builder.DEBUG = True
+        pagebuilder.DEBUG = True
         args = [a for a in args if a != '--debug']
     path = args[0] if args else None
 
