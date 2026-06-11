@@ -90,7 +90,7 @@ class SearchResultsList(wx.VListBox):
     def __init__(self, parent, textview):
         super().__init__(parent)
         self.textview = textview
-        self.textmodel = textview.model
+        self.textmodel = textview.root
         self.results = []
 
         colours.set(self, 'BackgroundColour', 'WINDOW')
@@ -213,8 +213,8 @@ class SearchResultsList(wx.VListBox):
             return
         i1, i2, _, _ = self.results[index]
         self.textview.set_index(i1)
-        self.textview.set_selection((i1, i2))
-        self.textview.adjust_viewport()
+        self.textview.selection = (i1, i2)
+        self.textview.canvas.adjust_viewport()
 
     def _line_from_pos(self, index):
         row, col, _ = self.textmodel.index2position(index)
@@ -228,7 +228,7 @@ class SearchPanel(SidePanel):
     def __init__(self, parent, textview):
         SidePanel.__init__(self, parent)
         self.textview = textview
-        self.textmodel = textview.model
+        self.textmodel = textview.root
         self.search = Search(self.textmodel)
         self.set_model(self.search)
         self._current_idx = -1
@@ -319,8 +319,8 @@ class SearchPanel(SidePanel):
     def update_visible(self):
         super().update_visible()
         if not self.visible:
-            self.textview.highlights = []
-            self.textview.Refresh()
+            self.textview.canvas.highlights = {}
+            self.textview.canvas.refresh()
 
     def on_text_changed(self, event):
         self.search.search(self.search_ctrl.GetValue().strip())
@@ -345,8 +345,8 @@ class SearchPanel(SidePanel):
         for idx, (i1, i2, *_) in enumerate(self.result_list.results):
             color = 'orange' if idx == self._current_idx else 'yellow'
             highlights.append((i1, i2, color))
-        self.textview.highlights = highlights
-        self.textview.Refresh()
+        self.textview.canvas.highlights = {0: highlights} if highlights else {}
+        self.textview.canvas.refresh()
 
     def _update_count_label(self):
         n = len(self.result_list.results)
@@ -397,9 +397,11 @@ class SearchPanel(SidePanel):
             return
         i1, i2, _, _ = results[idx]
         replacement = self.replace_ctrl.GetValue()
-        self.textview.remove(i1, i2)
+        self.textview.selection = (i1, i2)
+        self.textview.remove()
         if replacement:
-            self.textview.insert_text(i1, replacement)
+            self.textview.index = i1
+            self.textview.insert_text(replacement)
         self.search.update()
         new_results = self.search.get_results()
         self._current_idx = min(idx, len(new_results) - 1)
@@ -417,9 +419,11 @@ class SearchPanel(SidePanel):
         replacement = self.replace_ctrl.GetValue()
         self.textview.begin_undo_group()
         for i1, i2, _, _ in reversed(results):
-            self.textview.remove(i1, i2)
+            self.textview.selection = (i1, i2)
+            self.textview.remove()
             if replacement:
-                self.textview.insert_text(i1, replacement)
+                self.textview.index = i1
+                self.textview.insert_text(replacement)
         self.textview.end_undo_group()
         self._current_idx = -1
 
@@ -433,16 +437,29 @@ class SearchPanel(SidePanel):
 
 
 def demo_00():
-    from ..wxtextview.wxtextview import WXTextView
+    "Search panel on a TextEditor showing the Einstein text"
     from einstein import get_einstein_model
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+    from ..layout.cairodevice import CairoDevice
+    from ..layout.pagebuilder import PageBuilder
+    from ..texteditor.editor import Editor
+    from ..texteditor.textcanvas import TextCanvas
+
     app = wx.App(True)
-    frame = wx.Frame(None, title="Search Demo", size=(500, 400))
     model = get_einstein_model()
-    f = wx.Frame(None)
-    view = WXTextView(f)
-    view.set_model(model)
-    f.Show()
-    panel = SearchPanel(frame, view)
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = PageBuilder(model, factory)
+    builder.rebuild()
+    builder.assure_index(len(model))
+    editor = Editor(model)
+
+    frame = wx.Frame(None, title="Search Demo", size=(800, 600))
+    canvas = TextCanvas(frame, model, builder, editor)
+    editor.canvas = canvas
+
+    panel = SearchPanel(wx.Frame(None, title="Search"), editor)
+    panel.GetParent().Show()
     frame.Show()
     app.MainLoop()
 

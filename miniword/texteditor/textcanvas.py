@@ -32,9 +32,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
     zoom_factor = 1.1
     hcenter     = True
 
-    # annotations: list of (i1, i2) or (i1, i2, color), drawn by draw()
-    highlights = []
-    squiggles  = []
+    # annotations: dict flow -> list of (i1, i2) or (i1, i2, color), drawn by draw()
+    highlights = {}
+    squiggles  = {}
 
 
     def __init__(self, parent, model, builder, editor=None, pos=wx.DefaultPosition,
@@ -405,14 +405,28 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
     def draw_background(self, painter):
         self.layout.draw_background(0, 0, painter)
 
+    def get_flow_box(self, flow):
+        """Return the box used for layout/annotation queries for the given flow."""
+        if flow == 0:
+            return self.layout
+        return self.layout.childs[0].footnote_box
+
     def draw(self, painter):
         self.builder.assure_rect(self.get_viewport())
         self.draw_background(painter)
-        for i1, i2, *color in self.highlights:
-            annotation.highlight(painter, self.layout, i1, i2, 0, 0, *color)
+        for flow, items in self.highlights.items():
+            box = self.get_flow_box(flow)
+            if box is None:
+                continue
+            for i1, i2, *color in items:
+                annotation.highlight(painter, box, i1, i2, 0, 0, *color)
         self.layout.draw(0, 0, painter)
-        for i1, i2, *color in self.squiggles:
-            annotation.squiggle(painter, self.layout, i1, i2, 0, 0, *color)
+        for flow, items in self.squiggles.items():
+            box = self.get_flow_box(flow)
+            if box is None:
+                continue
+            for i1, i2, *color in items:
+                annotation.squiggle(painter, box, i1, i2, 0, 0, *color)
         if self.editor is not None:
             self.editor.controller.draw(painter)
 

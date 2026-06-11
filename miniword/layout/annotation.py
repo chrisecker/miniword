@@ -168,7 +168,7 @@ def demo_00():
     A Python shell opens so that view.highlights and view.squiggles
     can be edited interactively and view.Refresh() called to redraw.
 
-    Annotation format: list of (i1, i2) or (i1, i2, color).
+    Annotation format: dict flow -> list of (i1, i2) or (i1, i2, color).
     """
     import re
     import wx
@@ -184,8 +184,8 @@ def demo_00():
 
     frame = wx.Frame(None, title='Annotation Demo', size=(900, 600))
     view  = TextEditor(frame, doc)
-    view.highlights = []
-    view.squiggles  = []
+    view.highlights = {0: []}
+    view.squiggles  = {0: []}
     view.SetBackgroundColour('light grey')
 
     # Seed example annotations from the first six long words in the text.
@@ -193,10 +193,10 @@ def demo_00():
     words = list(dict.fromkeys(re.findall(r'\b\w{6,}\b', text)))[:6]
     for word in words[:3]:
         i = text.find(word)
-        view.highlights.append((i, i + len(word)))
+        view.highlights[0].append((i, i + len(word)))
     for word in words[3:6]:
         i = text.find(word)
-        view.squiggles.append((i, i + len(word)))
+        view.squiggles[0].append((i, i + len(word)))
 
     frame.Show()
 
