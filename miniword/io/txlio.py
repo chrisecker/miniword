@@ -78,10 +78,13 @@ def save(doc, path):
             parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
         parts.append('')
 
-    # Blobs section — only written when non-empty
-    if doc.blobs:
+    # Blobs section — only written when non-empty; unused blobs are dropped
+    from ..images.images import collect_blob_ids
+    used = collect_blob_ids(doc.textmodel.texel)
+    blobs = {k: v for k, v in doc.blobs.items() if k in used}
+    if blobs:
         parts.append('[blobs]')
-        for key, data in doc.blobs.items():
+        for key, data in blobs.items():
             parts.append('"%s" = "%s"' % (key, base64.b64encode(data).decode('ascii')))
         parts.append('')
 
@@ -242,11 +245,14 @@ def test_03():
 
 
 def test_04():
-    "blobs roundtrip"
+    "blobs roundtrip: only blobs referenced by Image texels are kept"
     import tempfile, os
+    from ..textmodel.texeltree import grouped
+    from ..images.images import Image
 
     doc = Document()
     doc.textmodel = TextModel("Hello")
+    doc.textmodel.texel = grouped([Image('photo.png'), doc.textmodel.texel])
     doc.blobs = {'photo.png': b'\x89PNG\r\nfakedata', 'logo.jpg': b'\xff\xd8fake'}
 
     with tempfile.NamedTemporaryFile(
@@ -255,7 +261,7 @@ def test_04():
     try:
         doc.save(path)
         doc2 = Document.load(path)
-        assert doc2.blobs == doc.blobs
+        assert doc2.blobs == {'photo.png': b'\x89PNG\r\nfakedata'}
     finally:
         os.unlink(path)
 

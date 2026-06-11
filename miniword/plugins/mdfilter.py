@@ -198,6 +198,8 @@ import base64
 _IMG_MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
              '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml'}
 
+_IMG_RE    = re.compile(r'!\[([^\]]*)\]\(data:[^;]+;base64,([^)]+)\)')
+
 _ATX_RE    = re.compile(r'^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
 _UL_RE     = re.compile(r'^(\s*)[-*+]\s+(.*)')
 _OL_RE     = re.compile(r'^(\s*)\d+\.\s+(.*)')
@@ -256,8 +258,8 @@ def _load_builtin(text):
 
 
 def _insert_text_block(doc, ptype, indent, runs):
-    if any(r[1].get('_footnote') for r in runs):
-        _insert_text_block_with_footnotes(doc, ptype, indent, runs)
+    if any(r[1].get('_footnote') or r[1].get('_image') for r in runs):
+        _insert_text_block_with_specials(doc, ptype, indent, runs)
         return
     par_text = ''.join(t for t, _ in runs) + '\n'
     pos = len(doc.textmodel.get_text())
@@ -271,8 +273,9 @@ def _insert_text_block(doc, ptype, indent, runs):
         run_pos += len(run_text)
 
 
-def _insert_text_block_with_footnotes(doc, ptype, indent, runs):
+def _insert_text_block_with_specials(doc, ptype, indent, runs):
     from miniword.footnotes.footnotes import Footnote
+    from miniword.images.images import Image
     from miniword.textmodel.texeltree import T, ENDMARK, grouped
     for run_text, run_props in runs:
         pos = len(doc.textmodel.get_text())
@@ -281,6 +284,12 @@ def _insert_text_block_with_footnotes(doc, ptype, indent, runs):
             fn_model = doc.textmodel.create_textmodel()
             fn_model.texel = grouped([fn])
             doc.textmodel.insert(pos, fn_model)
+        elif run_props.get('_image'):
+            blob_id, data = run_props['_image']
+            doc.blobs[blob_id] = data
+            img_model = doc.textmodel.create_textmodel()
+            img_model.texel = grouped([Image(blob_id)])
+            doc.textmodel.insert(pos, img_model)
         elif run_text:
             doc.textmodel.insert_text(pos, run_text)
             if run_props:
@@ -455,7 +464,8 @@ def _parse_inline(text, fn_defs=None):
     parts = []
     pos   = 0
     pattern = re.compile(
-        r'(`[^`]+`)'                                     # code
+        r'(!\[[^\]]*\]\(data:[^;]+;base64,[^)]+\))'    # inline image (data URI)
+        r'|(`[^`]+`)'                                     # code
         r'|(\*{3}[^\s*](?:[^*]*[^\s*])?\*{3})'         # bold+italic ***
         r'|(\*{2}[^\s*](?:[^*]*[^\s*])?\*{2})'         # bold **
         r'|(\*[^\s*](?:[^*]*[^\s*])?\*)'               # italic *  (single char: *a*)
@@ -468,7 +478,11 @@ def _parse_inline(text, fn_defs=None):
         if m.start() > pos:
             parts.append((text[pos:m.start()], {}))
         raw = m.group(0)
-        if raw.startswith('[^'):
+        if raw.startswith('!['):
+            img = _IMG_RE.match(raw)
+            blob_id, data = img.group(1), base64.b64decode(img.group(2))
+            parts.append(('', {'_image': (blob_id, data)}))
+        elif raw.startswith('[^'):
             ref = raw[2:-1]
             content = (fn_defs or {}).get(ref, ref)
             parts.append(('', {'_footnote': content}))
@@ -483,7 +497,7 @@ def _parse_inline(text, fn_defs=None):
         pos = m.end()
     if pos < len(text):
         parts.append((text[pos:], {}))
-    return [(t, p) for t, p in parts if t or p.get('_footnote')]
+    return [(t, p) for t, p in parts if t or p.get('_footnote') or p.get('_image')]
 
 
 def _github_defs(size, mm):
@@ -879,7 +893,7 @@ def test_01():
 
 
 def test_02():
-    "heading with continuation line (blank line before next)"
+    "heading with continuation line"
     pars = _parse("# Title\n\nParagraph text.\n")
     assert pars[0][0] == 'h1'
     assert ''.join(t for t, _ in pars[0][3]) == 'Title'
@@ -1001,7 +1015,7 @@ def test_11():
 
 
 def test_12():
-    "table import produces Table texel with correct dimensions and cell texts"
+    "table import"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
@@ -1021,7 +1035,7 @@ def test_12():
 
 
 def test_13():
-    "table export roundtrip preserves headers and data rows"
+    "table export"
     md = "| Name | City |\n| --- | --- |\n| Einstein | Ulm |\n| Darwin | Shrewsbury |\n"
     doc = _load_builtin(md)
     out = _doc_to_md(doc)
@@ -1032,7 +1046,7 @@ def test_13():
 
 
 def test_14():
-    "blank NL paragraphs are inserted before and after table and pre blocks"
+    "blank NL paragraphs around table & pre"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
@@ -1049,7 +1063,8 @@ def test_14():
                 result.append('table')
             else:
                 text = ''.join(get_text(e) for e in content)
-                result.append('blank' if not text.strip() else nl.parstyle.get('base', 'normal'))
+                result.append('blank' if not text.strip() else \
+                              nl.parstyle.get('base', 'normal'))
         return result
 
     # table surrounded by text → blank before and after
@@ -1085,7 +1100,7 @@ def test_15():
 
 
 def test_16():
-    "blank NL paragraphs are inserted before and after quote blocks"
+    "blank NL paragraphs inserted around quote blocks"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
 
@@ -1108,7 +1123,7 @@ def test_16():
 
 
 def test_17():
-    "images are exported as base64 data URIs; scale/crop loss is warned"
+    "image export"
     from miniword.core.document import Document
     from miniword.images.images import Image as ImageTexel
     from miniword.textmodel.texeltree import grouped, Text, NL
@@ -1153,7 +1168,7 @@ def test_18():
 
 
 def test_19():
-    "table with nheader=0 gets empty header row in MD output"
+    "table with nheader=0"
     from miniword.core.document import Document
     from miniword.tables.tables import from_strings as mk_table
     from miniword.textmodel.texeltree import grouped, NL
@@ -1169,7 +1184,7 @@ def test_19():
 
 
 def test_20():
-    "table with nheader=1 roundtrips correctly"
+    "table with nheader=1 roundtrip"
     from miniword.core.document import Document
     from miniword.tables.tables import from_strings as mk_table
     from miniword.textmodel.texeltree import grouped, NL
@@ -1188,7 +1203,7 @@ def test_20():
 
 
 def test_21():
-    "footnote import: [^ref] anchor resolved to Footnote texel"
+    "footnote import"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.footnotes.footnotes import Footnote
@@ -1202,7 +1217,7 @@ def test_21():
 
 
 def test_22():
-    "footnote export: Footnote texel → [^n] inline + definition at end"
+    "footnote export"
     from miniword.core.document import Document
     from miniword.textmodel.textmodel import TextModel
     from miniword.textmodel.texeltree import grouped, T, ENDMARK
@@ -1220,12 +1235,59 @@ def test_22():
 
 
 def test_23():
-    "footnote roundtrip: import → export preserves anchor and definition"
+    "footnote roundtrip"
     md = "Text with footnote[^a].\n\n[^a]: The note.\n"
     doc = _load_builtin(md)
     out = _doc_to_md(doc)
     assert '[^1]' in out
     assert '[^1]: The note.' in out
+
+
+def test_24():
+    "image import: data from URI"
+    from miniword.images.images import Image as ImageTexel, collect_blob_ids
+
+    data = b'\x89PNG\r\nfakedata'
+    b64 = base64.b64encode(data).decode('ascii')
+    md = "Before.\n\n![photo.png](data:image/png;base64,%s)\n\nAfter.\n" % b64
+    doc = _load_builtin(md)
+
+    assert doc.blobs.get('photo.png') == data
+    assert collect_blob_ids(doc.textmodel.texel) == {'photo.png'}
+
+    out = _doc_to_md(doc)
+    assert '![photo.png](data:image/png;base64,%s)' % b64 in out
+
+
+def test_25():
+    "load test/tesla.md"
+    import os
+    from miniword.images.images import collect_blob_ids
+
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    path = os.path.join(here, 'test', 'tesla.md')
+    with open(path, encoding='utf-8') as f:
+        doc = _load_builtin(f.read())
+
+    assert collect_blob_ids(doc.textmodel.texel) == {'teslasmall.jpg'}
+    assert 'teslasmall.jpg' in doc.blobs
+    # the huge base64 data must not end up as plain text in the model
+    assert len(doc.textmodel) < 2000
+
+
+def test_26():
+    "load test/footnotes.md: roundtrip"
+    import os
+
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    path = os.path.join(here, 'test', 'footnotes.md')
+    with open(path, encoding='utf-8') as f:
+        doc = _load_builtin(f.read())
+
+    out = _doc_to_md(doc)
+    for n in range(1, 8):
+        assert '[^%d]' % n in out
+        assert '[^%d]:' % n in out
 
 
 if __name__ == '__main__':

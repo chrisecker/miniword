@@ -98,6 +98,17 @@ class Image(Single):
         return 'IMG(%r)' % self.blob_id
 
 
+def collect_blob_ids(texel):
+    """Return the set of blob_ids referenced by Image texels within texel."""
+    if isinstance(texel, Image):
+        return {texel.blob_id}
+    ids = set()
+    if texel.is_group or texel.is_container:
+        for i1, i2, child in iter_childs(texel):
+            ids |= collect_blob_ids(child)
+    return ids
+
+
 # ---------------------------------------------------------------------------
 # ImageData — decoded image (Cairo surface + natural pixel dimensions)
 # ---------------------------------------------------------------------------
