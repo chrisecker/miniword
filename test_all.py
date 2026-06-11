@@ -30,7 +30,7 @@ modules = [
     "miniword.layout.cairodevice",
     "miniword.layout.page",
     "miniword.layout.pagegen",
-    "miniword.layout.builder",
+    "miniword.layout.pagebuilder",
     "miniword.layout.builderbase",
     "miniword.layout.factory",
     "miniword.layout.rect",
