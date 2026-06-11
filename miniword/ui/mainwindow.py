@@ -9,7 +9,6 @@ from ..texteditor.textcanvas import TextCanvas
 from ..layout.pagebuilder import PageBuilder
 from ..layout.factory import Factory
 from ..layout.cairodevice import CairoDevice
-from ..core.styles import testsheet
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
 from .colours import colours
@@ -352,7 +351,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetMenuBar(bar)
 
     def _create_editor_canvas(self):
-        factory = Factory(testsheet, device=CairoDevice())
+        factory = Factory(self.document.basestyles, device=CairoDevice())
         factory.blobs = self.document.blobs
         builder = PageBuilder(self.document.textmodel, factory)
         builder.rebuild()
@@ -862,13 +861,10 @@ class MainFrame(wx.Frame, ViewBase):
 def demo_00():
     from einstein import get_einstein_model
     from ..core.document import Document
-    from ..core.styles import testsheet
 
     app = wx.App(True)
     doc = Document()
     doc.textmodel = get_einstein_model()
-    for name, style in testsheet.items():
-        doc.basestyles.set(name, style)
     frame = MainFrame(doc)
     frame.Show()
 
@@ -887,15 +883,12 @@ def demo_00():
 def demo_01():
     from moby import get_moby_styled
     from ..core.document import Document
-    from ..core.styles import testsheet
 
     textmodel = get_moby_styled()
 
     app = wx.App(True)
     doc = Document()
     doc.textmodel = textmodel
-    for name, style in testsheet.items():
-        doc.basestyles.set(name, style)
     frame = MainFrame(doc)
     frame.Show()
 
