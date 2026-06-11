@@ -353,6 +353,7 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _create_editor_canvas(self):
         factory = Factory(testsheet, device=CairoDevice())
+        factory.blobs = self.document.blobs
         builder = PageBuilder(self.document.textmodel, factory)
         builder.rebuild()
         builder.assure_index(len(self.document.textmodel))

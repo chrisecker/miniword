@@ -22,9 +22,20 @@ class Factory(FactoryBase):
     indent_level = None
     line_width = None
 
+    blobs = {}
+
     def __init__(self, stylesheet, device=TESTDEVICE):
         self.stylesheet = stylesheet
+        self.image_cache = {}
         FactoryBase.__init__(self, device)
+
+    def get_image(self, blob_id):
+        """Return ImageData for blob_id, decoding (and caching) on first use."""
+        if blob_id not in self.image_cache:
+            from ..images.imageio import decode
+            blob = self.blobs.get(blob_id)
+            self.image_cache[blob_id] = decode(blob) if blob is not None else None
+        return self.image_cache[blob_id]
 
     def copy(self):
         clone = shallow_copy(self)
@@ -41,10 +52,7 @@ class Factory(FactoryBase):
     def Image_handler(self, texel, i1, i2):
         from ..images import ImageBox, ErrorPlaceholderBox
         from ..images.imageio import crop_surface
-        get_image = getattr(self, 'get_image', None)
-        if get_image is None:
-            return [ErrorPlaceholderBox(50, 50, self.device)]
-        image_data = get_image(texel.blob_id)
+        image_data = self.get_image(texel.blob_id)
         if image_data is None:
             log.warning("Image not found: %r", texel.blob_id)
             return [ErrorPlaceholderBox(50, 50, self.device)]

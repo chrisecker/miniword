@@ -40,7 +40,7 @@ DocumentView integration sketch:
 
 import wx
 from copy import copy
-from ..textmodel.texeltree import Single, EMPTYSTYLE, NL
+from ..textmodel.texeltree import Single, EMPTYSTYLE, NL, iter_childs
 from ..layout.boxes import Box
 from ..layout.testdevice import TESTDEVICE
 
@@ -173,12 +173,17 @@ class ErrorPlaceholderBox(Box):
 # ---------------------------------------------------------------------------
 
 def demo_00():
-    "Show text with an inline image placeholder in a view."
+    "Show text with inline images in a view."
     import os
     import wx
     from ..textmodel.texeltree import grouped, Text
     from ..core.document import Document
-    from ..texteditor import TextEditor
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+    from ..layout.cairodevice import CairoDevice
+    from ..layout.pagebuilder import PageBuilder
+    from ..texteditor.editor import Editor
+    from ..texteditor.textcanvas import TextCanvas
 
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -195,8 +200,16 @@ def demo_00():
 
     app = wx.App(False)
     frame = wx.Frame(None, title="Image Demo", size=(500, 400))
-    view = TextEditor(frame, doc)
-    view.builder.factory.blobs = doc.blobs
+
+    factory = Factory(testsheet, device=CairoDevice())
+    factory.blobs = doc.blobs
+    builder = PageBuilder(doc.textmodel, factory)
+    builder.rebuild()
+
+    editor = Editor(doc.textmodel)
+    canvas = TextCanvas(frame, doc.textmodel, builder, editor)
+    editor.canvas = canvas
+
     frame.Show()
     app.MainLoop()
 

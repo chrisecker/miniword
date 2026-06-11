@@ -36,7 +36,10 @@ class ImageController(BoxController):
         return None
 
     def find_box(self):
-        return find_image_at(self.editor.canvas.layout, self.i1)
+        result = find_image_at(self.editor.canvas.layout, self.i1)
+        if result is None:
+            raise IndexError(self.i1)
+        return result
 
     def get_cursor(self, handle_id):
         return self._CURSOR_MAP.get(handle_id, wx.CURSOR_SIZING)
