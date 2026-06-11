@@ -63,6 +63,7 @@ class OutlinePanel(SidePanel):
         self._entries    = []   # [(par_start, wx.TreeItemId)] sorted by par_start
 
         self.add_model(textview)
+        self.add_model(textview.root)
         self.add_model(document.basestyles)
         self.create()
 
@@ -90,7 +91,7 @@ class OutlinePanel(SidePanel):
     # --- Tree building --------------------------------------------------
 
     def update(self):
-        model = self._textview.model
+        model = self._textview.root
         tree  = self._tree
         tree.DeleteAllItems()
         self._entries    = []
@@ -117,8 +118,8 @@ class OutlinePanel(SidePanel):
         index = self._tree.GetItemData(event.GetItem())
         if index is not None:
             self._textview.set_index(index)
-            self._textview.adjust_viewport()
-            self._textview.SetFocus()
+            self._textview.canvas.adjust_viewport()
+            self._textview.canvas.SetFocus()
 
     def _sync_cursor(self):
         if not self._entries:
