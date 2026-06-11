@@ -68,6 +68,7 @@ def default_handler(action, shift, ctx):
     model = ctx.model
     index = ctx.index
     layout = ctx.layout
+    canvas = editor.canvas
     #row, col = ctx.row, ctx.col
     #x, y = ctx.x, ctx.y
     #style, parstyle = ctx.style, ctx.parstyle
@@ -138,10 +139,10 @@ def default_handler(action, shift, ctx):
     elif action == 'move_line_end':
         editor.set_index(model.lineend(index), shift)
     elif action == 'move_page_down':
-        _, height = editor.get_client_size()
+        _, height = canvas.get_client_size()
         editor.set_index(editor.compute_index(x, y + height / editor.scale), shift)
     elif action == 'move_page_up':
-        _, height = editor.get_client_size()
+        _, height = canvas.get_client_size()
         editor.set_index(editor.compute_index(x, y - height / editor.scale), shift)
     elif action == 'move_document_start':
         editor.set_index(0, shift)
