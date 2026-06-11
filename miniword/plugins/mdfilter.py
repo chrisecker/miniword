@@ -105,7 +105,8 @@ def _doc_to_md(doc):
         from miniword.textmodel.texeltree import get_text
         parts.append('')
         for n, fn in enumerate(footnotes, 1):
-            parts.append('[^%d]: %s' % (n, get_text(fn.content)))
+            # content ends with an ENDMARK ('\n'); strip it for the inline definition
+            parts.append('[^%d]: %s' % (n, get_text(fn.content)[:-1]))
     return '\n'.join(parts) + '\n'
 
 
@@ -272,11 +273,11 @@ def _insert_text_block(doc, ptype, indent, runs):
 
 def _insert_text_block_with_footnotes(doc, ptype, indent, runs):
     from miniword.footnotes.footnotes import Footnote
-    from miniword.textmodel.texeltree import T, grouped
+    from miniword.textmodel.texeltree import T, ENDMARK, grouped
     for run_text, run_props in runs:
         pos = len(doc.textmodel.get_text())
         if run_props.get('_footnote'):
-            fn = Footnote(T(run_props['_footnote']))
+            fn = Footnote(grouped([T(run_props['_footnote']), ENDMARK]))
             fn_model = doc.textmodel.create_textmodel()
             fn_model.texel = grouped([fn])
             doc.textmodel.insert(pos, fn_model)
@@ -1196,19 +1197,20 @@ def test_21():
     fns = [e for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0)
            for e in elems if isinstance(e, Footnote)]
     assert len(fns) == 1
-    assert get_text(fns[0].content) == 'Footnote text.'
+    # content ends with an ENDMARK ('\n')
+    assert get_text(fns[0].content) == 'Footnote text.\n'
 
 
 def test_22():
     "footnote export: Footnote texel → [^n] inline + definition at end"
     from miniword.core.document import Document
     from miniword.textmodel.textmodel import TextModel
-    from miniword.textmodel.texeltree import grouped, T
+    from miniword.textmodel.texeltree import grouped, T, ENDMARK
     from miniword.footnotes.footnotes import Footnote
     doc = Document()
     _register_styles(doc)
     doc.textmodel = TextModel('Hello world.\n')
-    fn = Footnote(T('Note text.'))
+    fn = Footnote(grouped([T('Note text.'), ENDMARK]))
     fn_model = doc.textmodel.create_textmodel()
     fn_model.texel = grouped([fn])
     doc.textmodel.insert(5, fn_model)
