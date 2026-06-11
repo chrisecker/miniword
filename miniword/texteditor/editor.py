@@ -232,9 +232,13 @@ class Editor(UndoRedo):
             new_texel = getattr(new_texel, 'set_' + key)(value)
         new = self.target.create_textmodel()
         new.texel = new_texel
+        j = self.local_idx(i1)
         with self.atomic():
             self.add_undo(self._remove(self.flow, i1, i1+1))
             self.add_undo(self._insert(self.flow, i1, new))
+        # keep the cursor on the (replaced) texel, so a click-installed
+        # controller (e.g. ImageSizeController) stays installed
+        self.index = j
 
     def insert_newline(self):
         model = self.target
@@ -525,23 +529,31 @@ class Editor(UndoRedo):
         controller = self._controller
         path = get_path(self.target.get_xtexel(), self.index)
 
-        if not (controller is None or controller.is_null):
-            # Note: Controler is None during init!
-            m = controller.match(self, path)
-            if m is not None:
-                # The current controller still matches. We reinstall it.
-                return m
-
         if self.canvas is not None:
             # Box controllers need self.canvas.layout, which does not
             # exist yet during Editor.__init__. The layout build is lazy
             # and incremental, so make sure it covers the current index
             # before find_box() walks it.
             self.canvas.builder.assure_index(self.abs_idx(self.index), self.flow)
+
+        if not (controller is None or controller.is_null):
+            # Note: Controler is None during init!
+            try:
+                m = controller.match(self, path)
+            except IndexError:
+                m = None
+            if m is not None:
+                # The current controller still matches. We reinstall it.
+                return m
+
+        if self.canvas is not None:
             for cls in self.controller_registry:
                 if not cls.auto_installable:
                     continue
-                m = cls.match(self, path)
+                try:
+                    m = cls.match(self, path)
+                except IndexError:
+                    continue
                 if m is not None:
                     return m
         return NullController.match(self, path)
