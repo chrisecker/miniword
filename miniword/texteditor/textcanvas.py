@@ -1,6 +1,3 @@
-import wx
-import string
-
 from ..textmodel import TextModel
 from ..textmodel.styles import updated_style
 from ..textmodel.viewbase import overridable_property, ViewBase
@@ -9,10 +6,12 @@ from ..layout.cairodevice import CairoDevice, defaultstyle
 from ..layout.testdevice import TESTDEVICE
 from ..layout.simplelayout import SimpleBuilder
 from ..layout.rect import Rect
-from math import ceil
+from ..layout import annotation
+
+import wx
+import string
 import pickle
-
-
+from math import ceil
 
 
 
@@ -32,7 +31,11 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
     max_zoom    = 5.0
     zoom_factor = 1.1
     hcenter     = True
-    
+
+    # annotations: list of (i1, i2) or (i1, i2, color), drawn by draw()
+    highlights = []
+    squiggles  = []
+
 
     def __init__(self, parent, model, builder, editor=None, pos=wx.DefaultPosition,
                  size=wx.DefaultSize, style=0):
@@ -101,10 +104,6 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
             (21, True, False): 'dedent',
         }
 
-    def ensure_viewport(self):
-        # XXX weg damit ?
-        pass
-
     def get_layout(self):
         return self.builder.layout
 
@@ -118,9 +117,6 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         self.set_zoom(max(self.min_zoom, min(self.max_zoom, self.zoom * factor)))
     
     def get_scale(self):
-        # XXX besser wäre die scale-Berechung direkt in TextView, aber
-        # eine DPI-Berechung lokal! ??
-        
         try:
             dpi = self.GetDPI().y
         except AttributeError:
@@ -141,13 +137,11 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
 
     def content_offset(self):
         # center the document horizontally; vertically it stays top-aligned
+        self.builder.assure_y(1) # make sure layout has its final width
         cw, _ = self.GetClientSize()
         vw = int(self.layout.width * self.scale)
         ox = (cw - vw) // 2 if self.hcenter and vw < cw else 0
         return ox, 0
-
-    def keep_cursor_on_screen(self):
-        pass
 
     # --- timer / focus ---
 
@@ -163,7 +157,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
         self.refresh()
 
     def on_size(self, event):
-        self.keep_cursor_on_screen()
+        self.adjust_viewport()
 
     # --- keyboard ---
 
@@ -255,7 +249,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
 
         # virtual size must be updated before scrolling
         layout = self.layout
-        self.SetVirtualSize((int(layout.width * new_scale), int(layout.height * new_scale)))
+        self.SetVirtualSize((
+            int(layout.width * new_scale), int(layout.height * new_scale)))
         self.SetScrollRate(rx, ry)
 
         # scroll so the content point stays at the viewport center
@@ -294,54 +289,30 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
             editor.set_index(j, extend=True)
             
     def on_leftdclick(self, event):
-        #if self.try_install_click_editor():
-        #    return
-        x, y = self.window_to_content(event.Position)
-        self.select_word(x, y)
-        self.SetFocus()
-
-    def select_word(self, x, y):
         editor = self.editor
-        i = self.layout.get_index(x, y, editor.flow)
-        if i is None:
-            return
-        j = editor.local_idx(i)
-        i = None
-        model = editor.target
-        n = len(model)
+        if not editor:
+            return event.Skip()
         
-        def isalnum(j):
-            return model.get_text(j, j+1).isalnum()
-            
-        try:
-            while not isalnum(j-1):
-                j = j-1
-            while isalnum(j-1):
-                j = j-1
-        except IndexError:
-            j = 0
-        j1 = j
-        j = j1
-        try:
-            while not isalnum(j):
-                j = j+1
-            while isalnum(j):
-                j = j+1
-        except IndexError:
-            j = n
-        j2 = j
-        editor.index = j2
-        editor.selection = (j1, j2)
-
-    
+        if editor.try_install_click_controller():
+            return
+        x, y = self.window_to_content(event.Position)
+        flow = self.layout.get_flow(x, y)
+        i = self.layout.get_index(x, y, flow)
+        if i is not None:
+            editor.switch_target(flow, i)
+            j = editor.local_idx(i)
+            editor.set_index(j, extend=event.ShiftDown())
+            s1, s2 = editor.target.expand_word(j, j)
+            editor.selection = s1, s2
+            editor.index = j
+        self.SetFocus()
 
             
     # --- painting ---
 
     def on_paint(self, event):
-        self.ensure_viewport()
+        #self.ensure_viewport()
         self._update_scroll()
-        self.keep_cursor_on_screen()
 
         pdc = wx.PaintDC(self)
         pdc.SetAxisOrientation(True, False)
@@ -437,7 +408,11 @@ class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextC
     def draw(self, painter):
         self.builder.assure_rect(self.get_viewport())
         self.draw_background(painter)
+        for i1, i2, *color in self.highlights:
+            annotation.highlight(painter, self.layout, i1, i2, 0, 0, *color)
         self.layout.draw(0, 0, painter)
+        for i1, i2, *color in self.squiggles:
+            annotation.squiggle(painter, self.layout, i1, i2, 0, 0, *color)
         if self.editor is not None:
             self.editor.controller.draw(painter)
 

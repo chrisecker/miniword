@@ -166,19 +166,6 @@ class Editor(UndoRedo):
             return result
         return [self.target.expand_range(s1, s2)]
 
-    def expand_lines(self, i1, i2):
-        """Extend (i1, i2) to cover complete lines.
-
-        Calls expand_range first so that i1 and i2 are on the same
-        nesting level.  Then shifts the left edge to the start of i1's
-        line and the right edge past the NL of i2's line.
-        """
-        model = self.target
-        e1, e2 = model.expand_range(i1, i2)
-        s1 = model.linestart(e1)
-        s2 = model.lineend(e2) + 1
-        return s1, s2
-
     def start_selection(self):
         """Sets the selection start to index."""
         index = self.index
@@ -301,9 +288,9 @@ class Editor(UndoRedo):
         if not self.has_selection():
             return
         j1, j2 = self.selection
-        i1, i2 = self.abs_idxs(j1, j2)        
+        i1, i2 = self.abs_idxs(j1, j2)
         styles = self.target.clear_properties(j1, j2, *keys)
-        info = self._set_styles, flow, i1, styles
+        info = self._set_styles, self.flow, i1, styles
         self.add_undo(info)
 
     def _set_styles(self, flow, i, styles):
@@ -476,18 +463,20 @@ class Editor(UndoRedo):
 
 
     ### Controller
-    def XXXtry_install_click_editor(self):
-        """Install a click_installable editor at the current index, if any matches.
-
-        Returns True if an editor was installed.
+    def try_install_click_controller(self):
         """
-        path = get_path(self.model.get_xtexel(), self.index)
-        for cls in self.editor_registry:
+        Install a click_installable controller at the current
+        index, if any matches.
+
+        Returns True if a controller was installed.
+        """
+        path = get_path(self.target.get_xtexel(), self.index)
+        for cls in self.controller_registry:
             if not cls.click_installable:
                 continue
             m = cls.match(self, path)
             if m is not None:
-                self.install_editor(m)
+                self.set_controller(m)
                 return True
         return False
 

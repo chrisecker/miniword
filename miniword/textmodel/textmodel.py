@@ -198,6 +198,32 @@ class TextModel(Model):
         """
         return expand_range(self.texel, s1, s2)
 
+    def expand_lines(self, i1, i2):
+        """Expand (i1, i2) to cover complete lines.
+
+        Calls expand_range first so that i1 and i2 are on the same
+        nesting level.  Then shifts the left edge to the start of i1's
+        line and the right edge past the NL of i2's line.
+        """
+        e1, e2 = self.expand_range(i1, i2)
+        s1 = self.linestart(e1)
+        s2 = self.lineend(e2) + 1
+        return s1, s2
+
+    def expand_word(self, i1, i2):
+        """Expand (i1, i2) to cover complete word."""
+        j1, j2 = self.expand_range(i1, i2)
+        l1 = self.get_start(j1)
+        l2 = self.get_end(j2)
+        def isalnum(j):
+            return self.get_text(j, j+1).isalnum()
+            
+        while isalnum(j1-1) and j1>l1:
+            j1 = j1-1
+        while isalnum(j2) and j2<l2:
+            j2 = j2+1
+        return j1, j2    
+
     def position2index(self, row, col, i0=0):
         """Returns the index for (row, col) within the flow starting at i0."""
         if i0 > 0:
