@@ -370,7 +370,7 @@ class TablePanel(SidePanel):
         if event.cols == 0:
             return  # custom dialog was cancelled
         table = empty_table(event.rows, event.cols)
-        self._view.insert_texel(self._view.index, table)
+        self._view.insert_texel(table)
 
 
     def _set_table_controls(self, enabled):
@@ -408,7 +408,7 @@ class TablePanel(SidePanel):
         or (None, None) if the cursor is not inside a table."""
         index = self._view.index
         result = None
-        for abs_i1, abs_i2, node in get_path(self._view.edit_model.texel, index):
+        for abs_i1, abs_i2, node in get_path(self._view.target.texel, index):
             if isinstance(node, Table):
                 result = node, abs_i1
         return result or (None, None)
@@ -427,6 +427,15 @@ class TablePanel(SidePanel):
         r2, c2 = table.get_coord(max(i1, i2))
         return min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2)
 
+    def _replace_table(self, offset, table, new_table):
+        """Replace table at offset with new_table, as one undo-able edit."""
+        view = self._view
+        with view.atomic():
+            view.selection = (offset, offset + length(table))
+            view.remove()
+            view.index = offset
+            view.insert_texel(new_table)
+
     def _on_header(self, event):
         table, offset = self._find_table_texel()
         if table is None:
@@ -434,9 +443,7 @@ class TablePanel(SidePanel):
         new_table = table.set_nheader(1 if event.IsChecked() else 0)
         if new_table is table:
             return
-        with self._view.atomic():
-            self._view.remove(offset, offset + length(table))
-            self._view.insert_texel(offset, new_table)
+        self._replace_table(offset, table, new_table)
 
     def _apply_to_table(self, fn):
         """Find table, apply fn(table, r1, c1, r2, c2) → new_table, commit via undo."""
@@ -447,9 +454,7 @@ class TablePanel(SidePanel):
         new_table = fn(table, r1, c1, r2, c2)
         if new_table is table:
             return
-        with self._view.atomic():
-            self._view.remove(offset, offset + length(table))
-            self._view.insert_texel(offset, new_table)
+        self._replace_table(offset, table, new_table)
 
     # --- border preset ---
 
@@ -606,9 +611,10 @@ def demo_00():
     class _FakeView:
         index    = 0
         selection = None
-        def add_view(self, v):       pass
-        def insert_texel(self, i, t): pass
-        def remove(self, i1, i2):    pass
+        def add_view(self, v):    pass
+        def has_selection(self):  return False
+        def insert_texel(self, t): pass
+        def remove(self):         pass
         def atomic(self):
             from contextlib import contextmanager
             @contextmanager

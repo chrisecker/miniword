@@ -14,6 +14,7 @@ long as it matches.
 import wx
 from ..layout.boxes import find_row, prev_row, next_row
 from ..texteditor.boxcontroller import BoxController
+from ..texteditor.actions import create_ctx
 from .tables import Table, from_cells
 from .table_boxes import TableBox
 
@@ -240,9 +241,10 @@ class CursorController(TableControllerBase):
                         e = None
         return e
 
-    def handle_action(self, action, shift, ctx):
+    def handle_action(self, action, shift):
         if action not in ('move_up', 'move_down'):
-            return False
+            return super().handle_action(action, shift)
+        ctx = create_ctx(self.editor)
         i = ctx.index
         texel = self.texel
         row, col = texel.get_coord(i - self.i1)
@@ -363,7 +365,8 @@ class MatrixController(TableControllerBase):
         result.texel = from_cells(sub_grid)
         self.editor.canvas.to_clipboard(result)
 
-    def handle_action(self, action, shift, ctx):
+    def handle_action(self, action, shift):
+        ctx = create_ctx(self.editor)
         i = ctx.index
         texel = self.texel
         row, col = texel.get_coord(i-self.i1)

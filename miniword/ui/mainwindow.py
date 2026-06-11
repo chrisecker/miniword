@@ -10,12 +10,12 @@ from ..layout.pagebuilder import PageBuilder
 from ..layout.factory import Factory
 from ..layout.cairodevice import CairoDevice
 from ..core.styles import testsheet
-from ..images import Image, ImageInspector
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
 from .colours import colours
 from .icons import ICONS_DIR
 from .outlinepanel import OutlinePanel
+from .searchtool import SearchPanel
 
 from ..images import image_controllers  # registers controllers
 from ..tables import table_controllers  # registers controllers
@@ -332,8 +332,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_about, id=wx.ID_ABOUT)
         bar.Append(help_menu, "&Help")
 
-        from ..layout import builder as _builder
-        if _builder.DEBUG:
+        from ..layout import pagebuilder as _pagebuilder
+        if _pagebuilder.DEBUG:
             self._id_debug_console = wx.NewIdRef()
             self._id_debug_dump    = wx.NewIdRef()
             debug_menu = wx.Menu()
@@ -363,6 +363,27 @@ class MainFrame(wx.Frame, ViewBase):
         colours.set(self.canvas, 'BackgroundColour', 'CanvasBg')
         self.editor.add_view(self)
 
+    def _build_inspector_panels(self):
+        self._inspector_book = wx.Simplebook(self._base)
+        colours.set(self._inspector_book, 'BackgroundColour', 'BTNFACE')
+        self._inspector_pages = {}
+        self.inspector = StyleInspector(self._inspector_book, self.editor, self.document.basestyles)
+        self.document_settings = SettingsInspector(self._inspector_book, self.document)
+        self.table_panel = TablePanel(self._inspector_book, self.editor)
+        self._search_panel = SearchPanel(self._inspector_book, self.editor)
+        self._outline_panel = OutlinePanel(self._inspector_book, self.document, self.editor)
+        for key, panel in [
+            ("style",    self.inspector),
+            ("settings", self.document_settings),
+            ("table",    self.table_panel),
+            ("search",   self._search_panel),
+            ("outline",  self._outline_panel),
+        ]:
+            idx = self._inspector_book.GetPageCount()
+            self._inspector_book.AddPage(panel, "")
+            self._inspector_pages[key] = idx
+        self._inspector_book.Hide()
+
     def _build_layout(self):
         self._base = wx.Panel(self)
         colours.set(self._base, 'BackgroundColour', 'CanvasBg')
@@ -371,11 +392,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetSizer(outer)
 
         self._create_editor_canvas()
-
-        # XXX Inspectors/side panels not yet adapted to the new
-        # Editor/Canvas API; disabled for now.
-        self._inspector_book = None
-        self._inspector_pages = {}
+        self._build_inspector_panels()
         self._panel_key = None
 
         self._build_strip()
@@ -389,8 +406,6 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _on_panel_toggle(self, key):
         book = self._inspector_book
-        if book is None:
-            return # XXX side panels not yet adapted to the new Editor/Canvas API
         if key is None:
             self._panel_key = None
             book.Hide()             
@@ -448,8 +463,6 @@ class MainFrame(wx.Frame, ViewBase):
         dlg.Destroy()
 
     def _on_menu_inspector(self, _):
-        if self._inspector_book is None:
-            return # XXX side panels not yet adapted to the new Editor/Canvas API
         if self._mi_panel.IsChecked():
             self._panel_key = "style"
             self._inspector_book.SetSelection(self._inspector_pages["style"])
@@ -516,7 +529,6 @@ class MainFrame(wx.Frame, ViewBase):
             ("outline",  "Outline"),
             ("style",    "Styles"),
             ("search",   "Search"),
-            ("image",    "Image"),
             ("table",    "Table"),
             ("settings", "Settings"),
         ], self._on_panel_toggle)
@@ -764,8 +776,11 @@ class MainFrame(wx.Frame, ViewBase):
 
     def replace_document(self, doc):
         self.canvas.Destroy()
+        self._inspector_book.Destroy()
         self.document = doc
         self._create_editor_canvas()
+        self._build_inspector_panels()
+        self._panel_key = None
         self._layout()
 
     def show_right_panel(self, key):
