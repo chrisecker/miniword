@@ -1,4 +1,5 @@
-from ..textmodel.texeltree import Single, NULL_TEXEL, EMPTYSTYLE
+from ..textmodel.submodel import Footnote
+from ..textmodel.texeltree import EMPTYSTYLE
 from ..layout.boxes import NewlineBox
 from ..layout.testdevice import TESTDEVICE
 
@@ -7,18 +8,6 @@ SUPERSCRIPTS = str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')
 
 def to_superscript(n):
     return str(n).translate(SUPERSCRIPTS)
-
-
-class Footnote(Single):
-    content = NULL_TEXEL
-    def __init__(self, content=NULL_TEXEL):
-        self.content = content
-
-    def set_content(self, content):
-        from copy import copy as shallow_copy
-        clone = shallow_copy(self)
-        clone.content = content
-        return clone
 
 
 class FootnoteAnchorBox(NewlineBox):
@@ -52,7 +41,7 @@ def demo_00():
     app = wx.App(False)
 
     from ..textmodel.textmodel import TextModel
-    from ..textmodel.texeltree import grouped, T
+    from ..textmodel.texeltree import grouped, T, ENDMARK
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagegen import generate_pages, RestartMemo
     from ..layout.factory import Factory
@@ -60,7 +49,7 @@ def demo_00():
     from ..core.units import cm
 
     model = TextModel('Miniword ist ein freies Textsatzsystem.\n')
-    fn = Footnote(T('Ein leichtgewichtiges Satzsystem, geschrieben in Python.'))
+    fn = Footnote(grouped([T('Ein leichtgewichtiges Satzsystem, geschrieben in Python.'), ENDMARK]))
     fn_model = model.create_textmodel()
     fn_model.texel = grouped([fn])
     model.insert(7, fn_model)   # Anker nach "Miniword"
@@ -85,7 +74,7 @@ def demo_00():
 
 
 def test_00():
-    from ..textmodel.texeltree import G, T
-    note = Footnote(T('Hi Chris.'))
+    from ..textmodel.texeltree import G, T, grouped, ENDMARK
+    note = Footnote(grouped([T('Hi Chris.'), ENDMARK]))
     text = G([T('Hello world!'), note])
     

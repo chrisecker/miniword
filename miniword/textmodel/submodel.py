@@ -55,8 +55,9 @@ class SubModel(TextModel):
 
         
 class Footnote(Single):
-    # Simple footnote implementation for testing submodel
-    # functionality
+    # Footnote texel: an inline anchor (length 1) whose content forms
+    # a separate flow, layouted via SubModel. content must end with
+    # an ENDMARK, carrying the parstyle of the last line.
     content = NULL_TEXEL
     def __init__(self, content=ENDMARK):
         self.content = content
