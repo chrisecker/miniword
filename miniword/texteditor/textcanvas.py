@@ -14,12 +14,17 @@ import pickle
 from math import ceil
 
 
-
-class TextCanvas(wx.ScrolledWindow, ViewBase): # TextPanel, WxTextDisplay, TextCanvas
+"""
+TODO:
+- on paste, named styles must be mapped to the existing ones; a mechanism
+  for this is still missing
+- same for images: pasting images must create the corresponding blobs
+"""
+class TextCanvas(wx.ScrolledWindow, ViewBase):
     """
-    - Render bei Modelländerungen
-    - Hat Editor als optionales Attribut
-    - Wenn Editor None ist, dann wird auch kein Cursor dargestellt
+    - Renders on model changes
+    - Has an Editor as optional attribute
+    - If Editor is None, no cursor is shown
     """
     _scrollrate = 10, 10
 
@@ -496,7 +501,7 @@ def demo_00():
     frame = wx.Frame(None)
     win = wx.Panel(frame)
     canvas = TextCanvas(win, model, builder, editor)
-    editor.canvas = canvas # XXX zirkuläre Referenz!
+    editor.canvas = canvas
     
     box = wx.BoxSizer(wx.VERTICAL)
     box.Add(canvas, 1, wx.ALL | wx.GROW, 1)
