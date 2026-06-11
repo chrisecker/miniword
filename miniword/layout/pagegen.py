@@ -78,6 +78,11 @@ class DraftNode:
 
     def can_addfootnote(self, row, line_spacing=1.0, is_last_page=False):
         """Can this footnote row still fit within the footnote area?"""
+        # Is the page full?
+        if not self.can_addrow(row, line_spacing, 0):
+            # XXX don we need 'before'?
+            return False
+        # Is the max footnote fraction reached?
         page_height = self.geometry[1] - self.border[0] - self.border[2]
         limit = page_height if is_last_page else page_height * MAX_FOOTNOTES
         advance = (row.height + row.depth) * line_spacing
@@ -318,8 +323,11 @@ def render_footnote_rows(fn_texel, factory, line_width, number=None):
     memo.border = (0, 0, 0, 0)
 
     saved = {k: getattr(factory, k, None)
-             for k in ('line_width', 'parstyle', 'markerstyle', 'indent_level')}
+             for k in ('line_width', 'parstyle', 'markerstyle', 'indent_level',
+                       'footnote_counter')}
 
+    # fn_texel.content must end with an ENDMARK so that iter_paragraphs()
+    # yields it, and so that len(content) matches the rows' total length.
     page = None
     for page in generate_pages(fn_texel.content, 0, memo, factory,
                                 allow_page_breaks=False, footnotes=[]):
@@ -509,20 +517,40 @@ def generate_pages(texel, i, restartmemo, factory,
         for page in pages:
             yield page
 
-    # Yield remaining content as the final page
-    if state.rows:
-        if allow_page_breaks:
+    # Yield remaining content as the final page(s)
+    if allow_page_breaks:
+        if state.rows or pending_fn_rows:
             draft = state.start_draft()
-            place_pending_footnotes(pending_fn_rows, draft, is_last_page=True)
+            pending_fn_rows = place_pending_footnotes(
+                pending_fn_rows, draft, is_last_page=True)
             draft = draft.create_newpage()
             pages, _ = draft.fix_draft(device)
-        else:
-            page = Page(state.rows, state.geometry, device)
-            page.decorations = state.decorations
-            page.footnote_box = _position_footnotes(state.footnotes, state)
-            pages = [page]
-        for page in pages:
-            yield page
+            for page in pages:
+                yield page
+
+        # Footnotes that still didn't fit get dedicated page(s).
+        empty_state = RestartMemo()
+        empty_state.geometry = state.geometry
+        empty_state.border = state.border
+        while pending_fn_rows:
+            draft = empty_state.start_draft()
+            remaining = place_pending_footnotes(
+                pending_fn_rows, draft, is_last_page=True)
+            if remaining == pending_fn_rows:
+                # a single footnote row taller than the page: place it
+                # anyway to avoid an infinite loop.
+                draft.add_footnote(pending_fn_rows[0])
+                remaining = pending_fn_rows[1:]
+            pending_fn_rows = remaining
+            draft = draft.create_newpage()
+            pages, _ = draft.fix_draft(device)
+            for page in pages:
+                yield page
+    elif state.rows:
+        page = Page(state.rows, state.geometry, device)
+        page.decorations = state.decorations
+        page.footnote_box = _position_footnotes(state.footnotes, state)
+        yield page
 
 
 # --- Tests ---

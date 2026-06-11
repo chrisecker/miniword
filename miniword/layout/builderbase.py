@@ -145,6 +145,9 @@ class BuilderBase(ViewBase):
 
     def assure_rect(self, r):
         pass # default: do nothing
+
+    def assure_y(self, y):
+        pass # default: do nothing
                 
     def rebuild(self):
         raise NotImplemented()

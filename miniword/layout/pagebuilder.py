@@ -234,6 +234,7 @@ class PageBuilder(BuilderBase):
     def __init__(self, model, factory):
         BuilderBase.__init__(self, model)
         self._layout = self.layout_class([], factory.device)
+        self._layout.is_finished = True  # no generator yet: nothing to build
         self.factory = factory
 
     def clear_caches(self):
@@ -294,6 +295,10 @@ class PageBuilder(BuilderBase):
                 rest_i += len(_)
             self.rest_memo = rest_i, rest
         except StopIteration:
+            # The generator produced fresh pages for the entire remainder
+            # of the document, so any leftover 'rest' (never matched via
+            # can_finish) is stale and must be dropped, not appended.
+            self.rest_memo = 0, ()
             return self.finish()
 
     def build_background(self):
