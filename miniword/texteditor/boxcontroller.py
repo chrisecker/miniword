@@ -77,11 +77,11 @@ class BoxController(ElementController):
 
     def draw_selection(self, gc):
         """Draw the selection. """
-        self.textview.draw_selection(gc)
-        
+        self.editor.canvas.draw_selection(gc)
+
     def draw_cursor(self, gc):
         """Draw the insertion cursor. """
-        self.textview.draw_cursor(gc)
+        self.editor.canvas.draw_cursor(gc)
 
     def draw_overlay(self, gc):
         """Draw editor-specific decorations (preview outlines, …)."""
@@ -92,7 +92,7 @@ class BoxController(ElementController):
         if self.box_origin is None:
             return
         bx, by = self.box_origin
-        zoom = self.textview.zoom
+        zoom = self.editor.canvas.zoom
         lw = 1.0 / zoom
         hs = self._HANDLE_PX / zoom
         for name, hx, hy in self.get_handles():
@@ -113,7 +113,7 @@ class BoxController(ElementController):
         """Begin a drag from box-local position (x, y) for the given handle."""
         self._drag_start = x, y
         self._drag_handle = handle
-        self.textview.refresh()
+        self.editor.canvas.refresh()
 
     def clear_drag(self):
         """Reset drag state after commit or cancel."""
@@ -126,7 +126,7 @@ class BoxController(ElementController):
 
     def hit_test(self, x, y):
         """Return the handle name under (x, y) in box-local coords, or None."""
-        hit_r = self._HIT_PX / self.textview.zoom
+        hit_r = self._HIT_PX / self.editor.canvas.zoom
         for name, hx, hy in self.get_handles():
             if abs(x - hx) <= hit_r and abs(y - hy) <= hit_r:
                 return name
@@ -145,7 +145,7 @@ class BoxController(ElementController):
         Uses the cached box_origin rather than re-querying find_box(), because
         the layout is stable for the lifetime of this controller instance.
         """
-        x, y = self.textview.window_to_content(pos)
+        x, y = self.editor.canvas.window_to_content(pos)
         x0, y0 = self.box_origin
         return x - x0, y - y0
 
@@ -179,37 +179,29 @@ class BoxController(ElementController):
 
     def on_motion(self, event):
         """Update over cursor, update the preview state while dragging."""
+        canvas = self.editor.canvas
         if self._drag_handle is not None:
-            self.textview.SetCursor(wx.Cursor(self.get_cursor(self._drag_handle)))
+            canvas.SetCursor(wx.Cursor(self.get_cursor(self._drag_handle)))
             p = self.window_to_box(event.Position)
             dx = p[0] - self._drag_start[0]
             dy = p[1] - self._drag_start[1]
             self.drag_handle(self._drag_handle, dx, dy, event.ShiftDown(), event.ControlDown())
-            self.textview.refresh()
+            canvas.refresh()
             return True
-        
+
         # Hover cursor shape near handles
         if not event.LeftIsDown():
             x, y = self.window_to_box(event.Position)
             hit = self.hit_test(x, y)
             cursor = wx.CURSOR_IBEAM if hit is None else self.get_cursor(hit)
-            self.textview.SetCursor(wx.Cursor(cursor))
+            canvas.SetCursor(wx.Cursor(cursor))
         if not event.LeftIsDown():
             event.Skip() # XXX needed?
             return False
-        textview = self.textview
-        x, y = textview.window_to_content(event.Position)
-        i = textview.layout.get_index(x, y)
+        x, y = canvas.window_to_content(event.Position)
+        i = canvas.layout.get_index(x, y)
         if i is not None:
-            textview.set_index(i, extend=True)
+            self.editor.set_index(i, extend=True)
         return True
-                
-    def on_key(self, keycode, event):
-        """Handle a key press.  ESC removes the editor; returns True
-        if consumed."""
-        if keycode == wx.WXK_ESCAPE:
-            self.textview.remove_editor()
-            return True
-        return False
 
 
