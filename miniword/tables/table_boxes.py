@@ -414,7 +414,12 @@ def demo_00():
     """Interactive demo: click and shift-click to select cells."""
     import wx
     from ..core.document import Document
-    from ..texteditor import TextEditor
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+    from ..layout.cairodevice import CairoDevice
+    from ..layout.pagebuilder import PageBuilder
+    from ..texteditor.editor import Editor
+    from ..texteditor.textcanvas import TextCanvas
 
     TEXTS = [['Name',     'City',       'Country'],
              ['Einstein', 'Ulm',        'Germany'],
@@ -427,8 +432,16 @@ def demo_00():
 
     app   = wx.App(redirect=False)
     frame = wx.Frame(None, title='Table demo', size=(420, 420))
-    view  = TextEditor(frame, doc)
+
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = PageBuilder(doc.textmodel, factory)
+    builder.rebuild()
+
+    editor = Editor(doc.textmodel)
+    canvas = TextCanvas(frame, doc.textmodel, builder, editor)
+    editor.canvas = canvas
+
     frame.Show()
-    from ..wxtextview import testing
+    from ..ui import testing
     testing.pyshell(locals())
     app.MainLoop()

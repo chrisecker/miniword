@@ -824,7 +824,7 @@ class MainFrame(wx.Frame, ViewBase):
         return None
 
     def _on_debug_console(self, _):
-        from ..wxtextview import testing
+        from . import testing
         l = locals()
         l.update(globals())
         testing.pyshell(l)

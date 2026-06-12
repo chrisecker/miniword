@@ -10,7 +10,7 @@
 
 [document]
 T('Nikola Tesla: Der Magier der Elektrizität')
-NL({base="h1"})
+NL({base="h1", space_after=45.35433070866142, space_before=28.34645669291339})
 IMG('teslasmall.jpg', {scale_x=0.4440698176435517, scale_y=0.4440698176435517})
 NL({alignment="center"})
 T('Nikola Tesla (')

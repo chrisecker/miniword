@@ -87,10 +87,10 @@ class SearchResultsList(wx.VListBox):
     MAX_LINES = 3
     on_select = None  # optional callback()
 
-    def __init__(self, parent, textview):
+    def __init__(self, parent, editor):
         super().__init__(parent)
-        self.textview = textview
-        self.textmodel = textview.root
+        self.editor = editor
+        self.textmodel = editor.root
         self.results = []
 
         colours.set(self, 'BackgroundColour', 'WINDOW')
@@ -212,9 +212,9 @@ class SearchResultsList(wx.VListBox):
         if index < 0 or index >= len(self.results):
             return
         i1, i2, _, _ = self.results[index]
-        self.textview.set_index(i1)
-        self.textview.selection = (i1, i2)
-        self.textview.canvas.adjust_viewport()
+        self.editor.set_index(i1)
+        self.editor.selection = (i1, i2)
+        self.editor.canvas.adjust_viewport()
 
     def _line_from_pos(self, index):
         row, col, _ = self.textmodel.index2position(index)
@@ -225,10 +225,10 @@ class SearchPanel(SidePanel):
     _current_idx = -1
     delay = 100
 
-    def __init__(self, parent, textview):
+    def __init__(self, parent, editor):
         SidePanel.__init__(self, parent)
-        self.textview = textview
-        self.textmodel = textview.root
+        self.editor = editor
+        self.textmodel = editor.root
         self.search = Search(self.textmodel)
         self.set_model(self.search)
         self._current_idx = -1
@@ -293,7 +293,7 @@ class SearchPanel(SidePanel):
         content.Add(self.count_label, 0, wx.BOTTOM, dip(3))
 
         # Result list
-        self.result_list = SearchResultsList(self, self.textview)
+        self.result_list = SearchResultsList(self, self.editor)
         self.result_list.on_select = self._on_result_selected
         content.Add(self.result_list, 1, wx.EXPAND)
 
@@ -319,8 +319,8 @@ class SearchPanel(SidePanel):
     def update_visible(self):
         super().update_visible()
         if not self.visible:
-            self.textview.canvas.highlights = {}
-            self.textview.canvas.refresh()
+            self.editor.canvas.highlights = {}
+            self.editor.canvas.refresh()
 
     def on_text_changed(self, event):
         self.search.search(self.search_ctrl.GetValue().strip())
@@ -345,8 +345,8 @@ class SearchPanel(SidePanel):
         for idx, (i1, i2, *_) in enumerate(self.result_list.results):
             color = 'orange' if idx == self._current_idx else 'yellow'
             highlights.append((i1, i2, color))
-        self.textview.canvas.highlights = {0: highlights} if highlights else {}
-        self.textview.canvas.refresh()
+        self.editor.canvas.highlights = {0: highlights} if highlights else {}
+        self.editor.canvas.refresh()
 
     def _update_count_label(self):
         n = len(self.result_list.results)
@@ -397,11 +397,11 @@ class SearchPanel(SidePanel):
             return
         i1, i2, _, _ = results[idx]
         replacement = self.replace_ctrl.GetValue()
-        self.textview.selection = (i1, i2)
-        self.textview.remove()
+        self.editor.selection = (i1, i2)
+        self.editor.remove()
         if replacement:
-            self.textview.index = i1
-            self.textview.insert_text(replacement)
+            self.editor.index = i1
+            self.editor.insert_text(replacement)
         self.search.update()
         new_results = self.search.get_results()
         self._current_idx = min(idx, len(new_results) - 1)
@@ -417,14 +417,14 @@ class SearchPanel(SidePanel):
         if not results:
             return
         replacement = self.replace_ctrl.GetValue()
-        self.textview.begin_undo_group()
+        self.editor.begin_undo_group()
         for i1, i2, _, _ in reversed(results):
-            self.textview.selection = (i1, i2)
-            self.textview.remove()
+            self.editor.selection = (i1, i2)
+            self.editor.remove()
             if replacement:
-                self.textview.index = i1
-                self.textview.insert_text(replacement)
-        self.textview.end_undo_group()
+                self.editor.index = i1
+                self.editor.insert_text(replacement)
+        self.editor.end_undo_group()
         self._current_idx = -1
 
     def _on_option_changed(self, event):

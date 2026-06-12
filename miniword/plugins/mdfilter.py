@@ -589,6 +589,7 @@ def _register_styles(doc, preset='github'):
 def apply_md_style(view, preset):
     """Apply a named MD style preset to an already-loaded document (undo-able)."""
     from miniword.core.styles import style_default, updated
+    from miniword.core.stylesheet import undo_basestyle_change
     mm = 72 / 25.4
     n  = len(style_default['indent_levels'])
     heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
@@ -609,7 +610,7 @@ def apply_md_style(view, preset):
             new_style = updated(style_default, base, props)
             old       = view.document.basestyles.get(key)
             old_style = old.copy() if old else None
-            view.add_undo((view._undo_stylesheet, key, old_style, new_style))
+            view.add_undo((undo_basestyle_change, view.document.basestyles, key, old_style, new_style))
             view.document.basestyles.set(key, new_style)
 
 
@@ -618,10 +619,10 @@ def get_menus(doc):
     if getattr(doc, 'home_format', None) not in ('md', 'markdown'):
         return []
     return [("&Markdown", [
-        ("GitHub",       lambda frame: apply_md_style(frame.textview, 'github')),
-        ("GitHub Small", lambda frame: apply_md_style(frame.textview, 'github_small')),
-        ("Report",       lambda frame: apply_md_style(frame.textview, 'report')),
-        ("Compact",      lambda frame: apply_md_style(frame.textview, 'compact')),
+        ("GitHub",       lambda frame: apply_md_style(frame.editor, 'github')),
+        ("GitHub Small", lambda frame: apply_md_style(frame.editor, 'github_small')),
+        ("Report",       lambda frame: apply_md_style(frame.editor, 'report')),
+        ("Compact",      lambda frame: apply_md_style(frame.editor, 'compact')),
     ])]
 
 

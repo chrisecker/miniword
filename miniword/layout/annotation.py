@@ -174,33 +174,43 @@ def demo_00():
     import wx
     from einstein import get_einstein_model
     from ..core.document import Document
-    from ..texteditor import TextEditor
     from ..core.styles import testsheet
+    from .factory import Factory
+    from .cairodevice import CairoDevice
+    from .pagebuilder import PageBuilder
+    from ..texteditor.editor import Editor
+    from ..texteditor.textcanvas import TextCanvas
 
     app = wx.App(True)
     doc = Document()
     doc.textmodel = get_einstein_model()
-    doc.basestyles = testsheet
 
     frame = wx.Frame(None, title='Annotation Demo', size=(900, 600))
-    view  = TextEditor(frame, doc)
-    view.highlights = {0: []}
-    view.squiggles  = {0: []}
-    view.SetBackgroundColour('light grey')
+
+    factory = Factory(testsheet, device=CairoDevice())
+    builder = PageBuilder(doc.textmodel, factory)
+    builder.rebuild()
+
+    editor = Editor(doc.textmodel)
+    canvas = TextCanvas(frame, doc.textmodel, builder, editor)
+    editor.canvas = canvas
+    canvas.highlights = {0: []}
+    canvas.squiggles  = {0: []}
+    canvas.SetBackgroundColour('light grey')
 
     # Seed example annotations from the first six long words in the text.
     text  = doc.textmodel.get_text()
     words = list(dict.fromkeys(re.findall(r'\b\w{6,}\b', text)))[:6]
     for word in words[:3]:
         i = text.find(word)
-        view.highlights[0].append((i, i + len(word)))
+        canvas.highlights[0].append((i, i + len(word)))
     for word in words[3:6]:
         i = text.find(word)
-        view.squiggles[0].append((i, i + len(word)))
+        canvas.squiggles[0].append((i, i + len(word)))
 
     frame.Show()
 
-    from ..wxtextview import testing
+    from ..ui import testing
     l = locals()
     l.update(globals())
     testing.pyshell(l)

@@ -55,15 +55,15 @@ def iter_headings(model, stylesheet):
 class OutlinePanel(SidePanel):
     delay = 400 # a high delay since this may be costly
 
-    def __init__(self, parent, document, textview):
+    def __init__(self, parent, document, editor):
         SidePanel.__init__(self, parent)
-        self._textview   = textview
+        self.editor   = editor
         self._document   = document
         self._basestyles = document.basestyles
         self._entries    = []   # [(par_start, wx.TreeItemId)] sorted by par_start
 
-        self.add_model(textview)
-        self.add_model(textview.root)
+        self.add_model(editor)
+        self.add_model(editor.root)
         self.add_model(document.basestyles)
         self.create()
 
@@ -91,7 +91,7 @@ class OutlinePanel(SidePanel):
     # --- Tree building --------------------------------------------------
 
     def update(self):
-        model = self._textview.root
+        model = self.editor.root
         tree  = self._tree
         tree.DeleteAllItems()
         self._entries    = []
@@ -117,14 +117,14 @@ class OutlinePanel(SidePanel):
     def _on_activate(self, event):
         index = self._tree.GetItemData(event.GetItem())
         if index is not None:
-            self._textview.set_index(index)
-            self._textview.canvas.adjust_viewport()
-            self._textview.canvas.SetFocus()
+            self.editor.set_index(index)
+            self.editor.canvas.adjust_viewport()
+            self.editor.canvas.SetFocus()
 
     def _sync_cursor(self):
         if not self._entries:
             return
-        index = self._textview.index
+        index = self.editor.index
         best  = None
         for start, item in self._entries:
             if start <= index:

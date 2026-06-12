@@ -635,7 +635,7 @@ def demo_00():
     from ..core.styles import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     dropdown.SetSelection(2)
-    from ..wxtextview import testing
+    from . import testing
     testing.pyshell({**locals(), **globals()})
     app.MainLoop()
 

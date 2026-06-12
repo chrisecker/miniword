@@ -17,6 +17,7 @@ from .threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
 from .buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
 from .stylemenu import BasestyleSelector
 from ..core.styles import defaultbullets, n_levels, style_default
+from ..core.stylesheet import undo_basestyle_change
 from ..core.utils import updated
 
 
@@ -634,7 +635,7 @@ class StyleInspector(SidePanel):
         editor = self.editor
         old_style = self.basestyles.get(name).copy()
         with editor.atomic():
-            editor.add_undo((self._undo_stylesheet, name, old_style, new_style))
+            editor.add_undo((undo_basestyle_change, self.basestyles, name, old_style, new_style))
             self.basestyles.set(name, new_style)
             self._clear_overrides(overrides - {'base'})
 
@@ -648,7 +649,7 @@ class StyleInspector(SidePanel):
         editor = self.editor
         with editor.atomic():
             # Undo entry: delete the new style (restore_to=None means delete).
-            editor.add_undo((self._undo_stylesheet, new_name, None, new_style))
+            editor.add_undo((undo_basestyle_change, self.basestyles, new_name, None, new_style))
             self.basestyles.set(new_name, new_style)
             self._apply_to_ranges(self.get_parrange(),
                 lambda: editor.set_parproperties(base=new_name))
@@ -671,7 +672,7 @@ class StyleInspector(SidePanel):
         new_style = old_style.copy()
         new_style["name"] = new_label
         with editor.atomic():
-            editor.add_undo((self._undo_stylesheet, name, old_style, new_style))
+            editor.add_undo((undo_basestyle_change, self.basestyles, name, old_style, new_style))
             self.basestyles.set(name, new_style)
 
     def _delete_style(self, name):
@@ -687,16 +688,8 @@ class StyleInspector(SidePanel):
                 lambda: editor.set_parproperties(base='normal'))
             # Add stylesheet undo last so it's applied first when undoing,
             # ensuring the style exists before paragraph bases are restored.
-            editor.add_undo((self._undo_stylesheet, name, old_style, None))
+            editor.add_undo((undo_basestyle_change, self.basestyles, name, old_style, None))
             self.basestyles.delete(name)
-
-    def _undo_stylesheet(self, name, old_style, new_style):
-        """Undo/redo helper for stylesheet edits (see add_undo)."""
-        if old_style is None:
-            self.basestyles.delete(name)
-        else:
-            self.basestyles.set(name, old_style)
-        return self._undo_stylesheet, name, new_style, old_style
 
     def mk_style(self, parstyle, style):
         # Computes the style of a single run of text. Unlike the code

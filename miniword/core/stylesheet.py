@@ -34,6 +34,15 @@ class StyleSheet(DocumentNode):
         return key in self.data
 
 
+def undo_basestyle_change(basestyles, name, old_style, new_style):
+    """Undo/redo helper for basestyle edits (see Editor.add_undo)."""
+    if old_style is None:
+        basestyles.delete(name)
+    else:
+        basestyles.set(name, old_style)
+    return undo_basestyle_change, basestyles, name, new_style, old_style
+
+
 def test_00():
     ss = StyleSheet()
     ss.set('normal', dict(fontsize=10, color="black"))
