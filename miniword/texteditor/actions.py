@@ -15,6 +15,7 @@ def create_ctx(editor):
     ctx.editor = editor
     ctx.model = editor.target
     ctx.index = editor.index
+    ctx.aindex = editor.abs_idx(editor.index)
     if editor.canvas is not None:
         ctx.layout = editor.canvas.layout
     else:
@@ -122,15 +123,15 @@ def default_handler(action, shift, ctx):
         editor.set_index(i, shift)
     elif action == 'move_up':
         flow = editor.flow
-        x = layout.get_rect(index, flow).x1
         i = editor.abs_idx(index)
+        x = layout.get_rect(i, flow).x1
         k = _navigate(layout, i, x, layout.prev_row, flow)
         if k is not None:
             editor.set_index(editor.local_idx(k), shift)
     elif action == 'move_down':
         flow = editor.flow
-        x = layout.get_rect(index, flow).x1
         i = editor.abs_idx(index)
+        x = layout.get_rect(i, flow).x1
         k = _navigate(layout, i, x, layout.next_row, flow)
         if k is not None:
             editor.set_index(editor.local_idx(k), shift)

@@ -82,7 +82,7 @@ class LayoutBase:
         raise IndexError("Wrong index %i for flow %i"%(i, flow))
         
     def find_row(self, i, flow):
-        if not 0 <= i < len(self):
+        if not 0 <= i < self.length[flow]:
             return None
         for j1, j2, x, y, child in self.iter_boxes(flow):
             if j1<=i<j2:
