@@ -398,8 +398,9 @@ class PageBuilder(BuilderBase):
                 q2 = j1
                 break
 
-        if not k1:
-            # k1 is either None (empty layout) or 0 (first page)
+        if k1 is None or k1 == 0:
+            # empty layout, or first page is dirty: no pages_before,
+            # rebuild from the start
             pages_before = []
             state = restartmemo_from_settings(self.settings)
         else:
@@ -627,6 +628,9 @@ def test_03():
     "relayout: abort condition reached after page 1"
     from einstein import get_einstein_model
     from ..core.styles import testsheet
+
+    if wx.App.Get() is None:
+        wx.App(False)
 
     model   = get_einstein_model()
     factory = Factory(testsheet)
