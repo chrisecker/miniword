@@ -216,12 +216,17 @@ class TextModel(Model):
         l1 = self.get_start(j1)
         l2 = self.get_end(j2)
         def isalnum(j):
-            return self.get_text(j, j+1).isalnum()
-            
-        while isalnum(j1-1) and j1>l1:
-            j1 = j1-1
-        while isalnum(j2) and j2<l2:
-            j2 = j2+1
+            return self.get_text(j, j+1).isalnum()            
+        try:
+            while isalnum(j1-1) and j1>l1:
+                j1 = j1-1
+        except IndexError:
+            pass
+        try:
+            while isalnum(j2) and j2<l2:
+                j2 = j2+1
+        except IndexError:
+            pass
         return j1, j2    
 
     def position2index(self, row, col, i0=0):
