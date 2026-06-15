@@ -62,15 +62,14 @@ class UndoRedo(Model):
         l = self._undo_groups.pop()
         if not l:
             return
-        n = len(self._undo_groups)
-        if n:
+        if self._undo_groups:
             # Append entries to the parent group
-            self._undo_groups[n-1].extend(l)
+            self._undo_groups[-1].extend(l)
         else:
-            # Insert into undo stack directly
-            self._undoinfo.insert(0, l)
-            self._redoinfo = []
-            self.notify_views('undo_changed')
+            # Unwrap single-entry groups so that join_undo can merge them
+            # with the previous undo entry (e.g. consecutive keystrokes).
+            info = l[0] if len(l) == 1 else l
+            self.add_undo(info)
         
     def clear_undo(self):
         self._undoinfo = []

@@ -224,7 +224,35 @@ class Editor(UndoRedo):
         self.index = j1
         self.selection = j1, j1
         return self._insert, flow, i1, old
-    
+
+    def join_undo(self, info2, info1):
+        # Merge consecutive insertions resp. consecutive removals into a
+        # single undo entry, so that e.g. typing several characters in a
+        # row can be undone with one undo step. Merging stops once the
+        # combined range reaches nmax, roughly limiting undo steps to
+        # word-sized chunks.
+        nmax = 10
+        try:
+            fn2, flow2, a2, b2 = info2
+            fn1, flow1, a1, b1 = info1
+        except (TypeError, ValueError):
+            return [info2, info1]
+        if flow2 != flow1:
+            return [info2, info1]
+        if fn2 == self._remove and fn1 == self._remove and a2 == b1:
+            # undo of two consecutive insertions -> remove combined range
+            if b2-a1 < nmax:
+                return [(self._remove, flow2, a1, b2)]
+        if fn2 == self._insert and fn1 == self._insert:
+            # undo of two consecutive removals -> reinsert combined text
+            if a2+len(b2) == a1 and len(b1)+len(b2) < nmax:
+                # consecutive backspaces
+                return [(self._insert, flow2, a2, b2+b1)]
+            if a2 == a1 and len(b1)+len(b2) < nmax:
+                # consecutive deletes
+                return [(self._insert, flow2, a2, b1+b2)]
+        return [info2, info1]
+
     def set_texel_attributes(self, i1, texel, **attributes):
         """Replace the Single texel at i1 with a clone that has updated attributes."""
         new_texel = texel
@@ -631,17 +659,43 @@ def test_01():
     "undo & redo"
     editor = Editor()
     editor.insert_text('Hello')
-    editor.insert_text(' ')    
+    editor.insert_text(' ')
     editor.insert_text('World!')
     assert editor.root.get_text() == 'Hello World!'
+    # consecutive insertions are merged into undo steps of limited size
+    assert editor.undocount() == 2
     editor.undo()
     assert editor.root.get_text() == 'Hello '
     editor.redo()
     assert editor.root.get_text() == 'Hello World!'
-    editor.undo()    
+    editor.undo()
     editor.insert_text('Chris!')
     assert editor.root.get_text() == 'Hello Chris!'
-    
+
+def test_06():
+    "undo merging for removals"
+    editor = Editor()
+    editor.insert_text('Hello World!')
+    editor.clear_undo()
+
+    # consecutive backspaces (deleting "World!" from the end)
+    for i in range(6):
+        editor.index = len(editor.root)
+        editor.remove_range(editor.index-1, editor.index)
+    assert editor.root.get_text() == 'Hello '
+    assert editor.undocount() == 1
+    editor.undo()
+    assert editor.root.get_text() == 'Hello World!'
+
+    editor.clear_undo()
+    # consecutive deletes (deleting "Hello" from the start)
+    for i in range(5):
+        editor.remove_range(0, 1)
+    assert editor.root.get_text() == ' World!'
+    assert editor.undocount() == 1
+    editor.undo()
+    assert editor.root.get_text() == 'Hello World!'
+
 def test_02():
     "find_footnote"
     from ..textmodel.submodel import mk_test, _get_text
