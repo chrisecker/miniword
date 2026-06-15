@@ -285,12 +285,11 @@ class PageBuilder(BuilderBase):
             return self.finish()
 
     def build_background(self):
-        """One build step for the async loop: step + Yield + reschedule."""
+        """One build step for the async loop: step + reschedule."""
         self.build_step()
         if self.generator is not None:
-            wx.Yield()
-            if self.generator is not None:
-                wx.CallAfter(self.build_background)
+            wx.Yield() # Necessary!
+            wx.CallAfter(self.build_background)
 
     @trace
     def assure_finished(self, callback=NOOP):

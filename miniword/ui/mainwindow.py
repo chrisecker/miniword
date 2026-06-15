@@ -355,7 +355,8 @@ class MainFrame(wx.Frame, ViewBase):
         factory.blobs = self.document.blobs
         builder = PageBuilder(self.document.textmodel, factory)
         builder.rebuild()
-        builder.assure_index(len(self.document.textmodel))
+        builder.assure_y(1)  # build first row, so initial geometry is known
+        builder.build_background()  # build the rest asynchronously
         self.editor = TestEditor(self.document.textmodel)
         self.canvas = TextCanvas(
             self._base, self.document.textmodel, builder, self.editor)
