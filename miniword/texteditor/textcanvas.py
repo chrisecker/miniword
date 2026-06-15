@@ -191,7 +191,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             return
 
         if ukey != wx.WXK_NONE:
-            self.editor.insert_text(chr(ukey))
+            with self.editor.atomic():
+                self.editor.remove()
+                self.editor.insert_text(chr(ukey))
         else:
             event.Skip()
         
@@ -351,6 +353,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     # --- scroll ---
 
     def _update_scroll(self):
+        """Update scroll parameters (virtual size & scroll rate)."""
         layout = self.layout
         scale = self.scale
         w = int(layout.width * scale)
@@ -375,9 +378,14 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     
     def adjust_viewport(self):
         layout = self.layout
-        if self.editor.index > len(layout):
+        if len(layout) == 0:
             return
-        cursor = layout.get_rect(self.editor.index, 0, 0)
+        editor = self.editor
+        flow = editor.flow
+        i = editor.abs_idx(editor.index)
+        if i > layout.length[flow]:
+            return
+        cursor = layout.get_rect(i, flow)
         vp = self.get_viewport()
         fw, fh = self._scrollrate
         scale = self.scale
@@ -408,30 +416,21 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     ### Drawing
 
     def draw_background(self, painter):
-        self.layout.draw_background(0, 0, painter)
-
-    def get_flow_box(self, flow):
-        """Return the box used for layout/annotation queries for the given flow."""
-        if flow == 0:
-            return self.layout
-        return self.layout.childs[0].footnote_box
+        self.layout.draw_background(painter)
 
     def draw(self, painter):
+        layout = self.layout
         self.builder.assure_rect(self.get_viewport())
         self.draw_background(painter)
         for flow, items in self.highlights.items():
-            box = self.get_flow_box(flow)
-            if box is None:
-                continue
             for i1, i2, *color in items:
-                annotation.highlight(painter, box, i1, i2, 0, 0, *color)
-        self.layout.draw(0, 0, painter)
+                annotation.highlight(painter, layout.iter_boxes(flow),
+                                     i1, i2, 0, 0, *color)
+        layout.draw(painter)
         for flow, items in self.squiggles.items():
-            box = self.get_flow_box(flow)
-            if box is None:
-                continue
             for i1, i2, *color in items:
-                annotation.squiggle(painter, box, i1, i2, 0, 0, *color)
+                annotation.squiggle(painter, layout.iter_boxes(flow),
+                                    i1, i2, 0, 0, *color)
         if self.editor is not None:
             self.editor.controller.draw(painter)
 
@@ -444,16 +443,15 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         current = editor.get_current_style()
         style.update(current)
         i = editor.abs_idx(editor.index)
-        self.layout.draw_cursor(i, 0, 0, painter, style,
-                                flow=editor.flow)
+        self.layout.draw_cursor(i, editor.flow, painter, style)
 
     def draw_selection(self, painter):
         # note that draw_selection is called by editor
         editor = self.editor
         for j1, j2 in editor.selected_ranges():
             i1, i2 = editor.abs_idxs(j1, j2)
-            self.layout.draw_selection(i1, i2, 0, 0, painter,
-                                       flow=editor.flow)
+            self.layout.draw_selection(i1, i2, editor.flow, painter)
+            
     def model_changed(self, *args):
         self.refresh()
     
@@ -501,6 +499,7 @@ def demo_00():
     frame = wx.Frame(None)
     win = wx.Panel(frame)
     canvas = TextCanvas(win, model, builder, editor)
+    canvas.hcenter = False
     editor.canvas = canvas
     
     box = wx.BoxSizer(wx.VERTICAL)

@@ -12,14 +12,14 @@
 
 
 from .testdevice import TESTDEVICE
-from .boxes import TextBox, VBox
+from .boxes import TextBox
 from .linewrap import simple_linewrap
 from ..core.units import mm, cm, pt
 from ..core.styles import updated, n_levels
 from ..core.papersizes import PAPER_SIZES
 from ..core.document import settings_default
 from .stretchable import justify_line
-from .page import ForceBreakBox, Row, Page
+from .page import ForceBreakBox, Row, Page, FootnoteBox
 from .counters import format_number, set_counter, inc_counter
 from ..tables.table_boxes import TableBox, split_at_height
 from ..footnotes.footnotes import FootnoteAnchorBox, to_superscript
@@ -170,9 +170,10 @@ class DraftNode:
             if node.startspage:
                 if i > 0:
                     # Flush the completed page
-                    page = Page(memo.rows, self.geometry, device)
+                    footnotebox = _position_footnotes(
+                        memo.footnotes, memo, draw_separator=bool(memo.rows))
+                    page = Page(memo.rows, self.geometry, footnotebox, device=device)
                     page.decorations = memo.decorations
-                    page.footnote_box = _position_footnotes(memo.footnotes, memo)
                     pages.append(page)
                 memo = RestartMemo()
                 memo.geometry = node.geometry
@@ -300,16 +301,24 @@ def place_longtable(box, draft, device):
 
 
 
-def _position_footnotes(fn_rows, memo):
-    """Return a VBox with the footnote rows, positioned above the bottom
-    margin, or None if there are no footnotes."""
+def _position_footnotes(fn_rows, memo, draw_separator=True):
+    """Return a (x, y, FootnoteBox) tuple with the footnote rows.
+
+    Normally the box is anchored above the bottom margin. If it fills the
+    whole page (no separator, no other content), it starts at the top
+    margin instead. Returns None if there are no footnotes.
+    """
     if not fn_rows:
         return None
-    _, _, border_bottom, border_left = memo.border
-    box = VBox(list(fn_rows), device=fn_rows[0].device)
-    box.x = border_left
-    box.y = memo.geometry[1] - border_bottom - (box.height + box.depth)
-    return box
+    border_top, _, border_bottom, border_left = memo.border
+    box = FootnoteBox(list(fn_rows), memo.geometry[0], draw_separator,
+                       device=fn_rows[0].device)
+    x = border_left
+    if draw_separator:
+        y = memo.geometry[1] - border_bottom - (box.height + box.depth)
+    else:
+        y = border_top
+    return x, y, box
 
 
 def render_footnote_rows(fn_texel, factory, line_width, number=None):
@@ -547,9 +556,9 @@ def generate_pages(texel, i, restartmemo, factory,
             for page in pages:
                 yield page
     elif state.rows:
-        page = Page(state.rows, state.geometry, device)
+        footnotebox = _position_footnotes(state.footnotes, state)
+        page = Page(state.rows, state.geometry, footnotebox, device=device)
         page.decorations = state.decorations
-        page.footnote_box = _position_footnotes(state.footnotes, state)
         yield page
 
 

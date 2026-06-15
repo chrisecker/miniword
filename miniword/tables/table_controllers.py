@@ -12,7 +12,6 @@ long as it matches.
 
 
 import wx
-from ..layout.boxes import find_row, prev_row, next_row
 from ..texteditor.boxcontroller import BoxController
 from ..texteditor.actions import create_ctx
 from .tables import Table, from_cells
@@ -251,7 +250,7 @@ class CursorController(TableControllerBase):
         cells = texel.get_cells()
 
         if action == 'move_up':
-            prev = prev_row(ctx.layout, i)
+            prev = ctx.layout.prev_row(i)
             if prev is not None and prev[0] >= ctx.model.get_start(i):
                 self.editor.move_up(shift)
                 return True
@@ -260,7 +259,7 @@ class CursorController(TableControllerBase):
             row -= 1
             target_i = self.i1 + cells[row][col].i2 - 2  # last content pos in cell above
         else:
-            nxt = next_row(ctx.layout, i)
+            nxt = ctx.layout.next_row(i)
             if nxt is not None and nxt[1] <= ctx.model.get_end(i):
                 self.editor.move_down(shift)
                 return True

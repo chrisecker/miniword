@@ -26,6 +26,7 @@ from .linewrap import simple_linewrap
 from .rect import Rect
 from .builderbase import BuilderBase
 from .builderbase import Factory as _Factory
+from .layoutbase import LayoutBase
 
 
 
@@ -45,28 +46,7 @@ class Paragraph(VBox):
 
     
 
-class SimpleLayout(VBox):
-    def get_flow(self, x, y):
-        return 0
-
-    def prev_row(self, i, flow):
-        return boxes.prev_row(self, i)
-    
-    def next_row(self, i, flow):
-        return boxes.next_row(self, i)
-
-    ### add flow-argument to box methods (needed by textview)
-    def get_index(self, x, y, flow=0):
-        return VBox.get_index(self, x, y)
-
-    def get_rect(self, i, x0, y0, flow=0):
-        return VBox.get_rect(self, i, x0, y0)
-
-    def draw_cursor(self, i, x0, y0, dc, style, flow=0):
-        return VBox.draw_cursor(self, i, x0, y0, dc, style)
-
-    def draw_selection(self, i1, i2, x, y, dc, flow=0):
-        return VBox.draw_selection(self, i1, i2, x, y, dc)
+class SimpleLayout(LayoutBase):
 
     def find_paragraph(self, i):
         """
@@ -75,7 +55,7 @@ class SimpleLayout(VBox):
         """ 
         k = -1
         i2 = 0 # needed when empty!
-        for i1, i2, child in self.iter_childs():
+        for i1, i2, x, y, child in self.iter_boxes(0):
             k += 1
             if i1<=i<i2:
                 return i1, i2, k, k+1
@@ -167,7 +147,7 @@ class SimpleBuilder(BuilderBase, Factory):
     def rebuild(self):
         texel = self.extended_texel()
         l = self.create_paragraphs(texel, 0, length(texel))
-        self._layout = SimpleLayout(l, device=self.device)
+        self._layout = SimpleLayout(l)
 
     def rebuild_range(self, i1, i2, delta):
         """XXX" Achtung: der Bereich i1,i2 ist bisher inkonsistent"""

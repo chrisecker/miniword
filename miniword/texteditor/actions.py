@@ -43,7 +43,7 @@ def _navigate(layout, i, x, row_fn, flow=0):
     best_i, best_dist = None, float('inf')
     for r1, r2, rx, ry, row in candidates:
         j = r1 + row.get_index(x - rx, row.height)
-        dist = abs(layout.get_rect(j, 0, 0, flow).x1 - x)
+        dist = abs(layout.get_rect(j, flow).x1 - x)
         if dist < best_dist:
             best_dist, best_i = dist, j
     return best_i
@@ -122,14 +122,14 @@ def default_handler(action, shift, ctx):
         editor.set_index(i, shift)
     elif action == 'move_up':
         flow = editor.flow
-        x = layout.get_rect(index, 0, 0, flow).x1
+        x = layout.get_rect(index, flow).x1
         i = editor.abs_idx(index)
         k = _navigate(layout, i, x, layout.prev_row, flow)
         if k is not None:
             editor.set_index(editor.local_idx(k), shift)
     elif action == 'move_down':
         flow = editor.flow
-        x = layout.get_rect(index, 0, 0, flow).x1
+        x = layout.get_rect(index, flow).x1
         i = editor.abs_idx(index)
         k = _navigate(layout, i, x, layout.next_row, flow)
         if k is not None:
@@ -151,7 +151,9 @@ def default_handler(action, shift, ctx):
     elif action == 'select_all':
         editor.selection = (0, len(model))
     elif action == 'insert_newline':
-        editor.insert_newline()
+        with editor.atomic():
+            editor.remove()
+            editor.insert_newline()        
     elif action == 'del_left':
         with editor.atomic():
             editor.remove()
@@ -161,13 +163,14 @@ def default_handler(action, shift, ctx):
     elif action == 'copy':
         editor.copy()
     elif action == 'paste':
-        editor.paste()
+        with editor.atomic():
+            editor.remove()
+            editor.paste()
     elif action == 'cut':
         editor.cut()
     elif action == 'delete':
         editor.remove()
     elif action == 'indent':
-        print("indent")
         editor.indent()
     elif action == 'dedent':
         editor.dedent()

@@ -1,12 +1,34 @@
-from .boxes import Box, TextBox, NewlineBox, Row, select_i_by_x, \
-    select_i_by_y, get_text
+from .boxes import Box, VBox, NewlineBox, Row, select_i_by_y, get_text
 from .testdevice import TESTDEVICE
 from ..core.units import mm, cm, pt
 
 
-
 class ForceBreakBox(NewlineBox):
     """Sentinel box for a forced line break (BR texel)."""
+
+
+class FootnoteBox(VBox):
+    """A column of footnote rows, optionally preceded by a separator line.
+
+    Like any box, its rows are positioned relative to its own top-left
+    corner; the box's position on the page is carried separately (see
+    Page.footnotebox, a (x, y, box) tuple).
+
+    The separator is omitted when the footnote box fills the whole
+    remaining page (no normal text above it).
+    """
+
+    def __init__(self, rows, width, draw_separator=True, device=None):
+        VBox.__init__(self, rows, device=device)
+        self.width = max(self.width, width)
+        self.draw_separator = draw_separator
+
+    def draw(self, x, y, gc):
+        if self.draw_separator:
+            sep_y = y - 4   # 4pt gap above the line
+            self.device.draw_line(x, sep_y, x + self.width * 0.3, sep_y,
+                                   0.5, gc)
+        VBox.draw(self, x, y, gc)
 
 
 class Page(Box):
@@ -15,28 +37,22 @@ class Page(Box):
     page          = 0
     height        = 0
     decorations   = ()
-    footnote_box  = None
     restartmemo   = None
 
-    def __init__(self, rowdata, geometry, device=TESTDEVICE):
+    def __init__(self, rowdata, geometry, footnotebox=None, device=TESTDEVICE):
         if device is not None:
             self.device = device
         self.rows = rowdata[:]
-        n = 0
+        self.footnotebox = footnotebox
+        n0 = 0
         for x, y, row in rowdata:
-            n += len(row)
-        self.length = n
+            n0 += len(row)
+        n1 = len(footnotebox[2]) if footnotebox is not None else 0
+        self.length = (n0, n1)
         self.width, self.height = geometry
 
     def __len__(self):
-        return self.length
-
-    def flowlength(self, flow):
-        if flow == 0:
-            return self.length
-        if self.footnote_box is None:
-            return 0
-        return len(self.footnote_box)
+        return self.length[0]
 
     def adjust(self, pagenum):
         """Update page properties that do not affect layout.
@@ -57,14 +73,9 @@ class Page(Box):
             self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
 
     def draw_footnotes(self, x, y, gc):
-        box = self.footnote_box
-        if box is None:
-            return
-        sep_y = box.y - 4   # 4pt gap above the line
-        self.device.draw_line(x + box.x, y + sep_y,
-                              x + box.x + self.width * 0.3, y + sep_y,
-                              0.5, gc)
-        box.draw(x + box.x, y + box.y, gc)
+        if self.footnotebox is not None:
+            fx, fy, box = self.footnotebox
+            box.draw(x + fx, y + fy, gc)
 
     def draw(self, x, y, gc):
         Box.draw(self, x, y, gc)
@@ -79,6 +90,7 @@ class Page(Box):
     def draw_for_print(self, x, y, gc):
         Box.draw(self, x, y, gc)
         self.draw_footnotes(x, y, gc)
+        # XXX Draw page-Number?
 
     def iter_boxes(self, i, x, y):
         j1 = i
@@ -86,40 +98,6 @@ class Page(Box):
             j2 = j1 + len(row)
             yield j1, j2, x + x_, y + y_, row
             j1 = j2
-
-    def iter_fnboxes(self, i, x, y):
-        box = self.footnote_box
-        if box is None:
-            return
-        for j1, j2, x_, y_, row in box.iter_boxes(0, box.x, box.y):
-            yield i + j1, i + j2, x + x_, y + y_, row
-
-    def compute_fnindex(self, x, y):
-        """Return local footnote flow index at page-relative (x, y), or None."""
-        box = self.footnote_box
-        if box is None:
-            return None
-        for j1, j2, x_, y_, row in box.iter_boxes(0, box.x, box.y):
-            if y_ <= y < y_ + row.height + row.depth:
-                return j1 + row.get_index(x - x_, row.height)
-        return None
-
-    def get_flow(self, x, y):
-        if self.footnote_box is None:
-            return 0
-        return 0 # XXX: footnote_box.y is page-relative; compare against y
-
-
-    def draw_mdcursor(self, i, x, y, dc, style):
-        for j1, j2, rx, ry, row in self.iter_fnboxes(0, x, y):
-            if j1 <= i < j2:
-                row.draw_cursor(i - j1, rx, ry, dc, style)
-                return
-
-    def draw_mdselection(self, i1, i2, x, y, dc):
-        for j1, j2, rx, ry, row in self.iter_fnboxes(0, x, y):
-            if j2 > i1 and j1 < i2:
-                row.draw_selection(max(i1, j1) - j1, min(i2, j2) - j1, rx, ry, dc)
 
     def get_index(self, x, y):
         items = self.iter_boxes(0, 0, 0)

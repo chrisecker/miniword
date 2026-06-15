@@ -726,33 +726,20 @@ def check_box(box, texel=None):
     return True
     
 
-def find_row(layout, i):
-    if not (0 <= i < len(layout)):
+def find_row(box, i, offset=0, x0=0, y0=0):
+    """Find the deepest row-box which contains index i. Returns None if
+    i is out of range or no row contains it."""
+    if not 0 <= i-offset < len(box):
         return None
-    def _find(box, offset, x0, y0):
-        for j1, j2, x, y, child in box.iter_boxes(offset, x0, y0):
-            if j1 <= i < j2:
-                deeper = _find(child, j1, x, y)
-                if deeper is not None:
-                    return deeper
-                if isinstance(child, Row):
-                    return j1, j2, x, y, child
-                return None
-    return _find(layout, 0, 0, 0)
-
-
-def prev_row(layout, i):
-    cur = find_row(layout, i)
-    if cur is None:
-        return None
-    return find_row(layout, cur[0] - 1)
-
-
-def next_row(layout, i):
-    cur = find_row(layout, i)
-    if cur is None:
-        return None
-    return find_row(layout, cur[1])
+    for j1, j2, x, y, child in box.iter_boxes(offset, x0, y0):
+        if j1 <= i < j2:
+            deeper = find_row(child, i, j1, x, y)
+            if deeper is not None:
+                return deeper
+            if isinstance(child, Row):
+                return j1, j2, x, y, child
+            return None
+    return None
 
 
 def _create_testobjects(s):
@@ -922,7 +909,7 @@ def test_07():
 
 
 def test_08():
-    "find_row, prev_row, next_row"
+    "find_row"
     b1, _ = _create_testobjects("01")
     b2, _ = _create_testobjects("34")
     row1 = Row([b1, NewlineBox()])   # len=3, positions 0..2
@@ -934,13 +921,3 @@ def test_08():
     assert find_row(layout, 3)[:2] == (3, 6)
     assert find_row(layout, 5)[:2] == (3, 6)
     assert find_row(layout, 6) is None
-
-    assert prev_row(layout, 0) is None
-    assert prev_row(layout, 2) is None
-    assert prev_row(layout, 3)[:2] == (0, 3)
-    assert prev_row(layout, 5)[:2] == (0, 3)
-
-    assert next_row(layout, 0)[:2] == (3, 6)
-    assert next_row(layout, 2)[:2] == (3, 6)
-    assert next_row(layout, 3) is None
-    assert next_row(layout, 5) is None

@@ -13,6 +13,7 @@ from .rect import Rect
 from .pagegen import RestartMemo, generate_pages, restartmemo_from_settings
 from .page import show_page
 from .factory import Factory
+from .layoutbase import LayoutBase
 from .cairodevice import CairoDevice
 
 import wx
@@ -40,7 +41,9 @@ def trace(fn):
 
 NOOP = lambda: None
 
-class Layout(VBox):
+
+
+class Layout(LayoutBase):
     """Simple single-column layout containing pages."""
     is_finished = False
     page_gap = 12  # visual gap between pages (screen only; PDF/print unaffected)
@@ -49,113 +52,79 @@ class Layout(VBox):
     def append_page(self, page):
         self.height += self.page_gap  # gap before every page, including the first
         self.childs.append(page)
-        self.length += len(page)
+        self.length[0] += len(page)
+        if page.footnotebox is not None:
+            self.length[1] += len(page.footnotebox[-1])
         self.width   = max(self.width, page.width)
         self.height += page.height  # assumes a specific page geometry
 
-    def flowlength(self, flow):
-        if flow == 0:
-            return self.length
-        return sum(page.flowlength(flow) for page in self.childs)
-
-    def iter_boxes(self, i, x, y):
-        j1 = i
-        y += self.page_gap  # initial gap before first page
+    def layout(self):
+        w0 = w1 = h0 = h1 = h2 = 0
+        n0 = 0
+        n1 = 0
+        for j1, j2, x, y, child in self.iter_pages():
+            w0 = min(w0, x)
+            h0 = min(h0, y)
+            w1 = max(w1, x+child.width)
+            h1 = max(h1, y+child.height)
+            h2 = max(h2, y+child.height+child.depth)
+            n0 = j2
+            if child.footnotebox is not None:
+                n1 += len(child.footnotebox[-1])
+            
+        self.width = w1
+        self.height = h1
+        self.depth = h2-h1
+        self.length = [n0, n1]
+        
+    def iter_pages(self):
+        j1 = 0
+        x = 0
+        y = self.page_gap  # initial gap before first page
         for child in self.childs:
             j2 = j1 + len(child)
             yield j1, j2, x, y, child
             y  += child.height + child.depth + self.page_gap
             j1  = j2
-
-    def iter_fnboxes(self, i, x, y):
-        # brauchen wir nicht!
-        j = i
-        y += self.page_gap
-        for page in self.childs:
-            for entry in page.iter_fnboxes(j, x, y):
-                yield entry
-                j = entry[1]
-            y += page.height + page.depth + self.page_gap
+        
+    def iter_boxes(self, flow):
+        if flow == 0:
+            yield from self.iter_pages()
+        else:
+            j1 = 0
+            for i1, i2, px, py, page in self.iter_pages():
+                if page.footnotebox is None:
+                    continue
+                x, y, box = page.footnotebox
+                j2 = j1+len(box)
+                yield j1, j2, x+px, y+py, box
+                j1 = j2
 
     def find_page(self, x, y):
-        for j1, j2, x0, y0, page in self.iter_boxes(0, 0, 0):
-            if y >= y0 and y <= y+page.height:
+        for j1, j2, x0, y0, page in self.iter_pages():
+            if y >= y0 and y <= y0+page.height:
                 return j1, j2, x0, y0, page
         raise ValueError("No page contains %f,%f"%(x,y))
-            
+
     def get_flow(self, x, y):
         try:
             j1, j2, x0, y0, page = self.find_page(x, y)
         except ValueError:
-            return 0 # Fallback!        
-        if page.footnote_box is None:
+            return 0 # Fallback!
+        if page.footnotebox is None:
             return 0
-        if y-y0 > page.footnote_box.y:
+        fx, fy, box = page.footnotebox
+        if y-y0 > fy:
             return 1 # in footnote box
         return 0 # normal text
-
-    def get_index(self, x, y, flow=0):
-        # XXX Besser wäre
-        # 1. Seite mit x,y finden
-        # 2. je nach flow get_index oder get_fnindex aufrufen
-        
-        if flow == 0:
-            return VBox.get_index(self, x, y)
-        j = 0
-        page_y = self.page_gap
-        for page in self.childs:
-            result = page.compute_fnindex(x, y - page_y)
-            if result is not None:
-                return j + result
-            if page.footnote_box is not None:
-                j += len(page.footnote_box)
-            page_y += page.height + page.depth + self.page_gap
-        return None
-
-    def get_rect(self, i, x, y, flow=0):
-        if flow == 0:
-            return VBox.get_rect(self, i, x, y)
-        return self.childs[0].footnote_box.get_rect(i, x, y)
-
-    def prev_row(self, i, flow=0):
-        if flow == 0:
-            return boxes.prev_row(self, i)
-        return boxes.prev_row(self.childs[0].footnote_box, i)
-
-    def next_row(self, i, flow=0):
-        if flow == 0:
-            return boxes.next_row(self, i)
-        return boxes.next_row(self.childs[0].footnote_box, i)
-
-    def draw_cursor(self, i, x, y, dc, style, flow=0):
-        if flow == 0:
-            return VBox.draw_cursor(self, i, x, y, dc, style)
-        for j1, j2, rx, ry, row in self.iter_fnboxes(0, x, y):
-            if j1 <= i < j2:
-                row.draw_cursor(i - j1, rx, ry, dc, style)
-                return
-
-    def draw_selection(self, i1, i2, x, y, dc, flow=0):
-        if flow == 0:
-            return VBox.draw_selection(self, i1, i2, x, y, dc)
-        
-        for j1, j2, rx, ry, row in self.iter_fnboxes(0, x, y):
-            if j2 > i1 and j1 < i2:
-                row.draw_selection(max(i1, j1) - j1, min(i2, j2) - j1, rx, ry, dc)
-
-    def from_childs(self, l): # XXX remove this
-        assert False
-
-    def create_group(self, l): # XXX remove this
-        assert False
-
-    def draw_background(self, x, y, gc):
+    
+    def draw_background(self, gc):
         """Fill the background of every visible page."""
-        device = self.device
-        for j1, j2, x1, y1, child in self.iter_boxes(0, x, y):
-            if device.intersects(gc, Rect(x1, y1,
-                                          x1 + child.width,
-                                          y1 + child.height)):
+        for j1, j2, x1, y1, child in self.iter_pages():
+            if child.device.intersects(
+                    gc, Rect(x1, y1,
+                             x1 + child.width,
+                             y1 + child.height)):
                 child.draw_background(x1, y1, gc)
 
     def get_text(self):
@@ -205,6 +174,17 @@ class TwoPageLayout(Layout):
         # Fallback for clicks in margins/gaps between page rows
         return select_i_by_y(x, y, items)
 
+    def get_index(self, x, y, flow):
+        # we override the base behavious (select by y) to enable two
+        # column view.
+        items = self.iter_boxes(flow)
+        r = select_i_by_xy(x, y, items)
+        if r is None:
+            return 0
+        return r
+    
+    
+
 
 class PageBuilder(BuilderBase):
     """The Builder operates in two phases:
@@ -238,7 +218,7 @@ class PageBuilder(BuilderBase):
 
     def __init__(self, model, factory):
         BuilderBase.__init__(self, model)
-        self._layout = self.layout_class([], factory.device)
+        self._layout = self.layout_class([])
         self._layout.is_finished = True  # no generator yet: nothing to build
         self.factory = factory
 
@@ -329,7 +309,7 @@ class PageBuilder(BuilderBase):
     def assure_index(self, i, flow=0, callback=NOOP):
         layout = self._layout
         while not layout.is_finished:
-            if layout.flowlength(flow) >= i and self._row_complete():
+            if layout.length[flow] >= i and self._row_complete():
                 break
             self.build_step()
             callback()
@@ -364,7 +344,7 @@ class PageBuilder(BuilderBase):
     def rebuild(self):
         """Rebuild the entire layout from i=0; nothing is reused."""
         if DEBUG: print("rebuild")
-        self._layout = self.layout_class([], self.factory.device)
+        self._layout = self.layout_class([])
         self.start(restartmemo_from_settings(self.settings), 0, ())
 
     def finish(self):
@@ -449,7 +429,7 @@ class PageBuilder(BuilderBase):
             i_rest, pages_rest = self.rest_memo
             i_rest += delta
 
-        self._layout = self.layout_class(pages_before, self.factory.device)
+        self._layout = self.layout_class(pages_before)
         self.start(state, i_rest, pages_rest)
         wx.CallAfter(self.build_background)
 
