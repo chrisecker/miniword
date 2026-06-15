@@ -129,6 +129,11 @@ class TextModel(Model):
     def get_xtexel(self):
         """Returns the texel tree extended by an ENDMARK glyph."""
         texel = self.texel
+        if not length(texel):
+            # Group([texel, self.ENDMARK]) would be "unclean" (a
+            # zero-length child), breaking the ENDMARK round-trip done
+            # by set_xtexel / SubModel.__init__.
+            return self.ENDMARK
         return Group([texel, self.ENDMARK])
 
     def set_xtexel(self, xtexel):
