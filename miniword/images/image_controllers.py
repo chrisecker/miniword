@@ -3,9 +3,13 @@ from ..texteditor.boxcontroller import BoxController
 from .images import Image, ImageBox
 
 
-def find_image_at(layout, index):
-    """Return (ImageBox, (cx, cy)) for the ImageBox adjacent to index, or None."""
-    for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
+def find_image_at(layout, index, flow=0):
+    """Return (ImageBox, (cx, cy)) for the ImageBox adjacent to index, or None.
+
+    index is a global (flow-relative) index, like the j1/j2 values yielded
+    by layout.iter_boxes.
+    """
+    for p1, p2, px, py, page in layout.iter_boxes(flow):
         if not (p1 <= index <= p2):
             continue
         for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
@@ -36,10 +40,12 @@ class ImageController(BoxController):
         return None
 
     def find_box(self):
-        result = find_image_at(self.editor.canvas.layout, self.i1)
+        editor = self.editor
+        result = find_image_at(editor.canvas.layout, editor.abs_idx(self.i1), editor.flow)
         if result is None:
             raise IndexError(self.i1)
-        return result
+        ci1, origin, box = result
+        return editor.local_idx(ci1), origin, box
 
     def get_cursor(self, handle_id):
         return self._CURSOR_MAP.get(handle_id, wx.CURSOR_SIZING)

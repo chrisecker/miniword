@@ -179,13 +179,16 @@ class BoxController(ElementController):
 
     def on_motion(self, event):
         """Update over cursor, update the preview state while dragging."""
-        canvas = self.editor.canvas
+        editor = self.editor
+        flow = editor.flow
+        canvas = editor.canvas
         if self._drag_handle is not None:
             canvas.SetCursor(wx.Cursor(self.get_cursor(self._drag_handle)))
             p = self.window_to_box(event.Position)
             dx = p[0] - self._drag_start[0]
             dy = p[1] - self._drag_start[1]
-            self.drag_handle(self._drag_handle, dx, dy, event.ShiftDown(), event.ControlDown())
+            self.drag_handle(self._drag_handle, dx, dy,
+                             event.ShiftDown(), event.ControlDown())
             canvas.refresh()
             return True
 
@@ -199,9 +202,9 @@ class BoxController(ElementController):
             event.Skip() # XXX needed?
             return False
         x, y = canvas.window_to_content(event.Position)
-        i = canvas.layout.get_index(x, y)
+        i = canvas.layout.get_index(x, y, flow)
         if i is not None:
-            self.editor.set_index(i, extend=True)
+            editor.set_index(editor.local_idx(i), extend=True)
         return True
 
 

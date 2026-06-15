@@ -97,30 +97,32 @@ class TableControllerBase(BoxController):
     def find_box(self):
         """
         Return (ci1, (cx, cy), TableBox) for the box containing index.
+        ci1 is a local index (like self.i1).
 
         Raises: IndexError when no Box is found.
         """
-        layout = self.editor.canvas.layout
-        index = self.editor.index
+        editor = self.editor
+        layout = editor.canvas.layout
+        index = editor.abs_idx(editor.index)
 
         def visit(p1, p2, x, y, box):
             if not (p1 <= index < p2):
                 return None
             if isinstance(box, TableBox):
-                if self.i1 == p1 + box.get_texel_offset():
-                    return p1, (x, y), box
+                if editor.abs_idx(self.i1) == p1 + box.get_texel_offset():
+                    return editor.local_idx(p1), (x, y), box
             for c1, c2, cx, cy, child in box.iter_boxes(p1, x, y):
                 result = visit(c1, c2, cx, cy, child)
                 if result:
                     return result
             return None
 
-        for p1, p2, px, py, page in layout.iter_boxes(0, 0, 0):
+        for p1, p2, px, py, page in layout.iter_boxes(editor.flow):
             result = visit(p1, p2, px, py, page)
             if result:
                 return result
 
-        raise IndexError(index)    
+        raise IndexError(index)
 
     def get_cursor(self, handle_id):
         return wx.CURSOR_SIZEWE
@@ -243,38 +245,40 @@ class CursorController(TableControllerBase):
     def handle_action(self, action, shift):
         if action not in ('move_up', 'move_down'):
             return super().handle_action(action, shift)
-        ctx = create_ctx(self.editor)
-        i = ctx.index
+        editor = self.editor
+        ctx = create_ctx(editor)
+        flow = editor.flow
+        i = ctx.aindex
         texel = self.texel
-        row, col = texel.get_coord(i - self.i1)
+        row, col = texel.get_coord(ctx.index - self.i1)
         cells = texel.get_cells()
 
         if action == 'move_up':
-            prev = ctx.layout.prev_row(i)
+            prev = ctx.layout.prev_row(i, flow)
             if prev is not None and prev[0] >= ctx.model.get_start(i):
-                self.editor.move_up(shift)
+                editor.move_up(shift)
                 return True
             if row == 0:
                 return False
             row -= 1
             target_i = self.i1 + cells[row][col].i2 - 2  # last content pos in cell above
         else:
-            nxt = ctx.layout.next_row(i)
+            nxt = ctx.layout.next_row(i, flow)
             if nxt is not None and nxt[1] <= ctx.model.get_end(i):
-                self.editor.move_down(shift)
+                editor.move_down(shift)
                 return True
             if row == texel.nrows - 1:
                 return False
             row += 1
             target_i = self.i1 + cells[row][col].i1  # first content pos in cell below
 
-        x = ctx.layout.get_rect(i, 0, 0).x1
-        row_info = find_row(ctx.layout, target_i)
+        x = ctx.layout.get_rect(i, flow).x1
+        row_info = ctx.layout.find_row(editor.abs_idx(target_i), flow)
         if row_info is None:
             return False
         r1, r2, rx, ry, row_box = row_info
         j = r1 + row_box.get_index(x - rx, row_box.height)
-        self.editor.set_index(j, shift)
+        editor.set_index(editor.local_idx(j), shift)
         return True
 
     
@@ -412,8 +416,8 @@ def test_00():
     texel = from_strings(texts)
 
     class FakeLayout:
-        def iter_boxes(self, i, x, y):
-            yield i, i + len(table), x, y, table
+        def iter_boxes(self, flow):
+            yield 0, len(table), 0, 0, table
 
     class FakeCanvas:
         layout = FakeLayout()
@@ -421,6 +425,9 @@ def test_00():
     class FakeView:
         canvas = FakeCanvas()
         index  = 0
+        flow   = 0
+        def abs_idx(self, i): return i
+        def local_idx(self, i): return i
 
     controller = MatrixController(FakeView(), texel, 0, len(table), 0)
 
@@ -453,8 +460,8 @@ def test_04():
 
     copied_model = []
     class FakeLayout:
-        def iter_boxes(self, i, x, y):
-            yield i, i + len(box), x, y, box
+        def iter_boxes(self, flow):
+            yield 0, len(box), 0, 0, box
 
     class FakeCanvas:
         layout = FakeLayout()
@@ -463,11 +470,14 @@ def test_04():
 
     class FakeEditor:
         index     = 0
+        flow      = 0
         selection = None
         target    = model
         canvas    = FakeCanvas()
         def has_selection(self):
             return self.selection is not None and self.selection[0] != self.selection[1]
+        def abs_idx(self, i): return i
+        def local_idx(self, i): return i
 
     controller = MatrixController(FakeEditor(), table, 0, texel_length(table), 0)
 
