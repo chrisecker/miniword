@@ -430,11 +430,13 @@ class TablePanel(SidePanel):
     def _replace_table(self, offset, table, new_table):
         """Replace table at offset with new_table, as one undo-able edit."""
         view = self._view
+        new = view.target.create_textmodel()
+        new.texel = new_table
+        i = view.abs_idx(offset)
+        n = length(table)
         with view.atomic():
-            view.selection = (offset, offset + length(table))
-            view.remove()
-            view.index = offset
-            view.insert_texel(new_table)
+            view.add_undo(view._remove(view.flow, i, i+n))
+            view.add_undo(view._insert(view.flow, i, new))
 
     def _on_header(self, event):
         table, offset = self._find_table_texel()

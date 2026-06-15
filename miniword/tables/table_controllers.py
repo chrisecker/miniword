@@ -344,7 +344,11 @@ class MatrixController(TableControllerBase):
             cy += rh
 
     def selected(self, s1, s2):
-        r1, c1, r2, c2 = self.texel.get_rect(s1 - self.i1, s2 - self.i1)
+        i1, i2 = s1 - self.i1, s2 - self.i1
+        # While MatrixController is active, the selection must lie inside
+        # the table (cell-range), excluding the boundary markers.
+        assert 1 <= i1 and i2 < self.i2 - self.i1
+        r1, c1, r2, c2 = self.texel.get_rect(i1, i2)
         return [(self.i1 + a, self.i1 + b)
                 for a, b in self.texel.get_cell_ranges(r1, c1, r2, c2)]
 
