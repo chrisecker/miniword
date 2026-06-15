@@ -21,7 +21,8 @@ class LayoutBase:
         for child in self.childs:
             j2 = j1+len(child)
             yield j1, j2, child
-                
+            j1 = j2
+
     def iter_boxes(self, flow):
         # Default behavior: stack child boxes
         if flow != 0:
