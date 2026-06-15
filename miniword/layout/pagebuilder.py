@@ -136,7 +136,6 @@ class Layout(LayoutBase):
 
 
 class TwoPageLayout(Layout):
-    # XXX NOCH NICHT ANGEPASST AUF FLOW!!
     """Two-column layout: pages are arranged in left/right pairs side by side."""
     page_gap_h = 20  # horizontal gap between the two pages of a pair
     pages_per_row = 2
@@ -144,46 +143,45 @@ class TwoPageLayout(Layout):
     def append_page(self, page):
         n = len(self.childs)
         self.childs.append(page)
-        self.length += len(page)
+        self.length[0] += len(page)
+        if page.footnotebox is not None:
+            self.length[1] += len(page.footnotebox[-1])
+        self.width = max(self.width, page.width * 2 + self.page_gap_h)
         if n % 2 == 0:
             # Left page: starts a new row
-            self.height += self.page_gap + page.height
-            self.width = max(self.width, page.width * 2 + self.page_gap_h)
+            self.height += self.page_gap + page.height + page.depth
+        else:
+            # Right page: extend the row if it is taller than the left page
+            left = self.childs[n - 1]
+            self.height += max(0, page.height + page.depth
+                                   - left.height - left.depth)
 
-    def iter_boxes(self, i, x, y):
-        j1 = i
-        row_y = y + self.page_gap
+    def iter_pages(self):
+        j1 = 0
+        row_y = self.page_gap
+        row_height = 0
         for k, child in enumerate(self.childs):
             j2 = j1 + len(child)
             if k % 2 == 0:
                 if k > 0:
-                    prev = self.childs[k - 1]
-                    row_y += prev.height + prev.depth + self.page_gap
-                yield j1, j2, x, row_y, child
+                    row_y += row_height + self.page_gap
+                row_height = child.height + child.depth
+                yield j1, j2, 0, row_y, child
             else:
                 left = self.childs[k - 1]
-                yield j1, j2, x + left.width + self.page_gap_h, row_y, child
+                row_height = max(row_height, child.height + child.depth)
+                yield j1, j2, left.width + self.page_gap_h, row_y, child
             j1 = j2
 
-    def get_index(self, x, y):
-        items = list(self.iter_boxes(0, 0, 0))
-        # Exact hit: click falls within a page's bounds (handles left vs. right)
+    def get_index(self, x, y, flow):
+        # Override the base behaviour (select by y only), to enable
+        # picking the correct page in a left/right pair.
+        items = list(self.iter_boxes(flow))
         r = select_i_by_xy(x, y, items)
         if r is not None:
             return r
-        # Fallback for clicks in margins/gaps between page rows
         return select_i_by_y(x, y, items)
 
-    def get_index(self, x, y, flow):
-        # we override the base behavious (select by y) to enable two
-        # column view.
-        items = self.iter_boxes(flow)
-        r = select_i_by_xy(x, y, items)
-        if r is None:
-            return 0
-        return r
-    
-    
 
 
 class PageBuilder(BuilderBase):
@@ -533,13 +531,8 @@ def demo_00():
 
 def test_00():
     "TwoPageLayout: geometry, iter_boxes, rebuild"
-    from ..core.styles import testsheet
-
-    device  = CairoDevice()
-    factory = Factory(testsheet, device=device)
-
     # Build a two-page layout from scratch
-    layout = TwoPageLayout([], device)
+    layout = TwoPageLayout([])
     assert layout.height == 0
     assert layout.width  == 0
 
@@ -547,6 +540,7 @@ def test_00():
     class FakePage:
         width = 100; height = 200; depth = 0; length = 10
         restartmemo = None
+        footnotebox = None
         def __len__(self): return self.length
         def get_index(self, x, y): return 0
 
@@ -559,7 +553,7 @@ def test_00():
     layout.append_page(p1)
     h_after_1 = layout.height
     assert h_after_1 == layout.page_gap + 200        # still one row
-    assert layout.length == 20
+    assert layout.length[0] == 20
 
     layout.append_page(p2)
     assert layout.height == 2 * (layout.page_gap + 200)   # two rows
@@ -568,15 +562,15 @@ def test_00():
     assert layout.height == 2 * (layout.page_gap + 200)   # still two rows
 
     # iter_boxes: check x/y coordinates
-    boxes = list(layout.iter_boxes(0, 0, 0))
+    boxes = list(layout.iter_boxes(0))
     assert boxes[0][2] == 0                               # p0: x=0 (left)
     assert boxes[1][2] == 100 + layout.page_gap_h         # p1: x=left_width+gap
     assert boxes[0][3] == boxes[1][3]                     # p0, p1: same y (same row)
     assert boxes[2][3] > boxes[0][3]                     # p2: below p0/p1
 
     # Reconstruction from pages_before should give same geometry
-    layout2 = TwoPageLayout([p0, p1, p2, p3], device)
-    boxes2 = list(layout2.iter_boxes(0, 0, 0))
+    layout2 = TwoPageLayout([p0, p1, p2, p3])
+    boxes2 = list(layout2.iter_boxes(0))
     assert len(boxes2) == 4
     assert boxes2[0][3] == boxes[0][3]
     assert boxes2[2][3] == boxes[2][3]
@@ -584,8 +578,8 @@ def test_00():
     # get_index: clicking on right page must return an index from page 1
     gap = layout.page_gap
     p1_x = 100 + layout.page_gap_h  # x-start of right page
-    idx_left  = layout.get_index(50,        gap + 100)  # mid of left page
-    idx_right = layout.get_index(p1_x + 50, gap + 100)  # mid of right page
+    idx_left  = layout.get_index(50,        gap + 100, 0)  # mid of left page
+    idx_right = layout.get_index(p1_x + 50, gap + 100, 0)  # mid of right page
     assert idx_left  < 10   # within p0 (length=10)
     assert idx_right >= 10  # within p1 (starts at offset 10)
 

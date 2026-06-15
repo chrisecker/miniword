@@ -476,7 +476,12 @@ class MainFrame(wx.Frame, ViewBase):
         self._layout()
 
     def _on_two_page(self, _):
-        pass # XXX TwoPageLayout not yet adapted to flow-based layout
+        from ..layout.pagebuilder import Layout, TwoPageLayout
+        builder = self.canvas.builder
+        builder.layout_class = TwoPageLayout if self._mi_two_page.IsChecked() else Layout
+        builder.rebuild()
+        builder.assure_finished()
+        self.canvas.refresh()
 
     def _on_find(self, _):
         self.show_right_panel("search")
