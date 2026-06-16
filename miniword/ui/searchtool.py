@@ -3,6 +3,9 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from ..textmodel.modelbase import Model
 from ..textmodel.properties import overridable_property
+from ..textmodel.utils import iter_leafes
+from ..textmodel.submodel import Footnote
+from ..textmodel.texeltree import get_text as texel_get_text
 from .sidepanel import SidePanel
 from .colours import colours
 from .design import muted_button, flat_button, make_panel
@@ -19,6 +22,7 @@ class Search(ViewBase, Model):
     
     results = overridable_property('results')
     _results = ()
+    _fn_ranges = ()  # (fn_start, fn_end, fn_num) built during update()
     substring = ""
     ignorecase = True
     use_regex = False
@@ -38,7 +42,6 @@ class Search(ViewBase, Model):
 
     def update(self):
         substring = self.substring
-        text = self.model.get_text()
         if not substring:
             self._results = []
             self.valide = True
@@ -55,19 +58,58 @@ class Search(ViewBase, Model):
             return
         context = 50 + min(len(substring) * 2, 60)
         results = []
+
+        # flow=0: main text
+        text = self.model.get_text()
         for m in rx.finditer(text):
             i1, i2 = m.start(), m.end()
-            left = max(0, i1 - context)
+            left  = max(0, i1 - context)
             right = min(len(text), i2 + context)
             snippet = "…" + text[left:right].replace("\n", " ").strip() + "…"
-            results.append((i1, i2, snippet, m.group()))
+            results.append((0, i1, i2, snippet, m.group()))
             if len(results) >= self.max_results:
                 self.truncated = True
-                break
-        else:
-            self.truncated = False
+                self._results = results
+                self.valide = True
+                return
+
+        # flow=1: footnotes — single traversal builds _fn_ranges and searches
+        fn_offset = 0
+        fn_num = 0
+        fn_ranges = []
+        for _, _, texel in iter_leafes(self.model.texel, 0, True):
+            if not isinstance(texel, Footnote):
+                continue
+            fn_num += 1
+            fn_text = texel_get_text(texel.content)[:-1]  # exclude ENDMARK
+            fn_len = len(fn_text) + 1                     # +1 for ENDMARK
+            fn_ranges.append((fn_offset, fn_offset + fn_len, fn_num))
+            for m in rx.finditer(fn_text):
+                i1 = fn_offset + m.start()
+                i2 = fn_offset + m.end()
+                left  = max(0, m.start() - context)
+                right = min(len(fn_text), m.end() + context)
+                snippet = "…" + fn_text[left:right].replace("\n", " ").strip() + "…"
+                results.append((1, i1, i2, snippet, m.group()))
+                if len(results) >= self.max_results:
+                    self.truncated = True
+                    self._fn_ranges = fn_ranges
+                    self._results = results
+                    self.valide = True
+                    return
+            fn_offset += fn_len
+        self._fn_ranges = fn_ranges
+
+        self.truncated = False
         self._results = results
         self.valide = True
+
+    def _footnote_number(self, i1_flow1):
+        """Return the 1-based number of the footnote containing flow=1 position i1."""
+        for fn_start, fn_end, fn_num in self._fn_ranges:
+            if i1_flow1 < fn_end:
+                return fn_num
+        return len(self._fn_ranges)
 
     def get_results(self):
         if not self.valide:
@@ -120,7 +162,7 @@ class SearchResultsList(wx.VListBox):
         shadow    = gc(wx.SYS_COLOUR_BTNSHADOW)
         hotlight  = gc(wx.SYS_COLOUR_HOTLIGHT)
 
-        i1, i2, snippet, query = self.results[index]
+        flow, i1, i2, snippet, query = self.results[index]
 
         dc.SetBrush(wx.Brush(window))
         dc.SetPen(wx.TRANSPARENT_PEN)
@@ -138,8 +180,7 @@ class SearchResultsList(wx.VListBox):
 
         dc.SetFont(self.line_font)
         dc.SetTextForeground(graytext)
-        line = self._line_from_pos(i1)
-        dc.DrawText(str(line), rect.x + padding, rect.y + padding)
+        dc.DrawText(self._line_label(flow, i1), rect.x + padding, rect.y + padding)
 
         dc.SetFont(self.preview_font)
         max_width = rect.width - dip(60)
@@ -211,14 +252,23 @@ class SearchResultsList(wx.VListBox):
     def goto_index(self, index):
         if index < 0 or index >= len(self.results):
             return
-        i1, i2, _, _ = self.results[index]
-        self.editor.set_index(i1)
-        self.editor.selection = (i1, i2)
+        flow, i1, i2, _, _ = self.results[index]
+        if flow == 1:
+            self.editor.switch_target(1, i1)
+            local_i1 = self.editor.local_idx(i1)
+            local_i2 = self.editor.local_idx(i2)
+            self.editor.set_index(local_i1)
+            self.editor.selection = (local_i1, local_i2)
+        else:
+            self.editor.set_index(i1)
+            self.editor.selection = (i1, i2)
         self.editor.canvas.adjust_viewport()
 
-    def _line_from_pos(self, index):
+    def _line_label(self, flow, index):
+        if flow == 1:
+            return "FN %d" % self.search._footnote_number(index)
         row, col, _ = self.textmodel.index2position(index)
-        return row + 1
+        return str(row + 1)
 
 
 class SearchPanel(SidePanel):
@@ -294,6 +344,7 @@ class SearchPanel(SidePanel):
 
         # Result list
         self.result_list = SearchResultsList(self, self.editor)
+        self.result_list.search = self.search
         self.result_list.on_select = self._on_result_selected
         content.Add(self.result_list, 1, wx.EXPAND)
 
@@ -341,11 +392,11 @@ class SearchPanel(SidePanel):
         self._update_count_label()
 
     def _update_highlights(self):
-        highlights = []
-        for idx, (i1, i2, *_) in enumerate(self.result_list.results):
+        highlights = {}
+        for idx, (flow, i1, i2, *_) in enumerate(self.result_list.results):
             color = 'orange' if idx == self._current_idx else 'yellow'
-            highlights.append((i1, i2, color))
-        self.editor.canvas.highlights = {0: highlights} if highlights else {}
+            highlights.setdefault(flow, []).append((i1, i2, color))
+        self.editor.canvas.highlights = highlights
         self.editor.canvas.refresh()
 
     def _update_count_label(self):
@@ -395,13 +446,23 @@ class SearchPanel(SidePanel):
                 self._current_idx = 0
                 self._select_current()
             return
-        i1, i2, _, _ = results[idx]
+        flow, i1, i2, _, _ = results[idx]
         replacement = self.replace_ctrl.GetValue()
-        self.editor.selection = (i1, i2)
-        self.editor.remove()
-        if replacement:
-            self.editor.index = i1
-            self.editor.insert_text(replacement)
+        if flow == 1:
+            self.editor.switch_target(1, i1)
+            local_i1 = self.editor.local_idx(i1)
+            local_i2 = self.editor.local_idx(i2)
+            self.editor.selection = (local_i1, local_i2)
+            self.editor.remove()
+            if replacement:
+                self.editor.index = local_i1
+                self.editor.insert_text(replacement)
+        else:
+            self.editor.selection = (i1, i2)
+            self.editor.remove()
+            if replacement:
+                self.editor.index = i1
+                self.editor.insert_text(replacement)
         self.search.update()
         new_results = self.search.get_results()
         self._current_idx = min(idx, len(new_results) - 1)
@@ -418,12 +479,22 @@ class SearchPanel(SidePanel):
             return
         replacement = self.replace_ctrl.GetValue()
         self.editor.begin_undo_group()
-        for i1, i2, _, _ in reversed(results):
-            self.editor.selection = (i1, i2)
-            self.editor.remove()
-            if replacement:
-                self.editor.index = i1
-                self.editor.insert_text(replacement)
+        for flow, i1, i2, _, _ in reversed(results):
+            if flow == 1:
+                self.editor.switch_target(1, i1)
+                local_i1 = self.editor.local_idx(i1)
+                local_i2 = self.editor.local_idx(i2)
+                self.editor.selection = (local_i1, local_i2)
+                self.editor.remove()
+                if replacement:
+                    self.editor.index = local_i1
+                    self.editor.insert_text(replacement)
+            else:
+                self.editor.selection = (i1, i2)
+                self.editor.remove()
+                if replacement:
+                    self.editor.index = i1
+                    self.editor.insert_text(replacement)
         self.editor.end_undo_group()
         self._current_idx = -1
 
@@ -469,17 +540,17 @@ def test_00():
     search = Search(model)
 
     search.search('Einstein')
-    res = [(i1, i2) for i1, i2, *_ in search.results]
-    expected = [(7, 15), (633, 641), (1516, 1524), (2667, 2675),
-                (2770, 2778), (3147, 3155), (3274, 3282), (3643, 3651),
-                (3743, 3751)]
+    res = [(flow, i1, i2) for flow, i1, i2, *_ in search.results]
+    expected = [(0, 7, 15), (0, 633, 641), (0, 1516, 1524), (0, 2667, 2675),
+                (0, 2770, 2778), (0, 3147, 3155), (0, 3274, 3282), (0, 3643, 3651),
+                (0, 3743, 3751)]
     assert res == expected
 
     model.remove(0, 7)
-    res2 = [(i1, i2) for i1, i2, *_ in search.results]
-    expected2 = [(0, 8), (626, 634), (1509, 1517), (2660, 2668),
-                 (2763, 2771), (3140, 3148), (3267, 3275), (3636, 3644),
-                 (3736, 3744)]
+    res2 = [(flow, i1, i2) for flow, i1, i2, *_ in search.results]
+    expected2 = [(0, 0, 8), (0, 626, 634), (0, 1509, 1517), (0, 2660, 2668),
+                 (0, 2763, 2771), (0, 3140, 3148), (0, 3267, 3275), (0, 3636, 3644),
+                 (0, 3736, 3744)]
     assert res2 == expected2
 
 
@@ -500,7 +571,7 @@ def test_01():
 
     # case-sensitive: exact casing matches
     search.search('Einstein')
-    res = [(i1, i2) for i1, i2, *_ in search.results]
+    res = [(i1, i2) for _, i1, i2, *_ in search.results]
     assert res == [(7, 15), (633, 641), (1516, 1524), (2667, 2675),
                    (2770, 2778), (3147, 3155), (3274, 3282), (3643, 3651),
                    (3743, 3751)]
@@ -521,7 +592,7 @@ def test_02():
     search.search(r'\d{4}')
     text = model.get_text()
     assert all(i2 - i1 == 4 and text[i1:i2].isdigit()
-               for i1, i2, *_ in search.results)
+               for _, i1, i2, *_ in search.results if _ == 0 or True)
     assert len(search.results) > 15
 
     # invalid regex → empty results, no exception
@@ -533,9 +604,26 @@ def test_02():
     search2.whole_word = True
     search2.search('he')
     assert search2.results
-    for i1, i2, *_ in search2.results:
-        assert i1 == 0 or not text[i1 - 1].isalpha()
-        assert i2 >= len(text) or not text[i2].isalpha()
+    for flow, i1, i2, *_ in search2.results:
+        if flow == 0:
+            assert i1 == 0 or not text[i1 - 1].isalpha()
+            assert i2 >= len(text) or not text[i2].isalpha()
+
+
+def test_04():
+    "search in footnotes (flow=1)"
+    from ..textmodel.submodel import mk_test
+    model = mk_test()
+    search = Search(model)
+
+    # "Zur" appears in footnote content
+    search.search('Zur')
+    fn_results = [(flow, i1, i2) for flow, i1, i2, *_ in search.results if flow == 1]
+    assert len(fn_results) > 0
+    # all flow=1 results have flow==1
+    assert all(flow == 1 for flow, *_ in search.results if flow == 1)
+    # flow=0 results have flow==0
+    assert all(flow == 0 for flow, *_ in search.results if flow == 0)
 
 
 def test_03():
@@ -547,7 +635,7 @@ def test_03():
     assert len(search.results) == 3
 
     # single replace: first 'aaa' → 'xx'
-    i1, i2, _, _ = search.results[0]
+    _, i1, i2, _, _ = search.results[0]
     assert model.get_text()[i1:i2] == 'aaa'
     model.remove(i1, i2)
     model.insert_text(i1, 'xx')
@@ -555,10 +643,10 @@ def test_03():
     # search auto-updates via inserted/removed callbacks
     results = search.get_results()
     assert len(results) == 2
-    assert all(model.get_text()[j1:j2] == 'aaa' for j1, j2, *_ in results)
+    assert all(model.get_text()[j1:j2] == 'aaa' for _, j1, j2, *_ in results)
 
     # replace all remaining in reverse order (preserves offsets)
-    for i1, i2, _, _ in reversed(results):
+    for _, i1, i2, _, _ in reversed(results):
         model.remove(i1, i2)
         model.insert_text(i1, 'yy')
 
