@@ -579,7 +579,8 @@ class Row(Box):
             return
         left, top = self.start
         markerheight = self.device.measure(self.marker, self.style)[1]
-        dy = self.height - markerheight
+        vpos = self.style.get('vertical_position', 'normal')
+        dy = 0 if vpos == 'superscript' else self.height - markerheight
         self.device.set_style(self.style, dc)
         self.device.draw_text(self.marker, x + self.offset + left, y + top + dy, dc)
 

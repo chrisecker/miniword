@@ -410,6 +410,12 @@ class CairoDevice:
             self.draw_underline(x, y, total_width, ctx)
 
     def draw_text(self, text, x, y, ctx):
+        vpos = self._current_style.get('vertical_position', 'normal')
+        if vpos == 'superscript':
+            y -= self._current_style['font_size'] * 0.3
+        elif vpos == 'subscript':
+            y += self._current_style['font_size'] * 0.2
+
         fe      = self._temp_ctx.font_extents()
         line_h  = fe[2]
         descent = fe[1]

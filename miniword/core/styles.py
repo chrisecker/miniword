@@ -48,7 +48,7 @@ text_default = {
     "color":        "black",
     "bgcolor":      "white",
     # "letter_spacing":    0,        # normal
-    # "vertical_position": "normal"  # normal / superscript / subscript
+    "vertical_position": "normal",  # normal / superscript / subscript
 }
 
 structure_default = {                

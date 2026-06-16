@@ -68,10 +68,12 @@ class Factory(FactoryBase):
         return [ImageBox(bitmap, w, h, image_data, self.device)]
 
     def Footnote_handler(self, texel, i1, i2):
-        from ..footnotes.footnotes import FootnoteAnchorBox
+        from ..footnotes.footnotes import FootnoteAnchorBox, format_fn_label
         self.footnote_counter = getattr(self, 'footnote_counter', 0) + 1
-        return [FootnoteAnchorBox(texel, self.footnote_counter,
-                                  self.mk_style({}), self.device)]
+        label = texel.label or format_fn_label(self.footnote_counter, texel.numbering)
+        style = self.mk_style(texel.style)
+        style['font_size'] *= 0.7
+        return [FootnoteAnchorBox(texel, label, style, self.device)]
 
     def Table_handler(self, texel, i1, i2):
         from ..tables.table_factory import build_table_box

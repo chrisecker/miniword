@@ -15,6 +15,7 @@ from .colours import colours
 from .icons import ICONS_DIR
 from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
+from .linkpanel import LinksPanel
 
 from ..images import image_controllers  # registers controllers
 from ..tables import table_controllers  # registers controllers
@@ -374,12 +375,14 @@ class MainFrame(wx.Frame, ViewBase):
         self.table_panel = TablePanel(self._inspector_book, self.editor)
         self._search_panel = SearchPanel(self._inspector_book, self.editor)
         self._outline_panel = OutlinePanel(self._inspector_book, self.document, self.editor)
+        self._links_panel = LinksPanel(self._inspector_book, self.editor, self.document)
         for key, panel in [
             ("style",    self.inspector),
             ("settings", self.document_settings),
             ("table",    self.table_panel),
             ("search",   self._search_panel),
             ("outline",  self._outline_panel),
+            ("links",    self._links_panel),
         ]:
             idx = self._inspector_book.GetPageCount()
             self._inspector_book.AddPage(panel, "")
@@ -539,6 +542,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("style",    "Styles"),
             ("search",   "Search"),
             ("table",    "Table"),
+            ("links",    "Links"),
             ("settings", "Settings"),
         ], self._on_panel_toggle)
 

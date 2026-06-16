@@ -22,7 +22,7 @@ from .stretchable import justify_line
 from .page import ForceBreakBox, Row, Page, FootnoteBox
 from .counters import format_number, set_counter, inc_counter
 from ..tables.table_boxes import TableBox, split_at_height
-from ..footnotes.footnotes import FootnoteAnchorBox, to_superscript
+from ..footnotes.footnotes import FootnoteAnchorBox
 
 from copy import copy as shallow_copy
 
@@ -321,7 +321,11 @@ def _position_footnotes(fn_rows, memo, draw_separator=True):
     return x, y, box
 
 
-def render_footnote_rows(fn_texel, factory, line_width, number=None):
+_MIN_LABEL_INDENT = 10   # minimum hanging indent for footnote label (pt)
+_LABEL_GAP        = 3    # gap between label and content (pt)
+
+
+def render_footnote_rows(fn_texel, factory, line_width, label=None):
     """Render a Footnote texel's content into a list of Row objects.
 
     Reuses generate_pages with allow_page_breaks=False, the same way
@@ -329,7 +333,19 @@ def render_footnote_rows(fn_texel, factory, line_width, number=None):
     """
     memo = RestartMemo()
     memo.geometry = (line_width, 10**9)
-    memo.border = (0, 0, 0, 0)
+    memo.border   = (0, 0, 0, 0)
+
+    label_style = {}
+    label_w     = 0
+    indent      = _MIN_LABEL_INDENT
+    if label is not None:
+        outer = factory.mk_style({})
+        label_style = {**outer,
+                       'font_size': outer['font_size'] * 0.7,
+                       'vertical_position': 'superscript'}
+        label_w = factory.device.measure(label, label_style)[0]
+        indent  = max(_MIN_LABEL_INDENT, label_w + _LABEL_GAP)
+        memo.border = (0, 0, 0, indent)
 
     saved = {k: getattr(factory, k, None)
              for k in ('line_width', 'parstyle', 'markerstyle', 'indent_level',
@@ -347,9 +363,13 @@ def render_footnote_rows(fn_texel, factory, line_width, number=None):
             setattr(factory, k, v)
 
     rows = [row for _, _, row in page.rows] if page else []
-    if rows and number is not None:
-        label = to_superscript(number)
-        rows[0].set_marker(label, -10, {})
+    if rows and label is not None:
+        rows[0].set_marker(label, -(label_w + _LABEL_GAP), label_style)
+        if indent > _MIN_LABEL_INDENT:
+            extra = indent - _MIN_LABEL_INDENT
+            for row in rows[1:]:
+                row.start = (row.start[0] - extra, row.start[1])
+                row.width -= extra
     return rows
 
 
@@ -495,7 +515,7 @@ def generate_pages(texel, i, restartmemo, factory,
                         if isinstance(box, FootnoteAnchorBox):
                             for fn_row in render_footnote_rows(
                                     box.fn_texel, factory, line_width_rest,
-                                    number=box.number):
+                                    label=box.display):
                                 if draft.can_addfootnote(fn_row):
                                     draft.add_footnote(fn_row)
                                 else:

@@ -52,19 +52,45 @@ class SubModel(TextModel):
         self.root.texel = grouped(new_list)
         self.root.notify_views('properties_changed', i, i + 1)
 
+    def update_host(self, modifier):
+        """Apply modifier(fn_texel) → new_fn_texel and sync back to root."""
+        i = self.anchor
+        new_list = transform_range(self.root.texel, i, i + 1, modifier)
+        self.root.texel = grouped(new_list)
+        self.root.notify_views('properties_changed', i, i + 1)
+
 
         
 class Footnote(Single):
     # Footnote texel: an inline anchor (length 1) whose content forms
     # a separate flow, layouted via SubModel. content must end with
     # an ENDMARK, carrying the parstyle of the last line.
-    content = NULL_TEXEL
+    content   = NULL_TEXEL
+    numbering = 'numbers'  # 'numbers' | 'letters' | 'roman'
+    label     = None       # explicit label; if set, overrides auto-numbering
+    style     = {'vertical_position': 'superscript'}
+
     def __init__(self, content=ENDMARK):
         self.content = content
 
     def set_content(self, content):
         clone = shallow_copy(self)
         clone.content = content
+        return clone
+
+    def set_numbering(self, style):
+        clone = shallow_copy(self)
+        clone.numbering = style
+        return clone
+
+    def set_label(self, text):
+        clone = shallow_copy(self)
+        clone.label = text or None
+        return clone
+
+    def set_style(self, style):
+        clone = shallow_copy(self)
+        clone.style = style
         return clone
 
     

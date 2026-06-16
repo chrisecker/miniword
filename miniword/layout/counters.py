@@ -13,7 +13,7 @@ def inc_counter(indent, counter):
     return set_counter(indent, counter, value)
     
     
-def _to_roman(n):
+def to_roman(n):
     """Convert positive integer to lowercase Roman numeral string."""
     val  = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
     syms = ['m', 'cm', 'd', 'cd', 'c', 'xc', 'l', 'xl', 'x', 'ix', 'v', 'iv', 'i']
@@ -57,9 +57,9 @@ def format_number(arr, level, style):
         elif typ == 'A':
             result += chr(ord('A') + (n - 1) % 26) if n > 0 else 'A'
         elif typ == 'i':
-            result += _to_roman(n) if n > 0 else 'i'
+            result += to_roman(n) if n > 0 else 'i'
         else:  # 'I'
-            result += _to_roman(n).upper() if n > 0 else 'I'
+            result += to_roman(n).upper() if n > 0 else 'I'
         if k + 1 < len(parts):
             result += parts[k + 1]
     return result

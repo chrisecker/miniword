@@ -3,21 +3,22 @@ from ..textmodel.texeltree import EMPTYSTYLE
 from ..layout.boxes import NewlineBox
 from ..layout.testdevice import TESTDEVICE
 
-SUPERSCRIPTS = str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')
-
-
-def to_superscript(n):
-    return str(n).translate(SUPERSCRIPTS)
+def format_fn_label(n, style='numbers'):
+    if style == 'letters':
+        return chr(ord('a') + (n - 1) % 26)
+    if style == 'roman':
+        from ..layout.counters import to_roman
+        return to_roman(n)
+    return str(n)
 
 
 class FootnoteAnchorBox(NewlineBox):
     """Inline superscript number marking a footnote anchor in the text flow."""
     text = '\x00'  # length 1; display is separate to keep length == 1
 
-    def __init__(self, fn_texel, number, style=EMPTYSTYLE, device=None):
+    def __init__(self, fn_texel, label, style=EMPTYSTYLE, device=None):
         self.fn_texel = fn_texel
-        self.number = number
-        self.display = to_superscript(number)
+        self.display = label
         NewlineBox.__init__(self, style, device)
 
     def layout(self):
