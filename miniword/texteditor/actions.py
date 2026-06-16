@@ -20,7 +20,7 @@ def create_ctx(editor):
         ctx.layout = editor.canvas.layout
     else:
         ctx.layout = editor.layout
-    ctx.r = ctx.layout.get_rect(ctx.aindex, editor.flow)
+    ctx.r = ctx.layout.get_rect(ctx.aindex, editor.flow) if ctx.layout is not None else None
 
     if editor.has_selection():
         ctx.s1, ctx.s2 = sorted(editor.selection)
