@@ -434,6 +434,9 @@ class EndBox(_TextBoxBase):
         self.height = h
         self.depth = d
 
+    def get_index(self, x, y):
+        return 0
+
 
 class EmptyTextBox(_TextBoxBase):
     text = ""
