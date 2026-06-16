@@ -72,7 +72,6 @@ class Factory(FactoryBase):
         self.footnote_counter = getattr(self, 'footnote_counter', 0) + 1
         label = texel.label or format_fn_label(self.footnote_counter, texel.numbering)
         style = self.mk_style(texel.style)
-        style['font_size'] *= 0.7
         return [FootnoteAnchorBox(texel, label, style, self.device)]
 
     def Table_handler(self, texel, i1, i2):

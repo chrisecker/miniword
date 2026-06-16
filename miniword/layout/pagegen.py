@@ -340,9 +340,7 @@ def render_footnote_rows(fn_texel, factory, line_width, label=None):
     indent      = _MIN_LABEL_INDENT
     if label is not None:
         outer = factory.mk_style({})
-        label_style = {**outer,
-                       'font_size': outer['font_size'] * 0.7,
-                       'vertical_position': 'superscript'}
+        label_style = {**outer, 'vertical_position': 'superscript'}
         label_w = factory.device.measure(label, label_style)[0]
         indent  = max(_MIN_LABEL_INDENT, label_w + _LABEL_GAP)
         memo.border = (0, 0, 0, indent)

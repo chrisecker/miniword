@@ -228,6 +228,20 @@ class StyleInspector(SidePanel):
             wx.EVT_CHECKBOX,
             lambda e: self.set_char_properties(italic=self.italic.GetValue()))
 
+        self.strike = wx.CheckBox(panel, -1, "Strikethrough", style=wx.CHK_3STATE)
+        self.reset_strike = ResetButton(panel, ['strike'])
+        add_row(contentsizer, self.strike, self.reset_strike)
+        self.strike.Bind(
+            wx.EVT_CHECKBOX,
+            lambda e: self.set_char_properties(strike=self.strike.GetValue()))
+
+        self.superscript = wx.CheckBox(panel, label="Superscript")
+        self.subscript   = wx.CheckBox(panel, label="Subscript")
+        self.reset_vpos  = ResetButton(panel, ['vertical_position'])
+        add_row(contentsizer, self.superscript, self.subscript, self.reset_vpos)
+        self.superscript.Bind(wx.EVT_CHECKBOX, self.on_superscript)
+        self.subscript.Bind(wx.EVT_CHECKBOX,   self.on_subscript)
+
         ### layout tab ###
         panel, contentsizer = make_tab(notebook, 'Layout')
 
@@ -417,7 +431,8 @@ class StyleInspector(SidePanel):
 
         for resetter in [
                 self.reset_colors, self.reset_family, self.reset_size,
-                self.reset_underline, self.reset_bold, self.reset_italic]:
+                self.reset_underline, self.reset_bold, self.reset_italic,
+                self.reset_strike, self.reset_vpos]:
             resetter.callback = self.clear_char_properties
 
         for resetter in [
@@ -542,6 +557,20 @@ class StyleInspector(SidePanel):
                 action()
         if saved is not None:
             editor.selection = saved
+
+    def on_superscript(self, event=None):
+        if self.superscript.GetValue():
+            self.subscript.SetValue(False)
+            self.set_char_properties(vertical_position='superscript')
+        else:
+            self.set_char_properties(vertical_position='normal')
+
+    def on_subscript(self, event=None):
+        if self.subscript.GetValue():
+            self.superscript.SetValue(False)
+            self.set_char_properties(vertical_position='subscript')
+        else:
+            self.set_char_properties(vertical_position='normal')
 
     def clear_properties(self, *keys):
         self._apply_to_ranges(self.get_range(),
@@ -774,7 +803,7 @@ class StyleInspector(SidePanel):
         x = 'color' in overrides or 'bgcolor' in overrides
         self.reset_colors.set_x(x)
             
-        checkboxes_names = "underline italic bold".split()
+        checkboxes_names = "underline italic bold strike".split()
         for name in checkboxes_names:
             widget = getattr(self, name)
             reset = getattr(self, 'reset_'+name)
@@ -784,6 +813,11 @@ class StyleInspector(SidePanel):
                 widget.Set3StateValue(wx.CHK_UNDETERMINED)
             else:
                 widget.SetValue(value)
+
+        vpos = properties.get('vertical_position', 'normal')
+        self.superscript.SetValue(vpos in (None, 'superscript'))
+        self.subscript.SetValue(vpos in (None, 'subscript'))
+        self.reset_vpos.set_x('vertical_position' in overrides)
 
         family = properties['font_family']
         self.family.SetFontName(family or '')

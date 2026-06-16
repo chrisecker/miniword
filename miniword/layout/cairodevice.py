@@ -32,10 +32,14 @@ defaultstyle = dict(
     underline=False, font_family='Arial', italic=False, bold=False)
 
 
+_VPOS_SCALE = 0.65
+
 def filled(style, defaultstyle=defaultstyle):
     """Fill missing properties with default values."""
     new = defaultstyle.copy()
     new.update(style)
+    if new.get('vertical_position', 'normal') != 'normal':
+        new['font_size'] *= _VPOS_SCALE
     return new
 
 
@@ -258,6 +262,7 @@ class CairoDevice:
         set_font(ctx, _style)
         set_font(self._temp_ctx, _style)
         self._current_underline = _style.get('underline', False)
+        self._current_strike    = _style.get('strike',    False)
         self._current_bgcolor = _style.get('bgcolor', 'white')
         self._current_style = _style
 
@@ -326,6 +331,15 @@ class CairoDevice:
         ul_y      = y + line_h + descent * 0.3
         thickness = max(0.5, descent * 0.1)
         ctx.rectangle(x, ul_y, width, thickness)
+        ctx.fill()
+
+    def draw_strike(self, x, y, width, ctx):
+        fe        = self._temp_ctx.font_extents()
+        ascent    = fe[0]
+        line_h    = fe[2]
+        st_y      = y + line_h - ascent * 0.3
+        thickness = max(0.5, ascent * 0.05)
+        ctx.rectangle(x, st_y, width, thickness)
         ctx.fill()
 
     def _snap_baseline(self, ctx, y):
@@ -405,9 +419,11 @@ class CairoDevice:
                 ctx.move_to(tx, baseline_y)
                 ctx.show_text(text)
 
-        # 3. Draw underline as one continuous line
+        # 3. Draw underline / strikethrough as one continuous line
         if getattr(self, '_current_underline', False):
             self.draw_underline(x, y, total_width, ctx)
+        if getattr(self, '_current_strike', False):
+            self.draw_strike(x, y, total_width, ctx)
 
     def draw_text(self, text, x, y, ctx):
         vpos = self._current_style.get('vertical_position', 'normal')
@@ -451,6 +467,8 @@ class CairoDevice:
 
         if getattr(self, '_current_underline', False):
             self.draw_underline(x, y, xa, ctx)
+        if getattr(self, '_current_strike', False):
+            self.draw_strike(x, y, xa, ctx)
 
     def draw_rect(self, x, y, w, h, ctx):
         ctx.set_source_rgb(0.7, 0.7, 0.7)
