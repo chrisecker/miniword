@@ -158,10 +158,12 @@ def _elems_to_inline(elems, blobs=None, footnotes=None):
         text = get_text(elem)
         if not text:
             continue
-        props = getattr(elem, 'style', {})
+        props  = getattr(elem, 'style', {})
         bold   = props.get('bold',   False)
         italic = props.get('italic', False)
+        strike = props.get('strike', False)
         href   = props.get('href',   '')
+        vpos   = props.get('vertical_position', 'normal')
         code   = props.get('font_family', '').lower() in ('courier', 'courier new',
                                                            'monospace', 'consolas')
         if code:
@@ -172,6 +174,12 @@ def _elems_to_inline(elems, blobs=None, footnotes=None):
             text = '**' + text + '**'
         elif italic:
             text = '*' + text + '*'
+        if strike:
+            text = '~~' + text + '~~'
+        if vpos == 'superscript':
+            text = '^' + text + '^'
+        elif vpos == 'subscript':
+            text = '~' + text + '~'
         if href:
             text = '[%s](%s)' % (text, href)
         segments.append(text)
@@ -475,7 +483,10 @@ def _parse_inline(text, fn_defs=None):
         r'|(__[^\s_](?:[^_]*[^\s_])?__)'               # bold __
         r'|(_[^\s_](?:[^_]*[^\s_])?_)'                 # italic _  (single char: _a_)
         r'|(\[\^[^\]]+\])'                              # footnote reference [^ref]
-        r'|(\[([^\]]+)\]\(([^)]+)\))',                  # link [text](url)
+        r'|(\[([^\]]+)\]\(([^)]+)\))'                   # link [text](url)
+        r'|(~~[^\s~](?:[^~]*[^\s~])?~~)'               # strikethrough ~~text~~
+        r'|(\^[^\s^](?:[^^]*[^\s^])?\^)'               # superscript ^text^
+        r'|(~[^\s~](?:[^~]*[^\s~])?~)',                 # subscript ~text~
         re.DOTALL
     )
     for m in pattern.finditer(text):
@@ -493,15 +504,27 @@ def _parse_inline(text, fn_defs=None):
         elif raw.startswith('`'):
             parts.append((raw[1:-1], {'font_family': 'Courier New'}))
         elif raw.startswith('***') or raw.startswith('___'):
-            parts.append((raw[3:-3], {'bold': True, 'italic': True}))
+            for t, p in _parse_inline(raw[3:-3], fn_defs):
+                parts.append((t, dict(p, bold=True, italic=True)))
         elif raw.startswith('**') or raw.startswith('__'):
-            parts.append((raw[2:-2], {'bold': True}))
+            for t, p in _parse_inline(raw[2:-2], fn_defs):
+                parts.append((t, dict(p, bold=True)))
         elif raw.startswith('['):
             url = m.group(11)
             for t, p in _parse_inline(m.group(10), fn_defs):
                 parts.append((t, dict(p, href=url)))
+        elif raw.startswith('~~'):
+            for t, p in _parse_inline(raw[2:-2], fn_defs):
+                parts.append((t, dict(p, strike=True)))
+        elif raw.startswith('^'):
+            for t, p in _parse_inline(raw[1:-1], fn_defs):
+                parts.append((t, dict(p, vertical_position='superscript')))
+        elif raw.startswith('~'):
+            for t, p in _parse_inline(raw[1:-1], fn_defs):
+                parts.append((t, dict(p, vertical_position='subscript')))
         else:
-            parts.append((raw[1:-1], {'italic': True}))
+            for t, p in _parse_inline(raw[1:-1], fn_defs):
+                parts.append((t, dict(p, italic=True)))
         pos = m.end()
     if pos < len(text):
         parts.append((text[pos:], {}))
@@ -709,6 +732,12 @@ class _DocBuilder:
             for child in node.get('children', []):
                 self._visit(child)
             self._cur_props = old
+        elif t == 'del':
+            old = self._cur_props
+            self._cur_props = dict(old, strike=True)
+            for child in node.get('children', []):
+                self._visit(child)
+            self._cur_props = old
         elif t == 'codespan':
             self._append(node.get('raw', ''), {'font_family': 'Courier New'})
         elif t == 'softbreak' or t == 'linebreak':
@@ -794,7 +823,7 @@ def _check_md(doc):
                   'pre', 'list', 'numbered', 'quote'}
     _OK_PTYPES = {'normal', 'list', 'numbered'}
     _OK_PAR    = {'base', 'paragraph_type'}
-    _OK_CHAR   = {'bold', 'italic', 'font_family', 'href'}
+    _OK_CHAR   = {'bold', 'italic', 'font_family', 'href', 'strike', 'vertical_position'}
     _MONO      = {'courier', 'courier new', 'monospace', 'consolas',
                   'lucida console'}
 
@@ -1300,11 +1329,41 @@ def test_26():
 
 
 def test_27():
+    "strikethrough import and export roundtrip"
+    md_in = "Normal ~~struck~~ text.\n"
+    doc   = _load_builtin(md_in)
+    md_out = _doc_to_md(doc)
+    assert '~~struck~~' in md_out
+
+
+def test_28():
+    "superscript and subscript import and export roundtrip"
+    md_in = "H^2^O and CO~2~.\n"
+    doc   = _load_builtin(md_in)
+    md_out = _doc_to_md(doc)
+    assert '^2^' in md_out
+    assert '~2~' in md_out
+
+
+def test_29():
     "hyperlink import and export roundtrip"
     md_in = "Visit [Python](https://python.org) today.\n"
     doc   = _load_builtin(md_in)
     md_out = _doc_to_md(doc)
     assert '[Python](https://python.org)' in md_out
+
+
+def test_30():
+    "load test/hyperlinks.md: roundtrip preserves key markup"
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    path = os.path.join(here, 'test', 'hyperlinks.md')
+    with open(path, encoding='utf-8') as f:
+        doc = _load_builtin(f.read())
+    out = _doc_to_md(doc)
+    assert '[Python-Homepage](https://www.python.org)' in out
+    assert '~~' in out
+    assert '^' in out
+    assert '[^1]' in out and '[^1]:' in out
 
 
 if __name__ == '__main__':
