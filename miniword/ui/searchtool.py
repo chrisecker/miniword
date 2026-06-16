@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import re
 import wx
 from ..textmodel.viewbase import ViewBase
@@ -11,25 +12,27 @@ from .colours import colours
 from .design import muted_button, flat_button, make_panel
 
 
-class Search(ViewBase, Model):
-    """
-    Search model
+def make_snippet(text, start, end, context):
+    left  = max(0, start - context)
+    right = min(len(text), end + context)
+    return "…" + text[left:right].replace("\n", " ").strip() + "…"
 
-    When the model is changed, the search is invalidated but not
-    updated. Updates need an explicit call to get_results() or
-    update().
+
+class Search(ViewBase, Model):
+    """Search model.
+
+    Invalidated on every model change; updated lazily on get_results().
     """
-    
-    results = overridable_property('results')
-    _results = ()
-    _fn_ranges = ()  # (fn_start, fn_end, fn_num) built during update()
+    results   = overridable_property('results')
+    _results  = ()
+    fn_ranges = ()   # (fn_start, fn_end, fn_num) built during update()
     substring = ""
     ignorecase = True
-    use_regex = False
+    use_regex  = False
     whole_word = False
-    valide = True
+    valid      = True
     max_results = 500
-    truncated = False  # True when result list was cut off
+    truncated   = False
 
     def __init__(self, model):
         ViewBase.__init__(self)
@@ -38,13 +41,13 @@ class Search(ViewBase, Model):
 
     def search(self, substring):
         self.substring = substring
-        self.valide = False
+        self.valid = False
 
     def update(self):
         substring = self.substring
         if not substring:
             self._results = []
-            self.valide = True
+            self.valid = True
             return
         try:
             pattern = substring if self.use_regex else re.escape(substring)
@@ -54,7 +57,7 @@ class Search(ViewBase, Model):
             rx = re.compile(pattern, flags)
         except re.error:
             self._results = []
-            self.valide = True
+            self.valid = True
             return
         context = 50 + min(len(substring) * 2, 60)
         results = []
@@ -63,65 +66,61 @@ class Search(ViewBase, Model):
         text = self.model.get_text()
         for m in rx.finditer(text):
             i1, i2 = m.start(), m.end()
-            left  = max(0, i1 - context)
-            right = min(len(text), i2 + context)
-            snippet = "…" + text[left:right].replace("\n", " ").strip() + "…"
-            results.append((0, i1, i2, snippet, m.group()))
+            results.append((0, i1, i2, make_snippet(text, i1, i2, context), m.group()))
             if len(results) >= self.max_results:
                 self.truncated = True
                 self._results = results
-                self.valide = True
+                self.valid = True
                 return
 
-        # flow=1: footnotes — single traversal builds _fn_ranges and searches
+        # flow=1: footnotes — single traversal builds fn_ranges and searches
         fn_offset = 0
-        fn_num = 0
+        fn_num    = 0
         fn_ranges = []
         for _, _, texel in iter_leafes(self.model.texel, 0, True):
             if not isinstance(texel, Footnote):
                 continue
-            fn_num += 1
-            fn_text = texel_get_text(texel.content)[:-1]  # exclude ENDMARK
-            fn_len = len(fn_text) + 1                     # +1 for ENDMARK
+            fn_num  += 1
+            fn_text  = texel_get_text(texel.content)[:-1]  # exclude ENDMARK
+            fn_len   = len(fn_text) + 1                    # +1 for ENDMARK
             fn_ranges.append((fn_offset, fn_offset + fn_len, fn_num))
             for m in rx.finditer(fn_text):
                 i1 = fn_offset + m.start()
                 i2 = fn_offset + m.end()
-                left  = max(0, m.start() - context)
-                right = min(len(fn_text), m.end() + context)
-                snippet = "…" + fn_text[left:right].replace("\n", " ").strip() + "…"
-                results.append((1, i1, i2, snippet, m.group()))
+                results.append((1, i1, i2,
+                                make_snippet(fn_text, m.start(), m.end(), context),
+                                m.group()))
                 if len(results) >= self.max_results:
                     self.truncated = True
-                    self._fn_ranges = fn_ranges
-                    self._results = results
-                    self.valide = True
+                    self.fn_ranges = fn_ranges
+                    self._results  = results
+                    self.valid     = True
                     return
             fn_offset += fn_len
-        self._fn_ranges = fn_ranges
+        self.fn_ranges = fn_ranges
 
         self.truncated = False
-        self._results = results
-        self.valide = True
+        self._results  = results
+        self.valid     = True
 
-    def _footnote_number(self, i1_flow1):
+    def fn_number(self, i1_flow1):
         """Return the 1-based number of the footnote containing flow=1 position i1."""
-        for fn_start, fn_end, fn_num in self._fn_ranges:
+        for fn_start, fn_end, num in self.fn_ranges:
             if i1_flow1 < fn_end:
-                return fn_num
-        return len(self._fn_ranges)
+                return num
+        return len(self.fn_ranges)
 
     def get_results(self):
-        if not self.valide:
+        if not self.valid:
             self.update()
         return self._results
 
     def inserted(self, model, i, n):
-        self.valide = False
+        self.valid = False
         self.notify_views('results_changed')
 
     def removed(self, model, i, text):
-        self.valide = False
+        self.valid = False
         self.notify_views('results_changed')
 
 
@@ -131,9 +130,9 @@ class SearchResultsList(wx.VListBox):
 
     def __init__(self, parent, editor):
         super().__init__(parent)
-        self.editor = editor
+        self.editor    = editor
         self.textmodel = editor.root
-        self.results = []
+        self.results   = []
 
         colours.set(self, 'BackgroundColour', 'WINDOW')
         self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
@@ -142,7 +141,6 @@ class SearchResultsList(wx.VListBox):
                                     wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
         self.line_font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
                                  wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-
         self.Bind(wx.EVT_LEFT_DOWN, self.on_click)
 
     def set_results(self, results):
@@ -154,13 +152,13 @@ class SearchResultsList(wx.VListBox):
         return self.FromDIP(78)
 
     def OnDrawItem(self, dc, rect, index):
-        gc        = wx.SystemSettings.GetColour
-        window    = gc(wx.SYS_COLOUR_WINDOW)
-        highlight = gc(wx.SYS_COLOUR_HIGHLIGHT)
-        graytext  = gc(wx.SYS_COLOUR_GRAYTEXT)
-        wintext   = gc(wx.SYS_COLOUR_WINDOWTEXT)
-        shadow    = gc(wx.SYS_COLOUR_BTNSHADOW)
-        hotlight  = gc(wx.SYS_COLOUR_HOTLIGHT)
+        gc       = wx.SystemSettings.GetColour
+        window   = gc(wx.SYS_COLOUR_WINDOW)
+        sel_col  = gc(wx.SYS_COLOUR_HIGHLIGHT)
+        graytext = gc(wx.SYS_COLOUR_GRAYTEXT)
+        wintext  = gc(wx.SYS_COLOUR_WINDOWTEXT)
+        shadow   = gc(wx.SYS_COLOUR_BTNSHADOW)
+        hotlight = gc(wx.SYS_COLOUR_HOTLIGHT)
 
         flow, i1, i2, snippet, query = self.results[index]
 
@@ -168,36 +166,32 @@ class SearchResultsList(wx.VListBox):
         dc.SetPen(wx.TRANSPARENT_PEN)
         dc.DrawRectangle(rect)
 
-        dip = self.FromDIP
+        dip     = self.FromDIP
         padding = dip(12)
 
         if self.IsSelected(index):
             sel_rect = wx.Rect(rect)
             sel_rect.Deflate(1, 1)
-            dc.SetBrush(wx.Brush(highlight.ChangeLightness(185)))
+            dc.SetBrush(wx.Brush(sel_col.ChangeLightness(185)))
             dc.SetPen(wx.TRANSPARENT_PEN)
             dc.DrawRoundedRectangle(sel_rect, dip(6))
 
         dc.SetFont(self.line_font)
         dc.SetTextForeground(graytext)
-        dc.DrawText(self._line_label(flow, i1), rect.x + padding, rect.y + padding)
+        dc.DrawText(self.line_label(flow, i1), rect.x + padding, rect.y + padding)
 
         dc.SetFont(self.preview_font)
-        max_width = rect.width - dip(60)
-        lines = self._wrap_text(dc, snippet, max_width)
+        lines = self.wrap_text(dc, snippet, rect.width - dip(60))
         y = rect.y + padding
         for line_text in lines[:self.MAX_LINES]:
-            self._draw_highlighted_line(dc, line_text, query, rect.x + dip(50), y,
-                                        wintext, hotlight)
+            self.draw_line(dc, line_text, query, rect.x + dip(50), y, wintext, hotlight)
             y += dip(18)
 
         dc.SetPen(wx.Pen(shadow.ChangeLightness(140)))
         dc.DrawLine(rect.x + dip(10), rect.bottom - 1, rect.right - dip(10), rect.bottom - 1)
 
-    def _wrap_text(self, dc, text, max_width):
-        words = text.split()
-        lines = []
-        current = ""
+    def wrap_text(self, dc, text, max_width):
+        words, lines, current = text.split(), [], ""
         for word in words:
             test = current + " " + word if current else word
             w, _ = dc.GetTextExtent(test)
@@ -211,38 +205,35 @@ class SearchResultsList(wx.VListBox):
             lines.append(current)
         return lines
 
-    def _draw_highlighted_line(self, dc, text, query, x, y, wintext, hotlight):
+    def draw_line(self, dc, text, query, x, y, wintext, hotlight):
         text_lower  = text.lower()
         query_lower = query.lower()
-        offset_x = x
-        i = 0
+        ox = x
+        i  = 0
         while i < len(text):
             idx = text_lower.find(query_lower, i)
             if idx == -1:
                 dc.SetTextForeground(wintext)
-                dc.DrawText(text[i:], offset_x, y)
+                dc.DrawText(text[i:], ox, y)
                 break
             if idx > i:
                 dc.SetTextForeground(wintext)
                 part = text[i:idx]
-                dc.DrawText(part, offset_x, y)
-                w, _ = dc.GetTextExtent(part)
-                offset_x += w
+                dc.DrawText(part, ox, y)
+                ox += dc.GetTextExtent(part)[0]
             dc.SetTextForeground(hotlight)
             dc.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
                                wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD))
-            match_text = text[idx:idx + len(query)]
-            dc.DrawText(match_text, offset_x, y)
-            w, _ = dc.GetTextExtent(match_text)
-            offset_x += w
+            match = text[idx:idx + len(query)]
+            dc.DrawText(match, ox, y)
+            ox += dc.GetTextExtent(match)[0]
             dc.SetFont(self.preview_font)
             i = idx + len(query)
 
     def on_click(self, event):
         pos = event.GetPosition()
         for idx in range(self.GetItemCount()):
-            rect = self.GetItemRect(idx)
-            if rect.Contains(pos):
+            if self.GetItemRect(idx).Contains(pos):
                 self.SetSelection(idx)
                 self.goto_index(idx)
                 if self.on_select:
@@ -253,46 +244,46 @@ class SearchResultsList(wx.VListBox):
         if index < 0 or index >= len(self.results):
             return
         flow, i1, i2, _, _ = self.results[index]
+        editor = self.editor
         if flow == 1:
-            self.editor.switch_target(1, i1)
-            local_i1 = self.editor.local_idx(i1)
-            local_i2 = self.editor.local_idx(i2)
-            self.editor.set_index(local_i1)
-            self.editor.selection = (local_i1, local_i2)
+            editor.switch_target(1, i1)
+            j1, j2 = editor.local_idx(i1), editor.local_idx(i2)
+            editor.set_index(j1)
+            editor.selection = (j1, j2)
         else:
-            self.editor.set_index(i1)
-            self.editor.selection = (i1, i2)
-        self.editor.canvas.adjust_viewport()
+            editor.set_index(i1)
+            editor.selection = (i1, i2)
+        editor.canvas.adjust_viewport()
 
-    def _line_label(self, flow, index):
+    def line_label(self, flow, index):
         if flow == 1:
-            return "FN %d" % self.search._footnote_number(index)
+            return "FN %d" % self.search.fn_number(index)
         row, col, _ = self.textmodel.index2position(index)
         return str(row + 1)
 
 
 class SearchPanel(SidePanel):
-    _current_idx = -1
+    cur   = -1
     delay = 100
 
     def __init__(self, parent, editor):
         SidePanel.__init__(self, parent)
-        self.editor = editor
+        self.editor    = editor
         self.textmodel = editor.root
-        self.search = Search(self.textmodel)
+        self.search    = Search(self.textmodel)
         self.set_model(self.search)
-        self._current_idx = -1
+        self.cur = -1
         self.create()
 
     def create(self):
-        dip = self.FromDIP
+        dip     = self.FromDIP
         content = make_panel(self, "FIND & REPLACE")
 
         # Search field + ▲▼ navigation
-        sr = wx.BoxSizer(wx.HORIZONTAL)
+        sr       = wx.BoxSizer(wx.HORIZONTAL)
         self.search_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.search_ctrl.SetHint("Search…")
-        btn_w = dip(20)
+        btn_w    = dip(20)
         btn_prev = muted_button(self, "▲", size=(btn_w, -1))
         btn_next = muted_button(self, "▼", size=(btn_w, -1))
         btn_prev.SetMinSize((btn_w, -1))
@@ -309,25 +300,22 @@ class SearchPanel(SidePanel):
 
         # Options: Aa (case), .* (regex), W (whole word)
         os_ = wx.BoxSizer(wx.HORIZONTAL)
-        self.cb_case = wx.CheckBox(self, label="Aa")
-        self.cb_case.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
-                                     wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        self.cb_case.SetToolTip("Case sensitive")
+        self.cb_case  = wx.CheckBox(self, label="Aa")
         self.cb_regex = wx.CheckBox(self, label=".*")
-        self.cb_regex.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
-                                      wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        self.cb_regex.SetToolTip("Regex")
-        self.cb_word = wx.CheckBox(self, label="W")
-        self.cb_word.SetFont(wx.Font(10, wx.FONTFAMILY_DEFAULT,
-                                     wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
-        self.cb_word.SetToolTip("Whole word")
+        self.cb_word  = wx.CheckBox(self, label="W")
+        font = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        for cb, tip in [(self.cb_case,  "Case sensitive"),
+                        (self.cb_regex, "Regex"),
+                        (self.cb_word,  "Whole word")]:
+            cb.SetFont(font)
+            cb.SetToolTip(tip)
         os_.Add(self.cb_case,  0, wx.RIGHT, dip(10))
         os_.Add(self.cb_regex, 0, wx.RIGHT, dip(10))
         os_.Add(self.cb_word,  0)
         content.Add(os_, 0, wx.BOTTOM, dip(4))
 
         # Replace buttons
-        brs = wx.BoxSizer(wx.HORIZONTAL)
+        brs         = wx.BoxSizer(wx.HORIZONTAL)
         btn_replace = flat_button(self, "Replace",     size=(-1, dip(24)))
         btn_all     = flat_button(self, "Replace All", size=(-1, dip(24)))
         brs.Add(btn_replace, 1, wx.RIGHT, dip(3))
@@ -344,21 +332,21 @@ class SearchPanel(SidePanel):
 
         # Result list
         self.result_list = SearchResultsList(self, self.editor)
-        self.result_list.search = self.search
-        self.result_list.on_select = self._on_result_selected
+        self.result_list.search    = self.search
+        self.result_list.on_select = self.on_result_selected
         content.Add(self.result_list, 1, wx.EXPAND)
 
         # Bindings
-        self.search_ctrl.Bind(wx.EVT_TEXT, self.on_text_changed)
-        self.search_ctrl.Bind(wx.EVT_TEXT_ENTER, self._go_next)
-        self.replace_ctrl.Bind(wx.EVT_TEXT_ENTER, self._replace_current)
-        btn_prev.Bind(wx.EVT_BUTTON, self._go_prev)
-        btn_next.Bind(wx.EVT_BUTTON, self._go_next)
-        btn_replace.Bind(wx.EVT_BUTTON, self._replace_current)
-        btn_all.Bind(wx.EVT_BUTTON, self._replace_all)
-        self.cb_regex.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
-        self.cb_case.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
-        self.cb_word.Bind(wx.EVT_CHECKBOX, self._on_option_changed)
+        self.search_ctrl.Bind(wx.EVT_TEXT,       self.on_text_changed)
+        self.search_ctrl.Bind(wx.EVT_TEXT_ENTER, self.go_next)
+        self.replace_ctrl.Bind(wx.EVT_TEXT_ENTER, self.replace_current)
+        btn_prev.Bind(wx.EVT_BUTTON,    self.go_prev)
+        btn_next.Bind(wx.EVT_BUTTON,    self.go_next)
+        btn_replace.Bind(wx.EVT_BUTTON, self.replace_current)
+        btn_all.Bind(wx.EVT_BUTTON,     self.replace_all)
+        self.cb_regex.Bind(wx.EVT_CHECKBOX, self.on_option_changed)
+        self.cb_case.Bind(wx.EVT_CHECKBOX,  self.on_option_changed)
+        self.cb_word.Bind(wx.EVT_CHECKBOX,  self.on_option_changed)
 
         # Restore search state
         self.cb_case.SetValue(not self.search.ignorecase)
@@ -375,7 +363,7 @@ class SearchPanel(SidePanel):
 
     def on_text_changed(self, event):
         self.search.search(self.search_ctrl.GetValue().strip())
-        self._current_idx = -1
+        self.cur = -1
         self.update()
 
     def results_changed(self, model):
@@ -384,126 +372,115 @@ class SearchPanel(SidePanel):
 
     def update(self):
         results = self.search.get_results()
-        self._current_idx = min(self._current_idx, len(results) - 1)
+        self.cur = min(self.cur, len(results) - 1)
         self.result_list.set_results(results)
-        if self._current_idx >= 0:
-            self.result_list.SetSelection(self._current_idx)
-        self._update_highlights()
-        self._update_count_label()
+        if self.cur >= 0:
+            self.result_list.SetSelection(self.cur)
+        self.show_highlights()
+        self.show_count()
 
-    def _update_highlights(self):
+    def show_highlights(self):
         highlights = {}
         for idx, (flow, i1, i2, *_) in enumerate(self.result_list.results):
-            color = 'orange' if idx == self._current_idx else 'yellow'
+            color = 'orange' if idx == self.cur else 'yellow'
             highlights.setdefault(flow, []).append((i1, i2, color))
         self.editor.canvas.highlights = highlights
         self.editor.canvas.refresh()
 
-    def _update_count_label(self):
-        n = len(self.result_list.results)
+    def show_count(self):
+        results = self.result_list.results
+        n      = len(results)
         suffix = "+" if self.search.truncated else ""
         if not self.search.substring:
             label = ""
         elif n == 0:
             label = "NO MATCHES"
-        elif self._current_idx >= 0:
-            label = "%d / %d%s MATCHES" % (self._current_idx + 1, n, suffix)
+        elif self.cur >= 0:
+            label = "%d / %d%s MATCHES" % (self.cur + 1, n, suffix)
         else:
             label = "%d%s MATCHES" % (n, suffix)
         self.count_label.SetLabel(label)
 
-    def _go_next(self, event=None):
+    def go_next(self, event=None):
         n = len(self.result_list.results)
         if not n:
             return
-        self._current_idx = (self._current_idx + 1) % n
-        self._select_current()
+        self.cur = (self.cur + 1) % n
+        self.select_current()
 
-    def _go_prev(self, event=None):
+    def go_prev(self, event=None):
         n = len(self.result_list.results)
         if not n:
             return
-        self._current_idx = (self._current_idx - 1) % n
-        self._select_current()
+        self.cur = (self.cur - 1) % n
+        self.select_current()
 
-    def _select_current(self):
-        idx = self._current_idx
-        self.result_list.SetSelection(idx)
-        self.result_list.goto_index(idx)
-        self._update_highlights()
-        self._update_count_label()
+    def select_current(self):
+        self.result_list.SetSelection(self.cur)
+        self.result_list.goto_index(self.cur)
+        self.show_highlights()
+        self.show_count()
 
-    def _on_result_selected(self):
-        self._current_idx = self.result_list.GetSelection()
-        self._update_highlights()
-        self._update_count_label()
+    def on_result_selected(self):
+        self.cur = self.result_list.GetSelection()
+        self.show_highlights()
+        self.show_count()
 
-    def _replace_current(self, event=None):
+    def replace_one(self, flow, i1, i2, replacement):
+        editor = self.editor
+        if flow == 1:
+            editor.switch_target(1, i1)
+            j1, j2 = editor.local_idx(i1), editor.local_idx(i2)
+            editor.selection = (j1, j2)
+            editor.remove()
+            if replacement:
+                editor.index = j1
+                editor.insert_text(replacement)
+        else:
+            editor.selection = (i1, i2)
+            editor.remove()
+            if replacement:
+                editor.index = i1
+                editor.insert_text(replacement)
+
+    def replace_current(self, event=None):
         results = self.result_list.results
-        idx = self._current_idx
+        idx = self.cur
         if idx < 0 or idx >= len(results):
             if results:
-                self._current_idx = 0
-                self._select_current()
+                self.cur = 0
+                self.select_current()
             return
         flow, i1, i2, _, _ = results[idx]
-        replacement = self.replace_ctrl.GetValue()
-        if flow == 1:
-            self.editor.switch_target(1, i1)
-            local_i1 = self.editor.local_idx(i1)
-            local_i2 = self.editor.local_idx(i2)
-            self.editor.selection = (local_i1, local_i2)
-            self.editor.remove()
-            if replacement:
-                self.editor.index = local_i1
-                self.editor.insert_text(replacement)
-        else:
-            self.editor.selection = (i1, i2)
-            self.editor.remove()
-            if replacement:
-                self.editor.index = i1
-                self.editor.insert_text(replacement)
+        self.replace_one(flow, i1, i2, self.replace_ctrl.GetValue())
         self.search.update()
         new_results = self.search.get_results()
-        self._current_idx = min(idx, len(new_results) - 1)
+        self.cur = min(idx, len(new_results) - 1)
         self.result_list.set_results(new_results)
-        self._update_highlights()
-        if self._current_idx >= 0:
-            self.result_list.SetSelection(self._current_idx)
-            self.result_list.goto_index(self._current_idx)
-        self._update_count_label()
+        self.show_highlights()
+        if self.cur >= 0:
+            self.result_list.SetSelection(self.cur)
+            self.result_list.goto_index(self.cur)
+        self.show_count()
 
-    def _replace_all(self, event=None):
+    def replace_all(self, event=None):
         results = self.search.get_results()
         if not results:
             return
         replacement = self.replace_ctrl.GetValue()
-        self.editor.begin_undo_group()
+        editor = self.editor
+        editor.begin_undo_group()
         for flow, i1, i2, _, _ in reversed(results):
-            if flow == 1:
-                self.editor.switch_target(1, i1)
-                local_i1 = self.editor.local_idx(i1)
-                local_i2 = self.editor.local_idx(i2)
-                self.editor.selection = (local_i1, local_i2)
-                self.editor.remove()
-                if replacement:
-                    self.editor.index = local_i1
-                    self.editor.insert_text(replacement)
-            else:
-                self.editor.selection = (i1, i2)
-                self.editor.remove()
-                if replacement:
-                    self.editor.index = i1
-                    self.editor.insert_text(replacement)
-        self.editor.end_undo_group()
-        self._current_idx = -1
+            self.replace_one(flow, i1, i2, replacement)
+        editor.end_undo_group()
+        self.cur = -1
 
-    def _on_option_changed(self, event):
-        self.search.use_regex = self.cb_regex.GetValue()
-        self.search.ignorecase = not self.cb_case.GetValue()
-        self.search.whole_word = self.cb_word.GetValue()
+    def on_option_changed(self, event):
+        self.search.use_regex   = self.cb_regex.GetValue()
+        self.search.ignorecase  = not self.cb_case.GetValue()
+        self.search.whole_word  = self.cb_word.GetValue()
         self.search.search(self.search_ctrl.GetValue().strip())
-        self._current_idx = -1
+        self.cur = -1
         self.update()
 
 
@@ -534,9 +511,10 @@ def demo_00():
     frame.Show()
     app.MainLoop()
 
+
 def test_00():
     from einstein import get_einstein_model
-    model = get_einstein_model()
+    model  = get_einstein_model()
     search = Search(model)
 
     search.search('Einstein')
@@ -557,19 +535,16 @@ def test_00():
 def test_01():
     "case sensitivity"
     from einstein import get_einstein_model
-    model = get_einstein_model()
+    model  = get_einstein_model()
     search = Search(model)
 
-    # default ignorecase=True: lowercase finds all occurrences
     search.search('einstein')
     assert len(search.results) == 9
 
-    # case-sensitive: lowercase matches nothing
     search.ignorecase = False
     search.search('einstein')
     assert search.results == []
 
-    # case-sensitive: exact casing matches
     search.search('Einstein')
     res = [(i1, i2) for _, i1, i2, *_ in search.results]
     assert res == [(7, 15), (633, 641), (1516, 1524), (2667, 2675),
@@ -580,26 +555,22 @@ def test_01():
 def test_02():
     "regex and whole word"
     from einstein import get_einstein_model
-    model = get_einstein_model()
+    model  = get_einstein_model()
     search = Search(model)
     search.use_regex = True
 
-    # alternation: 9 Einstein + 3 Zurich
     search.search(r'Einstein|Zurich')
     assert len(search.results) == 12
 
-    # 4-digit years: all matches exactly 4 digits
     search.search(r'\d{4}')
     text = model.get_text()
     assert all(i2 - i1 == 4 and text[i1:i2].isdigit()
-               for _, i1, i2, *_ in search.results if _ == 0 or True)
+               for flow, i1, i2, *_ in search.results if flow == 0)
     assert len(search.results) > 15
 
-    # invalid regex → empty results, no exception
     search.search(r'[invalid')
     assert search.results == []
 
-    # whole word: no match is part of a longer word
     search2 = Search(model)
     search2.whole_word = True
     search2.search('he')
@@ -610,45 +581,38 @@ def test_02():
             assert i2 >= len(text) or not text[i2].isalpha()
 
 
-def test_04():
-    "search in footnotes (flow=1)"
-    from ..textmodel.submodel import mk_test
-    model = mk_test()
-    search = Search(model)
-
-    # "Zur" appears in footnote content
-    search.search('Zur')
-    fn_results = [(flow, i1, i2) for flow, i1, i2, *_ in search.results if flow == 1]
-    assert len(fn_results) > 0
-    # all flow=1 results have flow==1
-    assert all(flow == 1 for flow, *_ in search.results if flow == 1)
-    # flow=0 results have flow==0
-    assert all(flow == 0 for flow, *_ in search.results if flow == 0)
-
-
 def test_03():
     "replace via model operations"
     from miniword.textmodel.textmodel import TextModel
-    model = TextModel('aaa bbb aaa ccc aaa')
+    model  = TextModel('aaa bbb aaa ccc aaa')
     search = Search(model)
     search.search('aaa')
     assert len(search.results) == 3
 
-    # single replace: first 'aaa' → 'xx'
     _, i1, i2, _, _ = search.results[0]
     assert model.get_text()[i1:i2] == 'aaa'
     model.remove(i1, i2)
     model.insert_text(i1, 'xx')
 
-    # search auto-updates via inserted/removed callbacks
     results = search.get_results()
     assert len(results) == 2
     assert all(model.get_text()[j1:j2] == 'aaa' for _, j1, j2, *_ in results)
 
-    # replace all remaining in reverse order (preserves offsets)
     for _, i1, i2, _, _ in reversed(results):
         model.remove(i1, i2)
         model.insert_text(i1, 'yy')
 
     assert search.get_results() == []
     assert 'aaa' not in model.get_text()
+
+
+def test_04():
+    "search in footnotes (flow=1)"
+    from ..textmodel.submodel import mk_test
+    model  = mk_test()
+    search = Search(model)
+
+    search.search('Zur')
+    fn_results = [(i1, i2) for flow, i1, i2, *_ in search.results if flow == 1]
+    assert len(fn_results) > 0
+    assert all(flow in (0, 1) for flow, *_ in search.results)
