@@ -587,8 +587,8 @@ class Editor(UndoRedo):
         return NullController.match(self, path)
 
 
-class TestEditor(Editor):
-    # An editor for two flows (root and footnotes). For testing only.
+class TwoFlowEditor(Editor):
+    # An editor for two flows (root and footnotes).
     def switch_target(self, flow, index):
         if flow == 0:
             target = self.root
@@ -700,7 +700,7 @@ def test_02():
     "find_footnote"
     from ..textmodel.submodel import mk_test, _get_text
 
-    editor = TestEditor()
+    editor = TwoFlowEditor()
     editor.root = mk_test()
 
     texel, offset, anchor = editor.find_footnote(0)
@@ -736,7 +736,7 @@ def test_03():
     "target switching"
     from ..textmodel.submodel import mk_test, _get_text
 
-    editor = TestEditor()
+    editor = TwoFlowEditor()
     editor.root = mk_test()
 
     editor.switch_target(1, 0)
@@ -788,7 +788,7 @@ def test_05():
     "basic editing"
     from ..textmodel.submodel import mk_test, _get_text
 
-    editor = TestEditor()
+    editor = TwoFlowEditor()
     editor.root = mk_test()
     r = editor.root
 

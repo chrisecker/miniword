@@ -556,8 +556,8 @@ def demo_02():
     factory = Factory(testsheet, device=CairoDevice())
     builder = PageBuilder(model, factory)    
     
-    from .editor import TestEditor
-    editor = TestEditor(model)
+    from .editor import TwoFlowEditor
+    editor = TwoFlowEditor(model)
 
     frame = wx.Frame(None)
     win = wx.Panel(frame)

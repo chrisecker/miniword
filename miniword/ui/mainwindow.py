@@ -4,7 +4,7 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from .styleinspector import StyleInspector
 from .settingsinspector import SettingsInspector
-from ..texteditor.editor import TestEditor
+from ..texteditor.editor import TwoFlowEditor
 from ..texteditor.textcanvas import TextCanvas
 from ..layout.pagebuilder import PageBuilder
 from ..layout.factory import Factory
@@ -357,7 +357,7 @@ class MainFrame(wx.Frame, ViewBase):
         builder.rebuild()
         builder.assure_y(1)  # build first row, so initial geometry is known
         builder.build_background()  # build the rest asynchronously
-        self.editor = TestEditor(self.document.textmodel)
+        self.editor = TwoFlowEditor(self.document.textmodel)
         self.canvas = TextCanvas(
             self._base, self.document.textmodel, builder, self.editor)
         self.editor.canvas = self.canvas

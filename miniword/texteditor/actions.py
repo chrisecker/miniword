@@ -289,11 +289,11 @@ def test_00():
 
 def test_01():
     "move_up / move_down: inside a footnote"
-    from .editor import TestEditor
+    from .editor import TwoFlowEditor
     from ..textmodel.submodel import mk_test
 
     model = mk_test()
-    editor = TestEditor(model)
+    editor = TwoFlowEditor(model)
     editor.canvas = None
     editor.layout = _build_layout(model)
 
