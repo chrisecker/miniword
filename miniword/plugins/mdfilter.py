@@ -586,21 +586,22 @@ def _register_styles(doc, preset='github'):
         doc.basestyles.set(name, style)
 
 
-def apply_md_style(view, preset):
+def apply_md_style(editor, document, preset):
     """Apply a named MD style preset to an already-loaded document (undo-able)."""
     from miniword.core.styles import style_default, updated
     from miniword.core.stylesheet import undo_basestyle_change
     mm = 72 / 25.4
     n  = len(style_default['indent_levels'])
     heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
+    basestyles = document.basestyles
 
     role_to_key = {
-        view.document.basestyles.get(k).get('role'): k
-        for k in view.document.basestyles.keys()
-        if view.document.basestyles.get(k) and view.document.basestyles.get(k).get('role')
+        basestyles.get(k).get('role'): k
+        for k in basestyles.keys()
+        if basestyles.get(k) and basestyles.get(k).get('role')
     }
 
-    with view.atomic():
+    with editor.atomic():
         for _key, props in _preset_defs(preset, mm).items():
             role = props.get('role')
             key  = role_to_key.get(role)
@@ -608,10 +609,9 @@ def apply_md_style(view, preset):
                 continue
             base      = heading_base if role.startswith('h') else {}
             new_style = updated(style_default, base, props)
-            old       = view.document.basestyles.get(key)
-            old_style = old.copy() if old else None
-            view.add_undo((undo_basestyle_change, view.document.basestyles, key, old_style, new_style))
-            view.document.basestyles.set(key, new_style)
+            old_style = (basestyles.get(key) or {}).copy() or None
+            editor.add_undo((undo_basestyle_change, basestyles, key, old_style, new_style))
+            basestyles.set(key, new_style)
 
 
 def get_menus(doc):
@@ -619,10 +619,10 @@ def get_menus(doc):
     if getattr(doc, 'home_format', None) not in ('md', 'markdown'):
         return []
     return [("&Markdown", [
-        ("GitHub",       lambda frame: apply_md_style(frame.editor, 'github')),
-        ("GitHub Small", lambda frame: apply_md_style(frame.editor, 'github_small')),
-        ("Report",       lambda frame: apply_md_style(frame.editor, 'report')),
-        ("Compact",      lambda frame: apply_md_style(frame.editor, 'compact')),
+        ("GitHub",       lambda frame: apply_md_style(frame.editor, frame.document, 'github')),
+        ("GitHub Small", lambda frame: apply_md_style(frame.editor, frame.document, 'github_small')),
+        ("Report",       lambda frame: apply_md_style(frame.editor, frame.document, 'report')),
+        ("Compact",      lambda frame: apply_md_style(frame.editor, frame.document, 'compact')),
     ])]
 
 

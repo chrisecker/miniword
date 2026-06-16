@@ -363,6 +363,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.editor.canvas = self.canvas
         colours.set(self.canvas, 'BackgroundColour', 'CanvasBg')
         self.editor.add_view(self)
+        self.document.add_view(self)
 
     def _build_inspector_panels(self):
         self._inspector_book = wx.Simplebook(self._base)
@@ -807,6 +808,11 @@ class MainFrame(wx.Frame, ViewBase):
 
     def undo_changed(self, *args):
         wx.CallAfter(self._update_undo_ui)
+
+    def basestyles_changed(self, *args):
+        self.canvas.builder.clear_caches()
+        self.canvas.builder.rebuild()
+        self.canvas.Refresh()
 
     def layout_progress_start(self, view):
         if view.builder.layout.is_finished:
