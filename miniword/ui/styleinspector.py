@@ -663,7 +663,7 @@ class StyleInspector(SidePanel):
         """
         editor = self.editor
         with editor.atomic():
-            self._clear_overrides(overrides)
+            self._clear_overrides(overrides - {'base'})
 
     def _rename_style(self, name, new_label):
         """Change the display name of a style (undo-able)."""
