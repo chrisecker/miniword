@@ -480,11 +480,11 @@ class MainFrame(wx.Frame, ViewBase):
     def _on_two_page(self, _):
         from ..layout.pagebuilder import Layout, TwoPageLayout
         builder = self.canvas.builder
+        was_finished = builder._layout.is_finished
         pages = builder.layout.childs
         builder.layout_class = TwoPageLayout if self._mi_two_page.IsChecked() else Layout
-
-        # XXX HACK
         builder._layout = builder.layout_class(pages)
+        builder._layout.is_finished = was_finished
         self.canvas.refresh()
 
     def _on_find(self, _):
