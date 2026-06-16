@@ -14,23 +14,21 @@
 #     squiggle(gc, layout, i1, i2, x, y) # 4. lines on top of text
 
 from .boxes import _TextBoxBase
-from .rect import Rect
 from .stretchable import StretchableText
 
 
 def _iter_textboxes(dc, box, i1, i2, x, y):
-    """Yield (x1, y1, px1, px2, child) for every text leaf that overlaps
-    [i1, i2] and lies inside the current clipping region.
+    """Yield (x1, y1, px1, px2, child) for every text leaf in *box* that
+    overlaps [i1, i2] and lies inside the current clipping region.
 
-    px1, px2 are pixel offsets *within* child at the start and end of the
-    [i1, i2] range.  Handles both _TextBoxBase and StretchableText leaves.
+    i1, i2 are relative to the start of *box*.
+    px1, px2 are pixel offsets within child at the start/end of [i1, i2].
+    Handles both _TextBoxBase and StretchableText leaves.
     """
-    device = box.device
     for j1, j2, x1, y1, child in box.iter_boxes(0, x, y):
         if not (i1 < j2 and j1 < i2):
             continue
-        r = Rect(x1, y1, x1 + child.width, y1 + child.height + child.depth)
-        if not device.intersects(dc, r):
+        if not child.visible(x1, y1, dc):
             continue
         if isinstance(child, _TextBoxBase):
             k1 = max(0, i1 - j1)
@@ -48,7 +46,7 @@ def _iter_textboxes(dc, box, i1, i2, x, y):
             yield from _iter_textboxes(dc, child, i1 - j1, i2 - j1, x1, y1)
 
 
-def highlight(dc, box, i1, i2, x=0, y=0, color='yellow'):
+def highlight(dc, boxes, i1, i2, color='yellow'):
     """Draw a colored background behind all characters in [i1, i2].
 
     Uses device.fill_rect() so the fill is opaque.  Must be called
@@ -56,30 +54,38 @@ def highlight(dc, box, i1, i2, x=0, y=0, color='yellow'):
     the text is rendered on top of the highlight.
 
     Args:
-        dc:         Drawing context (wx.GraphicsContext or Cairo context).
-        box:        Root box (typically the layout object).
-        i1, i2:     Index range to annotate (document positions).
-        x, y:       Absolute pixel offset of *box* — same values
-                    passed to box.draw().
-        color:      Fill color accepted by device.fill_rect().
+        dc:     Drawing context.
+        boxes:  Iterable of (j1, j2, x, y, box) as returned by
+                layout.iter_boxes(flow).
+        i1, i2: Index range to annotate (flow-relative positions).
+        color:  Fill color accepted by device.fill_rect().
     """
-    for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1, i2, x, y):
-        hx1 = x1 + px1
-        hx2 = x1 + px2
-        if hx2 > hx1:
-            child.device.fill_rect(
-                hx1, y1, hx2 - hx1, child.height + child.depth, color, dc)
+    for j1, j2, x, y, box in boxes:
+        for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1-j1, i2-j1, x, y):
+            hx1 = x1 + px1
+            hx2 = x1 + px2
+            if hx2 > hx1:
+                child.device.fill_rect(
+                    hx1, y1, hx2 - hx1, child.height + child.depth, color, dc)
 
 
-def squiggle(dc, box, i1, i2, x=0, y=0, color='red'):
+def squiggle(dc, boxes, i1, i2, color='red'):
     """Draw a wavy underline beneath all characters in [i1, i2].
+
+    Args:
+        dc:     Drawing context.
+        boxes:  Iterable of (j1, j2, x, y, box) as returned by
+                layout.iter_boxes(flow).
+        i1, i2: Index range to annotate (flow-relative positions).
+        color:  Color accepted by device.draw_squiggle().
     """
-    for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1, i2, x, y):
-        hx1 = x1 + px1
-        hx2 = x1 + px2
-        if hx2 > hx1:
-            child.device.draw_squiggle(
-                hx1, y1+child.height+child.depth, hx2-hx1, color, dc)            
+    for j1, j2, x, y, box in boxes:
+        for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1-j1, i2-j1, x, y):
+            hx1 = x1 + px1
+            hx2 = x1 + px2
+            if hx2 > hx1:
+                child.device.draw_squiggle(
+                    hx1, y1+child.height+child.depth, hx2-hx1, color, dc)            
 
 
 # --- Tests ---
@@ -100,8 +106,11 @@ def test_00():
     t2 = TextBox('56789', device=device)
     par = VBox([t1, t2])
 
+    def boxes(box):
+        yield 0, len(box), 0, 0, box
+
     # '234' (indices 2..5) lies entirely in the first TextBox
-    highlight(None, par, 2, 5)
+    highlight(None, boxes(par), 2, 5)
     assert len(calls) == 1
     x, y, w, h, color = calls[0]
     assert x == 2        # measure('01') == 2  (TestDevice: 1 pt per char)
@@ -110,7 +119,7 @@ def test_00():
 
     # Range spanning both boxes: '34' + '567' (indices 3..8)
     calls.clear()
-    highlight(None, par, 3, 8)
+    highlight(None, boxes(par), 3, 8)
     assert len(calls) == 2
 
 
@@ -143,7 +152,7 @@ def test_01():
     results = list(_iter_textboxes(None, outer, 1, 5, 0, 0))
     assert len(results) == 2   # both inner TextBoxes
 
-    # StretchableText leaf: highlights must not be silently dropped
+    # StretchableText leaf
     tb = TextBox('Hello world')
     st = create_stretchtext(tb, is_last=False)
     st.set_stretch(10)
@@ -152,8 +161,8 @@ def test_01():
     assert len(results) == 1
     x1, y1, px1, px2, child = results[0]
     assert child is st
-    assert px1 == 0                      # start of first character
-    assert px2 == st.find_x(len(st))    # end of last character
+    assert px1 == 0
+    assert px2 == st.find_x(len(st))
 
 
 # --- Demo ---

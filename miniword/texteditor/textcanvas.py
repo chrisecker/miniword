@@ -424,13 +424,11 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         self.draw_background(painter)
         for flow, items in self.highlights.items():
             for i1, i2, *color in items:
-                annotation.highlight(painter, layout.iter_boxes(flow),
-                                     i1, i2, 0, 0, *color)
+                annotation.highlight(painter, layout.iter_boxes(flow), i1, i2, *color)
         layout.draw(painter)
         for flow, items in self.squiggles.items():
             for i1, i2, *color in items:
-                annotation.squiggle(painter, layout.iter_boxes(flow),
-                                    i1, i2, 0, 0, *color)
+                annotation.squiggle(painter, layout.iter_boxes(flow), i1, i2, *color)
         if self.editor is not None:
             self.editor.controller.draw(painter)
 
