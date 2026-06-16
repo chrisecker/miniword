@@ -2,6 +2,7 @@
 
 
 from .boxes import find_row, select_i_by_y, calc_length, Row
+from .rect import Rect
 
 
 
@@ -109,7 +110,8 @@ class LayoutBase:
     
     def draw(self, dc):
         for j1, j2, x, y, child in self.iter_boxes(flow=0):
-            child.draw(x, y, dc)
+            if child.visible(x, y, dc):
+                child.draw(x, y, dc)
         
     def draw_cursor(self, i, flow, dc, style):
         for j1, j2, x, y, child in self.iter_boxes(flow):
@@ -119,7 +121,7 @@ class LayoutBase:
 
     def draw_selection(self, i1, i2, flow, dc):
         for j1, j2, x, y, child in self.iter_boxes(flow):
-            if i1 < j2 and j1< i2:
+            if i1 < j2 and j1< i2 and child.visible(x, y, dc):
                 child.draw_selection(i1-j1, i2-j1, x, y, dc)
 
     def draw_background(self, dc):

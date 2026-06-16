@@ -210,24 +210,23 @@ class Box:
         print(j1, j2, i, child, child.can_leftappend())
         raise Exception(self, i, len(self))
 
+    def visible(self, x, y, dc):
+        r = Rect(x, y, x+self.width, y+self.height+self.depth)
+        return self.device.intersects(dc, r)
+        
     def draw(self, x, y, dc):
         """Draws box and all child boxes at origin (x, y)."""
-        device = self.device
         for j1, j2, x1, y1, child in self.iter_boxes(0, x, y):
-            r = Rect(x1, y1, x1+child.width, y1+child.height)
-            if device.intersects(dc, r):
+            if child.visible(x1, y1, dc):
                 child.draw(x1, y1, dc)
 
     def draw_selection(self, i1, i2, x, y, dc):
         """Draws box as selected, where the selection extends from $i1$ to
         $i2$.
         """
-        device = self.device
         for j1, j2, x1, y1, child in self.iter_boxes(0, x, y):
-            if i1 < j2 and j1< i2:
-                r = Rect(x1, y1, x1+child.width, y1+child.height)         
-                if device.intersects(dc, r):
-                    child.draw_selection(i1-j1, i2-j1, x1, y1, dc)
+            if i1 < j2 and j1< i2 and child.visible(x1, y1, dc):
+                child.draw_selection(i1-j1, i2-j1, x1, y1, dc)
 
     def draw_cursor(self, i, x0, y0, dc, style):
         """Draws the cursor."""
