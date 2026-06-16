@@ -45,6 +45,7 @@ text_default = {
     "italic":       False,
     "underline":    False,
     "strike":       False,
+    "href":         "",
     "color":        "black",
     "bgcolor":      "white",
     # "letter_spacing":    0,        # normal

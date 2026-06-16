@@ -14,6 +14,21 @@ import pickle
 from math import ceil
 
 
+def _footnote_at(editor, abs_i):
+    """Return fn_offset for the Footnote texel at abs_i-1, or None."""
+    from ..textmodel.submodel import Footnote
+    from ..textmodel.utils import iter_leafes
+    from ..textmodel.texeltree import length
+    fn_offset = 0
+    for i1, i2, texel in iter_leafes(editor.root.texel, 0, True):
+        if not isinstance(texel, Footnote):
+            continue
+        if i1 == abs_i - 1:
+            return fn_offset
+        fn_offset += length(texel.content)
+    return None
+
+
 """
 TODO:
 - on paste, named styles must be mapped to the existing ones; a mechanism
@@ -271,8 +286,23 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         if editor.controller.on_leftdown(event):
             return
         x, y = self.window_to_content(event.Position)
-        flow = self.layout.get_flow(x, y)
-        i = self.layout.get_index(x, y, flow)
+        flow  = self.layout.get_flow(x, y)
+        i     = self.layout.get_index(x, y, flow)
+        if i is not None and event.ControlDown():
+            if flow == 0:
+                fn_offset = _footnote_at(editor, i)
+                if fn_offset is not None:
+                    editor.switch_target(1, fn_offset)
+                    editor.set_index(editor.local_idx(fn_offset))
+                    wx.CallAfter(self.adjust_viewport)
+                    self.SetFocus()
+                    return
+            href = editor.root.get_style(max(0, i - 1)).get('href', '')
+            if href:
+                import webbrowser
+                webbrowser.open(href)
+                self.SetFocus()
+                return
         if i is not None:
             editor.switch_target(flow, i)
             j = editor.local_idx(i)
@@ -288,6 +318,16 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         if editor and editor.controller.on_motion(event):
             return
         if not event.LeftIsDown():
+            x, y    = self.window_to_content(event.Position)
+            flow    = self.layout.get_flow(x, y)
+            i       = self.layout.get_index(x, y, flow)
+            is_link = False
+            if i is not None and flow == 0:
+                if _footnote_at(editor, i) is not None:
+                    is_link = True
+                else:
+                    is_link = bool(editor.root.get_style(max(0, i - 1)).get('href', ''))
+            self.SetCursor(wx.Cursor(wx.CURSOR_HAND if is_link else wx.CURSOR_IBEAM))
             return event.Skip()
         x, y = self.window_to_content(event.Position)
         i = self.layout.get_index(x, y, editor.flow)

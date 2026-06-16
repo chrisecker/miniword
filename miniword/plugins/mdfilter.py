@@ -161,6 +161,7 @@ def _elems_to_inline(elems, blobs=None, footnotes=None):
         props = getattr(elem, 'style', {})
         bold   = props.get('bold',   False)
         italic = props.get('italic', False)
+        href   = props.get('href',   '')
         code   = props.get('font_family', '').lower() in ('courier', 'courier new',
                                                            'monospace', 'consolas')
         if code:
@@ -171,6 +172,8 @@ def _elems_to_inline(elems, blobs=None, footnotes=None):
             text = '**' + text + '**'
         elif italic:
             text = '*' + text + '*'
+        if href:
+            text = '[%s](%s)' % (text, href)
         segments.append(text)
     return ''.join(segments)
 
@@ -471,7 +474,8 @@ def _parse_inline(text, fn_defs=None):
         r'|(\*[^\s*](?:[^*]*[^\s*])?\*)'               # italic *  (single char: *a*)
         r'|(__[^\s_](?:[^_]*[^\s_])?__)'               # bold __
         r'|(_[^\s_](?:[^_]*[^\s_])?_)'                 # italic _  (single char: _a_)
-        r'|(\[\^[^\]]+\])',                             # footnote reference [^ref]
+        r'|(\[\^[^\]]+\])'                              # footnote reference [^ref]
+        r'|(\[([^\]]+)\]\(([^)]+)\))',                  # link [text](url)
         re.DOTALL
     )
     for m in pattern.finditer(text):
@@ -492,6 +496,10 @@ def _parse_inline(text, fn_defs=None):
             parts.append((raw[3:-3], {'bold': True, 'italic': True}))
         elif raw.startswith('**') or raw.startswith('__'):
             parts.append((raw[2:-2], {'bold': True}))
+        elif raw.startswith('['):
+            url = m.group(11)
+            for t, p in _parse_inline(m.group(10), fn_defs):
+                parts.append((t, dict(p, href=url)))
         else:
             parts.append((raw[1:-1], {'italic': True}))
         pos = m.end()
@@ -786,7 +794,7 @@ def _check_md(doc):
                   'pre', 'list', 'numbered', 'quote'}
     _OK_PTYPES = {'normal', 'list', 'numbered'}
     _OK_PAR    = {'base', 'paragraph_type'}
-    _OK_CHAR   = {'bold', 'italic', 'font_family'}
+    _OK_CHAR   = {'bold', 'italic', 'font_family', 'href'}
     _MONO      = {'courier', 'courier new', 'monospace', 'consolas',
                   'lucida console'}
 
@@ -1289,6 +1297,14 @@ def test_26():
     for n in range(1, 8):
         assert '[^%d]' % n in out
         assert '[^%d]:' % n in out
+
+
+def test_27():
+    "hyperlink import and export roundtrip"
+    md_in = "Visit [Python](https://python.org) today.\n"
+    doc   = _load_builtin(md_in)
+    md_out = _doc_to_md(doc)
+    assert '[Python](https://python.org)' in md_out
 
 
 if __name__ == '__main__':
