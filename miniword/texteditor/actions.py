@@ -20,6 +20,7 @@ def create_ctx(editor):
         ctx.layout = editor.canvas.layout
     else:
         ctx.layout = editor.layout
+    ctx.r = ctx.layout.get_rect(ctx.aindex, editor.flow)
 
     if editor.has_selection():
         ctx.s1, ctx.s2 = sorted(editor.selection)
@@ -74,6 +75,7 @@ def default_handler(action, shift, ctx):
     #x, y = ctx.x, ctx.y
     #style, parstyle = ctx.style, ctx.parstyle
     e1, e2 = ctx.e1, ctx.e2
+    
     def isalnum(j):
         return model.get_text(j, j+1).isalnum()
 
@@ -124,14 +126,14 @@ def default_handler(action, shift, ctx):
     elif action == 'move_up':
         flow = editor.flow
         i = editor.abs_idx(index)
-        x = layout.get_rect(i, flow).x1
+        x = ctx.r.x1
         k = _navigate(layout, i, x, layout.prev_row, flow)
         if k is not None:
             editor.set_index(editor.local_idx(k), shift)
     elif action == 'move_down':
         flow = editor.flow
         i = editor.abs_idx(index)
-        x = layout.get_rect(i, flow).x1
+        x = ctx.r.x1
         k = _navigate(layout, i, x, layout.next_row, flow)
         if k is not None:
             editor.set_index(editor.local_idx(k), shift)
@@ -141,10 +143,20 @@ def default_handler(action, shift, ctx):
         editor.set_index(model.lineend(index), shift)
     elif action == 'move_page_down':
         _, height = canvas.get_client_size()
-        editor.set_index(editor.compute_index(x, y + height / editor.scale), shift)
+        x = ctx.r.x1
+        y = ctx.r.y1
+        i = layout.get_index(x, y+height/canvas.scale, editor.flow)
+        if i <= ctx.aindex:
+            i = ctx.aindex+1
+        editor.set_index(editor.local_idx(i), shift)
     elif action == 'move_page_up':
+        x = ctx.r.x1
+        y = ctx.r.y1
         _, height = canvas.get_client_size()
-        editor.set_index(editor.compute_index(x, y - height / editor.scale), shift)
+        i = layout.get_index(x, y-height/canvas.scale, editor.flow)
+        if i >= ctx.aindex:
+            i = ctx.aindex-1        
+        editor.set_index(editor.local_idx(i), shift)
     elif action == 'move_document_start':
         editor.set_index(0, shift)
     elif action == 'move_document_end':
