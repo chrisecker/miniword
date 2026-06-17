@@ -783,9 +783,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._export_pdf(path)
 
     def _export_pdf(self, path):
-        # XXX PDF export not yet adapted to the new Editor/Canvas API.
-        wx.MessageBox("PDF export is not yet implemented.",
-                      "Export PDF", wx.OK | wx.ICON_INFORMATION, self)
+        self.canvas.export_pdf(path)
 
     def replace_document(self, doc):
         self.canvas.Destroy()

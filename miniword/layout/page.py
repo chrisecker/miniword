@@ -77,21 +77,22 @@ class Page(Box):
             fx, fy, box = self.footnotebox
             box.draw(x + fx, y + fy, gc)
 
-    def draw(self, x, y, gc):
+    def _draw(self, x, y, gc):
         Box.draw(self, x, y, gc)
-        self.device.draw_rect(x, y, self.width, self.height, gc)
+        self.draw_footnotes(x, y, gc)
         margin = self.margin
         self.device.set_style({}, gc)
         self.device.draw_text(
             "Page %i" % self.pagenum,
             x + margin[3], y + self.height - margin[2], gc)
-        self.draw_footnotes(x, y, gc)
+
+    def draw(self, x, y, gc):
+        self._draw(x, y, gc)
+        self.device.draw_rect(x, y, self.width, self.height, gc)
 
     def draw_for_print(self, x, y, gc):
-        Box.draw(self, x, y, gc)
-        self.draw_footnotes(x, y, gc)
-        # XXX Draw page-Number?
-
+        self._draw(x, y, gc)
+        
     def iter_boxes(self, i, x, y):
         j1 = i
         for x_, y_, row in self.rows:
