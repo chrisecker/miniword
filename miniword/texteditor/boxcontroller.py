@@ -173,6 +173,14 @@ class BoxController(ElementController):
             return True
         return False
 
+    def on_key(self, key, event):
+        # Escape cancels the drag instead of falling through to global actions.
+        if key == wx.WXK_ESCAPE and self._drag_handle is not None:
+            self.clear_drag()
+            self.editor.canvas.refresh()
+            return True
+        return False
+
     def drag_handle(self, handle, dx, dy, shift, ctrl):
         """Update preview state while dragging. Override in subclasses."""
         pass
