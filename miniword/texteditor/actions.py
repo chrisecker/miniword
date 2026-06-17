@@ -9,6 +9,7 @@ Action handlers can be combined using "join_handlers".
 
 
 import types
+from ..textmodel.textmodel import dump_range
 
 def create_ctx(editor):
     ctx = types.SimpleNamespace()

@@ -254,7 +254,7 @@ class Editor(UndoRedo):
         return [info2, info1]
 
     def set_texel_attributes(self, i1, texel, **attributes):
-        """Replace the Single texel at i1 with a clone that has updated attributes."""
+        """Replace the texel at i1 with a clone that has updated attributes."""
         new_texel = texel
         for key, value in attributes.items():
             new_texel = getattr(new_texel, 'set_' + key)(value)
@@ -262,7 +262,7 @@ class Editor(UndoRedo):
         new.texel = new_texel
         j = self.local_idx(i1)
         with self.atomic():
-            self.add_undo(self._remove(self.flow, i1, i1+1))
+            self.add_undo(self._remove(self.flow, i1, i1+length(texel)))
             self.add_undo(self._insert(self.flow, i1, new))
         # keep the cursor on the (replaced) texel, so a click-installed
         # controller (e.g. ImageSizeController) stays installed
