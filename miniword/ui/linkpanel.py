@@ -2,6 +2,7 @@
 import wx
 from .sidepanel import SidePanel
 from .design import make_panel, make_tab, add_section, flat_button
+from .flatbutton import ResetButton
 
 NUMBERING_CHOICES = ["Numbers", "Letters", "Roman", "Custom Label"]
 NUMBERING_KEYS    = ["numbers", "letters", "roman", "custom"]
@@ -62,8 +63,10 @@ class LinksPanel(SidePanel):
         url_row.Add(wx.StaticText(panel, label="URL"), 0,
                     wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, dip(6))
         self.url_ctrl = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.url_ctrl.SetHint("https://…")
+        self.reset_url = ResetButton(panel, ['href'])
+        self.reset_url.callback = self.clear_href
         url_row.Add(self.url_ctrl, 1, wx.ALIGN_CENTER_VERTICAL)
+        url_row.Add(self.reset_url, 0, wx.ALIGN_CENTER_VERTICAL)
         content.Add(url_row, 0, wx.EXPAND | wx.BOTTOM, dip(4))
 
         for evt in (wx.EVT_TEXT_ENTER, wx.EVT_KILL_FOCUS):
@@ -103,9 +106,21 @@ class LinksPanel(SidePanel):
                     self.label_ctrl.Enable(False)
                     self.label_ctrl.ChangeValue('')
 
+        has_selection = bool(self.editor.selected_ranges())
+        self.url_ctrl.Enable(has_selection)
+        self.reset_url.Enable(has_selection)
+        if not has_selection:
+            self.url_ctrl.SetHint("Select text to add a link")
+            if self.url_ctrl.GetValue():
+                self.url_ctrl.ChangeValue('')
+            self.reset_url.set_x(False)
+            return
+
+        self.url_ctrl.SetHint("https://…")
         href = self.editor.get_current_style().get('href', '')
         if self.url_ctrl.GetValue() != href:
             self.url_ctrl.ChangeValue(href)
+        self.reset_url.set_x(bool(href))
 
     def on_insert(self, event=None):
         from ..textmodel.submodel import Footnote
@@ -146,12 +161,6 @@ class LinksPanel(SidePanel):
         editor = self.editor
         ranges = editor.selected_ranges()
         if not ranges:
-            style = dict(editor.current_style)
-            if url:
-                style.update(href=url, underline=True)
-            else:
-                style.pop('href', None)
-            editor.current_style = style
             return
         with editor.atomic():
             saved = editor.selection
@@ -162,6 +171,21 @@ class LinksPanel(SidePanel):
                 else:
                     editor.clear_properties('href')
             editor.selection = saved
+        self.reset_url.set_x(bool(url))
+
+    def clear_href(self, *keys):
+        editor = self.editor
+        ranges = editor.selected_ranges()
+        if not ranges:
+            return
+        with editor.atomic():
+            saved = editor.selection
+            for i1, i2 in ranges:
+                editor.selection = (i1, i2)
+                editor.clear_properties(*keys)
+            editor.selection = saved
+        self.url_ctrl.ChangeValue('')
+        self.reset_url.set_x(False)
 
     def on_label_changed(self, event=None):
         fn = self.active_footnote()
