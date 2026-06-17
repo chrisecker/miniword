@@ -372,10 +372,15 @@ def render_footnote_rows(fn_texel, factory, line_width, label=None):
 
 
 def place_pending_footnotes(fn_rows, draft, is_last_page=False):
-    """Place as many footnote rows as possible onto draft; return unplaced rows."""
+    """Place as many footnote rows as possible onto draft; return unplaced rows.
+
+    Stops at the first row that doesn't fit — placing a later row ahead of
+    an earlier one that's still pending would put the footnote boxes out
+    of document order.
+    """
     remaining = []
     for row in fn_rows:
-        if draft.can_addfootnote(row, is_last_page=is_last_page):
+        if not remaining and draft.can_addfootnote(row, is_last_page=is_last_page):
             draft.add_footnote(row)
         else:
             remaining.append(row)
@@ -514,7 +519,12 @@ def generate_pages(texel, i, restartmemo, factory,
                             for fn_row in render_footnote_rows(
                                     box.fn_texel, factory, line_width_rest,
                                     label=box.display):
-                                if draft.can_addfootnote(fn_row):
+                                # Once a row didn't fit, every later row (same
+                                # footnote or a later one) must also defer —
+                                # placing a later footnote ahead of an earlier
+                                # pending one would put the footnote boxes out
+                                # of document order.
+                                if not pending_fn_rows and draft.can_addfootnote(fn_row):
                                     draft.add_footnote(fn_row)
                                 else:
                                     pending_fn_rows.append(fn_row)
@@ -642,4 +652,26 @@ def test_02():
         allpages.append(page)
 
     assert len(allpages) > 0
+
+
+def test_03():
+    "place_pending_footnotes must not let a later, smaller row jump ahead of a still-pending one"
+
+    class FakeRow:
+        def __init__(self, height):
+            self.height = height
+            self.depth  = 0
+
+    info          = RestartMemo()
+    info.geometry = (100, 50)
+    info.border   = 1, 1, 1, 1
+    draft         = info.start_draft()
+    draft.add_row(TextBox("body"), 1.0, 0)  # page is no longer empty
+
+    tall  = FakeRow(1000)  # taller than the page: never fits
+    short = FakeRow(1)     # would easily fit on its own
+
+    remaining = place_pending_footnotes([tall, short], draft)
+    assert remaining == [tall, short]
+    assert draft.footnotes == ()
 
