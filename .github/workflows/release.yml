@@ -1,0 +1,58 @@
+name: Release builds
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install . pyinstaller
+      - name: Build with PyInstaller
+        run: >
+          pyinstaller miniword.py --name miniword --windowed --onedir
+          --icon miniword/icons/miniword.ico
+          --add-data "miniword/icons;miniword/icons"
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+      - name: Build installer
+        run: ISCC /DMyAppVersion=${{ github.ref_name }} installer/miniword.iss
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/*.exe
+
+  macos:
+    needs: windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install . pyinstaller
+      - name: Build .icns from iconset
+        run: iconutil -c icns miniword/icons/miniword.iconset -o miniword/icons/miniword.icns
+      - name: Build with PyInstaller
+        # cairocffi needs libcairo; on macOS this comes from Homebrew, not wxPython (unverified - check on first run)
+        run: |
+          brew install cairo
+          pyinstaller miniword.py --name miniword --windowed --onedir \
+            --icon miniword/icons/miniword.icns \
+            --add-data "miniword/icons:miniword/icons"
+      - name: Create .dmg
+        run: |
+          mkdir -p dist/dmg
+          cp -R dist/miniword.app dist/dmg/
+          hdiutil create -volname miniword -srcfolder dist/dmg -ov -format UDZO dist/miniword-${{ github.ref_name }}.dmg
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/miniword-*.dmg
