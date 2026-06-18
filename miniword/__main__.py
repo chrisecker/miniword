@@ -8,22 +8,10 @@ from .layout import pagebuilder
 
 
 def _enable_dpi_awareness():
-    """Enable Per-Monitor DPI awareness on Windows to avoid blurry rendering."""
-    if sys.platform != 'win32':
-        return
-    try:
-        import ctypes
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-Monitor DPI aware
-    except Exception:
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass
-
-def _enable_dpi_awareness():
     """Enable Per-Monitor DPI awareness v2 on Windows."""
     if sys.platform != 'win32':
         return
+    import ctypes
     try:
         # Windows 10 v1703+: Using SetProcessDpiAwarenessContext mit v2
         # -4 entspricht DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
