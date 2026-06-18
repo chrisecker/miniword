@@ -373,7 +373,7 @@ class Editor(UndoRedo):
         self.switch_target(flow, i)
         j = self.local_idx(i)
         styles = self.target.set_parstyles(j, styles)
-        return self._set_parstyles, i, styles
+        return self._set_parstyles, flow, i, styles
 
     def get_current_style(self):
         """Gets the style for the next insert-operation."""
