@@ -255,7 +255,12 @@ class Box:
         if child is not None:
             return child.get_cursorrect(i-j, x, y, style)
         else:
-            w, h, d = self.device.measure('M', style)
+            # Prefer the responsible leaf box's own (resolved) style over
+            # the caller-supplied one: the latter is just the raw run
+            # style at this index and misses basestyle/parstyle
+            # resolution (e.g. heading fontsize), which would draw an
+            # undersized cursor in headings.
+            w, h, d = self.device.measure('M', getattr(self, 'style', style))
             yb = y0+self.height
             x1, y1, x2, y2 = list(self.get_rect(i, x0, y0).items())
             # Use h-d (≈ ascent) instead of h (= line_h) so the cursor top
