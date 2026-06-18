@@ -12,6 +12,10 @@ A minimal word processor in python. In development but already great.
 - Good Markdown support
 - Extensible via Python-plugins
 
+## Download
+
+Pre-built installers for Windows (`.exe`) and macOS (`.dmg`) are published on the [Releases page](https://github.com/chrisecker/miniword/releases) for each tagged version. On Linux, install from source via `pip` (see below) — no separate installer is provided there.
+
 ## Dependencies
 
 Miniword is developed under Linux. In principle it should run under Windows and Mac as well. 
@@ -64,6 +68,8 @@ cp miniword.desktop ~/.local/share/applications/
 
 ## Install (Windows)
 
+Prefer a ready-made installer? Download the `.exe` from the [Releases page](https://github.com/chrisecker/miniword/releases) instead of building from source.
+
 No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`, and `pip install .` pulls in `cairocffi` to bind to it.
 
 ```
@@ -77,6 +83,8 @@ MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:
 **Note** that MiniWord is not yet **optimised** for Windows. While it mostly works, the GUI is less polished and startup takes a bit longer.
 
 ## Install (macOS)
+
+Prefer a ready-made installer? Download the `.dmg` from the [Releases page](https://github.com/chrisecker/miniword/releases) instead of building from source.
 
 On macOS, `fontconfig` must be installed via Homebrew:
 
