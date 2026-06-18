@@ -199,11 +199,15 @@ class MainFrame(wx.Frame, ViewBase):
 
     _progress_dlg = None
     _current_path = None
+    _debug_menu = None
+    _secret_armed = False
+    _secret_buffer = ''
 
     def __init__(self, document):
         self.document = document
         wx.Frame.__init__(self, None, title="MiniWord")
         ViewBase.__init__(self)
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_secret_key)
 
         self.SetSize(self.FromDIP(wx.Size(1400, 700)))
         self.SetMinSize(self.FromDIP(wx.Size(800, 480)))
@@ -333,24 +337,53 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_about, id=wx.ID_ABOUT)
         bar.Append(help_menu, "&Help")
 
+        self.SetMenuBar(bar)
         from ..layout import pagebuilder as _pagebuilder
         if _pagebuilder.DEBUG:
-            self._id_debug_console = wx.NewIdRef()
-            self._id_debug_dump    = wx.NewIdRef()
-            debug_menu = wx.Menu()
-            self._id_debug_txl     = wx.NewIdRef()
-            self._id_debug_boxes   = wx.NewIdRef()
-            debug_menu.Append(self._id_debug_console, "Open Python console")
-            debug_menu.Append(self._id_debug_dump,    "Dump texel tree")
-            debug_menu.Append(self._id_debug_txl,     "Dump TXL")
-            debug_menu.Append(self._id_debug_boxes,   "Dump box tree")
-            bar.Append(debug_menu, "&Debug")
-            self.Bind(wx.EVT_MENU, self._on_debug_console, id=self._id_debug_console)
-            self.Bind(wx.EVT_MENU, self._on_debug_dump,    id=self._id_debug_dump)
-            self.Bind(wx.EVT_MENU, self._on_debug_txl,     id=self._id_debug_txl)
-            self.Bind(wx.EVT_MENU, self._on_debug_boxes,   id=self._id_debug_boxes)
+            self._add_debug_menu()
 
-        self.SetMenuBar(bar)
+    def _add_debug_menu(self):
+        if self._debug_menu is not None:
+            return
+        self._id_debug_console = wx.NewIdRef()
+        self._id_debug_dump    = wx.NewIdRef()
+        self._id_debug_txl     = wx.NewIdRef()
+        self._id_debug_boxes   = wx.NewIdRef()
+        debug_menu = wx.Menu()
+        debug_menu.Append(self._id_debug_console, "Open Python console")
+        debug_menu.Append(self._id_debug_dump,    "Dump texel tree")
+        debug_menu.Append(self._id_debug_txl,     "Dump TXL")
+        debug_menu.Append(self._id_debug_boxes,   "Dump box tree")
+        self.GetMenuBar().Append(debug_menu, "&Debug")
+        self.Bind(wx.EVT_MENU, self._on_debug_console, id=self._id_debug_console)
+        self.Bind(wx.EVT_MENU, self._on_debug_dump,    id=self._id_debug_dump)
+        self.Bind(wx.EVT_MENU, self._on_debug_txl,     id=self._id_debug_txl)
+        self.Bind(wx.EVT_MENU, self._on_debug_boxes,   id=self._id_debug_boxes)
+        self._debug_menu = debug_menu
+
+    def _on_secret_key(self, event):
+        """Hidden 'ESC debug ESC' key-code enables the Debug menu at runtime."""
+        code = event.GetKeyCode()
+        if code == wx.WXK_ESCAPE:
+            if self._secret_armed and self._secret_buffer == 'debug':
+                from ..layout import pagebuilder as _pagebuilder
+                _pagebuilder.DEBUG = True
+                self._add_debug_menu()
+                self._secret_armed = False
+            else:
+                self._secret_armed = True
+            self._secret_buffer = ''
+            event.Skip()
+            return
+        if self._secret_armed:
+            uni = event.GetUnicodeKey()
+            ch = chr(uni).lower() if uni != wx.WXK_NONE else ''
+            if ch and 'debug'.startswith(self._secret_buffer + ch):
+                self._secret_buffer += ch
+            else:
+                self._secret_armed = False
+                self._secret_buffer = ''
+        event.Skip()
 
     def _create_editor_canvas(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
