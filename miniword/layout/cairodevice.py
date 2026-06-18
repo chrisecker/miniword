@@ -244,9 +244,19 @@ class CairoDevice:
             s = zoom
         ctx.scale(s, s)
 
-        ctx.set_font_options(self._make_font_options())
+        font_options = self._make_font_options()
+        # Subpixel (ClearType-style) antialiasing assumes glyphs land on an
+        # unscaled, axis-aligned physical pixel grid. We always draw through
+        # a non-trivial ctx.scale() above (pt -> device pixels, plus zoom), so
+        # subpixel AA samples the wrong "pixels" and shows up as colored
+        # fringing / blockiness. Grayscale AA is scale-invariant and stays
+        # smooth at any DPI/zoom. Cairo's win32 font backend maps this to the
+        # glyph's LOGFONT quality, so it must be set on the font options
+        # themselves -- ctx.set_antialias() alone does not override it.
         if sys.platform == 'win32':
-            ctx.set_antialias(cairo.ANTIALIAS_SUBPIXEL)
+            font_options.set_antialias(cairo.ANTIALIAS_GRAY)
+            ctx.set_antialias(cairo.ANTIALIAS_GRAY)
+        ctx.set_font_options(font_options)
         return ctx
 
     def create_pdf_painter(self, filename, width, height):

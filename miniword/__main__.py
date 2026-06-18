@@ -15,7 +15,15 @@ def _enable_dpi_awareness():
     try:
         # Windows 10 v1703+: Using SetProcessDpiAwarenessContext mit v2
         # -4 entspricht DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
-        ctypes.windll.user32.SetProcessDpiAwarenessContext(-4)
+        # NOTE: the context value is a HANDLE (pointer-sized). Passing a
+        # bare negative Python int lets ctypes marshal it as a 32-bit
+        # c_int, which truncates it on 64-bit Windows; the call then
+        # fails (returns FALSE) without raising, silently leaving the
+        # process DPI-unaware (-> blurry, bitmap-stretched window). It
+        # must be wrapped as c_void_p, and the return value checked.
+        ok = ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+        if not ok:
+            raise OSError("SetProcessDpiAwarenessContext failed")
     except Exception:
         try:
             # Fallback for Windows 8.1 / early Win 10 (2 = Process_Per_Monitor_DPI_Aware)
