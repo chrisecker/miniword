@@ -68,6 +68,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         wx.ScrolledWindow.__init__(self, parent, -1,
                                    pos, size,
                                    style | wx.WANTS_CHARS)
+        if wx.Platform == '__WXMSW__':
+            self.SetDoubleBuffered(True)
         try:
             wx.ScrolledWindow.DisableKeyboardScrolling(self)
         except AttributeError:
