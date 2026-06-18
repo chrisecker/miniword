@@ -378,7 +378,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._search_panel = SearchPanel(self._inspector_book, self.editor)
         self._outline_panel = OutlinePanel(self._inspector_book, self.document, self.editor)
         self._links_panel = LinksPanel(self._inspector_book, self.editor, self.document)
-        for key, panel in [
+        self.panels = [
             ("style",    self.inspector),
             ("settings", self.document_settings),
             ("table",    self.table_panel),
@@ -386,7 +386,8 @@ class MainFrame(wx.Frame, ViewBase):
             ("search",   self._search_panel),
             ("outline",  self._outline_panel),
             ("links",    self._links_panel),
-        ]:
+        ]
+        for key, panel in self.panels:
             idx = self._inspector_book.GetPageCount()
             self._inspector_book.AddPage(panel, "")
             self._inspector_pages[key] = idx
@@ -558,6 +559,8 @@ class MainFrame(wx.Frame, ViewBase):
         self._build_strip()
         if active_key:
             self._strip.activate(active_key)
+        for key, panel in self.panels:
+            panel.dpi_changed()
         self.canvas.Refresh()
         self._layout()
         self.Refresh()
