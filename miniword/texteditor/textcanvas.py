@@ -116,12 +116,19 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             (22, True, False): 'paste',
             (24, True, False): 'cut',
             (26, True, False): 'undo',
-            (18, True, False): 'redo',
             (11, True, False): 'del_line_end',
             (wx.WXK_BACK, True, False): 'del_word_left',
             (1,  True, False): 'select_all',
             (9,  True, False): 'indent',
             (21, True, False): 'dedent',
+            (25, True, False): 'redo',             # Ctrl+Y (Ctrl+R is "Reload" in the File menu)
+            (wx.WXK_LEFT,  False, True): 'dedent',          # Alt+Left
+            (wx.WXK_RIGHT, False, True): 'indent',          # Alt+Right
+            (wx.WXK_UP,    False, True): 'move_par_up',     # Alt+Up
+            (wx.WXK_DOWN,  False, True): 'move_par_down',   # Alt+Down
+            (20, True, False): 'cycle_list_type',  # Ctrl+T
+            (116, False, True): 'cycle_basestyle', # Alt+t
+            (84,  False, True): 'cycle_basestyle', # Shift+Alt+T
         }
 
     def get_layout(self):

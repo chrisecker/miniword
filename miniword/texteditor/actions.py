@@ -64,7 +64,51 @@ def join_handlers(*handlers):
     """Creates a combined handler function. """
     return lambda a, s, ctx: _handle_action(a, s, ctx, handlers)
 
-    
+
+def swap_paragraph(editor, model, index, direction):
+    """Move the paragraph at index one position up (-1) or down (+1)."""
+    cur_start = model.linestart(index)
+    cur_end   = model.lineend(index) + 1
+    col = index - cur_start
+    if direction == 1:
+        if cur_end >= len(model):
+            return
+        other_start = cur_end
+        other_end   = model.lineend(other_start) + 1
+        a_start, a_end, b_start, b_end = cur_start, cur_end, other_start, other_end
+    else:
+        if cur_start == 0:
+            return
+        other_start = model.linestart(cur_start - 1)
+        other_end   = cur_start
+        a_start, a_end, b_start, b_end = other_start, other_end, cur_start, cur_end
+    para_a = model.copy(a_start, a_end)
+    para_b = model.copy(b_start, b_end)
+    flow = editor.flow
+    with editor.atomic():
+        editor.remove_range(b_start, b_end)
+        editor.remove_range(a_start, a_end)
+        editor.add_undo(editor._insert(flow, editor.abs_idx(a_start), para_b))
+        editor.add_undo(editor._insert(
+            flow, editor.abs_idx(a_start) + len(para_b), para_a))
+    # cur is "a" when moving down (lands after para_b), "b" when moving up
+    # (lands first, at a_start).
+    new_start = a_start + len(para_b) if direction == 1 else a_start
+    editor.set_index(min(new_start + col, model.lineend(new_start)))
+
+
+def cycle_parproperty(editor, model, ctx, key, values, reverse=False):
+    """Cycle the paragraph property `key` through `values`, wrapping around."""
+    current = model.get_parstyle(ctx.index).get(key, values[0])
+    idx = values.index(current) if current in values else 0
+    delta = -1 if reverse else 1
+    ps1, ps2 = model.expand_lines(ctx.s1, ctx.s2)
+    saved = editor.selection
+    editor.selection = ps1, ps2
+    editor.set_parproperties(**{key: values[(idx + delta) % len(values)]})
+    editor.selection = saved
+
+
 def default_handler(action, shift, ctx):
     """Fallback handler: implements all standard editing actions."""
     editor = ctx.editor
@@ -205,6 +249,19 @@ def default_handler(action, shift, ctx):
         i = max(i, model.linestart(index))
         editor.selection = i, index
         editor.cut()
+    elif action == 'move_par_up':
+        swap_paragraph(editor, model, index, -1)
+    elif action == 'move_par_down':
+        swap_paragraph(editor, model, index, 1)
+    elif action == 'cycle_list_type':
+        cycle_parproperty(editor, model, ctx, 'paragraph_type',
+                          ['normal', 'list', 'numbered'])
+    elif action == 'cycle_basestyle':
+        if editor.canvas is None:
+            return False
+        basestyles = editor.canvas.builder.factory.stylesheet
+        cycle_parproperty(editor, model, ctx, 'base',
+                          list(basestyles.keys()), reverse=shift)
     else:
         return False # not handled
     return True
@@ -242,6 +299,9 @@ def code_handler(action, shift, ctx):
     return False
 
 
+
+
+    
 def _build_layout(model):
     import wx
     if wx.App.Get() is None:
