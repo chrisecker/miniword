@@ -14,6 +14,13 @@ dependencies = [
     "cairocffi",
 ]
 
+[project.optional-dependencies]
+full = [
+    "uharfbuzz",
+    "mistune",
+    "fonttools",
+]
+
 [project.urls]
 Homepage = "https://codeberg.org/chrisecker/miniword"
 

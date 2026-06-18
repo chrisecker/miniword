@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install . pyinstaller
+      - run: pip install ".[full]" pyinstaller
       - name: Build with PyInstaller
         run: >
           pyinstaller miniword.py --name miniword --windowed --onedir
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install . pyinstaller
+      - run: pip install ".[full]" pyinstaller
       - name: Build .icns from iconset
         run: iconutil -c icns miniword/icons/miniword.iconset -o miniword/icons/miniword.icns
       - name: Build with PyInstaller

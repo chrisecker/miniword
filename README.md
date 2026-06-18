@@ -46,17 +46,17 @@ Install system dependencies:
 sudo apt install python3-wxgtk4.0 fontconfig
 ```
 
-For ligature support, non-Latin scripts, and richer Markdown import, install the optional extras:
-
-```
-pip install uharfbuzz mistune
-```
-
 Then install miniword (this also pulls in `cairocffi`):
 
 ```
 cd miniword
 pip install .
+```
+
+For ligature support, non-Latin scripts, and richer Markdown import, install with the `full` extra instead:
+
+```
+pip install ".[full]"
 ```
 
 If you want to register MiniWord to the desktop (you probably will):
@@ -74,8 +74,7 @@ No separate Cairo installation is needed — wxPython already bundles `libcairo-
 
 ```
 cd miniword
-pip install .
-pip install uharfbuzz fonttools mistune   # optional: ligatures, non-Latin scripts, richer Markdown import
+pip install ".[full]"   # full installs uharfbuzz, fonttools, mistune: ligatures, non-Latin scripts, richer Markdown import
 ```
 
 MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:\Users\<you>\AppData\Roaming\miniword\`).
@@ -96,8 +95,7 @@ Then install miniword (this also pulls in `cairocffi`):
 
 ```
 cd miniword
-pip install .
-pip install uharfbuzz mistune   # optional: ligatures, non-Latin scripts, richer Markdown import
+pip install ".[full]"   # full installs uharfbuzz, mistune: ligatures, non-Latin scripts, richer Markdown import
 ```
 
 MiniWord stores its configuration and plugins in `~/Library/Application Support/miniword/`.
