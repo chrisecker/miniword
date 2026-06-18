@@ -8,7 +8,7 @@ log = logging.getLogger(__name__)
 def decode(blob_data):
     """Decode image bytes → ImageData. Returns None on failure."""
     from .images import ImageData
-    import cairo
+    import cairocffi as cairo
     try:
         surface = cairo.ImageSurface.create_from_png(io.BytesIO(blob_data))
         return ImageData(surface, surface.get_width(), surface.get_height())
@@ -37,7 +37,7 @@ def decode(blob_data):
 
 def crop_surface(surface, cx, cy, cw, ch):
     """Return a new ImageSurface containing only the (cx, cy, cw, ch) region."""
-    import cairo
+    import cairocffi as cairo
     dst = cairo.ImageSurface(cairo.FORMAT_ARGB32, cw, ch)
     ctx = cairo.Context(dst)
     ctx.set_source_surface(surface, -cx, -cy)

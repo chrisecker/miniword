@@ -461,7 +461,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         return (x - ox) / scale, (y - oy) / scale
 
     def export_pdf(self, path):
-        import cairo
+        import cairocffi as cairo
         self.builder.assure_finished()
         pages = self.layout.childs
         if not pages:

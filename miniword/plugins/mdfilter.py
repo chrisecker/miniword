@@ -389,6 +389,7 @@ def _parse_md_paragraphs(text):
     buf = []         # accumulated normal-paragraph lines
     table_buf = []   # accumulated table lines
     in_fence = False
+    list_stack = []  # marker columns of the currently open list, outermost first
 
     def flush_buf():
         if buf:
@@ -403,10 +404,24 @@ def _parse_md_paragraphs(text):
                 paragraphs.append(('table', grid))
             table_buf.clear()
 
+    def list_indent(col):
+        """Map a marker's leading-whitespace column to a nesting level,
+        relative to the columns already seen in the current list — like a
+        real list-aware parser (e.g. mistune), so a list that's uniformly
+        indented throughout (e.g. every line starts with "  - ") still
+        comes out as a single top-level (indent 0) list, not nested.
+        """
+        while list_stack and col < list_stack[-1]:
+            list_stack.pop()
+        if not list_stack or col > list_stack[-1]:
+            list_stack.append(col)
+        return len(list_stack) - 1
+
     for line in lines:
         if _FENCE_RE.match(line):
             flush_buf()
             flush_table()
+            list_stack.clear()
             in_fence = not in_fence
             continue
         if in_fence:
@@ -416,10 +431,12 @@ def _parse_md_paragraphs(text):
         if _RULE_RE.match(line):
             flush_buf()
             flush_table()
+            list_stack.clear()
             continue
 
         if line.startswith('|'):
             flush_buf()
+            list_stack.clear()
             table_buf.append(line)
             continue
         else:
@@ -428,6 +445,7 @@ def _parse_md_paragraphs(text):
         m = _ATX_RE.match(line)
         if m:
             flush_buf()
+            list_stack.clear()
             level = len(m.group(1))
             paragraphs.append(('h%d' % level, 0, pi(m.group(2))))
             continue
@@ -435,14 +453,14 @@ def _parse_md_paragraphs(text):
         m = _UL_RE.match(line)
         if m:
             flush_buf()
-            indent = len(m.group(1)) // 2
+            indent = list_indent(len(m.group(1)))
             paragraphs.append(('list', indent, pi(m.group(2))))
             continue
 
         m = _OL_RE.match(line)
         if m:
             flush_buf()
-            indent = len(m.group(1)) // 2
+            indent = list_indent(len(m.group(1)))
             paragraphs.append(('numbered', indent, pi(m.group(2))))
             continue
 
@@ -450,10 +468,13 @@ def _parse_md_paragraphs(text):
         if m:
             flush_buf()
             flush_table()
+            list_stack.clear()
             paragraphs.append(('quote', 0, pi(m.group(1))))
             continue
 
         if line.strip() == '':
+            # A blank line alone doesn't end a list (loose lists are
+            # common), so list_stack is intentionally left untouched.
             flush_buf()
         elif (line.startswith(' ') and not _UL_RE.match(line)
               and not _OL_RE.match(line)
@@ -464,6 +485,7 @@ def _parse_md_paragraphs(text):
             paragraphs[-1] = (prev[0], prev[1], prev[2] + [(' ', {})] + extra)
         else:
             buf.append(line)
+            list_stack.clear()
 
     flush_buf()
     flush_table()
@@ -754,12 +776,12 @@ class _DocBuilder:
                 for sub in child.get('children', []):
                     self._visit_list_item(sub, subptype, depth + 1)
             elif child.get('type') == 'paragraph':
-                self._start_par(ptype, depth + 1)
+                self._start_par(ptype, depth)
                 for c in child.get('children', []):
                     self._visit(c)
                 self._end_par()
             else:
-                self._start_par(ptype, depth + 1)
+                self._start_par(ptype, depth)
                 self._visit(child)
                 self._end_par()
 
@@ -1009,6 +1031,21 @@ def test_08():
     "nested list — deeper indent"
     pars = _parse("- Top\n  - Nested\n")
     assert pars[0][2] < pars[1][2]   # nested has higher indent
+
+
+def test_08b():
+    "list uniformly indented by 2 spaces (e.g. under a lead-in paragraph) is still top-level"
+    pars = _parse("  - Alpha\n  - Beta\n  - Gamma\n")
+    assert len(pars) == 3
+    for base, ptype, indent, runs in pars:
+        assert ptype  == 'list'
+        assert indent == 0
+
+
+def test_08c():
+    "nesting inside a uniformly-indented list is still relative, not absolute"
+    pars = _parse("  - Top\n    - Nested\n  - Top again\n")
+    assert [indent for base, ptype, indent, runs in pars] == [0, 1, 0]
 
 
 def test_09():
@@ -1364,6 +1401,33 @@ def test_30():
     assert '~~' in out
     assert '^' in out
     assert '[^1]' in out and '[^1]:' in out
+
+
+def test_31():
+    "_DocBuilder (mistune AST path): top-level list items have indent 0"
+    # Builds a minimal fake mistune-style AST by hand, so this exercises
+    # _DocBuilder without requiring the optional 'mistune' dependency.
+    from .mdfilter import _DocBuilder
+    from ..core.document import Document
+
+    doc = Document()
+    builder = _DocBuilder(doc)
+    nodes = [
+        {'type': 'list', 'attrs': {'ordered': False}, 'children': [
+            {'children': [
+                {'type': 'paragraph', 'children': [{'type': 'text', 'raw': 'Alpha'}]},
+                {'type': 'list', 'attrs': {'ordered': False}, 'children': [
+                    {'children': [{'type': 'paragraph',
+                                   'children': [{'type': 'text', 'raw': 'Nested'}]}]},
+                ]},
+            ]},
+            {'children': [{'type': 'paragraph', 'children': [{'type': 'text', 'raw': 'Beta'}]}]},
+        ]},
+    ]
+    builder.process(nodes)
+    indents = [(ptype, indent, builder.text[start:end].strip())
+               for start, end, ptype, indent in builder.pars]
+    assert indents == [('list', 0, 'Alpha'), ('list', 1, 'Nested'), ('list', 0, 'Beta')]
 
 
 if __name__ == '__main__':

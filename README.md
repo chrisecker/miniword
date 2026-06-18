@@ -20,11 +20,11 @@ Dependencies vary between platforms and prefered features. You always need Pytho
 
 | Dependency | Linux    | Windows  | macOS    | Notes                                      |
 | ---------- | -------- | -------- | -------- | ------------------------------------------ |
-| pycairo    | required | —        | required | system library                             |
-| cairocffi  | —        | required | —        | alternative to pycairo; required on Windows |
+| cairocffi  | required | required | required | pulled in automatically by `pip install .` |
 | fontconfig | required | —        | required | system CLI-tool                            |
 | uharfbuzz  | optional | optional | optional | needed for ligatures and non-Latin scripts |
 | fonttools  | —        | optional | —        | needed for non-Latin scripts on Windows    |
+| mistune    | optional | optional | optional | richer Markdown import; falls back to a built-in parser |
 
 ## Running without installation
 
@@ -36,19 +36,19 @@ Alternatively, double-click `miniword.py` in your file explorer.
 
 ## Install (Linux)
 
-Install all dependencies:
+Install system dependencies:
 
 ```
-sudo apt install python3-wxgtk4.0 python3-cairo fontconfig
+sudo apt install python3-wxgtk4.0 fontconfig
 ```
 
-For ligature support and non-Latin scripts install uharfbuzz:                                                                                                                              
+For ligature support, non-Latin scripts, and richer Markdown import, install the optional extras:
 
 ```
-pip install uharfbuzz
+pip install uharfbuzz mistune
 ```
 
-Then install miniword:
+Then install miniword (this also pulls in `cairocffi`):
 
 ```
 cd miniword
@@ -64,11 +64,12 @@ cp miniword.desktop ~/.local/share/applications/
 
 ## Install (Windows)
 
-No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`.
+No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`, and `pip install .` pulls in `cairocffi` to bind to it.
 
 ```
-pip install cairocffi
-pip install uharfbuzz fonttools   # optional: ligatures, non-Latin scripts
+cd miniword
+pip install .
+pip install uharfbuzz fonttools mistune   # optional: ligatures, non-Latin scripts, richer Markdown import
 ```
 
 MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:\Users\<you>\AppData\Roaming\miniword\`).
@@ -81,7 +82,14 @@ On macOS, `fontconfig` must be installed via Homebrew:
 
 ```
 brew install fontconfig
-pip install uharfbuzz   # optional: ligatures and non-Latin scripts
+```
+
+Then install miniword (this also pulls in `cairocffi`):
+
+```
+cd miniword
+pip install .
+pip install uharfbuzz mistune   # optional: ligatures, non-Latin scripts, richer Markdown import
 ```
 
 MiniWord stores its configuration and plugins in `~/Library/Application Support/miniword/`.
@@ -99,14 +107,14 @@ python test_all.py
 Run tests for a single module:
 
 ```
-python runtests.py miniword/pagegen.py
+python runtests.py miniword/layout/pagegen.py
 ```
 
 Run a specific test or demo:
 
 ```
 python runtests.py miniword/ui/searchtool.py test_00
-python runtests.py miniword/wxtextview/wxtextview.py demo_00
+python runtests.py miniword/texteditor/textcanvas.py demo_00
 ```
 
 ## Plugins

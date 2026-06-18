@@ -1,10 +1,7 @@
 import sys
 import wx
 import wx.lib.wxcairo as wxcairo
-try:
-    import cairocffi as cairo
-except ImportError:
-    import cairo
+import cairocffi as cairo
 import time
 try:
     import uharfbuzz as hb

@@ -38,7 +38,7 @@ class FootnoteAnchorBox(NewlineBox):
 def demo_00():
     """Render a short document with a footnote to /tmp/footnote_demo.png."""
     import wx
-    import cairo
+    import cairocffi as cairo
     app = wx.App(False)
 
     from ..textmodel.textmodel import TextModel
