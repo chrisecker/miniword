@@ -4,6 +4,7 @@ from .images import Image
 from ..core.utils import get_path
 from .image_controllers import ImageCropController
 from ..textmodel.texeltree import grouped
+from ..texteditor.controller import NullController
 from ..ui.sidepanel import SidePanel
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from ..ui.design import flat_button, make_panel, add_section, add_row
@@ -18,11 +19,11 @@ class ImageInspector(SidePanel):
         replace, resize, and crop the image.
     """
 
-    def __init__(self, parent, view):
+    def __init__(self, parent, editor, document):
         SidePanel.__init__(self, parent)
-        self._view = view
-        self.add_model(view)
-        self.add_model(view.model)
+        self.editor   = editor
+        self.document = document
+        self.add_model(editor)
         self._blob_id       = None
         self._current_crop  = None
         self._last_image_dir = ''
@@ -119,12 +120,11 @@ class ImageInspector(SidePanel):
         self._updating     = True
         self._blob_id      = image.blob_id
         self._current_crop = image.crop
-        get_image = getattr(self._view, 'get_image', None)
-        if get_image:
-            image_data = get_image(image.blob_id)
-            if image_data:
-                self._natural_w = image_data.width_px
-                self._natural_h = image_data.height_px
+        builder = self.editor.canvas.builder if self.editor.canvas else None
+        image_data = builder.factory.get_image(image.blob_id) if builder else None
+        if image_data:
+            self._natural_w = image_data.width_px
+            self._natural_h = image_data.height_px
         self.txt_size_x.SetValue(self._natural_w * image.scale_x)
         self.txt_size_y.SetValue(self._natural_h * image.scale_y)
         self.txt_scale_x.SetValue(image.scale_x)
@@ -141,7 +141,8 @@ class ImageInspector(SidePanel):
 
     def clear(self):
         """Disable inspector section (cursor is not on an Image texel)."""
-        self._blob_id = None
+        self._blob_id      = None
+        self._crop_active  = False
         self._set_inspector_enabled(False)
         for btn in (self.btn_reset_w, self.btn_reset_h,
                     self.btn_reset_sx, self.btn_reset_sy):
@@ -152,14 +153,14 @@ class ImageInspector(SidePanel):
     def _notify(self):
         if self._updating or self._blob_id is None:
             return
-        index = self._view.index
-        texel = next((t for _, _, t in get_path(self._view.edit_model.texel, index)
+        index = self.editor.index
+        texel = next((t for _, _, t in get_path(self.editor.target.texel, index)
                       if isinstance(t, Image)), None)
         if texel is None:
             return
         scale_x = self.txt_scale_x.GetValue() or 1.0
         scale_y = self.txt_scale_y.GetValue() or 1.0
-        self._view.set_texel_attributes(
+        self.editor.set_texel_attributes(
             index, texel,
             blob_id=self._blob_id, scale_x=scale_x, scale_y=scale_y,
             proportional=self.chk_proportional.GetValue(),
@@ -237,21 +238,30 @@ class ImageInspector(SidePanel):
 
     def _get_image_texel(self):
         """Return the Image texel at the current cursor position, or None."""
-        return next((t for _, _, t in get_path(self._view.edit_model.texel, self._view.index)
+        return next((t for _, _, t in get_path(self.editor.target.texel, self.editor.index)
                      if isinstance(t, Image)), None)
 
     def _on_crop_toggle(self, event):
+        editor = self.editor
         if not self._crop_active:
-            if self._blob_id is not None:
-                index = self._view.index
-                path = get_path(self._view.edit_model.texel, index)
-                for depth, (i1, i2, texel) in enumerate(path):
-                    if isinstance(texel, Image):
-                        editor = ImageCropController(self._view, i1, i2, depth)
-                        self._view.install_editor(editor, texel)
-                        break
+            if self._blob_id is None:
+                return
+            if editor.canvas is not None:
+                # find_box() (called from the controller's __init__) needs
+                # the layout built up to this index; the build is lazy.
+                editor.canvas.builder.assure_index(
+                    editor.abs_idx(editor.index), editor.flow)
+            path = get_path(editor.target.texel, editor.index)
+            for depth, (i1, i2, texel) in enumerate(path):
+                if isinstance(texel, Image):
+                    controller = ImageCropController(editor, texel, i1, i2, depth)
+                    editor.set_controller(controller)
+                    self._crop_active = True
+                    break
         else:
-            self._view.remove_editor()
+            path = get_path(editor.target.get_xtexel(), editor.index)
+            editor.set_controller(NullController.match(editor, path))
+            self._crop_active = False
 
     def _on_unset_crop(self, event):
         if self._blob_id is None:
@@ -275,7 +285,7 @@ class ImageInspector(SidePanel):
         blob_id = os.path.basename(path)
         base, ext = os.path.splitext(blob_id)
         n = 1
-        while blob_id in self._view.document.blobs:
+        while blob_id in self.document.blobs:
             blob_id = '%s_%d%s' % (base, n, ext)
             n += 1
         with open(path, 'rb') as f:
@@ -286,15 +296,8 @@ class ImageInspector(SidePanel):
         blob_id, data = self._load_image_file()
         if blob_id is None:
             return
-        self._view.document.blobs[blob_id] = data
-        index   = self._view.index
-        scale_x = scale_y = 1.0
-        image_data = self._view.get_image(blob_id)
-        if image_data and image_data.width_px > 0:
-            avail_w = self._view.get_rowwidth(index)
-            if avail_w and image_data.width_px > avail_w:
-                scale_x = scale_y = avail_w / image_data.width_px
-        self._view.insert_texel(index, grouped([Image(blob_id, scale_x, scale_y)]))
+        self.document.blobs[blob_id] = data
+        self.editor.insert_texel(grouped([Image(blob_id)]))
 
     def _on_replace(self, event):
         if self._blob_id is None:
@@ -302,14 +305,14 @@ class ImageInspector(SidePanel):
         blob_id, data = self._load_image_file()
         if blob_id is None:
             return
-        self._view.document.blobs[blob_id] = data
+        self.document.blobs[blob_id] = data
         self._blob_id = blob_id
         self._notify()
 
     def _on_export(self, event):
         if self._blob_id is None:
             return
-        data = self._view.document.blobs.get(self._blob_id)
+        data = self.document.blobs.get(self._blob_id)
         if data is None:
             return
         ext = os.path.splitext(self._blob_id)[1].lower()
@@ -330,29 +333,46 @@ class ImageInspector(SidePanel):
 
 
 def demo_00():
-    """Show ImageInspector with a simulated active image selection."""
-    app = wx.App()
-    frame = wx.Frame(None, title="ImageInspector Demo", size=(260, 400))
+    """Show ImageInspector next to a canvas with an inline image."""
+    import os
+    from ..textmodel.texeltree import Text, NL
+    from ..core.document import Document
+    from ..core.styles import testsheet
+    from ..layout.factory import Factory
+    from ..layout.cairodevice import CairoDevice
+    from ..layout.pagebuilder import PageBuilder
+    from ..texteditor.editor import Editor
+    from ..texteditor.textcanvas import TextCanvas
 
-    class _FakeDoc:
-        blobs = {}
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    with open(os.path.join(here, 'test', 'red.png'), 'rb') as f:
+        data = f.read()
 
-    class _FakeView:
-        index    = 0
-        document = _FakeDoc()
-        def add_view(self, v): pass
-        def set_texel_attributes(self, *a, **kw): pass
-        def get_rowwidth(self, i): return 400
-        def insert_texel(self, i, t): pass
-        def install_editor(self, e, i): pass
-        def remove_editor(self): pass
+    doc = Document()
+    doc.blobs['red.png'] = data
+    doc.textmodel.texel = grouped([Text("Before "), Image("red.png"), Text(" after."), NL])
 
-    panel = ImageInspector(frame, view=_FakeView())
+    app   = wx.App(False)
+    frame = wx.Frame(None, title="ImageInspector Demo", size=(700, 400))
 
-    # Simulate cursor on an image texel
-    img = Image("photo.jpg", scale_x=1.5, scale_y=1.5)
-    panel.refresh(img, index=5)
+    factory = Factory(testsheet, device=CairoDevice())
+    factory.blobs = doc.blobs
+    builder = PageBuilder(doc.textmodel, factory)
+    builder.rebuild()
 
+    editor = Editor(doc.textmodel)
+    canvas = TextCanvas(frame, doc.textmodel, builder, editor)
+    editor.canvas = canvas
+    editor.index  = 7  # land on the Image texel
+
+    panel = ImageInspector(frame, editor, doc)
+
+    sizer = wx.BoxSizer(wx.HORIZONTAL)
+    sizer.Add(canvas, 1, wx.EXPAND)
+    sizer.Add(panel,  0, wx.EXPAND)
+    frame.SetSizer(sizer)
+
+    panel.update()
     frame.Show()
     app.MainLoop()
 

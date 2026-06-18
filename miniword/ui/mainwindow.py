@@ -16,6 +16,7 @@ from .icons import ICONS_DIR
 from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
 from .linkpanel import LinksPanel
+from ..images import ImageInspector
 
 from ..images import image_controllers  # registers controllers
 from ..tables import table_controllers  # registers controllers
@@ -373,6 +374,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.inspector = StyleInspector(self._inspector_book, self.editor, self.document.basestyles)
         self.document_settings = SettingsInspector(self._inspector_book, self.document)
         self.table_panel = TablePanel(self._inspector_book, self.editor)
+        self.image_inspector = ImageInspector(self._inspector_book, self.editor, self.document)
         self._search_panel = SearchPanel(self._inspector_book, self.editor)
         self._outline_panel = OutlinePanel(self._inspector_book, self.document, self.editor)
         self._links_panel = LinksPanel(self._inspector_book, self.editor, self.document)
@@ -380,6 +382,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("style",    self.inspector),
             ("settings", self.document_settings),
             ("table",    self.table_panel),
+            ("image",    self.image_inspector),
             ("search",   self._search_panel),
             ("outline",  self._outline_panel),
             ("links",    self._links_panel),
@@ -542,6 +545,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("style",    "Styles"),
             ("search",   "Search"),
             ("table",    "Table"),
+            ("image",    "Image"),
             ("links",    "Links"),
             ("settings", "Settings"),
         ], self._on_panel_toggle)
