@@ -23,6 +23,7 @@ jobs:
           --icon miniword/icons/miniword.ico
           --add-data "miniword/icons;miniword/icons"
           --add-data "miniword/plugins;miniword/plugins"
+          --manifest installer/miniword.manifest
       - name: Install Inno Setup
         run: choco install innosetup -y
       - name: Build installer
