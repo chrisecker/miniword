@@ -22,6 +22,7 @@ jobs:
           pyinstaller miniword.py --name miniword --windowed --onedir
           --icon miniword/icons/miniword.ico
           --add-data "miniword/icons;miniword/icons"
+          --add-data "miniword/plugins;miniword/plugins"
       - name: Install Inno Setup
         run: choco install innosetup -y
       - name: Build installer
@@ -47,7 +48,8 @@ jobs:
           brew install cairo
           pyinstaller miniword.py --name miniword --windowed --onedir \
             --icon miniword/icons/miniword.icns \
-            --add-data "miniword/icons:miniword/icons"
+            --add-data "miniword/icons:miniword/icons" \
+            --add-data "miniword/plugins:miniword/plugins"
       - name: Create .dmg
         run: |
           mkdir -p dist/dmg
