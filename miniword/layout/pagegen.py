@@ -30,7 +30,12 @@ from copy import copy as shallow_copy
 # Needed for testing
 A4 = 210 * mm, 297 * mm
 
-MAX_FOOTNOTES = 0.10  # max fraction of page height reserved for footnotes
+MAX_FOOTNOTE_AREA_FRACTION = 0.10  # max fraction of page height reserved for footnotes
+
+
+def _copy_counters(counters):
+    """Deep-copy a dict of mutable counter lists (numbering_style -> list[int])."""
+    return {k: list(v) for k, v in counters.items()}
 
 
 class DraftNode:
@@ -84,7 +89,7 @@ class DraftNode:
             return False
         # Is the max footnote fraction reached?
         page_height = self.geometry[1] - self.border[0] - self.border[2]
-        limit = page_height if is_last_page else page_height * MAX_FOOTNOTES
+        limit = page_height if is_last_page else page_height * MAX_FOOTNOTE_AREA_FRACTION
         advance = (row.height + row.depth) * line_spacing
         return self.footnote_height + advance <= limit
 
@@ -144,7 +149,7 @@ class DraftNode:
         draft.footnote_height = 0
         return draft
 
-    def fix_draft(self, device):
+    def finalize_draft(self, device):
         """
         Finalise draft by converting it (and all parents) to
         pages.
@@ -152,7 +157,8 @@ class DraftNode:
         Returns the list of completed pages and a RestartMemo
         describing any spillover that did not fit on the last page.
         """
-        # Collect draft nodes
+        # Collect draft nodes — self is always included, so nodes is
+        # never empty.
         nodes = []
         draft = self
         while draft:
@@ -160,9 +166,6 @@ class DraftNode:
             draft = draft.parent
 
         pages = []
-        memo = RestartMemo()
-        if not nodes:
-            return pages, memo
 
         # Generate Pages
         assert nodes[0].startspage
@@ -191,7 +194,7 @@ class DraftNode:
 class RestartMemo:
     """Carries the state needed to resume page building after an interruption.
 
-    Also used as the return value of fix_draft() to describe spillover
+    Also used as the return value of finalize_draft() to describe spillover
     content that did not fit on the last completed page.
     """
     rows            = ()
@@ -228,11 +231,11 @@ class RestartMemo:
         return node
 
     def copy(self):
-        r = shallow_copy(self)
+        new = shallow_copy(self)
         # counters contains mutable lists — deep copy required so that
         # future increments do not corrupt previously saved snapshots.
-        r.counters = {k: list(v) for k, v in self.counters.items()}
-        return r
+        new.counters = _copy_counters(self.counters)
+        return new
 
 
 
@@ -404,7 +407,7 @@ def generate_pages(texel, i, restartmemo, factory,
 
     # Restore per-style counter arrays from the restart memo so that
     # numbered lists continue with the correct numbers after a restart.
-    counters = {k: list(v) for k, v in state.counters.items()}
+    counters = _copy_counters(state.counters)
 
     # Shift the box-generator start position by the amount of row
     # material already present in the restart memo.
@@ -429,8 +432,8 @@ def generate_pages(texel, i, restartmemo, factory,
         indent            = factory.indent_level
         first_line_indent = r['first_line_indent']
         indent_levels     = r['indent_levels']
-        is_list           = r['paragraph_type'] in ('list', 'numbered')
-        list_indent       = r['list_indent'] if is_list else 0
+        in_any_list       = r['paragraph_type'] in ('list', 'numbered')
+        list_indent       = r['list_indent'] if in_any_list else 0
         block_indent      = indent_levels[indent] + list_indent
         alignment         = r['alignment']
         line_spacing      = r['line_spacing']
@@ -465,18 +468,18 @@ def generate_pages(texel, i, restartmemo, factory,
                     if alignment == 'justify' and idx < n - 1:
                         line = justify_line(line, line_width)
                     row = Row(line, device=device)
-                    
-                    style = factory.mk_style(factory.markerstyle)
-                    style['font_size'] *= style['marker_size'][indent]
-                    style['color'] = style['marker_color'][indent]
-                    pos = r['marker_pos'][indent]
 
-                    if first:
-                        if  r['paragraph_type'] == 'list':
+                    if first and in_any_list:
+                        marker_style = factory.mk_style(factory.markerstyle)
+                        marker_style['font_size'] *= marker_style['marker_size'][indent]
+                        marker_style['color'] = marker_style['marker_color'][indent]
+                        pos = r['marker_pos'][indent]
+
+                        if r['paragraph_type'] == 'list':
                             marker = r['marker'][indent]
-                            row.set_marker(marker, pos, style)
+                            row.set_marker(marker, pos, marker_style)
 
-                        elif r['paragraph_type'] == 'numbered':
+                        else:  # 'numbered'
                             ns = r['numbering_style'][indent]
                             ckey = r['counter']
                             if ckey not in counters:
@@ -491,7 +494,7 @@ def generate_pages(texel, i, restartmemo, factory,
                                 # a section count clears the item counter
                                 counters['item'] = [0] * n_levels
                             marker = format_number(counters[ckey], indent, ns)
-                            row.set_marker(marker, pos, style)
+                            row.set_marker(marker, pos, marker_style)
 
                     if not draft.can_addrow(row, line_spacing, before):
                         draft = draft.create_newpage()
@@ -499,14 +502,12 @@ def generate_pages(texel, i, restartmemo, factory,
                             pending_fn_rows, draft)
 
                     text_width = row.width
-                    if alignment == 'left':
+                    if alignment in ('left', 'justify'):
                         x = line_left
                     elif alignment == 'right':
                         x = line_left + (line_width - text_width)
                     elif alignment == 'center':
                         x = line_left + 0.5 * (line_width - text_width)
-                    elif alignment == 'justify':
-                        x = line_left
                     else:
                         assert False
 
@@ -542,8 +543,8 @@ def generate_pages(texel, i, restartmemo, factory,
             draft.y += space_after
             # XXX adjust depth of last row?
 
-        pages, state = draft.fix_draft(device)
-        state.counters = {k: list(v) for k, v in counters.items()}
+        pages, state = draft.finalize_draft(device)
+        state.counters = _copy_counters(counters)
         if footnotes is not None:
             footnotes.extend(state.footnotes)
         if floats is not None:
@@ -554,35 +555,32 @@ def generate_pages(texel, i, restartmemo, factory,
         for page in pages:
             yield page
 
-    # Yield remaining content as the final page(s)
+    # Yield remaining content as the final page(s): first the trailing body
+    # rows together with whatever footnotes still fit, then — as long as
+    # footnotes remain unplaced — dedicated footnote-only pages.
     if allow_page_breaks:
         if state.rows or pending_fn_rows:
-            draft = state.start_draft()
-            pending_fn_rows = place_pending_footnotes(
-                pending_fn_rows, draft, is_last_page=True)
-            draft = draft.create_newpage()
-            pages, _ = draft.fix_draft(device)
-            for page in pages:
-                yield page
+            empty_state = RestartMemo()
+            empty_state.geometry = state.geometry
+            empty_state.border = state.border
 
-        # Footnotes that still didn't fit get dedicated page(s).
-        empty_state = RestartMemo()
-        empty_state.geometry = state.geometry
-        empty_state.border = state.border
-        while pending_fn_rows:
-            draft = empty_state.start_draft()
-            remaining = place_pending_footnotes(
-                pending_fn_rows, draft, is_last_page=True)
-            if remaining == pending_fn_rows:
-                # a single footnote row taller than the page: place it
-                # anyway to avoid an infinite loop.
-                draft.add_footnote(pending_fn_rows[0])
-                remaining = pending_fn_rows[1:]
-            pending_fn_rows = remaining
-            draft = draft.create_newpage()
-            pages, _ = draft.fix_draft(device)
-            for page in pages:
-                yield page
+            body_state = state
+            while body_state is not None or pending_fn_rows:
+                draft = (body_state or empty_state).start_draft()
+                remaining = place_pending_footnotes(
+                    pending_fn_rows, draft, is_last_page=True)
+                if (body_state is None and pending_fn_rows
+                        and remaining == pending_fn_rows):
+                    # a single footnote row taller than the page: place it
+                    # anyway to avoid an infinite loop.
+                    draft.add_footnote(pending_fn_rows[0])
+                    remaining = pending_fn_rows[1:]
+                pending_fn_rows = remaining
+                body_state = None
+                draft = draft.create_newpage()
+                pages, _ = draft.finalize_draft(device)
+                for page in pages:
+                    yield page
     elif state.rows:
         footnotebox = _position_footnotes(state.footnotes, state)
         page = Page(state.rows, state.geometry, footnotebox, device=device)
@@ -618,7 +616,7 @@ def test_01():
         if not draft.can_addrow(row, 1.0, 0):
             draft = draft.create_newpage()
         draft.add_row(row, 1.0, 0)
-    pages, restartmemo = draft.fix_draft(TESTDEVICE)
+    pages, restartmemo = draft.finalize_draft(TESTDEVICE)
     assert len(pages) > 0
     assert len(restartmemo.rows) > 0
 
@@ -627,7 +625,7 @@ def test_01():
         row = TextBox("New row %i" % i)
         draft.add_row(row, 1.0, 0)
 
-    pages2, restartmemo2 = draft.fix_draft(TESTDEVICE)
+    pages2, restartmemo2 = draft.finalize_draft(TESTDEVICE)
     # rows that fit on one page end up in restartmemo, not pages
     assert len(pages2) + len(restartmemo2.rows) > 0
 

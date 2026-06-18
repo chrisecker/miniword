@@ -42,7 +42,7 @@ jobs:
       - name: Build .icns from iconset
         run: iconutil -c icns miniword/icons/miniword.iconset -o miniword/icons/miniword.icns
       - name: Build with PyInstaller
-        # cairocffi needs libcairo; on macOS this comes from Homebrew, not wxPython (unverified - check on first run)
+        # cairocffi needs libcairo; on macOS this comes from Homebrew, not wxPython
         run: |
           brew install cairo
           pyinstaller miniword.py --name miniword --windowed --onedir \
