@@ -204,10 +204,12 @@ class BoxController(ElementController):
         if not event.LeftIsDown():
             x, y = self.window_to_box(event.Position)
             hit = self.hit_test(x, y)
-            cursor = wx.CURSOR_IBEAM if hit is None else self.get_cursor(hit)
-            canvas.SetCursor(wx.Cursor(cursor))
-        if not event.LeftIsDown():
-            event.Skip() # XXX needed?
+            if hit is not None:
+                # Claim the event so textcanvas.on_motion's own cursor
+                # logic (IBEAM / link-hand) doesn't overwrite this one.
+                canvas.SetCursor(wx.Cursor(self.get_cursor(hit)))
+                return True
+            event.Skip()
             return False
         x, y = canvas.window_to_content(event.Position)
         i = canvas.layout.get_index(x, y, flow)
