@@ -132,7 +132,6 @@ Example plugins are provided in the `examples/` directory:
 | File            | Description                           |
 | --------------- | ------------------------------------- |
 | `wordcount.py`  | Shows a live word count               |
-| `texelcount.py` | Shows a live texel count              |
 | `txtfilter.py`  | Filter for importing plain text files |
 
 To install all example plugins on Linux:
