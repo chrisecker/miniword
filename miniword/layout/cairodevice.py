@@ -1,4 +1,5 @@
 import sys
+import bisect
 import wx
 import wx.lib.wxcairo as wxcairo
 import cairocffi as cairo
@@ -19,8 +20,7 @@ from ..core.units import mm, cm, pt, inch
 from ..core.fontfinder import resolve_font_path, find_fallback_info, init_preload
 from .cache import LRUCache
 
-if _HB_AVAILABLE:
-    init_preload()
+init_preload()
 
 
 # Minimal set of properties required for the device to function
@@ -304,10 +304,35 @@ class CairoDevice:
         _style = filled(style)
         hb_font = self._get_hb_font(_style)
         if hb_font is not None:
+            runs = self._shape_with_fallback(text, hb_font, _style['font_size'])
+            # Collect (cluster, x_advance) for every glyph across all runs.
+            pairs = sorted(
+                (info.cluster, pos.x_advance / 64.0)
+                for _, infos, positions in runs
+                for info, pos in zip(infos, positions)
+            )
+            # Sum advances per cluster (ligatures produce one glyph per cluster group).
+            cluster_adv: dict[int, float] = {}
+            for cluster, adv in pairs:
+                cluster_adv[cluster] = cluster_adv.get(cluster, 0.0) + adv
+            sorted_cl = sorted(cluster_adv)
+            # Prefix-sum of cluster advances.
+            cum = [0.0]
+            for cl in sorted_cl:
+                cum.append(cum[-1] + cluster_adv[cl])
+            # Build one width per character; interpolate linearly within ligature clusters.
             widths = []
             for i in range(1, len(text) + 1):
-                runs = self._shape_with_fallback(text[:i], hb_font, _style['font_size'])
-                widths.append(sum(sum(p.x_advance for p in pos) for _, _, pos in runs) / 64.0)
+                char_idx = i - 1
+                pos = bisect.bisect_right(sorted_cl, char_idx) - 1
+                if pos < 0:
+                    widths.append(0.0)
+                    continue
+                cl_start = sorted_cl[pos]
+                cl_end = sorted_cl[pos + 1] if pos + 1 < len(sorted_cl) else len(text)
+                cl_size = max(1, cl_end - cl_start)
+                frac = (char_idx - cl_start + 1) / cl_size
+                widths.append(cum[pos] + cluster_adv[cl_start] * frac)
             return widths
         ctx = self._temp_ctx
         set_font(ctx, _style)
