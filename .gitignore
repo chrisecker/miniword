@@ -4,4 +4,5 @@ __pycache__
 dev_*
 *.pdf
 tmp.*
-
+*.egg-info/
+get-pip.py
