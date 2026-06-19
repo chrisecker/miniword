@@ -52,6 +52,7 @@ class Layout(LayoutBase):
     def append_page(self, page):
         self.height += self.page_gap  # gap before every page, including the first
         self.childs.append(page)
+        page.adjust(len(self.childs))
         self.length[0] += len(page)
         if page.footnotebox is not None:
             self.length[1] += len(page.footnotebox[-1])
@@ -143,6 +144,7 @@ class TwoPageLayout(Layout):
     def append_page(self, page):
         n = len(self.childs)
         self.childs.append(page)
+        page.adjust(n + 1)
         self.length[0] += len(page)
         if page.footnotebox is not None:
             self.length[1] += len(page.footnotebox[-1])
@@ -357,8 +359,6 @@ class PageBuilder(BuilderBase):
         # Clean up
         self.generator = None
 
-        # Update counters
-        self.adjust_pages()
         try:
             assert len(self._layout) == len(self.model)+1
         except:
@@ -367,13 +367,6 @@ class PageBuilder(BuilderBase):
             raise
         self._layout.is_finished = True
         self.dump_updatestats()
-
-    def adjust_pages(self):
-        # Used here solely to update page numbers.
-        # The call is very fast (≈1 ms for moby), so it is safe to
-        # run after every change.
-        for i, page in enumerate(self._layout.childs):
-            page.adjust(i + 1)
 
     def rebuild_range(self, i1, i2, delta):
         """
