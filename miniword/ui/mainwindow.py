@@ -471,11 +471,7 @@ class MainFrame(wx.Frame, ViewBase):
         dlg.Destroy()
 
     def _on_about(self, _):
-        from importlib.metadata import version, PackageNotFoundError
-        try:
-            ver = version("miniword")
-        except PackageNotFoundError:
-            ver = "-"
+        from miniword import __version__ as ver
 
         dlg = wx.Dialog(self, title="About MiniWord")
         logo_bmp = wx.StaticBitmap(dlg,
