@@ -25,7 +25,7 @@ full = [
 Homepage = "https://codeberg.org/chrisecker/miniword"
 
 [tool.setuptools.dynamic]
-version = {attr = "miniword.__version__"}
+version = {attr = "miniword.version.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["miniword*"]
