@@ -205,7 +205,11 @@ class CairoDevice:
                 set_font(ctx, {**self._current_style, 'font_family': family})
             glyphs = self._to_cairo_glyphs(infos, pos, cur_x, baseline_y)
             if glyphs:
-                ctx.show_glyphs(glyphs)
+                if sys.platform == 'win32':
+                    ctx.glyph_path(glyphs)
+                    ctx.fill()
+                else:
+                    ctx.show_glyphs(glyphs)
             cur_x += sum(p.x_advance for p in pos) / 64.0
             if family is not None:
                 ctx.restore()
@@ -245,14 +249,9 @@ class CairoDevice:
         ctx.scale(s, s)
 
         font_options = self._make_font_options()
-        # Subpixel (ClearType-style) antialiasing assumes glyphs land on an
-        # unscaled, axis-aligned physical pixel grid. We always draw through
-        # a non-trivial ctx.scale() above (pt -> device pixels, plus zoom), so
-        # subpixel AA samples the wrong "pixels" and shows up as colored
-        # fringing / blockiness. Grayscale AA is scale-invariant and stays
-        # smooth at any DPI/zoom. Cairo's win32 font backend maps this to the
-        # glyph's LOGFONT quality, so it must be set on the font options
-        # themselves -- ctx.set_antialias() alone does not override it.
+        # On Windows, text is rendered via text_path()+fill() so that Cairo's
+        # own rasteriser applies ANTIALIAS_GRAY.  Subpixel AA would still
+        # produce coloured fringing at non-integer scales, so we keep gray AA.
         if sys.platform == 'win32':
             font_options.set_antialias(cairo.ANTIALIAS_GRAY)
             ctx.set_antialias(cairo.ANTIALIAS_GRAY)
@@ -424,7 +423,11 @@ class CairoDevice:
                 self._render_runs(sruns, tx, baseline_y, ctx)
             else:
                 ctx.move_to(tx, baseline_y)
-                ctx.show_text(text)
+                if sys.platform == 'win32':
+                    ctx.text_path(text)
+                    ctx.fill()
+                else:
+                    ctx.show_text(text)
 
         # 3. Draw underline / strikethrough as one continuous line
         if getattr(self, '_current_underline', False):
@@ -470,7 +473,11 @@ class CairoDevice:
             self._render_runs(runs, x, baseline_y, ctx)
         else:
             ctx.move_to(x, baseline_y)
-            ctx.show_text(text)
+            if sys.platform == 'win32':
+                ctx.text_path(text)
+                ctx.fill()
+            else:
+                ctx.show_text(text)
 
         if getattr(self, '_current_underline', False):
             self.draw_underline(x, y, xa, ctx)
