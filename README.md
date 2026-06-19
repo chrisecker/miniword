@@ -2,7 +2,7 @@
 
 A minimal word processor in python. In development but already great.
 
-![Screenshot](https://codeberg.org/chrisecker/miniword/raw/branch/main/screenshots/miniword_18jun26.png)
+![Screenshot](https://codeberg.org/chrisecker/miniword/raw/branch/main/screenshots/miniword.png)
 
 ## Key Aspects
 
