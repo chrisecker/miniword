@@ -46,11 +46,13 @@ jobs:
       - name: Build with PyInstaller
         # cairocffi needs libcairo; on macOS this comes from Homebrew, not wxPython
         run: |
-          brew install cairo
+          brew install cairo dylibbundler
           pyinstaller miniword.py --name miniword --windowed --onedir \
             --icon miniword/icons/miniword.icns \
             --add-data "miniword/icons:miniword/icons" \
             --add-data "miniword/plugins:miniword/plugins"
+      - name: Bundle cairo (PyInstaller can't see its dlopen-by-name load)
+        run: bash installer/bundle_cairo_macos.sh dist/miniword.app
       - name: Create .dmg
         run: |
           mkdir -p dist/dmg

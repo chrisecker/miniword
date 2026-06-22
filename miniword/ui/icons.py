@@ -1,9 +1,9 @@
 import wx
-from pathlib import Path
+
+from ..core.respath import package_dir
 
 
-BASE_DIR = Path(__file__).resolve().parent
-ICONS_DIR = BASE_DIR / ".." / "icons"
+ICONS_DIR = package_dir() / "icons"
 
 
 def icon(name, size=(20, 20)):

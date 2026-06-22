@@ -1,5 +1,5 @@
 import wx
-from pathlib import Path
+from ..core.respath import package_dir
 from ..textmodel.viewbase import ViewBase
 from .colours import colours
 
@@ -7,7 +7,7 @@ PANEL_W    = 300
 STRIP_W    = 52
 ICON_H     = 48
 
-_ICONS_DIR = Path(__file__).resolve().parent.parent / "icons"
+_ICONS_DIR = package_dir() / "icons"
 
 
 

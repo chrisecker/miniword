@@ -91,8 +91,8 @@ def load_plugins():
     import glob
     import importlib.util
 
-    _builtin = os.path.normpath(
-        os.path.join(os.path.dirname(__file__), '..', 'plugins'))
+    from ..core.respath import package_dir
+    _builtin = str(package_dir() / 'plugins')
     plugin_dirs = [os.path.join(_miniword_dir(), "plugins"), _builtin]
 
     seen = set()
