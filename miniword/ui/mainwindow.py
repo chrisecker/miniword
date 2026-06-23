@@ -542,7 +542,7 @@ class MainFrame(wx.Frame, ViewBase):
         _, sy = tv.GetViewStart()
         scroll_y = sy * ry / tv.get_zoom()
         page_h = layout.height  # fallback
-        for _p1, _p2, _px, py, page in layout.iter_boxes(0, 0, 0):
+        for _p1, _p2, _px, py, page in layout.iter_boxes(0):
             if py + page.height + page.depth >= scroll_y:
                 page_h = page.height + page.depth
                 break
@@ -1040,6 +1040,61 @@ def test_02():
 
     text = doc.textmodel.get_text().rstrip('\n')
     assert text == word, repr(text)
+
+    frame.Destroy()
+    app.Yield()
+
+
+def test_03():
+    "View > zoom menu actions (in/out/actual size/fit width/fit page)"
+    from ..core.document import Document
+    import wx
+
+    app = wx.App()
+    doc = Document()
+    frame = MainFrame(doc)
+    frame.Show()
+    app.Yield()
+
+    editor = frame.editor
+    for ch in "Some text to lay out.":
+        editor.insert_text(ch)
+    app.Yield()
+
+    tv = frame.canvas
+
+    # Zoom In / Out: multiply/divide by zoom_factor, capped at min/max_zoom
+    tv.set_zoom(1.0)
+    tv.step_zoom(tv.zoom_factor)
+    assert tv.get_zoom() == 1.0 * tv.zoom_factor
+    tv.set_zoom(tv.max_zoom)
+    tv.step_zoom(tv.zoom_factor)
+    assert tv.get_zoom() == tv.max_zoom  # capped, doesn't overshoot
+
+    tv.set_zoom(1.0)
+    tv.step_zoom(1 / tv.zoom_factor)
+    assert tv.get_zoom() == 1.0 / tv.zoom_factor
+    tv.set_zoom(tv.min_zoom)
+    tv.step_zoom(1 / tv.zoom_factor)
+    assert tv.get_zoom() == tv.min_zoom  # capped, doesn't undershoot
+
+    # Actual Size: bound to wx.ID_ZOOM_100 in _build_menu
+    tv.set_zoom(2.5)
+    tv.set_zoom(1.0)
+    assert tv.get_zoom() == 1.0
+
+    # Fit to Text Width
+    cw = tv.GetClientSize()[0]
+    expected = cw / tv.layout.width
+    frame._zoom_fit_width()
+    assert tv.get_zoom() == expected, (tv.get_zoom(), expected)
+
+    # Fit to Page -- used to raise: iter_boxes() takes 2 args, 4 given
+    cw, ch_ = tv.GetClientSize()
+    _p1, _p2, _px, _py, page = next(iter(tv.layout.iter_boxes(0)))
+    expected = min(cw / tv.layout.width, ch_ / (page.height + page.depth))
+    frame._zoom_fit_page()
+    assert tv.get_zoom() == expected, (tv.get_zoom(), expected)
 
     frame.Destroy()
     app.Yield()
