@@ -799,8 +799,12 @@ class _DocBuilder:
                 table = mk_table(grid)
                 if nheader:
                     table = table.set_nheader(nheader)
+                self._start_par('normal', 0)
+                self._end_par()
                 self._marks.append((len(self.text), 'table', table))
-                self._append('\n', {})
+                self._append('\n', {})  # table's own mandatory trailing NL
+                self._start_par('normal', 0)
+                self._end_par()
         elif t == 'text' or t == 'raw_text':
             self._append(node.get('raw', ''), self._cur_props)
         elif t == 'link':
@@ -811,6 +815,8 @@ class _DocBuilder:
                 self._visit(child)
             self._cur_props = old
         elif t == 'block_quote':
+            self._start_par('normal', 0)
+            self._end_par()
             for child in node.get('children', []):
                 if child.get('type') == 'paragraph':
                     self._start_par('quote', 0)
@@ -819,6 +825,8 @@ class _DocBuilder:
                     self._end_par()
                 else:
                     self._visit(child)
+            self._start_par('normal', 0)
+            self._end_par()
         elif t == 'strong':
             old = self._cur_props
             self._cur_props = dict(old, bold=True)
@@ -1027,6 +1035,38 @@ register_export("Markdown", ["md", "markdown"], _save,
 # Tests
 # ---------------------------------------------------------------------------
 
+def for_each_parser(fn):
+    """Register fn once per Markdown backend (decorator), as fn_builtin and
+    fn_mistune module-level test functions.
+
+    fn(load) calls load(md) and asserts on the result; load is either
+    _load_builtin or _load_mistune. The two generated tests are reported
+    separately by the runner -- a failure in one doesn't hide whether the
+    other backend would have passed or failed -- without writing (or
+    looping through, which has the same problem) the test body twice.
+    Skips the mistune variant gracefully where mistune isn't installed,
+    since it's an optional dependency.
+    """
+    import sys
+    module = sys.modules[fn.__module__]
+
+    def run_builtin():
+        fn(_load_builtin)
+    run_builtin.__doc__ = fn.__doc__
+    setattr(module, fn.__name__ + '_builtin', run_builtin)
+
+    def run_mistune():
+        try:
+            import mistune  # noqa: F401 -- availability check only
+        except ImportError:
+            return
+        fn(_load_mistune)
+    run_mistune.__doc__ = fn.__doc__
+    setattr(module, fn.__name__ + '_mistune', run_mistune)
+
+    return None  # the bare name shouldn't be picked up as its own test
+
+
 def _parse(md):
     """Parse a MD string and return list of (base, ptype, indent, runs).
 
@@ -1212,13 +1252,14 @@ def test_11():
         os.unlink(path)
 
 
-def test_12():
+@for_each_parser
+def test_12(load):
     "table import"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
     md = "| A | B |\n| --- | --- |\n| C | D |\n"
-    doc = _load_builtin(md)
+    doc = load(md)
     table = None
     for i1, i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
         content = elems[:-1]
@@ -1232,10 +1273,11 @@ def test_12():
     assert [get_text(c) for c in cells] == ['A', 'B', 'C', 'D']
 
 
-def test_13():
+@for_each_parser
+def test_13(load):
     "table export"
     md = "| Name | City |\n| --- | --- |\n| Einstein | Ulm |\n| Darwin | Shrewsbury |\n"
-    doc = _load_builtin(md)
+    doc = load(md)
     out = _doc_to_md(doc)
     assert '| Name' in out
     assert '| ---' in out
@@ -1243,14 +1285,15 @@ def test_13():
     assert '| Darwin' in out
 
 
-def test_14():
+@for_each_parser
+def test_14(load):
     "blank NL paragraphs around table & pre"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
 
     def bases(md):
-        doc = _load_builtin(md)
+        doc = load(md)
         result = []
         for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
             nl = elems[-1]
@@ -1297,13 +1340,14 @@ def test_15():
     assert len(lines) == 2
 
 
-def test_16():
+@for_each_parser
+def test_16(load):
     "blank NL paragraphs inserted around quote blocks"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
 
     def bases(md):
-        doc = _load_builtin(md)
+        doc = load(md)
         result = []
         for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
             nl = elems[-1]
@@ -1400,13 +1444,14 @@ def test_20():
     assert 'Alice' in lines[2]
 
 
-def test_21():
+@for_each_parser
+def test_21(load):
     "footnote import"
     from miniword.textmodel.iterators import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.footnotes.footnotes import Footnote
     md = "Hello[^1] world.\n\n[^1]: Footnote text.\n"
-    doc = _load_builtin(md)
+    doc = load(md)
     fns = [e for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0)
            for e in elems if isinstance(e, Footnote)]
     assert len(fns) == 1
@@ -1432,23 +1477,25 @@ def test_22():
     assert '[^1]: Note text.' in md
 
 
-def test_23():
+@for_each_parser
+def test_23(load):
     "footnote roundtrip"
     md = "Text with footnote[^a].\n\n[^a]: The note.\n"
-    doc = _load_builtin(md)
+    doc = load(md)
     out = _doc_to_md(doc)
     assert '[^1]' in out
     assert '[^1]: The note.' in out
 
 
-def test_24():
+@for_each_parser
+def test_24(load):
     "image import: data from URI"
     from miniword.images.images import Image as ImageTexel, collect_blob_ids
 
     data = b'\x89PNG\r\nfakedata'
     b64 = base64.b64encode(data).decode('ascii')
     md = "Before.\n\n![photo.png](data:image/png;base64,%s)\n\nAfter.\n" % b64
-    doc = _load_builtin(md)
+    doc = load(md)
 
     assert doc.blobs.get('photo.png') == data
     assert collect_blob_ids(doc.textmodel.texel) == {'photo.png'}
@@ -1457,7 +1504,8 @@ def test_24():
     assert '![photo.png](data:image/png;base64,%s)' % b64 in out
 
 
-def test_25():
+@for_each_parser
+def test_25(load):
     "load test/tesla.md"
     import os
     from miniword.images.images import collect_blob_ids
@@ -1465,7 +1513,7 @@ def test_25():
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(here, 'test', 'tesla.md')
     with open(path, encoding='utf-8') as f:
-        doc = _load_builtin(f.read())
+        doc = load(f.read())
 
     assert collect_blob_ids(doc.textmodel.texel) == {'teslasmall.jpg'}
     assert 'teslasmall.jpg' in doc.blobs
@@ -1473,14 +1521,15 @@ def test_25():
     assert len(doc.textmodel) < 2000
 
 
-def test_26():
+@for_each_parser
+def test_26(load):
     "load test/footnotes.md: roundtrip"
     import os
 
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(here, 'test', 'footnotes.md')
     with open(path, encoding='utf-8') as f:
-        doc = _load_builtin(f.read())
+        doc = load(f.read())
 
     out = _doc_to_md(doc)
     for n in range(1, 8):
@@ -1488,37 +1537,41 @@ def test_26():
         assert '[^%d]:' % n in out
 
 
-def test_27():
+@for_each_parser
+def test_27(load):
     "strikethrough import and export roundtrip"
     md_in = "Normal ~~struck~~ text.\n"
-    doc   = _load_builtin(md_in)
+    doc   = load(md_in)
     md_out = _doc_to_md(doc)
     assert '~~struck~~' in md_out
 
 
-def test_28():
+@for_each_parser
+def test_28(load):
     "superscript and subscript import and export roundtrip"
     md_in = "H^2^O and CO~2~.\n"
-    doc   = _load_builtin(md_in)
+    doc   = load(md_in)
     md_out = _doc_to_md(doc)
     assert '^2^' in md_out
     assert '~2~' in md_out
 
 
-def test_29():
+@for_each_parser
+def test_29(load):
     "hyperlink import and export roundtrip"
     md_in = "Visit [Python](https://python.org) today.\n"
-    doc   = _load_builtin(md_in)
+    doc   = load(md_in)
     md_out = _doc_to_md(doc)
     assert '[Python](https://python.org)' in md_out
 
 
-def test_30():
+@for_each_parser
+def test_30(load):
     "load test/hyperlinks.md: roundtrip preserves key markup"
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(here, 'test', 'hyperlinks.md')
     with open(path, encoding='utf-8') as f:
-        doc = _load_builtin(f.read())
+        doc = load(f.read())
     out = _doc_to_md(doc)
     assert '[Python-Homepage](https://www.python.org)' in out
     assert '~~' in out
