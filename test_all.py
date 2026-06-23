@@ -48,6 +48,7 @@ modules = [
     "miniword.tables.table_boxes",
     "miniword.tables.table_factory",
     "miniword.tables.table_controllers",
+    "miniword.tables.table_panel",
 
     # images
     "miniword.images.images",
