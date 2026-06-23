@@ -3,23 +3,23 @@
 #endif
 
 [Setup]
-AppName=miniword
+AppName=MiniWord
 AppVersion={#MyAppVersion}
-DefaultDirName={autopf}\miniword
-DefaultGroupName=miniword
+DefaultDirName={autopf}\MiniWord
+DefaultGroupName=MiniWord
 OutputDir=Output
-OutputBaseFilename=miniword-{#MyAppVersion}-setup
+OutputBaseFilename=MiniWord-{#MyAppVersion}-setup
 Compression=lzma
 SolidCompression=yes
 SetupIconFile=..\miniword\icons\miniword.ico
-UninstallDisplayIcon={app}\miniword.exe
+UninstallDisplayIcon={app}\MiniWord.exe
 
 [Files]
-Source: "..\dist\miniword\*"; DestDir: "{app}"; Flags: recursesubdirs
+Source: "..\dist\MiniWord\*"; DestDir: "{app}"; Flags: recursesubdirs
 
 [Icons]
-Name: "{group}\miniword"; Filename: "{app}\miniword.exe"
-Name: "{commondesktop}\miniword"; Filename: "{app}\miniword.exe"; Tasks: desktopicon
+Name: "{group}\MiniWord"; Filename: "{app}\MiniWord.exe"
+Name: "{commondesktop}\MiniWord"; Filename: "{app}\MiniWord.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: desktopicon; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"

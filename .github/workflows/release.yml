@@ -19,7 +19,7 @@ jobs:
       - run: pip install ".[full]" pyinstaller
       - name: Build with PyInstaller
         run: >
-          pyinstaller miniword.py --name miniword --windowed --onedir
+          pyinstaller miniword.py --name MiniWord --windowed --onedir
           --icon miniword/icons/miniword.ico
           --add-data "miniword/icons;miniword/icons"
           --add-data "miniword/plugins;miniword/plugins"
@@ -47,20 +47,20 @@ jobs:
         # cairocffi needs libcairo; on macOS this comes from Homebrew, not wxPython
         run: |
           brew install cairo dylibbundler
-          pyinstaller miniword.py --name miniword --windowed --onedir \
+          pyinstaller miniword.py --name MiniWord --windowed --onedir \
             --icon miniword/icons/miniword.icns \
             --add-data "miniword/icons:miniword/icons" \
             --add-data "miniword/plugins:miniword/plugins"
       - name: Bundle cairo (PyInstaller can't see its dlopen-by-name load)
-        run: bash installer/bundle_cairo_macos.sh dist/miniword.app
+        run: bash installer/bundle_cairo_macos.sh dist/MiniWord.app
       - name: Create .dmg
         run: |
           mkdir -p dist/dmg
-          cp -R dist/miniword.app dist/dmg/
-          hdiutil create -volname miniword -srcfolder dist/dmg -ov -format UDZO dist/miniword-${{ github.ref_name }}.dmg
+          cp -R dist/MiniWord.app dist/dmg/
+          hdiutil create -volname MiniWord -srcfolder dist/dmg -ov -format UDZO dist/MiniWord-${{ github.ref_name }}.dmg
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/miniword-*.dmg
+          files: dist/MiniWord-*.dmg
 
   pypi:
     needs: [windows, macos]
