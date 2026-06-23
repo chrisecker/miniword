@@ -12,25 +12,36 @@ A minimal word processor in python. In development but already great.
 - Good Markdown support
 - Extensible via Python-plugins
 
-## Download
+## Install from a pre-built package
 
-Pre-built installers for Windows (`.exe`) and macOS (`.dmg`) are published on the [Releases page](https://github.com/chrisecker/miniword/releases) for each tagged version. On Linux, install from source via `pip` (see below) — no separate installer is provided there.
+Pre-built installers for Windows (`.exe`) and macOS (`.dmg`) are published on the [Releases page](https://github.com/chrisecker/miniword/releases) for each tagged version, with all dependencies (including the optional extras) already bundled — nothing else to install. On Linux, install from source instead (see below); no separate installer is provided there.
 
-## Dependencies
+### Windows
 
-Miniword is developed under Linux. In principle it should run under Windows and Mac as well. 
+Download the `.exe` from the [Releases page](https://github.com/chrisecker/miniword/releases) and run it.
 
-Dependencies vary between platforms and prefered features. You always need Python >= 3.9 and wxPython >= 4.0.
+### macOS
 
-| Dependency | Linux    | Windows  | macOS    | Notes                                      |
-| ---------- | -------- | -------- | -------- | ------------------------------------------ |
-| cairocffi  | required | required | required | pulled in automatically by `pip install .` |
-| fontconfig | required | —        | required | system CLI-tool                            |
-| uharfbuzz  | optional | optional | optional | needed for ligatures and non-Latin scripts |
-| fonttools  | —        | optional | —        | needed for non-Latin scripts on Windows    |
-| mistune    | optional | optional | optional | richer Markdown import; falls back to a built-in parser |
+Download the `.dmg` from the [Releases page](https://github.com/chrisecker/miniword/releases), open it, and drag `MiniWord.app` into your Applications folder.
 
-## Running without installation
+**First launch:** MiniWord isn't (yet) signed with a paid Apple Developer ID, so macOS blocks it the first time with "MiniWord can't be opened because Apple cannot check it for malicious software." To allow it, no Terminal needed:
+
+1. Double-click MiniWord in Applications once and dismiss the warning.
+2. Open **System Settings → Privacy & Security**, scroll down to the **Security** section.
+3. Click **Open Anyway** next to the MiniWord entry, then confirm with your password or Touch ID.
+4. Open MiniWord again and confirm **Open** in the dialog that appears.
+
+This is a one-time step per installed version.
+
+## Install from source
+
+Miniword is developed under Linux. In principle it should run under Windows and Mac as well.
+
+You always need Python >= 3.9 and wxPython >= 4.0. Further required dependencies vary between platforms — see the per-platform instructions below.
+
+Three optional packages add extra features and are all installed together via the `full` extra (`pip install ".[full]"`): `uharfbuzz` adds ligatures and non-Latin script support, `fonttools` is needed for non-Latin scripts specifically on Windows, and `mistune` enables richer Markdown import (without it, a built-in parser handles the common subset).
+
+### Running without installation
 
 ```
 python miniword.py
@@ -38,7 +49,7 @@ python miniword.py
 
 Alternatively, double-click `miniword.py` in your file explorer.
 
-## Install (Linux)
+### Linux
 
 Install system dependencies:
 
@@ -66,9 +77,7 @@ cp miniword/icons/miniword.svg ~/.local/share/icons/
 cp miniword.desktop ~/.local/share/applications/
 ```
 
-## Install (Windows)
-
-Prefer a ready-made installer? Download the `.exe` from the [Releases page](https://github.com/chrisecker/miniword/releases) instead of building from source.
+### Windows
 
 No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`, and `pip install .` pulls in `cairocffi` to bind to it.
 
@@ -81,20 +90,9 @@ MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:
 
 **Note** that MiniWord is not yet **optimised** for Windows. While it mostly works, the GUI is less polished and startup takes a bit longer.
 
-## Install (macOS)
+### macOS
 
-Prefer a ready-made installer? Download the `.dmg` from the [Releases page](https://github.com/chrisecker/miniword/releases) instead of building from source.
-
-**First launch:** MiniWord isn't (yet) signed with a paid Apple Developer ID, so macOS blocks it the first time with "MiniWord can't be opened because Apple cannot check it for malicious software." To allow it, no Terminal needed:
-
-1. Double-click MiniWord in Applications once and dismiss the warning.
-2. Open **System Settings → Privacy & Security**, scroll down to the **Security** section.
-3. Click **Open Anyway** next to the MiniWord entry, then confirm with your password or Touch ID.
-4. Open MiniWord again and confirm **Open** in the dialog that appears.
-
-This is a one-time step per installed version.
-
-On macOS, `fontconfig` must be installed via Homebrew:
+`fontconfig` must be installed via Homebrew:
 
 ```
 brew install fontconfig
