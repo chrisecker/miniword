@@ -15,3 +15,15 @@ def package_dir():
             return Path(sys.executable).resolve().parent.parent / 'Resources' / 'miniword'
         return Path(sys._MEIPASS) / 'miniword'
     return Path(__file__).resolve().parent.parent
+
+
+def frameworks_dir():
+    """Contents/Frameworks of a frozen macOS .app bundle, or None elsewhere.
+
+    Holds binaries PyInstaller can't discover itself (e.g. fc-match, cairo's
+    own dependency tree) that get bundled by the installer/bundle_*.sh
+    scripts instead.
+    """
+    if getattr(sys, 'frozen', False) and sys.platform == 'darwin':
+        return Path(sys.executable).resolve().parent.parent / 'Frameworks'
+    return None

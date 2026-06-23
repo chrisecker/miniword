@@ -9,9 +9,29 @@ import sys
 import os
 import subprocess
 
+from .respath import frameworks_dir, package_dir
+
 _path_cache = {}     # (family, bold, italic) -> path | None
 _fallback_cache = {} # codepoint -> (path, family) | (None, None)
 _scan_needed = False # set by init_preload(); queried by __main__ after wx init
+
+
+def _fc_match_argv0():
+    """Path to fc-match, plus extra env vars needed to find its config.
+
+    On a frozen macOS build, fc-match and its fonts.conf are bundled
+    alongside the app (installer/bundle_fontconfig_macos.sh) since
+    PyInstaller can't see this module's subprocess calls to find it itself.
+    """
+    frameworks = frameworks_dir()
+    if frameworks is None:
+        return 'fc-match', {}
+    fonts_conf = package_dir().parent / 'fontconfig' / 'fonts.conf'
+    return str(frameworks / 'fc-match'), {'FONTCONFIG_FILE': str(fonts_conf)}
+
+
+_FC_MATCH, _FC_EXTRA_ENV = _fc_match_argv0() if sys.platform != 'win32' else (None, {})
+_FC_ENV = {**os.environ, **_FC_EXTRA_ENV} if _FC_EXTRA_ENV else None
 
 
 # ── Windows backend ──────────────────────────────────────────────────────────
@@ -398,8 +418,8 @@ def resolve_font_path(family, bold, italic):
             pattern += ':italic'
         try:
             result = subprocess.run(
-                ['fc-match', pattern, '--format=%{file}'],
-                capture_output=True, text=True, timeout=2)
+                [_FC_MATCH, pattern, '--format=%{file}'],
+                capture_output=True, text=True, timeout=2, env=_FC_ENV)
             path = result.stdout.strip() or None
         except (FileNotFoundError, subprocess.TimeoutExpired):
             path = None
@@ -418,8 +438,8 @@ def find_fallback_info(codepoint):
     else:
         try:
             result = subprocess.run(
-                ['fc-match', f':charset={codepoint:04x}', '--format=%{file}\t%{family}'],
-                capture_output=True, text=True, timeout=2)
+                [_FC_MATCH, f':charset={codepoint:04x}', '--format=%{file}\t%{family}'],
+                capture_output=True, text=True, timeout=2, env=_FC_ENV)
             line = result.stdout.strip()
             if '\t' in line:
                 path, fam = line.split('\t', 1)

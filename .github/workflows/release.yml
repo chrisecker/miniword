@@ -23,6 +23,7 @@ jobs:
           --icon miniword/icons/miniword.ico
           --add-data "miniword/icons;miniword/icons"
           --add-data "miniword/plugins;miniword/plugins"
+          --hidden-import mistune
           --manifest installer/miniword.manifest
       - name: Install Inno Setup
         run: choco install innosetup -y
@@ -44,15 +45,19 @@ jobs:
       - name: Build .icns from iconset
         run: iconutil -c icns miniword/icons/miniword.iconset -o miniword/icons/miniword.icns
       - name: Build with PyInstaller
-        # cairocffi needs libcairo; on macOS this comes from Homebrew, not wxPython
+        # cairocffi needs libcairo; fontfinder.py shells out to fc-match for
+        # font resolution -- both come from Homebrew on macOS, not wxPython
         run: |
-          brew install cairo dylibbundler
+          brew install cairo fontconfig dylibbundler
           pyinstaller miniword.py --name MiniWord --windowed --onedir \
             --icon miniword/icons/miniword.icns \
             --add-data "miniword/icons:miniword/icons" \
-            --add-data "miniword/plugins:miniword/plugins"
+            --add-data "miniword/plugins:miniword/plugins" \
+            --hidden-import mistune
       - name: Bundle cairo (PyInstaller can't see its dlopen-by-name load)
         run: bash installer/bundle_cairo_macos.sh dist/MiniWord.app
+      - name: Bundle fontconfig (PyInstaller can't see the fc-match subprocess call)
+        run: bash installer/bundle_fontconfig_macos.sh dist/MiniWord.app
       - name: Create .dmg
         run: |
           mkdir -p dist/dmg
