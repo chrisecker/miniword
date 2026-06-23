@@ -333,11 +333,16 @@ def position_footnotes(fn_rows, memo, draw_separator=True):
 
 
 
-def render_footnote_rows(fn_texel, factory, line_width, label=None):
+def render_footnote_rows(fn_texel, factory, line_width, label=None, footnotes=None):
     """Render a Footnote texel's content into a list of Row objects.
 
     Reuses generate_pages with allow_page_breaks=False, the same way
     table_factory.build_cell() renders a table cell's content into rows.
+
+    footnotes: list to collect rows for any footnote nested inside this
+    footnote's own content, so the caller can hand them up to the
+    enclosing page instead of them silently vanishing (this call's own
+    draft/page is otherwise discarded once the rows are extracted).
     """
     memo = RestartMemo()
     memo.geometry = (line_width, 10**9)
@@ -361,7 +366,7 @@ def render_footnote_rows(fn_texel, factory, line_width, label=None):
     # yields it, and so that len(content) matches the rows' total length.
     page = None
     for page in generate_pages(fn_texel.content, 0, memo, factory,
-                                allow_page_breaks=False, footnotes=[]):
+                                allow_page_breaks=False, footnotes=footnotes):
         pass  # expect exactly one page
 
     for k, v in saved.items():
@@ -450,23 +455,27 @@ def align_x(alignment, left, width, text_width):
     assert False
 
 
-def place_anchors(line, factory, width, draft, pending):
-    """Render and place any footnote anchors found in line.
-
-    Once a row didn't fit, every later row (same footnote or a later
-    one) must also defer — placing a later footnote ahead of an
-    earlier pending one would put the footnote boxes out of document
-    order.
+def defer_footnote(fn_row, draft, pending):
+    """Place fn_row directly if it fits and nothing is already pending;
+    otherwise queue it -- once a row didn't fit, every later row (same
+    footnote or a later one) must also defer, or it would put the
+    footnote boxes out of document order.
     """
+    if not pending and draft.can_addfootnote(fn_row):
+        draft.add_footnote(fn_row)
+    else:
+        pending.append(fn_row)
+
+
+def place_anchors(line, factory, width, draft, pending):
+    """Render and place any footnote anchors found in line."""
     for box in line:
         if not isinstance(box, FootnoteAnchorBox):
             continue
         for fn_row in render_footnote_rows(
-                box.fn_texel, factory, width, label=box.display):
-            if not pending and draft.can_addfootnote(fn_row):
-                draft.add_footnote(fn_row)
-            else:
-                pending.append(fn_row)
+                box.fn_texel, factory, width, label=box.display,
+                footnotes=pending):
+            defer_footnote(fn_row, draft, pending)
 
 
 def final_pages(state, pending_fn_rows, device, allow_page_breaks):
@@ -560,6 +569,11 @@ def generate_pages(texel, i, restartmemo, factory,
         before = s.space_before
 
         for seg in split_at_tables(boxlist):
+            if len(seg) == 1 and isinstance(seg[0], TableBox):
+                # Footnotes anchored inside a cell belong to this page, not
+                # to the cell's own discarded nested draft (see build_cell).
+                for fn_row in getattr(seg[0], 'footnotes', None) or ():
+                    defer_footnote(fn_row, draft, pending_fn_rows)
             if (len(seg) == 1
                     and isinstance(seg[0], TableBox)
                     and seg[0].break_level >= 1):
@@ -708,4 +722,56 @@ def test_03():
     remaining = place_pending_footnotes([tall, short], draft)
     assert remaining == [tall, short]
     assert draft.footnotes == ()
+
+
+def test_04():
+    "a footnote anchored inside a table cell reaches the enclosing page"
+    from .factory import Factory
+    from ..core.document import Document
+    from ..footnotes.footnotes import Footnote
+    from ..tables.tables import Table
+    from ..textmodel.texeltree import T, NL, ENDMARK, grouped
+
+    fn = Footnote(grouped([T('Note from inside a table cell.'), ENDMARK]))
+    cell_content = grouped([T('Cell with note'), fn])
+    table = Table((cell_content, {}), (T('Other'), {}), ncols=2)
+
+    doc = Document()
+    doc.textmodel.texel = grouped([T('Intro text.'), NL, table, NL])
+
+    factory_ = Factory(doc.basestyles, TESTDEVICE)
+    memo = restartmemo_from_settings(doc.settings)
+    texel = doc.textmodel.get_xtexel()
+
+    n = 0
+    for page in generate_pages(texel, 0, memo, factory_):
+        if page.footnotebox:
+            n += len(page.footnotebox[2].childs)
+    assert n == 1
+
+
+def test_05():
+    "a footnote nested inside another footnote also reaches the page"
+    from .factory import Factory
+    from ..core.document import Document
+    from ..footnotes.footnotes import Footnote
+    from ..textmodel.texeltree import T, NL, ENDMARK, grouped
+
+    inner_fn = Footnote(grouped([T('Inner note.'), ENDMARK]))
+    outer_fn = Footnote(grouped(
+        [T('Outer note with nested'), inner_fn, T(' ref.'), ENDMARK]))
+
+    doc = Document()
+    doc.textmodel.texel = grouped(
+        [T('Intro text with a note'), outer_fn, T('.'), NL])
+
+    factory_ = Factory(doc.basestyles, TESTDEVICE)
+    memo = restartmemo_from_settings(doc.settings)
+    texel = doc.textmodel.get_xtexel()
+
+    n = 0
+    for page in generate_pages(texel, 0, memo, factory_):
+        if page.footnotebox:
+            n += len(page.footnotebox[2].childs)
+    assert n == 2
 
