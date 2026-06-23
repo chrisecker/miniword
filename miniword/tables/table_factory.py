@@ -10,8 +10,15 @@ from ..textmodel.texeltree import length as texel_length, Group, NewLine
 from .table_boxes import CellBox, TableBox, CELL_HPAD, CELL_VPAD
 
 
-def build_cell(cell_texel, sep, col_width, factory):
-    """Build a CellBox for one cell; cell style comes from the following separator."""
+def build_cell(cell_texel, sep, col_width, factory, footnotes=None):
+    """Build a CellBox for one cell; cell style comes from the following separator.
+
+    footnotes: list to collect FootnoteBox rows for any footnote anchored
+    inside this cell, so the caller can hand them up to the enclosing
+    page instead of them silently vanishing (cells are rendered through
+    their own nested generate_pages call, with its own draft/page that
+    is otherwise discarded once the cell's rows are extracted).
+    """
     from ..layout.pagegen import generate_pages, RestartMemo, Row as PageRow
 
     memo = RestartMemo()
@@ -32,7 +39,8 @@ def build_cell(cell_texel, sep, col_width, factory):
              for k in ('line_width', 'parstyle', 'markerstyle', 'indent_level')}
 
     page = None
-    for page in generate_pages(content, 0, memo, factory, allow_page_breaks=False):
+    for page in generate_pages(content, 0, memo, factory, allow_page_breaks=False,
+                                footnotes=footnotes):
         pass  # expect exactly one page
 
     for k, v in saved.items():
@@ -77,12 +85,14 @@ def build_table_box(texel, factory, row_height=None):
     cell_texels = texel.childs[1::2]
     seps        = texel.childs[2::2]
 
+    footnotes = []
     grid = []
     for r in range(n_rows):
         row = []
         for c in range(n_cols):
             idx = r * n_cols + c
-            row.append(build_cell(cell_texels[idx], seps[idx], col_widths_px[c], factory))
+            row.append(build_cell(cell_texels[idx], seps[idx], col_widths_px[c],
+                                   factory, footnotes=footnotes))
         grid.append(row)
 
     col_widths_out = [max(col_widths_px[c],
@@ -95,10 +105,15 @@ def build_table_box(texel, factory, row_height=None):
     else:
         row_heights = [row_height] * n_rows
 
-    return TableBox(grid, col_widths_out, row_heights,
-                    header_rows=texel.nheader,
-                    break_level=texel.breaklevel,
-                    device=factory.device)
+    table_box = TableBox(grid, col_widths_out, row_heights,
+                         header_rows=texel.nheader,
+                         break_level=texel.breaklevel,
+                         device=factory.device)
+    # Footnotes anchored inside a cell belong to the enclosing page, not
+    # to the cell's own (otherwise discarded) nested draft -- see
+    # build_cell's footnotes param. Picked up by pagegen.generate_pages.
+    table_box.footnotes = footnotes
+    return table_box
 
 
 # ---------------------------------------------------------------------------
