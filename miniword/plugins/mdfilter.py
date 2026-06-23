@@ -690,7 +690,10 @@ def _load_mistune(text):
     doc = Document()
     _register_styles(doc)
 
-    tokens = mistune.create_markdown(renderer='ast')(text)
+    tokens = mistune.create_markdown(
+        renderer='ast',
+        plugins=['footnotes', 'strikethrough', 'table',
+                 'superscript', 'subscript'])(text)
     builder = _DocBuilder(doc)
     builder.process(tokens)
     return doc
@@ -707,11 +710,60 @@ class _DocBuilder:
         self._cur_props  = {}
         self._cur_ptype  = 'normal'
         self._cur_indent = 0
+        self._fn_lookup = {}   # footnote key -> note text
+        # zero-width marks for non-text texels (footnotes, images), in
+        # document order: (position in self.text, kind, payload)
+        self._marks = []
 
     def process(self, nodes):
+        self._collect_footnotes(nodes)
         for node in nodes:
             self._visit(node)
         self._finalize()
+
+    def _collect_footnotes(self, nodes):
+        """Pre-scan the top-level 'footnotes' block the plugin collects
+        all [^ref]: definitions into, keyed by reference (matches
+        footnote_ref's own 'raw' field)."""
+        for node in nodes:
+            if not isinstance(node, dict) or node.get('type') != 'footnotes':
+                continue
+            for item in node.get('children', []):
+                key = item.get('attrs', {}).get('key')
+                if key is not None:
+                    self._fn_lookup[key] = self._flatten_text(
+                        item.get('children', []))
+
+    def _flatten_text(self, nodes):
+        """Plain-text content of a footnote definition (no rich formatting,
+        matching the built-in parser's treatment of footnote text)."""
+        parts = []
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            t = node.get('type')
+            if t in ('text', 'raw_text', 'codespan'):
+                parts.append(node.get('raw', ''))
+            elif t in ('softbreak', 'linebreak'):
+                parts.append(' ')
+            else:
+                parts.append(self._flatten_text(node.get('children', [])))
+        return ''.join(parts)
+
+    def _build_table_grid(self, node):
+        """2-D list of plain-text cells, plus the header row count."""
+        grid = []
+        nheader = 0
+        for child in node.get('children', []):
+            if child.get('type') == 'table_head':
+                grid.append([self._flatten_text(c.get('children', []))
+                             for c in child.get('children', [])])
+                nheader = 1
+            elif child.get('type') == 'table_body':
+                for tr in child.get('children', []):
+                    grid.append([self._flatten_text(c.get('children', []))
+                                 for c in tr.get('children', [])])
+        return grid, nheader
 
     def _visit(self, node):
         t = node.get('type') if isinstance(node, dict) else None
@@ -740,8 +792,33 @@ class _DocBuilder:
                 self._end_par()
             self._start_par('normal', 0)
             self._end_par()
+        elif t == 'table':
+            grid, nheader = self._build_table_grid(node)
+            if grid:
+                from miniword.tables.tables import from_strings as mk_table
+                table = mk_table(grid)
+                if nheader:
+                    table = table.set_nheader(nheader)
+                self._marks.append((len(self.text), 'table', table))
+                self._append('\n', {})
         elif t == 'text' or t == 'raw_text':
             self._append(node.get('raw', ''), self._cur_props)
+        elif t == 'link':
+            old = self._cur_props
+            url = node.get('attrs', {}).get('url')
+            self._cur_props = dict(old, href=url) if url else old
+            for child in node.get('children', []):
+                self._visit(child)
+            self._cur_props = old
+        elif t == 'block_quote':
+            for child in node.get('children', []):
+                if child.get('type') == 'paragraph':
+                    self._start_par('quote', 0)
+                    for c in child.get('children', []):
+                        self._visit(c)
+                    self._end_par()
+                else:
+                    self._visit(child)
         elif t == 'strong':
             old = self._cur_props
             self._cur_props = dict(old, bold=True)
@@ -754,9 +831,15 @@ class _DocBuilder:
             for child in node.get('children', []):
                 self._visit(child)
             self._cur_props = old
-        elif t == 'del':
+        elif t == 'strikethrough':
             old = self._cur_props
             self._cur_props = dict(old, strike=True)
+            for child in node.get('children', []):
+                self._visit(child)
+            self._cur_props = old
+        elif t == 'superscript' or t == 'subscript':
+            old = self._cur_props
+            self._cur_props = dict(old, vertical_position=t)
             for child in node.get('children', []):
                 self._visit(child)
             self._cur_props = old
@@ -764,6 +847,25 @@ class _DocBuilder:
             self._append(node.get('raw', ''), {'font_family': 'Courier New'})
         elif t == 'softbreak' or t == 'linebreak':
             self._append(' ', self._cur_props)
+        elif t == 'image':
+            url = node.get('attrs', {}).get('url', '')
+            if 'base64,' in url:
+                blob_id = self._flatten_text(node.get('children', []))
+                data = base64.b64decode(url.split('base64,', 1)[1])
+                self._marks.append((len(self.text), 'image', (blob_id, data)))
+            # non-data-URI images aren't supported on import (matches the
+            # built-in parser, which only recognizes data-URI images)
+        elif t == 'block_text':
+            # a list item's inline content; the surrounding paragraph
+            # boundaries are already set up by _visit_list_item
+            for child in node.get('children', []):
+                self._visit(child)
+        elif t == 'footnote_ref':
+            key = node.get('raw')
+            content = self._fn_lookup.get(key, key)
+            self._marks.append((len(self.text), 'footnote', content))
+        elif t == 'footnotes':
+            pass  # already consumed by _collect_footnotes
         elif isinstance(node, list):
             for child in node:
                 self._visit(child)
@@ -828,6 +930,27 @@ class _DocBuilder:
 
         for start, end, props in self.runs:
             doc.textmodel.set_properties(start, end, **props)
+
+        from miniword.footnotes.footnotes import Footnote
+        from miniword.images.images import Image
+        from miniword.textmodel.texeltree import T, ENDMARK, grouped
+        # Footnotes and images are zero-width marks in self.text, recorded
+        # in document order. Insert back to front: each insertion only
+        # shifts positions after it, so not-yet-inserted (earlier) marks
+        # stay valid, and marks at the same position (e.g. adjacent
+        # footnote refs "x[^1][^2]") still end up in left-to-right order.
+        for start, kind, payload in reversed(self._marks):
+            model = doc.textmodel.create_textmodel()
+            if kind == 'footnote':
+                fn = Footnote(grouped([T(payload), ENDMARK]))
+                model.texel = grouped([fn])
+            elif kind == 'image':
+                blob_id, data = payload
+                doc.blobs[blob_id] = data
+                model.texel = grouped([Image(blob_id)])
+            else:  # 'table': already a full texel, no grouped() wrapper
+                model.texel = payload
+            doc.textmodel.insert(start, model)
 
 
 # ---------------------------------------------------------------------------
