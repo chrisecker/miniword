@@ -58,6 +58,15 @@ jobs:
         run: bash installer/bundle_cairo_macos.sh dist/MiniWord.app
       - name: Bundle fontconfig (PyInstaller can't see the fc-match subprocess call)
         run: bash installer/bundle_fontconfig_macos.sh dist/MiniWord.app
+      - name: Re-sign the bundle
+        # PyInstaller signs the .app before the steps above add files to it,
+        # which leaves its seal stale -- macOS then refuses to launch it at
+        # all ("MiniWord is damaged"), not even with an Open Anyway override.
+        # No --deep: the added files are already individually signed by the
+        # bundling scripts, and --deep re-signing them errors out on some
+        # compiled extensions (a known macOS codesign quirk); only the outer
+        # bundle's own seal needs to be recomputed.
+        run: codesign --force --sign - dist/MiniWord.app
       - name: Create .dmg
         run: |
           mkdir -p dist/dmg
