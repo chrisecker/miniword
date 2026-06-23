@@ -85,6 +85,15 @@ MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:
 
 Prefer a ready-made installer? Download the `.dmg` from the [Releases page](https://github.com/chrisecker/miniword/releases) instead of building from source.
 
+**First launch:** MiniWord isn't (yet) signed with a paid Apple Developer ID, so macOS blocks it the first time with "MiniWord can't be opened because Apple cannot check it for malicious software." To allow it, no Terminal needed:
+
+1. Double-click MiniWord in Applications once and dismiss the warning.
+2. Open **System Settings → Privacy & Security**, scroll down to the **Security** section.
+3. Click **Open Anyway** next to the MiniWord entry, then confirm with your password or Touch ID.
+4. Open MiniWord again and confirm **Open** in the dialog that appears.
+
+This is a one-time step per installed version.
+
 On macOS, `fontconfig` must be installed via Homebrew:
 
 ```
@@ -100,7 +109,7 @@ pip install ".[full]"   # full installs uharfbuzz, mistune: ligatures, non-Latin
 
 MiniWord stores its configuration and plugins in `~/Library/Application Support/miniword/`.
 
-**Note** that MiniWord has not been tested on macOS.
+**Note** that MiniWord is not yet **optimised** for macOS (tested on Apple Silicon; Intel Macs are untested). While it works, some GUI elements aren't as polished as on Linux.
 
 ## Hacking
 
