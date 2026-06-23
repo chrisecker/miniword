@@ -164,10 +164,15 @@ class _TablePopup(wx.PopupWindow):
     receives keyboard focus on all platforms (PopupTransientWindow cannot
     become the key window on macOS).  Click-outside dismiss is handled
     via EVT_ACTIVATE rather than the transient mechanism.
+
+    wx.PU_CONTAINS_CONTROLS is required for that: on MSW, a plain
+    wx.PopupWindow never takes focus from its parent at all, so it can
+    never receive EVT_ACTIVATE's deactivate transition either -- without
+    this flag the popup is simply stuck open on Windows.
     """
 
     def __init__(self, parent, width):
-        super().__init__(parent, wx.BORDER_SIMPLE)
+        super().__init__(parent, wx.BORDER_SIMPLE | wx.PU_CONTAINS_CONTROLS)
         colours.set(self, 'BackgroundColour', 'BTNFACE')
         _make_table_popup_content(self, width)
         self.Bind(wx.EVT_ACTIVATE,  self._on_activate)
@@ -604,6 +609,16 @@ class TablePanel(SidePanel):
         self._apply_to_table(
             lambda table, r1, c1, r2, c2: table.set_cellattr(r1, c1, r2, c2, **{attr: value})
         )
+
+
+def test_00():
+    "table-size popup requests PU_CONTAINS_CONTROLS (needed to dismiss it on Windows)"
+    app = wx.App()
+    frame = wx.Frame(None)
+    popup = _TablePopup(frame, 200)
+    assert popup.GetWindowStyle() & wx.PU_CONTAINS_CONTROLS
+    popup.Destroy()
+    frame.Destroy()
 
 
 def demo_00():
