@@ -856,8 +856,8 @@ def test_06():
     import wx
     app = wx.App(redirect=False)
     device = CairoDevice()
-    t1 = TextBox('Ein m�nnlicher Briefmark erlebte', device=device)
-    t2 = TextBox('Was Sch�nes, bevor er klebte.', device=device)
+    t1 = TextBox('Ein männlicher Briefmark erlebte', device=device)
+    t2 = TextBox('Was Schönes, bevor er klebte.', device=device)
     par = VBox([t1, t2])
     assert par.height == t1.height+t1.depth+t2.height
     assert par.depth == t2.depth
