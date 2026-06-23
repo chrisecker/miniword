@@ -41,4 +41,29 @@ def _patch_find_library_for_homebrew():
     ctypes.util.find_library = find_library
 
 
+def _patch_dll_dir_for_wx_cairo():
+    """Let Windows find the libcairo-2.dll that wxPython bundles.
+
+    wxPython ships its own copy of the cairo DLLs directly inside the wx
+    package directory, but only adds that directory to the DLL search
+    path when wx.lib.wxcairo is imported -- and even then, only
+    temporarily, around its own internal import of cairocffi (see
+    wx/lib/wxcairo/wx_cairocffi.py). This project imports cairocffi
+    directly, so that fix-up never runs, and Windows' default DLL search
+    order (exe dir, cwd, System32, PATH) never finds the bundled DLL.
+    """
+    if sys.platform != 'win32':
+        return
+    import os
+    try:
+        import wx
+    except ImportError:
+        return
+    try:
+        os.add_dll_directory(os.path.dirname(wx.__file__))
+    except OSError:
+        pass
+
+
 _patch_find_library_for_homebrew()
+_patch_dll_dir_for_wx_cairo()
