@@ -1,3 +1,5 @@
+import sys
+
 import runtests
 
 modules = [
@@ -72,3 +74,6 @@ for modname in modules:
 print()
 print("=" * 62)
 print("Total: %i tests, %i failed" % (total_n, total_n - total_ok))
+
+if total_ok < total_n:
+    sys.exit(1)
