@@ -9,7 +9,26 @@
 # - Commandline arguments --silent, --redirect
 
 import sys
+import os
 sys.path.insert(0, "./test")
+
+
+def _to_module_name(name):
+    """Turn a filename argument into a dotted module name.
+
+    Accepts relative or absolute paths, with '/' or '\\' separators (so
+    it keeps working if the shell expands a typed relative path into an
+    absolute Windows path, e.g. via PowerShell tab-completion).
+    """
+    if name.lower().endswith('.py'):
+        name = name[:-3]
+    name = os.path.normpath(name)
+    if os.path.isabs(name):
+        try:
+            name = os.path.relpath(name, os.getcwd())
+        except ValueError:
+            pass  # e.g. different drive on Windows
+    return name.replace(os.sep, '.').replace('/', '.')
 
 import types
 
@@ -164,11 +183,7 @@ def test_library(modulname, silent=False, profile=False, names=()):
 
 
 def test_file(filename, silent=False, profile=False, names=()):
-    if filename.lower().endswith('.py'):
-        modulname = filename[:-3]
-    else:
-        modulname = filename
-    modulname = modulname.replace('/', '.')
+    modulname = _to_module_name(filename)
     return test_library(modulname, names=names, silent=silent, profile=profile)
 
     
@@ -187,11 +202,7 @@ if __name__ == '__main__':
             sys.argv.remove(name)
 
 
-    name = sys.argv[1]
-
-    if name.lower().endswith('.py'):
-        name = name[:-3]
-    filename = name.replace('/', '.')
+    filename = _to_module_name(sys.argv[1])
     fun_names = sys.argv[2:]
     print("testing:", filename)
 
