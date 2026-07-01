@@ -79,12 +79,17 @@ cp miniword.desktop ~/.local/share/applications/
 
 ### Windows
 
-No separate Cairo installation is needed — wxPython already bundles `libcairo-2.dll`, and `pip install .` pulls in `cairocffi` to bind to it.
-
 ```
 cd miniword
 pip install ".[full]"   # full installs uharfbuzz, fonttools, mistune: ligatures, non-Latin scripts, richer Markdown import
 ```
+
+wxPython bundled `libcairo-2.dll` up through 4.2.1, so `pip install .` alone was enough for `cairocffi` to bind to it. wxPython >=4.2.2 dropped the bundled DLL (an upstream regression, reported at wxWidgets/Phoenix), so on those versions install a Cairo runtime yourself first, e.g. the [GTK3 runtime for Windows](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer).
+
+(Advanced: alternatively, download just `libcairo-2.dll` from [wxWidgets/Phoenix's packaging assets](https://github.com/wxWidgets/Phoenix/blob/wxPython-4.2.1/packaging/msw-cairo/x64/bin/libcairo-2.dll) and drop it into your installed `wx` package folder, e.g. `site-packages/wx/`.)
+
+If you skip this and see an error mentioning a missing `libcairo-2.dll`, install a Cairo runtime as described above (or downgrade to `wxPython<4.2.2`).
+
 
 MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:\Users\<you>\AppData\Roaming\miniword\`).
 

@@ -25,6 +25,8 @@ jobs:
           --add-data "miniword/plugins;miniword/plugins"
           --hidden-import mistune
           --manifest installer/miniword.manifest
+      - name: Bundle cairo (wxPython >=4.2.2 dropped the bundled DLL upstream)
+        run: powershell -File installer/bundle_cairo_windows.ps1 dist/MiniWord
       - name: Install Inno Setup
         run: choco install innosetup -y
       - name: Build installer
