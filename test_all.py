@@ -3,7 +3,7 @@ import runtests
 modules = [
     # textmodel (external dependency, read-only)
     "miniword.textmodel.texeltree",
-    "miniword.textmodel.iterators",
+    "miniword.textmodel.utils",
     "miniword.textmodel.styles",
     "miniword.textmodel.weights",
     "miniword.textmodel.textmodel",

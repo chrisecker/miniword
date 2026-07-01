@@ -22,9 +22,9 @@ def _save(doc, path):
 
 
 def _doc_to_md(doc):
-    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import get_text
-    from miniword.textmodel.iterators import iter_leafes
+    from miniword.textmodel.utils import iter_leafes
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
@@ -967,7 +967,7 @@ class _DocBuilder:
 
 def _check_md(doc):
     """Return list of features that cannot be represented in Markdown."""
-    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables.tables import Table as TableTexel
     from miniword.images.images import Image as ImageTexel
@@ -1072,7 +1072,7 @@ def _parse(md):
 
     runs: list of (text, style_dict) for each leaf texel in the paragraph.
     """
-    from miniword.textmodel.iterators import iter_paragraphs, iter_leafes
+    from miniword.textmodel.utils import iter_paragraphs, iter_leafes
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.core.styles import style_default, updated
     doc = _load_builtin(md)
@@ -1255,7 +1255,7 @@ def test_11():
 @for_each_parser
 def test_12(load):
     "table import"
-    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
     md = "| A | B |\n| --- | --- |\n| C | D |\n"
@@ -1288,7 +1288,7 @@ def test_13(load):
 @for_each_parser
 def test_14(load):
     "blank NL paragraphs around table & pre"
-    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
 
@@ -1343,7 +1343,7 @@ def test_15():
 @for_each_parser
 def test_16(load):
     "blank NL paragraphs inserted around quote blocks"
-    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
 
     def bases(md):
@@ -1447,7 +1447,7 @@ def test_20():
 @for_each_parser
 def test_21(load):
     "footnote import"
-    from miniword.textmodel.iterators import iter_paragraphs
+    from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.footnotes.footnotes import Footnote
     md = "Hello[^1] world.\n\n[^1]: Footnote text.\n"
@@ -1637,7 +1637,7 @@ Code: `print("hello")` inline.
     try:
         doc = _load(path)
         print("Import OK, paragraphs:")
-        from miniword.textmodel.iterators import iter_paragraphs
+        from miniword.textmodel.utils import iter_paragraphs
         from miniword.textmodel.texeltree import get_text, NewLine
         for i1, i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
             nl = elems[-1]
