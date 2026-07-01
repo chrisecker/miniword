@@ -14,4 +14,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install ".[full]"
+      - name: Bundle cairo (wxPython >=4.2.2 dropped the bundled DLL upstream)
+        run: |
+          $sitePackages = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+          powershell -File installer/bundle_cairo_windows.ps1 $sitePackages
       - run: python test_all.py

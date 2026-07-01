@@ -5,7 +5,8 @@
 # so without this step the built app only works on machines that happen
 # to already have cairo on their DLL search path.
 #
-# usage: bundle_cairo_windows.ps1 <path to dist\MiniWord>
+# usage: bundle_cairo_windows.ps1 <directory tree containing the installed wx package>
+# (e.g. dist\MiniWord after a PyInstaller build, or a venv's site-packages)
 $ErrorActionPreference = "Stop"
 
 $distDir = $args[0]
