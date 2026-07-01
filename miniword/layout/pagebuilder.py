@@ -536,6 +536,7 @@ def test_00():
         footnotebox = None
         def __len__(self): return self.length
         def get_index(self, x, y): return 0
+        def adjust(self, pagenum): pass
 
     p0, p1, p2, p3, p4 = [FakePage() for _ in range(5)]
 
