@@ -59,6 +59,7 @@ modules = [
     "miniword.ui.stylemenu",
     "miniword.ui.styleinspector",
     "miniword.ui.searchtool",
+    "miniword.ui.markdownpreview",
 
     # plugins
     "miniword.plugins.mdfilter",

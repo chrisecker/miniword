@@ -12,7 +12,7 @@ from ..layout.cairodevice import CairoDevice
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
 from .colours import colours
-from .icons import ICONS_DIR
+from .icons import ICONS_DIR, app_icon_bundle
 from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
 from .linkpanel import LinksPanel
@@ -202,6 +202,7 @@ class MainFrame(wx.Frame, ViewBase):
     _debug_menu = None
     _secret_armed = False
     _secret_buffer = ''
+    _markdown_preview = None
 
     def __init__(self, document):
         self.document = document
@@ -211,12 +212,7 @@ class MainFrame(wx.Frame, ViewBase):
 
         self.SetSize(self.FromDIP(wx.Size(1400, 700)))
         self.SetMinSize(self.FromDIP(wx.Size(800, 480)))
-        logo_svg = str(ICONS_DIR / "miniword.svg")
-        bundle = wx.IconBundle()
-        for size in (16, 32, 48, 64):
-            bmp = wx.BitmapBundle.FromSVGFile(logo_svg, (size, size))
-            bundle.AddIcon(wx.Icon(bmp.GetBitmap(wx.Size(size, size))))
-        self.SetIcons(bundle)
+        self.SetIcons(app_icon_bundle())
         self.SetName("miniword")
         self._build_menu()
         self._load_plugins()
@@ -274,6 +270,8 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu.Append(self._id_export_pdf, "Export as &PDF…\tCtrl+Shift+E")
         self._id_export = wx.NewIdRef()
         file_menu.Append(self._id_export, "E&xport…")
+        self._id_show_markdown = wx.NewIdRef()
+        file_menu.Append(self._id_show_markdown, "Show &Markdown")
         file_menu.Append(wx.ID_PRINT, "&Print…\tCtrl+P")
         file_menu.AppendSeparator()
         file_menu.Append(wx.ID_CLOSE, "&Close Window\tCtrl+W")
@@ -287,6 +285,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, self._on_reload,     id=self._id_reload)
         self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
         self.Bind(wx.EVT_MENU, self._on_export,     id=self._id_export)
+        self.Bind(wx.EVT_MENU, self._on_show_markdown, id=self._id_show_markdown)
         self.Bind(wx.EVT_MENU, self._on_print,      id=wx.ID_PRINT)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_CLOSE)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
@@ -720,6 +719,19 @@ class MainFrame(wx.Frame, ViewBase):
             return
         fn(self.document, path)
         # NOTE: _current_path and home_format are NOT updated — pure export
+
+    def _on_show_markdown(self, event):
+        if getattr(self, '_markdown_preview', None) is not None:
+            self._markdown_preview.Raise()
+            return
+        from .markdownpreview import MarkdownPreviewFrame
+        self._markdown_preview = MarkdownPreviewFrame(self, self.document)
+        self._markdown_preview.Bind(wx.EVT_CLOSE, self._on_markdown_preview_close)
+        self._markdown_preview.Show()
+
+    def _on_markdown_preview_close(self, event):
+        self._markdown_preview = None
+        event.Skip()
 
     def _on_save(self, event):
         if not self._current_path:
