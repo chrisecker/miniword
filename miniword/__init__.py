@@ -1,7 +1,7 @@
 import sys
 import ctypes.util
 
-__version__ = "0.1.8"
+__version__ = "0.1.9"
 
 
 def _patch_find_library_for_homebrew():
