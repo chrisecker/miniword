@@ -11,6 +11,7 @@ from ..layout import annotation
 import wx
 import string
 import pickle
+import sys
 from math import ceil
 
 
@@ -224,8 +225,12 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     # --- clipboard ---
     
     def to_clipboard(self, textmodel):
-        for i in range(2):
-            # loop is a hack to make clipboard work reliably under linux
+        # repeated Open/SetData/Close is a hack to make the clipboard work
+        # reliably under linux; on other platforms a single pass suffices,
+        # and repeating it there has been observed to wedge the clipboard
+        # (Open() then never succeeds again for the rest of the process)
+        repeats = 2 if sys.platform.startswith('linux') else 1
+        for i in range(repeats):
             text = textmodel.get_text()
             plain = wx.TextDataObject()
             plain.SetText(text)
@@ -234,25 +239,30 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             data = wx.DataObjectComposite()
             data.Add(pickled, preferred=True)
             data.Add(plain)
-            if wx.TheClipboard.Open():
+            if not wx.TheClipboard.Open():
+                continue
+            try:
                 wx.TheClipboard.SetData(data)
                 wx.TheClipboard.Flush()
-                wx.TheClipboard.Close()
                 self._clipboard_data = data  # prevent gc of collecting data
+            finally:
+                wx.TheClipboard.Close()
 
     def read_clipboard(self):
         if wx.TheClipboard.IsOpened():
-            return
+            return None
         if not wx.TheClipboard.Open():
             return None
-        pickled = wx.CustomDataObject("pytextmodel")
-        plain = wx.TextDataObject()
-        textmodel = None
-        if wx.TheClipboard.GetData(pickled):
-            textmodel = pickle.loads(pickled.GetData())
-        elif wx.TheClipboard.GetData(plain):
-            textmodel = self._TextModel(plain.GetText())
-        wx.TheClipboard.Close()
+        try:
+            pickled = wx.CustomDataObject("pytextmodel")
+            plain = wx.TextDataObject()
+            textmodel = None
+            if wx.TheClipboard.GetData(pickled):
+                textmodel = pickle.loads(pickled.GetData())
+            elif wx.TheClipboard.GetData(plain):
+                textmodel = TextModel(plain.GetText())
+        finally:
+            wx.TheClipboard.Close()
         return textmodel
 
     # --- mouse ---
