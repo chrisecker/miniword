@@ -153,7 +153,7 @@ class _PreferencesDialog(wx.Dialog):
             self._choices[category] = ch
 
         btn_sizer = self.CreateButtonSizer(wx.OK | wx.CANCEL)
-        self.Bind(wx.EVT_BUTTON, self._on_ok, id=wx.ID_OK)
+        self.Bind(wx.EVT_BUTTON, self.on_ok, id=wx.ID_OK)
 
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(grid,       0, wx.ALL | wx.EXPAND, 16)
@@ -161,7 +161,7 @@ class _PreferencesDialog(wx.Dialog):
         self.SetSizerAndFit(outer)
         self.CentreOnParent()
 
-    def _on_ok(self, event):
+    def on_ok(self, event):
         for category, ch in self._choices.items():
             unit = _UNIT_CHOICES[ch.GetSelection()]
             self._prefs.set_unit(category, unit)
@@ -208,7 +208,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.document = document
         wx.Frame.__init__(self, None, title="MiniWord")
         ViewBase.__init__(self)
-        self.Bind(wx.EVT_CHAR_HOOK, self._on_secret_key)
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_secret_key)
 
         self.SetSize(self.FromDIP(wx.Size(1400, 700)))
         self.SetMinSize(self.FromDIP(wx.Size(800, 480)))
@@ -256,7 +256,7 @@ class MainFrame(wx.Frame, ViewBase):
         fh = get_file_history()
         fh.UseMenu(self._recent_menu)
         fh.AddFilesToMenu(self._recent_menu)
-        self.Bind(wx.EVT_MENU_RANGE, self._on_recent_file,
+        self.Bind(wx.EVT_MENU_RANGE, self.on_recent_file,
                   id=wx.ID_FILE1, id2=wx.ID_FILE9)
         self._id_import = wx.NewIdRef()
         file_menu.Append(self._id_import, "&Import…")
@@ -277,19 +277,19 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu.Append(wx.ID_CLOSE, "&Close Window\tCtrl+W")
         file_menu.Append(wx.ID_EXIT,  "E&xit\tCtrl+Q")
         bar.Append(file_menu, "&File")
-        self.Bind(wx.EVT_MENU, self._on_new,        id=wx.ID_NEW)
-        self.Bind(wx.EVT_MENU, self._on_open,       id=wx.ID_OPEN)
-        self.Bind(wx.EVT_MENU, self._on_import,     id=self._id_import)
-        self.Bind(wx.EVT_MENU, self._on_save,       id=wx.ID_SAVE)
-        self.Bind(wx.EVT_MENU, self._on_saveas,     id=wx.ID_SAVEAS)
-        self.Bind(wx.EVT_MENU, self._on_reload,     id=self._id_reload)
-        self.Bind(wx.EVT_MENU, self._on_export_pdf, id=self._id_export_pdf)
-        self.Bind(wx.EVT_MENU, self._on_export,     id=self._id_export)
-        self.Bind(wx.EVT_MENU, self._on_show_markdown, id=self._id_show_markdown)
-        self.Bind(wx.EVT_MENU, self._on_print,      id=wx.ID_PRINT)
+        self.Bind(wx.EVT_MENU, lambda _: self.new(),            id=wx.ID_NEW)
+        self.Bind(wx.EVT_MENU, lambda _: self.open_document(),  id=wx.ID_OPEN)
+        self.Bind(wx.EVT_MENU, lambda _: self.import_document(), id=self._id_import)
+        self.Bind(wx.EVT_MENU, lambda _: self.save(),           id=wx.ID_SAVE)
+        self.Bind(wx.EVT_MENU, lambda _: self.save_as(),        id=wx.ID_SAVEAS)
+        self.Bind(wx.EVT_MENU, lambda _: self.reload(),         id=self._id_reload)
+        self.Bind(wx.EVT_MENU, lambda _: self.export_pdf(),     id=self._id_export_pdf)
+        self.Bind(wx.EVT_MENU, lambda _: self.export_document(), id=self._id_export)
+        self.Bind(wx.EVT_MENU, lambda _: self.show_markdown(),  id=self._id_show_markdown)
+        self.Bind(wx.EVT_MENU, lambda _: self.print_document(), id=wx.ID_PRINT)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_CLOSE)
         self.Bind(wx.EVT_MENU, lambda _: self.Close(), id=wx.ID_EXIT)
-        self.Bind(wx.EVT_CLOSE, self._on_close)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
 
         edit_menu = wx.Menu()
         self.undo_item = edit_menu.Append(wx.ID_UNDO, "&Undo\tCtrl+Z")
@@ -311,8 +311,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self.copy(),  id=wx.ID_COPY)
         self.Bind(wx.EVT_MENU, lambda _: self.paste(), id=wx.ID_PASTE)
         self.Bind(wx.EVT_MENU, lambda _: self.paste_markdown(), id=self._id_paste_markdown)
-        self.Bind(wx.EVT_MENU, self._on_find,        id=wx.ID_FIND)
-        self.Bind(wx.EVT_MENU, self._on_preferences, id=wx.ID_PREFERENCES)
+        self.Bind(wx.EVT_MENU, lambda _: self.find(),        id=wx.ID_FIND)
+        self.Bind(wx.EVT_MENU, lambda _: self.preferences(), id=wx.ID_PREFERENCES)
 
         self._id_zoom_fit_w = wx.NewIdRef()
         self._id_zoom_fit_p = wx.NewIdRef()
@@ -331,12 +331,12 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self.canvas.set_zoom(1.0),                            id=wx.ID_ZOOM_100)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_width(),  id=self._id_zoom_fit_w)
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
-        self.Bind(wx.EVT_MENU, self._on_menu_inspector, self._mi_panel)
-        self.Bind(wx.EVT_MENU, self._on_two_page, self._mi_two_page)
+        self.Bind(wx.EVT_MENU, lambda _: self.menu_inspector(), self._mi_panel)
+        self.Bind(wx.EVT_MENU, lambda _: self.two_page(), self._mi_two_page)
 
         help_menu = wx.Menu()
         help_menu.Append(wx.ID_ABOUT, "&About MiniWord…")
-        self.Bind(wx.EVT_MENU, self._on_about, id=wx.ID_ABOUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.about(), id=wx.ID_ABOUT)
         bar.Append(help_menu, "&Help")
 
         self.SetMenuBar(bar)
@@ -357,13 +357,13 @@ class MainFrame(wx.Frame, ViewBase):
         debug_menu.Append(self._id_debug_txl,     "Dump TXL")
         debug_menu.Append(self._id_debug_boxes,   "Dump box tree")
         self.GetMenuBar().Append(debug_menu, "&Debug")
-        self.Bind(wx.EVT_MENU, self._on_debug_console, id=self._id_debug_console)
-        self.Bind(wx.EVT_MENU, self._on_debug_dump,    id=self._id_debug_dump)
-        self.Bind(wx.EVT_MENU, self._on_debug_txl,     id=self._id_debug_txl)
-        self.Bind(wx.EVT_MENU, self._on_debug_boxes,   id=self._id_debug_boxes)
+        self.Bind(wx.EVT_MENU, lambda _: self.debug_console(), id=self._id_debug_console)
+        self.Bind(wx.EVT_MENU, lambda _: self.debug_dump(),    id=self._id_debug_dump)
+        self.Bind(wx.EVT_MENU, lambda _: self.debug_txl(),     id=self._id_debug_txl)
+        self.Bind(wx.EVT_MENU, lambda _: self.debug_boxes(),   id=self._id_debug_boxes)
         self._debug_menu = debug_menu
 
-    def _on_secret_key(self, event):
+    def on_secret_key(self, event):
         """Hidden 'ESC debug ESC' key-code enables the Debug menu at runtime."""
         code = event.GetKeyCode()
         if code == wx.WXK_ESCAPE:
@@ -443,8 +443,8 @@ class MainFrame(wx.Frame, ViewBase):
 
         self._base.Bind(wx.EVT_SIZE, lambda e: (e.Skip(), self._layout()))
 
-        self.Bind(wx.EVT_DPI_CHANGED, self._on_dpi_changed)
-        self.Bind(wx.EVT_DISPLAY_CHANGED, self._on_dpi_changed)
+        self.Bind(wx.EVT_DPI_CHANGED, self.on_dpi_changed)
+        self.Bind(wx.EVT_DISPLAY_CHANGED, self.on_dpi_changed)
 
         wx.CallAfter(self._layout)
 
@@ -465,14 +465,14 @@ class MainFrame(wx.Frame, ViewBase):
         self._mi_panel.Check(key is not None)
         self._layout()
 
-    def _on_preferences(self, _):
+    def preferences(self):
         from ..core.config import get_config
         from .unitentry import LengthInput
         dlg = _PreferencesDialog(self, LengthInput.prefs, get_config())
         dlg.ShowModal()
         dlg.Destroy()
 
-    def _on_about(self, _):
+    def about(self):
         from miniword import __version__ as ver
 
         dlg = wx.Dialog(self, title="About MiniWord")
@@ -502,7 +502,7 @@ class MainFrame(wx.Frame, ViewBase):
         dlg.ShowModal()
         dlg.Destroy()
 
-    def _on_menu_inspector(self, _):
+    def menu_inspector(self):
         if self._mi_panel.IsChecked():
             self._panel_key = "style"
             self._inspector_book.SetSelection(self._inspector_pages["style"])
@@ -515,7 +515,7 @@ class MainFrame(wx.Frame, ViewBase):
             self._strip.deactivate()
         self._layout()
 
-    def _on_two_page(self, _):
+    def two_page(self):
         from ..layout.pagebuilder import Layout, TwoPageLayout
         builder = self.canvas.builder
         was_finished = builder._layout.is_finished
@@ -525,7 +525,7 @@ class MainFrame(wx.Frame, ViewBase):
         builder._layout.is_finished = was_finished
         self.canvas.refresh()
 
-    def _on_find(self, _):
+    def find(self):
         self.show_right_panel("search")
 
     def _zoom_fit_width(self):
@@ -582,7 +582,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("settings", "Settings"),
         ], self._on_panel_toggle)
 
-    def _on_dpi_changed(self, event):
+    def on_dpi_changed(self, event):
         self._build_menu()
         self._register_plugin_menus()
         active_key = self._strip.active_btn._key if self._strip.active_btn else None
@@ -605,7 +605,7 @@ class MainFrame(wx.Frame, ViewBase):
         if hasattr(self, '_mi_reload'):
             self._mi_reload.Enable(bool(self._current_path))
 
-    def _on_close(self, event):
+    def on_close(self, event):
         if hasattr(self, 'editor') and self.editor.undocount() > 0:
             dlg = wx.MessageDialog(
                 self,
@@ -617,7 +617,7 @@ class MainFrame(wx.Frame, ViewBase):
             result = dlg.ShowModal()
             dlg.Destroy()
             if result == wx.ID_YES:
-                self._on_save(event)
+                self.save()
                 if self.editor.undocount() > 0:
                     event.Veto()
                     return
@@ -631,12 +631,12 @@ class MainFrame(wx.Frame, ViewBase):
         get_file_history().RemoveMenu(self._recent_menu)
         event.Skip()
 
-    def _on_new(self, event):
+    def new(self):
         from ..core.document import Document
         frame = MainFrame(Document())
         frame.Show()
 
-    def _on_open(self, event):
+    def open_document(self):
         from ..io import importexport
         with wx.FileDialog(
             self, "Open",
@@ -658,7 +658,7 @@ class MainFrame(wx.Frame, ViewBase):
         get_file_history().AddFileToHistory(path)
         save_file_history()
 
-    def _on_recent_file(self, event):
+    def on_recent_file(self, event):
         idx = event.GetId() - wx.ID_FILE1
         fh = get_file_history()
         path = fh.GetHistoryFile(idx)
@@ -677,7 +677,7 @@ class MainFrame(wx.Frame, ViewBase):
         fh.AddFileToHistory(path)
         save_file_history()
 
-    def _on_import(self, event):
+    def import_document(self):
         from ..io import importexport
         with wx.FileDialog(
             self, "Import",
@@ -697,7 +697,7 @@ class MainFrame(wx.Frame, ViewBase):
         get_file_history().AddFileToHistory(path)
         save_file_history()
 
-    def _on_export(self, event):
+    def export_document(self):
         from ..io import importexport
         with wx.FileDialog(
             self, "Export",
@@ -723,16 +723,16 @@ class MainFrame(wx.Frame, ViewBase):
         fn(self.document, path)
         # NOTE: _current_path and home_format are NOT updated — pure export
 
-    def _on_show_markdown(self, event):
+    def show_markdown(self):
         if getattr(self, '_markdown_preview', None) is not None:
             self._markdown_preview.Raise()
             return
         from .markdownpreview import MarkdownPreviewFrame
         self._markdown_preview = MarkdownPreviewFrame(self, self.document)
-        self._markdown_preview.Bind(wx.EVT_CLOSE, self._on_markdown_preview_close)
+        self._markdown_preview.Bind(wx.EVT_CLOSE, self.on_markdown_preview_close)
         self._markdown_preview.Show()
 
-    def _on_markdown_preview_close(self, event):
+    def on_markdown_preview_close(self, event):
         self._markdown_preview = None
         event.Skip()
 
@@ -769,16 +769,16 @@ class MainFrame(wx.Frame, ViewBase):
             self.editor.remove()
             self.editor.insert_texel(texel)
 
-    def _on_save(self, event):
+    def save(self):
         if not self._current_path:
-            self._on_saveas(event)
+            self.save_as()
             return
         self._do_save(self._current_path)
 
     def _doc_dir(self):
         return os.path.dirname(self._current_path) if self._current_path else ''
 
-    def _on_saveas(self, event):
+    def save_as(self):
         from ..io import importexport
         with wx.FileDialog(
             self, "Save As",
@@ -828,7 +828,7 @@ class MainFrame(wx.Frame, ViewBase):
         dlg.Destroy()
         return result == wx.ID_YES
 
-    def _on_reload(self, event):
+    def reload(self):
         if self.editor.undocount() > 0:
             wx.MessageBox("Document has been modified. Please save your changes first.",
                           "Reload", wx.OK | wx.ICON_WARNING, self)
@@ -840,7 +840,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.editor.index = min(index, len(self.editor.root))
         self._update_title()
 
-    def _on_print(self, event):
+    def print_document(self):
         import tempfile, subprocess
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
             path = f.name
@@ -852,7 +852,7 @@ class MainFrame(wx.Frame, ViewBase):
         else:
             subprocess.run(["xdg-open", path])
 
-    def _on_export_pdf(self, event):
+    def export_pdf(self):
         with wx.FileDialog(
             self, "Export as PDF",
             defaultDir=self._doc_dir(),
@@ -923,7 +923,7 @@ class MainFrame(wx.Frame, ViewBase):
             return sorted(self.editor.selection)
         return None
 
-    def _on_debug_console(self, _):
+    def debug_console(self):
         from . import testing
         l = locals()
         l.update(globals())
@@ -936,15 +936,15 @@ class MainFrame(wx.Frame, ViewBase):
             return model.copy(*r).texel
         return model.texel
 
-    def _on_debug_dump(self, _):
+    def debug_dump(self):
         from ..textmodel.texeltree import dump
         dump(self._get_debug_texel())
 
-    def _on_debug_txl(self, _):
+    def debug_txl(self):
         from ..io.texeltreeformat import serialize
         print(serialize(self._get_debug_texel()))
 
-    def _on_debug_boxes(self, _):
+    def debug_boxes(self):
         layout = self.canvas.builder.layout
         r = self._get_debug_range()
         if r:
