@@ -298,6 +298,8 @@ class MainFrame(wx.Frame, ViewBase):
         edit_menu.Append(wx.ID_CUT,   "Cu&t\tCtrl+X")
         edit_menu.Append(wx.ID_COPY,  "&Copy\tCtrl+C")
         edit_menu.Append(wx.ID_PASTE, "&Paste\tCtrl+V")
+        self._id_paste_markdown = wx.NewIdRef()
+        edit_menu.Append(self._id_paste_markdown, "Paste as &Markdown")
         edit_menu.AppendSeparator()
         edit_menu.Append(wx.ID_FIND,    "&Find && Replace…\tCtrl+F")
         edit_menu.AppendSeparator()
@@ -305,9 +307,10 @@ class MainFrame(wx.Frame, ViewBase):
         bar.Append(edit_menu, "&Edit")
         self.Bind(wx.EVT_MENU, lambda _: self.editor.undo(),  id=wx.ID_UNDO)
         self.Bind(wx.EVT_MENU, lambda _: self.editor.redo(),  id=wx.ID_REDO)
-        self.Bind(wx.EVT_MENU, lambda _: self.editor.controller.handle_action('cut', False),   id=wx.ID_CUT)
-        self.Bind(wx.EVT_MENU, lambda _: self.editor.controller.handle_action('copy', False),  id=wx.ID_COPY)
-        self.Bind(wx.EVT_MENU, lambda _: self.editor.controller.handle_action('paste', False), id=wx.ID_PASTE)
+        self.Bind(wx.EVT_MENU, lambda _: self.cut(),   id=wx.ID_CUT)
+        self.Bind(wx.EVT_MENU, lambda _: self.copy(),  id=wx.ID_COPY)
+        self.Bind(wx.EVT_MENU, lambda _: self.paste(), id=wx.ID_PASTE)
+        self.Bind(wx.EVT_MENU, lambda _: self.paste_markdown(), id=self._id_paste_markdown)
         self.Bind(wx.EVT_MENU, self._on_find,        id=wx.ID_FIND)
         self.Bind(wx.EVT_MENU, self._on_preferences, id=wx.ID_PREFERENCES)
 
@@ -732,6 +735,39 @@ class MainFrame(wx.Frame, ViewBase):
     def _on_markdown_preview_close(self, event):
         self._markdown_preview = None
         event.Skip()
+
+    def cut(self):
+        self.editor.controller.handle_action('cut', False)
+
+    def copy(self):
+        self.editor.controller.handle_action('copy', False)
+
+    def paste(self):
+        """Normal Cmd/Ctrl+V: paste real structure when the clipboard holds
+        an HTML flavor (e.g. copied from a browser), otherwise fall back to
+        the editor's plain-text/internal-format paste."""
+        html = self.editor.canvas.read_clipboard_html()
+        if not html:
+            self.editor.controller.handle_action('paste', False)
+            return
+        from ..plugins.htmlfilter import html_text_to_fragment
+        texel = html_text_to_fragment(html, self.document)
+        with self.editor.atomic():
+            self.editor.remove()
+            self.editor.insert_texel(texel)
+
+    def paste_markdown(self):
+        """Explicit action: interpret the clipboard's plain text as
+        Markdown syntax, unlike normal Paste which never guesses at
+        plain-text content."""
+        text = self.editor.canvas.read_clipboard_text()
+        if not text:
+            return
+        from ..plugins.mdfilter import md_text_to_fragment
+        texel = md_text_to_fragment(text, self.document)
+        with self.editor.atomic():
+            self.editor.remove()
+            self.editor.insert_texel(texel)
 
     def _on_save(self, event):
         if not self._current_path:

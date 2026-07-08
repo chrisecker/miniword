@@ -63,6 +63,7 @@ modules = [
 
     # plugins
     "miniword.plugins.mdfilter",
+    "miniword.plugins.htmlfilter",
 ]
 
 total_n = 0

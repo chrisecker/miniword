@@ -265,6 +265,35 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             wx.TheClipboard.Close()
         return textmodel
 
+    def read_clipboard_html(self):
+        """Return the clipboard's HTML flavor as a string, or None if the
+        clipboard doesn't currently hold one (e.g. plain-text-only copy)."""
+        if wx.TheClipboard.IsOpened():
+            return None
+        if not wx.TheClipboard.Open():
+            return None
+        try:
+            data = wx.CustomDataObject(wx.DataFormat(wx.DF_HTML))
+            if not wx.TheClipboard.GetData(data):
+                return None
+            return bytes(data.GetData()).decode('utf-8', errors='replace')
+        finally:
+            wx.TheClipboard.Close()
+
+    def read_clipboard_text(self):
+        """Return the clipboard's plain-text flavor as a string, or None."""
+        if wx.TheClipboard.IsOpened():
+            return None
+        if not wx.TheClipboard.Open():
+            return None
+        try:
+            plain = wx.TextDataObject()
+            if not wx.TheClipboard.GetData(plain):
+                return None
+            return plain.GetText()
+        finally:
+            wx.TheClipboard.Close()
+
     # --- mouse ---
 
     def on_mousewheel(self, event):

@@ -228,12 +228,28 @@ def _load_builtin(text):
     doc = Document()
     _register_styles(doc)
     doc.textmodel = TextModel('')
+    _build_builtin(doc, text)
+    return doc
+
+
+def _build_builtin(doc, text):
+    """Parse text as Markdown and build it into doc.textmodel (+ doc.blobs
+    for embedded images). doc only needs those two attributes -- used both
+    for whole-file import (doc is a real Document) and for paste (doc is a
+    lightweight stand-in, see md_text_to_fragment)."""
+    _build_blocks(doc, _parse_md_paragraphs(text))
+
+
+def _build_blocks(doc, blocks):
+    """Build pre-parsed blocks (see _parse_md_paragraphs's return shape:
+    (ptype, indent, runs) or ('table', grid)) into doc.textmodel (+
+    doc.blobs). Shared by the built-in MD parser and the HTML-paste
+    converter (htmlfilter.py) so both produce identically-styled output."""
 
     def insert_nl():
         pos = len(doc.textmodel.get_text())
         doc.textmodel.insert(pos, doc.textmodel.create_textmodel('\n'))
 
-    blocks = _parse_md_paragraphs(text)
     prev_btype = None
 
     for i, block in enumerate(blocks):
@@ -264,8 +280,6 @@ def _load_builtin(text):
             insert_nl()
 
         prev_btype = btype
-
-    return doc
 
 
 def _insert_text_block(doc, ptype, indent, runs):
@@ -628,15 +642,101 @@ def _preset_defs(preset, mm):
     return _github_defs(12, mm)
 
 
-def _register_styles(doc, preset='github'):
+def _register_styles(doc, preset='github', overwrite=True, skip=()):
+    """Register the MD paragraph styles (h1..h6, body, list, numbered,
+    quote, pre) on doc.basestyles.
+
+    overwrite=False skips any name doc already defines, instead of
+    replacing it -- used when pasting into an already-open document, whose
+    existing styles of the same name (if any) should win.
+    skip: names to never touch -- used for roles _adopt_existing_styles
+    already resolved to one of doc's own (differently-named) styles, so a
+    second, disconnected style under the parser's canonical name doesn't
+    also get added.
+    """
     from miniword.core.styles import style_default, updated
     mm = 72 / 25.4
     n  = len(style_default['indent_levels'])
     heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
     for name, props in _preset_defs(preset, mm).items():
+        if name in skip:
+            continue
+        if not overwrite and doc.basestyles.contains(name):
+            continue
         base = heading_base if name.startswith('h') else {}
         style = updated(style_default, base, props)
         doc.basestyles.set(name, style)
+
+
+_CANONICAL_ROLES = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body',
+                     'list', 'numbered', 'quote', 'pre'}
+
+
+def _role_to_key(doc):
+    """Map each role tag already used by doc.basestyles to the style name
+    that carries it (see apply_md_style, which renames an existing
+    role-tagged style in place using this same mapping)."""
+    basestyles = doc.basestyles
+    return {
+        basestyles.get(k).get('role'): k
+        for k in basestyles.keys()
+        if basestyles.get(k) and basestyles.get(k).get('role')
+    }
+
+
+def _adopt_existing_styles(textmodel, doc):
+    """Rename textmodel's paragraph styles to whatever name doc's own
+    basestyles already uses for the same role (e.g. its own 'h1'-tagged
+    heading style, however it's actually named), so pasted content matches
+    the target document's look instead of introducing a second,
+    disconnected style under the parser's canonical name.
+
+    Returns the set of canonical role names doc already had a match for --
+    the caller should skip registering a fallback style for those (see
+    _register_styles's skip= parameter).
+    """
+    from miniword.textmodel.utils import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine
+
+    role_to_key = _role_to_key(doc)
+    remap = {role: key for role, key in role_to_key.items()
+             if role in _CANONICAL_ROLES and key != role}
+
+    if remap:
+        for i1, i2, elems in iter_paragraphs(textmodel.get_xtexel(), 0):
+            nl = elems[-1]
+            if not isinstance(nl, NewLine):
+                continue
+            base = nl.parstyle.get('base')
+            if base in remap:
+                textmodel.set_parstyle(i2 - 1, dict(nl.parstyle, base=remap[base]))
+
+    return set(role_to_key) & _CANONICAL_ROLES
+
+
+def md_text_to_fragment(text, target_doc):
+    """Parse Markdown text into a texel fragment for insertion into an
+    already-open document (e.g. via Editor.insert_texel()).
+
+    Paragraphs whose role (heading, list, ...) target_doc already has a
+    style for adopt that style's name (see _adopt_existing_styles); any
+    other roles get the standard MD styles registered as a fallback (see
+    _register_styles(..., overwrite=False)). Embedded images are routed
+    into target_doc's own blob store. No new Document is created.
+    """
+    from types import SimpleNamespace
+    from miniword.textmodel.textmodel import TextModel
+
+    shim = SimpleNamespace(textmodel=TextModel(''), blobs=target_doc.blobs)
+    try:
+        import mistune  # noqa: F401 -- availability check only
+        _build_mistune(shim, text)
+    except ImportError:
+        _build_builtin(shim, text)
+
+    covered = _adopt_existing_styles(shim.textmodel, target_doc)
+    _register_styles(target_doc, overwrite=False, skip=covered)
+    return shim.textmodel.texel
 
 
 def apply_md_style(editor, document, preset):
@@ -647,12 +747,7 @@ def apply_md_style(editor, document, preset):
     n  = len(style_default['indent_levels'])
     heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
     basestyles = document.basestyles
-
-    role_to_key = {
-        basestyles.get(k).get('role'): k
-        for k in basestyles.keys()
-        if basestyles.get(k) and basestyles.get(k).get('role')
-    }
+    role_to_key = _role_to_key(document)
 
     with editor.atomic():
         for _key, props in _preset_defs(preset, mm).items():
@@ -683,20 +778,24 @@ def get_menus(doc):
 
 def _load_mistune(text):
     """Import using mistune for more accurate MD parsing."""
-    import mistune
     from miniword.core.document import Document
-    from miniword.textmodel.textmodel import TextModel
 
     doc = Document()
     _register_styles(doc)
+    _build_mistune(doc, text)
+    return doc
 
+
+def _build_mistune(doc, text):
+    """Like _build_builtin, but via the (optional) mistune parser. doc only
+    needs .textmodel (set here) and .blobs."""
+    import mistune
     tokens = mistune.create_markdown(
         renderer='ast',
         plugins=['footnotes', 'strikethrough', 'table',
                  'superscript', 'subscript'])(text)
     builder = _DocBuilder(doc)
     builder.process(tokens)
-    return doc
 
 
 class _DocBuilder:
@@ -1604,6 +1703,79 @@ def test_31():
     indents = [(ptype, indent, builder.text[start:end].strip())
                for start, end, ptype, indent in builder.pars]
     assert indents == [('list', 0, 'Alpha'), ('list', 1, 'Nested'), ('list', 0, 'Beta')]
+
+
+def test_32():
+    "md_text_to_fragment: builds an insertable texel without creating a Document"
+    from miniword.core.document import Document
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.textmodel.utils import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine, get_text
+
+    doc = Document()
+    texel = md_text_to_fragment("# Title\n\nBody text.\n", doc)
+
+    model = TextModel()
+    model.texel = texel
+    assert model.get_text() == 'Title\nBody text.\n'
+
+    bases = []
+    for i1, i2, elems in iter_paragraphs(model.get_xtexel(), 0):
+        nl = elems[-1]
+        text = ''.join(get_text(e) for e in elems[:-1])
+        if isinstance(nl, NewLine) and text:
+            bases.append(nl.parstyle.get('base', 'normal'))
+    assert bases == ['h1', 'body']
+
+    # the fragment only renders correctly if the styles it references
+    # (h1, body, ...) actually got registered on the target document
+    assert doc.basestyles.contains('h1')
+    assert doc.basestyles.contains('body')
+
+
+def test_33():
+    "md_text_to_fragment doesn't clobber a document's own existing style"
+    from miniword.core.document import Document
+
+    doc = Document()
+    custom_h1 = {'font_size': 99}
+    doc.basestyles.set('h1', custom_h1)
+
+    md_text_to_fragment("# Title\n", doc)
+    assert doc.basestyles.get('h1') == custom_h1
+
+    # calling it again (e.g. a second paste) stays idempotent
+    md_text_to_fragment("# Title again\n", doc)
+    assert doc.basestyles.get('h1') == custom_h1
+
+
+def test_34():
+    "md_text_to_fragment adopts an existing role-tagged style under a different name"
+    from miniword.core.document import Document
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.textmodel.utils import iter_paragraphs
+    from miniword.textmodel.texeltree import NewLine, get_text
+
+    doc = Document()
+    # doc already has a heading style for role 'h1', just not named 'h1'
+    doc.basestyles.set('MyHeading', {'role': 'h1', 'font_size': 42})
+
+    texel = md_text_to_fragment("# Title\n\nBody text.\n", doc)
+    model = TextModel()
+    model.texel = texel
+
+    bases = {}
+    for i1, i2, elems in iter_paragraphs(model.get_xtexel(), 0):
+        nl = elems[-1]
+        if isinstance(nl, NewLine):
+            text = ''.join(get_text(e) for e in elems[:-1])
+            if text:
+                bases[text] = nl.parstyle.get('base')
+
+    assert bases['Title'] == 'MyHeading'         # adopted, not the canonical 'h1'
+    assert bases['Body text.'] == 'body'          # no role='body' match -> fallback
+    assert not doc.basestyles.contains('h1')      # no disconnected extra style added
+    assert doc.basestyles.get('MyHeading') == {'role': 'h1', 'font_size': 42}
 
 
 if __name__ == '__main__':
