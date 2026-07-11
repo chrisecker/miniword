@@ -211,7 +211,7 @@ _IMG_MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
 
 _IMG_RE    = re.compile(r'!\[([^\]]*)\]\(data:[^;]+;base64,([^)]+)\)')
 
-_ATX_RE    = re.compile(r'^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
+_ATX_RE    = re.compile(r'^ {0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
 _UL_RE     = re.compile(r'^(\s*)[-*+]\s+(.*)')
 _OL_RE     = re.compile(r'^(\s*)\d+\.\s+(.*)')
 _QUOTE_RE  = re.compile(r'^>\s?(.*)')
@@ -1166,15 +1166,14 @@ def for_each_parser(fn):
     return None  # the bare name shouldn't be picked up as its own test
 
 
-def _parse(md):
-    """Parse a MD string and return list of (base, ptype, indent, runs).
+def _extract_pars(doc):
+    """Extract list of (base, ptype, indent, runs) from a loaded Document.
 
     runs: list of (text, style_dict) for each leaf texel in the paragraph.
     """
-    from miniword.textmodel.utils import iter_paragraphs, iter_leafes
+    from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.core.styles import style_default, updated
-    doc = _load_builtin(md)
     result = []
     for i1, i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
         nl = elems[-1]
@@ -1193,6 +1192,11 @@ def _parse(md):
     return result
 
 
+def _parse(md):
+    """Parse a MD string with the built-in parser; see _extract_pars."""
+    return _extract_pars(_load_builtin(md))
+
+
 def test_00():
     "normal paragraph"
     pars = _parse("Hello world\n")
@@ -1203,15 +1207,27 @@ def test_00():
     assert ''.join(t for t, _ in runs) == 'Hello world'
 
 
-def test_01():
+@for_each_parser
+def test_01(load):
     "headings h1–h3"
-    pars = _parse("# Heading 1\n## Heading 2\n### Heading 3\n")
+    pars = _extract_pars(load("# Heading 1\n## Heading 2\n### Heading 3\n"))
     assert pars[0][0] == 'h1'
     assert pars[1][0] == 'h2'
     assert pars[2][0] == 'h3'
     assert ''.join(t for t, _ in pars[0][3]) == 'Heading 1'
     assert ''.join(t for t, _ in pars[1][3]) == 'Heading 2'
     assert ''.join(t for t, _ in pars[2][3]) == 'Heading 3'
+
+
+@for_each_parser
+def test_01b(load):
+    "indented ATX headings (up to 3 leading spaces) are still recognized"
+    pars = _extract_pars(load("## Section\n   ### Sub A\n   ### Sub B\n"))
+    assert pars[0][0] == 'h2'
+    assert pars[1][0] == 'h3'
+    assert pars[2][0] == 'h3'
+    assert ''.join(t for t, _ in pars[1][3]) == 'Sub A'
+    assert ''.join(t for t, _ in pars[2][3]) == 'Sub B'
 
 
 def test_02():
