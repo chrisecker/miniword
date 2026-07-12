@@ -91,8 +91,12 @@ def _sniff_txl(path):
 
 
 def open_wildcard():
-    """Wildcard for Open dialog: TXL + all registered import formats."""
-    parts = ["TXL files (*.txl)|*.txl"]
+    """Wildcard for Open dialog: all supported files (default), then TXL,
+    then each registered import format individually."""
+    all_exts = ['txl'] + [e for _n, extensions, _fn, _l in _import_filters for e in extensions]
+    all_pattern = ';'.join('*.' + e for e in all_exts)
+    parts = ['All supported files (%s)|%s' % (all_pattern, all_pattern),
+             "TXL files (*.txl)|*.txl"]
     for name, extensions, _fn, _lossless in _import_filters:
         pattern = ';'.join('*.' + e for e in extensions)
         parts.append('%s (%s)|%s' % (name, pattern, pattern))
@@ -111,7 +115,7 @@ def saveas_wildcard():
 
 
 def import_wildcard():
-    return _build_wildcard(_import_filters)
+    return _build_wildcard(_import_filters, all_supported=True)
 
 
 def export_wildcard():
@@ -139,8 +143,12 @@ def _find_entry(path, filters):
     return None
 
 
-def _build_wildcard(filters):
+def _build_wildcard(filters, all_supported=False):
     parts = []
+    if all_supported:
+        all_exts = [e for _name, extensions, *_rest in filters for e in extensions]
+        pattern = ';'.join('*.' + e for e in all_exts)
+        parts.append('All supported files (%s)|%s' % (pattern, pattern))
     for entry in filters:
         name, extensions = entry[0], entry[1]
         pattern = ';'.join('*.' + e for e in extensions)
@@ -238,6 +246,17 @@ def test_03():
     wc = open_wildcard()
     assert "*.txl" in wc
     assert "Plain Text" in wc
+
+
+def test_03b():
+    "open_wildcard and import_wildcard default to 'All supported files'"
+    for wc in (open_wildcard(), import_wildcard()):
+        first = wc.split('|')[0]
+        assert first.startswith("All supported files")
+
+    # export/saveas are unaffected -- no combined "all supported" entry
+    for wc in (export_wildcard(), saveas_wildcard()):
+        assert "All supported files" not in wc
 
 
 def test_04():
