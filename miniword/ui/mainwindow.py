@@ -89,6 +89,7 @@ def load_plugins():
       all_mods:    all successfully loaded modules
     """
     import glob
+    import importlib
     import importlib.util
 
     from ..core.respath import package_dir
@@ -108,14 +109,25 @@ def load_plugins():
     all_mods = []
     for path in paths:
         try:
-            mod_name = f"_mw_plugin_{os.path.splitext(os.path.basename(path))[0]}"
-            if mod_name in sys.modules:
-                mod = sys.modules[mod_name]
+            stem = os.path.splitext(os.path.basename(path))[0]
+            if os.path.dirname(os.path.abspath(path)) == os.path.abspath(_builtin):
+                # Built-in plugins are regular package modules. Import them
+                # by package name, not by file path, so they share module
+                # identity with any `from miniword.plugins.X import ...`
+                # done elsewhere in the codebase (e.g. htmlfilter.py imports
+                # from mdfilter.py) -- otherwise the module, including its
+                # side-effecting register_import/register_export calls,
+                # would run a second time under a different sys.modules key.
+                mod = importlib.import_module(f"miniword.plugins.{stem}")
             else:
-                spec = importlib.util.spec_from_file_location(mod_name, path)
-                mod  = importlib.util.module_from_spec(spec)
-                sys.modules[mod_name] = mod
-                spec.loader.exec_module(mod)
+                mod_name = f"_mw_plugin_{stem}"
+                if mod_name in sys.modules:
+                    mod = sys.modules[mod_name]
+                else:
+                    spec = importlib.util.spec_from_file_location(mod_name, path)
+                    mod  = importlib.util.module_from_spec(spec)
+                    sys.modules[mod_name] = mod
+                    spec.loader.exec_module(mod)
         except Exception as e:
             print(f"Plugin error ({os.path.basename(path)}): {e}")
             continue
