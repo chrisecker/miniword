@@ -175,6 +175,7 @@ class _TablePopup(wx.PopupWindow):
         super().__init__(parent, wx.BORDER_SIMPLE | wx.PU_CONTAINS_CONTROLS)
         colours.set(self, 'BackgroundColour', 'BTNFACE')
         _make_table_popup_content(self, width)
+        self._dismissed = False
         self.Bind(wx.EVT_ACTIVATE,  self._on_activate)
         self.Bind(wx.EVT_CHAR_HOOK, self._on_key)
 
@@ -195,6 +196,16 @@ class _TablePopup(wx.PopupWindow):
         self.grid.SetFocus()
 
     def Dismiss(self):
+        # Both the explicit dismiss (on selection) and EVT_ACTIVATE's
+        # deactivate transition call Dismiss() -- e.g. "Insert custom
+        # table" dismisses the popup and then opens a modal dialog, whose
+        # focus grab re-triggers EVT_ACTIVATE on the (still alive, just
+        # hidden) popup. Without this guard that schedules Destroy twice,
+        # and the second one crashes with "wrapped C/C++ object ... has
+        # been deleted" once the first has already run.
+        if self._dismissed:
+            return
+        self._dismissed = True
         self.Hide()
         wx.CallAfter(self.Destroy)
 
@@ -618,6 +629,20 @@ def test_00():
     popup = _TablePopup(frame, 200)
     assert popup.GetWindowStyle() & wx.PU_CONTAINS_CONTROLS
     popup.Destroy()
+    frame.Destroy()
+
+
+def test_01():
+    "calling Dismiss() more than once doesn't crash (e.g. selection dismiss + EVT_ACTIVATE)"
+    app = wx.App()
+    frame = wx.Frame(None)
+    popup = _TablePopup(frame, 200)
+    popup.Popup()
+    popup.Dismiss()
+    popup.Dismiss()   # must be a no-op, not a second wx.CallAfter(Destroy)
+    app.ProcessPendingEvents()
+    wx.MilliSleep(10)
+    app.ProcessPendingEvents()   # runs the pending CallAfter(s); would raise if doubled
     frame.Destroy()
 
 
