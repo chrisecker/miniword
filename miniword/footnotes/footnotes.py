@@ -1,6 +1,6 @@
 from ..textmodel.submodel import Footnote
 from ..textmodel.texeltree import EMPTYSTYLE
-from ..layout.boxes import NewlineBox
+from ..layout.boxes import NewlineBox, RowsBox
 from ..layout.testdevice import TESTDEVICE
 
 def format_fn_label(n, style='numbers'):
@@ -12,6 +12,38 @@ def format_fn_label(n, style='numbers'):
     return str(n)
 
 
+class FootnoteBox(RowsBox):
+    """
+    A footnotebox is a rectangular region at the bottom of a page containing footnote
+    rows. A separator line can be drawn at the top of the box.
+    """
+    def __init__(self, rows, width, draw_separator=True, device=None):
+        if device is not None:
+            self.device = device
+        self.draw_separator = draw_separator
+
+        positioned = []
+        y = 0
+        for row in rows:
+            positioned.append((0, y, row))
+            y += row.height + row.depth
+        self.rows = tuple(positioned)
+
+        self.width = max(width, max((row.width for row in rows), default=0))
+        self.height = y
+        self.depth = 0
+
+    def draw(self, x, y, gc):
+        if self.draw_separator:
+            sep_y = y - 4   # 4pt gap above the line
+            self.device.draw_line(x, sep_y, x + self.width * 0.3, sep_y,
+                                   0.5, gc)
+        RowsBox.draw(self, x, y, gc)
+    
+
+
+
+    
 class FootnoteAnchorBox(NewlineBox):
     """Inline superscript number marking a footnote anchor in the text flow."""
     text = '\x00'  # length 1; display is separate to keep length == 1

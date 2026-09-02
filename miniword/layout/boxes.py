@@ -644,6 +644,35 @@ class VGroup(VBox):
     def create_group(self, l):
         return VGroup(l, device=self.device)
 
+    
+class RowsBox(Box):    
+    """
+    Baseclass for Page, FootnoteBox and CellBox.
+
+    Data consists of row-boxes and their x,y-position. y values must
+    be monotonically increasing. decorations (shading, images, ...)
+    are possible.
+    """
+    data = ()
+    decorations = ()
+
+    def __len__(self):
+        return sum(len(row) for _, _, row in self.data)
+
+    def iter_boxes(self, i, x, y):
+        j1 = i
+        for x_, y_, row in self.data:
+            j2 = j1 + len(row)
+            yield j1, j2, x + x_, y + y_, row
+            j1 = j2
+
+    def draw_decorations(self, x, y, gc):
+        for dx, dy, dw, dh, color in self.decorations:
+            self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
+
+    def draw(self, x, y, gc):
+        self.draw_decorations(x, y, gc)
+        Box.draw(self, x, y, gc)
 
     
 def replace_boxes(box, i1, i2, stuff):
