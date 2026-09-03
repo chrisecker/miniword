@@ -746,7 +746,7 @@ def test_04():
     n = 0
     for page in generate_pages(texel, 0, memo, factory_):
         if page.footnotebox:
-            n += len(page.footnotebox[2].childs)
+            n += len(page.footnotebox[2].data)
     assert n == 1
 
 
@@ -772,6 +772,6 @@ def test_05():
     n = 0
     for page in generate_pages(texel, 0, memo, factory_):
         if page.footnotebox:
-            n += len(page.footnotebox[2].childs)
+            n += len(page.footnotebox[2].data)
     assert n == 2
 

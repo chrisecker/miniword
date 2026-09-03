@@ -1,62 +1,441 @@
 # -*- coding: utf-8 -*-
 
 """
+block_decorations groups row records sharing the same block style
+(block_color/border, via rowfactory.block_key/BLOCK_KEYS) into
+shading/border rects, one per group instead of one per record.
+
 typeset_into_rect turns row records (as produced by
-RowFactory.generate_rows) into a fixed-width RowsBox: row positions,
-plus block shadings/borders (block_color/border, grouped via
-rowfactory.block_key/BLOCK_KEYS, spaced apart by block_padding) as
-shadings/borders on the box. It knows nothing about cells, padding or
-backgrounds - callers turn its plain RowsBox into whatever concrete
-box they need (e.g. tables.table_boxes.create_cell for a table cell).
+RowFactory.generate_rows) into a fixed-width RowsBox: row positions
+(spaced apart by space_before/space_after and, at a block_decorations
+group's start/end, by block_padding) plus the group's shadings/
+borders. It knows nothing about cells, padding or backgrounds -
+callers turn its plain RowsBox into whatever concrete box they need
+(e.g. tables.table_boxes.create_cell for a table cell).
+
+DraftNode/RestartMemo/finalize_draft (page building, below) reuse
+block_decorations the same way, once a draft page's row records are
+final - see finalize_draft.
 """
 
+from copy import copy as shallow_copy
+
 from .boxes import RowsBox
-from .rowfactory import block_key
+from .rowfactory import RowFactory, block_key
+from .page import Page, FootnoteBox
+from .counters import copy_counters
+from ..core.units import mm, cm
 
 
-def typeset_into_rect(records, width, device):
-    """Lay out row records into a fixed-width RowsBox. Each paragraph's
-    own space_before/space_after (independent of neighbors) pushes rows
-    apart; consecutive paragraphs sharing the same block style
-    (block_color/padding/border) are additionally grouped into one
-    shading/border rect instead of one per paragraph, with block_padding
-    pushing rows apart at the start/end of such a group."""
-    y = 0
-    data = []
-    row_info = []  # (y, height+depth) per row
-    for row, parstyle, begins_par, ends_par, begins_block, ends_block \
-            in records:
-        color, padding, border = block_key(parstyle)
-        if begins_par:
-            y += parstyle.get('space_before', 0)
-        if begins_par and begins_block:
-            y += padding
-        data.append((0, y, row))
-        row_info.append((y, row.height + row.depth))
-        y += row.height + row.depth
-        if ends_par and ends_block:
-            y += padding
-        if ends_par:
-            y += parstyle.get('space_after', 0)
+def space_before(record):
+    """Extra vertical space to reserve before this row: space_before
+    (once per paragraph, at its first row) plus block_padding at a
+    block_decorations group's start."""
+    row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+    space = parstyle.get('space_before', 0) if begins_par else 0
+    if begins_par and begins_block:
+        space += block_key(parstyle)[1] or 0
+    return space
 
+
+def space_after(record):
+    """Extra vertical space to reserve after this row: block_padding
+    at a block_decorations group's end, plus space_after (once per
+    paragraph, at its last row)."""
+    row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+    space = (block_key(parstyle)[1] or 0) if (ends_par and ends_block) else 0
+    if ends_par:
+        space += parstyle.get('space_after', 0)
+    return space
+
+
+def block_decorations(placed_records, left, width):
+    """Group placed_records ((x, y, record), ...) into shading/border
+    rects: consecutive records sharing the same block style
+    (block_color/padding/border) merge into one rect instead of one
+    per record. The very first/last record always closes off a group,
+    even if its own begins_block/ends_block says the block continues
+    beyond placed_records - a box or a finalized page only ever
+    decorates its own, self-contained portion."""
     shadings, borders = [], []
+    n = len(placed_records)
+    row_info = [(y, record[0].height + record[0].depth)
+                for _, y, record in placed_records]
     group_start = None
-    for idx, (row, parstyle, bp, ep, begins_block, ends_block) in \
-            enumerate(records):
-        if bp and begins_block:
+    for idx, (x, y, record) in enumerate(placed_records):
+        _, parstyle, begins_par, ends_par, begins_block, ends_block = record
+        if idx == 0 or (begins_par and begins_block):
             group_start = idx
-        if ep and ends_block:
-            color, padding, border = block_key(records[group_start][1])
+        if idx == n - 1 or (ends_par and ends_block):
+            group_parstyle = placed_records[group_start][2][1]
+            color, padding, border = block_key(group_parstyle)
             if color is not None or border is not None:
                 top = row_info[group_start][0] - padding
                 bottom_y, bottom_h = row_info[idx]
-                rect = (0, top, width, bottom_y + bottom_h + padding - top)
+                rect = (left, top, width, bottom_y + bottom_h + padding - top)
                 if color is not None:
                     shadings.append(rect + (color,))
                 if border is not None:
                     borders.append(rect + (border,))
+    return shadings, borders
 
+
+def typeset_into_rect(records, width, device):
+    """Lay out row records into a fixed-width RowsBox: stack them via
+    space_before/space_after (see there), then group them into
+    shadings/borders via block_decorations."""
+    y = 0
+    data = []
+    placed_records = []  # [(x, y, record)] - for block_decorations
+    for record in records:
+        row = record[0]
+        y += space_before(record)
+        data.append((0, y, row))
+        placed_records.append((0, y, record))
+        y += row.height + row.depth
+        y += space_after(record)
+
+    shadings, borders = block_decorations(placed_records, 0, width)
     return RowsBox(data, width, y, 0, (0, 0), shadings, borders, device)
+
+
+# ---------------------------------------------------------------------
+# Page building
+# ---------------------------------------------------------------------
+
+# Needed for testing
+A4 = 210 * mm, 297 * mm
+
+FOOTNOTE_FRACTION = 0.10  # max fraction of page height reserved for footnotes
+
+
+def position_footnotes(fn_records, memo, draw_separator=True):
+    """Return a (x, y, FootnoteBox) tuple built from footnote row
+    records ((x, y, record), ...), decorated via block_decorations the
+    same way a page's own body is. Returns None if there are none.
+
+    Normally the box is anchored above the bottom margin. If it fills
+    the whole page (no separator, no other content), it starts at the
+    top margin instead."""
+    if not fn_records:
+        return None
+    border_top, _, border_bottom, border_left = memo.border
+    width = memo.geometry[0] - memo.border[1] - memo.border[3]
+    shadings, borders = block_decorations(fn_records, 0, width)
+    rows = [record[0] for _, _, record in fn_records]
+    box = FootnoteBox(rows, memo.geometry[0], draw_separator, rows[0].device,
+                       shadings, borders)
+    x = border_left
+    if draw_separator:
+        y = memo.geometry[1] - border_bottom - (box.height + box.depth)
+    else:
+        y = border_top
+    return x, y, box
+
+
+class DraftNode:
+    """Stacks row records vertically (y grows downward) while a page
+    is being filled. Decorations are not computed here - see
+    finalize_draft, which groups a completed page's own records via
+    block_decorations once the page is known to be full.
+
+    Adjusts row.height/row.depth so that:
+    - rows are tightly stacked (no gaps, no overlap)
+    - line_spacing factor is respected
+    - hit-testing and selection work on box geometry
+    """
+
+    records = ()  # [(x, y, record), ...] - record = RowFactory row record
+    footnotes = ()
+    footnote_height = 0
+    floats = ()
+    parent = None
+    startspage = True
+    x = y = None
+
+    # defaults for testing:
+    geometry = A4
+    border = 2 * cm, 2 * cm, 2 * cm, 2 * cm
+
+    def init_xy(self):
+        self.x = self.border[-1]  # ignored in the minimal model
+        self.y = self.border[0]
+
+    def is_empty(self):
+        return (len(self.records) == 0
+                and len(self.footnotes) == 0
+                and len(self.floats) == 0)
+
+    def _fits(self, row, line_spacing, before):
+        """Would row (plus before, extra space reserved ahead of it)
+        still fit before the bottom margin/footnote area?"""
+        if not self.records:
+            # always accept first row even if oversized
+            return True
+        advance = (row.height + row.depth) * line_spacing
+        border_top, _, border_bottom, _ = self.border
+        max_y = (self.geometry[1] - border_top - border_bottom
+                 - self.footnote_height)
+        return self.y + before + advance <= max_y
+
+    def can_addrow(self, record, line_spacing):
+        """Can the current page hold record or do we need a new page?"""
+        return self._fits(record[0], line_spacing, space_before(record))
+
+    def can_addfootnote(self, record, line_spacing=1.0, is_last_page=False):
+        """Can this footnote row record still fit within the footnote
+        area?"""
+        row = record[0]
+        if not self._fits(row, line_spacing, 0):
+            return False
+        page_height = self.geometry[1] - self.border[0] - self.border[2]
+        limit = (page_height if is_last_page
+                 else page_height * FOOTNOTE_FRACTION)
+        before = space_before(record) if self.footnotes else 0
+        advance = (row.height + row.depth) * line_spacing
+        return self.footnote_height + before + advance + space_after(record) <= limit
+
+    def add_footnote(self, record, line_spacing=1.0):
+        """Add a footnote row record (row, parstyle, begins_par,
+        ends_par, begins_block, ends_block) to the footnote area."""
+        row = record[0]
+        before = space_before(record) if self.footnotes else 0
+        y = self.footnote_height + before
+        self.footnotes += ((0, y, record),)
+        advance = (row.height + row.depth) * line_spacing
+        self.footnote_height = y + advance + space_after(record)
+
+    def add_row(self, record, line_spacing):
+        """Add a row record (row, parstyle, begins_par, ends_par,
+        begins_block, ends_block) to the draft page."""
+        row = record[0]
+
+        # Natural box height
+        natural = row.height + row.depth
+
+        # Desired baseline advance
+        advance = natural * line_spacing
+
+        # Extra leading
+        extra = advance - natural
+        if extra < -0.5:
+            # we allow negative leading, but not too much
+            extra = -0.5
+
+        extra_top = extra * 0.5
+        extra_bottom = extra * 0.5
+
+        if self.records:
+            extra_top += space_before(record)
+
+        row.height += extra_top
+        row.depth += extra_bottom
+
+        self.records += ((0, self.y, record),)
+        self.y += row.height + row.depth + space_after(record)
+
+    def remaining_height(self):
+        """Free vertical space from current y to bottom margin."""
+        border_top, _, border_bottom, _ = self.border
+        return self.geometry[1] - border_top - border_bottom - self.y
+
+    def create_child(self):
+        """Create a child node. Can be used to fork or append a new page."""
+        r = shallow_copy(self)
+        r.parent = self
+        return r
+
+    def create_newpage(self):
+        """Create an empty new page."""
+        draft = self.create_child()
+        draft.startspage = True
+        draft.init_xy()
+        draft.records = ()
+        draft.floats = ()
+        draft.footnotes = ()
+        draft.footnote_height = 0
+        return draft
+
+    def finalize_draft(self, device):
+        """
+        Finalise draft by converting it (and all parents) to
+        pages.
+
+        Returns the list of completed pages and a RestartMemo
+        describing any spillover that did not fit on the last page.
+        """
+        # Collect draft nodes — self is always included, so nodes is
+        # never empty.
+        nodes = []
+        draft = self
+        while draft:
+            nodes.insert(0, draft)
+            draft = draft.parent
+
+        pages = []
+
+        # Generate Pages
+        assert nodes[0].startspage
+        for i, node in enumerate(nodes):
+            if node.startspage:
+                if i > 0:
+                    # Flush the completed page
+                    footnotebox = position_footnotes(
+                        memo.footnotes, memo, draw_separator=bool(memo.records))
+                    rowdata = [(x, y, record[0]) for x, y, record in memo.records]
+                    page = Page(rowdata, self.geometry, footnotebox,
+                                device=device)
+                    left = memo.border[3]
+                    width = memo.geometry[0] - memo.border[1] - memo.border[3]
+                    page.shadings, page.borders = block_decorations(
+                        memo.records, left, width)
+                    pages.append(page)
+                memo = RestartMemo()
+                memo.geometry = node.geometry
+                memo.border = node.border
+            memo.records += node.records
+            memo.floats += node.floats
+            memo.footnotes += node.footnotes
+            memo.footnote_height = node.footnote_height
+            memo.y = node.y
+
+        return pages, memo
+
+
+class RestartMemo:
+    """Carries the state needed to resume page building after an interruption.
+
+    Also used as the return value of finalize_draft() to describe spillover
+    content that did not fit on the last completed page.
+
+    row_restart is RowFactory's own restart tuple (j, counters,
+    footnote_counter): j is always a paragraph start, never mid-
+    paragraph. records may already contain the tail of a paragraph
+    that was cut off by a page break - those records are carried along
+    as already-finished data, not regenerated; RowFactory is only ever
+    asked to continue from j, the next paragraph boundary."""
+    records = ()  # [(x, y, record), ...]
+    footnotes = ()
+    footnote_height = 0
+    floats = ()
+    parent = None
+    y = None
+    row_restart = None  # RowFactory (j, counters, footnote_counter)
+
+    # defaults for testing
+    geometry = A4
+    border = 2 * cm, 2 * cm, 2 * cm, 2 * cm
+
+    def get_length(self):
+        n = 0
+        for _, _, record in self.records:
+            n += len(record[0])
+        return n
+
+    def start_draft(self):
+        node = DraftNode()
+        node.records = self.records
+        node.floats = self.floats
+        node.footnotes = self.footnotes
+        node.footnote_height = self.footnote_height
+        node.geometry = self.geometry
+        node.border = self.border
+        node.init_xy()
+        if self.y is not None:
+            node.y = self.y
+        return node
+
+    def copy(self):
+        new = shallow_copy(self)
+        if self.row_restart is not None:
+            j, counters, footnote_counter = self.row_restart
+            # counters contains mutable lists — deep copy required so
+            # that future increments do not corrupt previously saved
+            # snapshots.
+            new.row_restart = (j, copy_counters(counters), footnote_counter)
+        return new
+
+
+class FootnoteSupply:
+    """Supplies footnote row records for placement, rendered as late
+    as possible: a footnote's content is only turned into rows when a
+    record is actually pulled, at whatever line_width is current at
+    that moment - not the geometry in effect when the footnote was
+    anchored (which may be pages earlier than where it ends up placed).
+
+    Two queues: pending_texels holds not-yet-rendered (or interrupted,
+    partially rendered) footnotes as (label, content_texel, restart)
+    - restart is None for a fresh start, else RowFactory's own restart
+    tuple; a live RowFactory/generator drains whichever footnote is
+    currently being pulled from, one record at a time. Footnotes
+    nested inside a footnote's own content (its fn_sink) are queued
+    right after it, preserving document order.
+    """
+
+    def __init__(self, stylesheet, device):
+        self.stylesheet = stylesheet
+        self.device = device
+        self.pending_texels = []  # [(label, content_texel, restart), ...]
+        self._content_texel = None
+        self._factory = None      # RowFactory currently being drained
+        self._generator = None    # its generate_rows() generator
+        self._label = None        # label of the footnote being drained
+        self._is_first = False    # marker goes on the first fresh record
+
+    def append(self, label, content_texel):
+        """Queue a not-yet-rendered footnote (e.g. from fn_sink)."""
+        self.pending_texels.append((label, content_texel, None))
+
+    def next_record(self, line_width):
+        """Return (label, record) for the next footnote row, or None
+        if nothing is pending. label is the footnote's label on the
+        very first record of a freshly started footnote (attach as a
+        hanging marker there), else None (already attached earlier)."""
+        while True:
+            if self._generator is not None:
+                try:
+                    record = next(self._generator)
+                except StopIteration:
+                    nested = [(lbl, txt, None)
+                              for lbl, txt in self._factory.fn_sink]
+                    self.pending_texels = nested + self.pending_texels
+                    self._generator = None
+                    self._factory = None
+                    self._content_texel = None
+                    continue
+                label = self._label if self._is_first else None
+                self._is_first = False
+                return label, record
+            if not self.pending_texels:
+                return None
+            label, content_texel, restart = self.pending_texels.pop(0)
+            self._content_texel = content_texel
+            self._label = label
+            self._is_first = restart is None
+            self._factory = RowFactory(self.stylesheet, self.device, line_width)
+            self._generator = self._factory.generate_rows(
+                content_texel, restartmemo=restart)
+
+    def snapshot(self):
+        """Recipe to resume all still-pending footnotes later. The
+        in-progress footnote (if any) resumes from its own last
+        paragraph boundary (RowFactory.restartmemo) - never mid-
+        paragraph, same as RowFactory's own restart contract. Nested
+        footnotes already collected in its fn_sink are queued right
+        after it."""
+        pending = list(self.pending_texels)
+        if self._factory is not None:
+            nested = [(lbl, txt, None) for lbl, txt in self._factory.fn_sink]
+            pending = ([(self._label, self._content_texel,
+                         self._factory.restartmemo)] + nested + pending)
+        return pending
+
+    @classmethod
+    def from_snapshot(cls, stylesheet, device, pending):
+        """Rebuild a FootnoteSupply from a previous snapshot()."""
+        supply = cls(stylesheet, device)
+        supply.pending_texels = list(pending)
+        return supply
 
 
 # ---------------------------------------------------------------------
@@ -65,8 +444,9 @@ def typeset_into_rect(records, width, device):
 
 from ..core.styles import testsheet
 from ..textmodel.texeltree import Text, NewLine, Group
+from ..textmodel.submodel import Footnote
 from .testdevice import TESTDEVICE
-from .rowfactory import RowFactory
+from .boxes import TextBox
 
 
 def _nl(parstyle, endmark=False):
@@ -166,3 +546,177 @@ def test_01():
     # excluding both space_before (0..5) and space_after (10..13).
     assert boxed_box.shadings == [(0, 5, 400, 5, '#eee')]
     assert boxed_box.height == 5 + 2 + 1 + 2 + 3  # space_before+pad+row+pad+space_after
+
+
+def _rec(row, parstyle=None):
+    "Minimal single-row-paragraph record for DraftNode tests."
+    return (row, parstyle or {}, True, True, True, True)
+
+
+def test_02():
+    "DraftNode/RestartMemo: fill, finalize, resume"
+    memo = RestartMemo()
+    memo.geometry = (100, 10)
+    memo.border = 1, 1, 1, 1
+    draft = memo.start_draft()
+
+    for i in range(20):
+        row = TextBox("Row %i" % i)
+        record = _rec(row)
+        if not draft.can_addrow(record, 1.0):
+            draft = draft.create_newpage()
+        draft.add_row(record, 1.0)
+    pages, restartmemo = draft.finalize_draft(TESTDEVICE)
+    assert len(pages) > 0
+    assert len(restartmemo.records) > 0
+
+    draft = restartmemo.start_draft()
+    for i in range(10):
+        row = TextBox("New row %i" % i)
+        draft.add_row(_rec(row), 1.0)
+
+    pages2, restartmemo2 = draft.finalize_draft(TESTDEVICE)
+    # rows that fit on one page end up in restartmemo, not pages
+    assert len(pages2) + len(restartmemo2.records) > 0
+
+
+def test_03():
+    "block_decorations: page edges close an open group"
+    boxed = {'base': 'normal', 'block_color': '#eee', 'block_padding': 2}
+    # Simulate a block run split across a page break: row0 doesn't
+    # begin the block (it continues from a previous page), row1
+    # doesn't end it (it continues onto the next page) - but as the
+    # only rows collected for THIS page, block_decorations must still
+    # close a group around them.
+    row0, row1 = TextBox("a"), TextBox("b")
+    placed_records = [
+        (0, 0, (row0, boxed, True, False, False, False)),
+        (0, 1, (row1, boxed, False, True, False, False)),
+    ]
+    shadings, borders = block_decorations(placed_records, left=0, width=10)
+    # top/height extend by block_padding(2) around both rows (height 1
+    # each), even though neither row's own begins_block/ends_block
+    # would normally trigger that on its own.
+    assert shadings == [(0, -2, 10, 6, '#eee')]
+    assert borders == []
+
+
+def _texts(row):
+    return ''.join(box.text for box in row.childs if isinstance(box, TextBox))
+
+
+def test_04():
+    "FootnoteSupply: drains queued footnotes in order"
+    normal = {'base': 'normal'}
+    fn1 = Group([Text('First note.'), _nl(normal, endmark=True)])
+    fn2 = Group([Text('Second note.'), _nl(normal, endmark=True)])
+
+    supply = FootnoteSupply(testsheet, TESTDEVICE)
+    supply.append('1', fn1)
+    supply.append('2', fn2)
+
+    pulled = []
+    while True:
+        item = supply.next_record(400)
+        if item is None:
+            break
+        pulled.append(item)
+
+    assert len(pulled) == 2
+    label0, record0 = pulled[0]
+    label1, record1 = pulled[1]
+    assert label0 == '1'
+    assert _texts(record0[0]) == 'First note.'
+    assert label1 == '2'
+    assert _texts(record1[0]) == 'Second note.'
+
+
+def test_05():
+    "Nested footnotes queue right after parent"
+    normal = {'base': 'normal'}
+    inner = Footnote(Group([Text('Inner.'), _nl(normal, endmark=True)]))
+    outer_content = Group([
+        Text('Outer with'), inner, Text(' ref.'), _nl(normal, endmark=True)])
+
+    supply = FootnoteSupply(testsheet, TESTDEVICE)
+    supply.append('X', outer_content)
+
+    pulled = []
+    while True:
+        item = supply.next_record(400)
+        if item is None:
+            break
+        pulled.append(item)
+
+    # The outer footnote's one row, then the nested footnote's own
+    # (separately queued) row right after it.
+    assert len(pulled) == 2
+    label0, record0 = pulled[0]
+    label1, record1 = pulled[1]
+    assert label0 == 'X'
+    assert _texts(record0[0]) == 'Outer with1 ref.'  # '1': inner's anchor
+    assert label1 == '1'  # the nested footnote itself
+    assert _texts(record1[0]) == 'Inner.'
+
+
+def test_06():
+    "snapshot/from_snapshot resumes mid-footnote"
+    normal = {'base': 'normal'}
+    fn = Group([
+        Text('Para one.'), _nl(normal),
+        Text('Para two.'), _nl(normal, endmark=True),
+    ])
+
+    def _drain(supply):
+        out = []
+        while True:
+            item = supply.next_record(400)
+            if item is None:
+                break
+            out.append((item[0], _texts(item[1][0])))
+        return out
+
+    full_supply = FootnoteSupply(testsheet, TESTDEVICE)
+    full_supply.append('1', fn)
+    assert _drain(full_supply) == [('1', 'Para one.'), (None, 'Para two.')]
+
+    supply = FootnoteSupply(testsheet, TESTDEVICE)
+    supply.append('1', fn)
+    first = supply.next_record(400)
+    assert (first[0], _texts(first[1][0])) == ('1', 'Para one.')
+
+    # Snapshot right after the first paragraph, rebuild, continue: the
+    # second paragraph must still arrive, without a marker (label is
+    # None - it was only ever meant for the footnote's true first row).
+    snap = supply.snapshot()
+    resumed = FootnoteSupply.from_snapshot(testsheet, TESTDEVICE, snap)
+    assert _drain(resumed) == [(None, 'Para two.')]
+
+
+def test_07():
+    "add_footnote/can_addfootnote work with records"
+    memo = RestartMemo()
+    memo.geometry = (100, 50)
+    memo.border = 1, 1, 1, 1
+    draft = memo.start_draft()
+    draft.add_row(_rec(TextBox("body")), 1.0)  # page no longer empty
+
+    normal = {'base': 'normal'}
+    fn = Group([Text('Note.'), _nl(normal, endmark=True)])
+    factory = RowFactory(testsheet, TESTDEVICE, line_width=50)
+    record = list(factory.generate_rows(fn, 0))[0]
+
+    assert draft.can_addfootnote(record)
+    draft.add_footnote(record)
+    assert len(draft.footnotes) == 1
+    x, y, stored = draft.footnotes[0]
+    assert (x, y) == (0, 0)
+    assert stored is record
+    assert draft.footnote_height == record[0].height + record[0].depth
+
+    # Force finalize_draft to actually flush a page (a single node
+    # never does, since it never crosses a startspage boundary).
+    draft = draft.create_newpage()
+    pages, restartmemo = draft.finalize_draft(TESTDEVICE)
+    assert len(pages) == 1
+    assert pages[0].footnotebox is not None
