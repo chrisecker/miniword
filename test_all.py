@@ -35,6 +35,8 @@ modules = [
     "miniword.layout.pagebuilder",
     "miniword.layout.builderbase",
     "miniword.layout.factory",
+    "miniword.layout.rowfactory",
+    "miniword.layout.typesetter",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

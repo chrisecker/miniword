@@ -10,10 +10,17 @@ Table_handler); _finish_paragraph wraps the boxes into lines and yields
 row records: (row, parstyle, begins_par, ends_par, begins_block,
 ends_block).
 
-Footnote_handler collects footnote content in fn_sink; only the anchor
-appears inline. Table_handler builds a child factory per cell
-(create_child), lets it generate rows on its own, and merges
-footnote_counter/fn_sink back into the parent (update_from_child).
+Footnote_handler renders a footnote's content into row records right
+away (via a child factory, like Table_handler does for a cell) and
+collects them in fn_sink; only the anchor appears inline. Rendering
+eagerly, in document order, is what keeps fn_sink - and therefore
+footnote numbering and placement order - correct even for footnotes
+nested inside other footnotes: a nested Footnote_handler call runs
+(and merges via update_from_child) before the outer one returns,
+never deferred to a later, decoupled placement pass. Table_handler
+builds a child factory per cell (create_child), lets it generate rows
+on its own, and merges footnote_counter/fn_sink back into the parent
+(update_from_child).
 
 _iter_paragraphs_with_neighbors also yields the parstyle of the
 previous/next paragraph; _process_paragraph derives begins_block/
@@ -36,6 +43,7 @@ from ..textmodel.textmodel import get_texel
 from ..textmodel.submodel import Footnote  # used only by the tests below
 from ..core.styles import testsheet, style_default, updated, n_levels
 from .boxes import TextBox, NewlineBox, EndBox, Row
+from .page import ForceBreakBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
 from .linewrap import simple_linewrap
@@ -148,7 +156,14 @@ class RowFactory:
         from ..footnotes.footnotes import format_fn_label
         self.footnote_counter += 1
         label = texel.label or format_fn_label(self.footnote_counter, texel.numbering)
-        self.fn_sink.append((label, texel.content))
+        child = self.create_child()
+        seed = (0, {}, self.footnote_counter)
+        fn_records = list(child.generate_rows(texel.content, restartmemo=seed))
+        # Append this footnote's own record before merging the child's
+        # fn_sink (any footnotes nested inside it) - document order
+        # requires the parent to precede its own nested footnotes.
+        self.fn_sink.append((label, fn_records))
+        self.update_from_child(child)
         style = mk_style(self.stylesheet, parstyle, texel.style)
         return TextBox(label, style, self.device)
 
@@ -169,6 +184,14 @@ class RowFactory:
         style = mk_style(self.stylesheet, parstyle, texel.style)
         cls = EndBox if texel.is_endmark else NewlineBox
         return cls(style, self.device)
+
+    def BR_handler(self, texel, parstyle):
+        # A forced line break (Shift-Enter) within a paragraph. The
+        # generate_pages driver splits a paragraph's lines at
+        # ForceBreakBox markers to force a page break there - not
+        # handled here, RowFactory only builds the marker box itself.
+        style = mk_style(self.stylesheet, parstyle, texel.style)
+        return ForceBreakBox(style, self.device)
 
     # ---- Finishing a paragraph -----------------------------------------
 
@@ -430,10 +453,10 @@ def test_02():
     assert _texts(resumed_records[0][0]) == 'And2 again'
     assert [label for label, _ in resumed.fn_sink] == ['2']
 
+    # fn_sink already holds rendered row records (rendered eagerly, at
+    # Footnote_handler time) - no separate render step needed here.
     from .typesetter import typeset_into_rect
-    label, content = drained[1]
-    fn_factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
-    fn_records = list(fn_factory.generate_rows(content, 0))
+    label, fn_records = drained[1]
     fn_box = typeset_into_rect(fn_records, 400, TESTDEVICE)
     assert _rows(fn_box)[0].marker == '1.'
 
@@ -552,3 +575,47 @@ def test_05():
     assert records[1][4:6] == (False, True)
     assert records[2][4:6] == (True, True)
     assert all(r[2:4] == (True, True) for r in records)
+
+
+def test_06():
+    "Footnotes nested inside a footnote's content queue right after it"
+    normal = {'base': 'normal'}
+    inner = Footnote(Group([Text('Inner.'), _nl(normal, endmark=True)]))
+    outer_content = Group([
+        Text('Outer with'), inner, Text(' ref.'), _nl(normal, endmark=True)])
+    texel = Group([
+        Text('See'), Footnote(outer_content), Text(' here'),
+        _nl(normal, endmark=True)])
+
+    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
+    records = list(factory.generate_rows(texel, 0))
+    assert _texts(records[0][0]) == 'See1 here'
+
+    # fn_sink: the outer footnote's own (rendered eagerly, in-line)
+    # content, immediately followed by the nested one - both already
+    # rendered to row records, in document order. The nested footnote
+    # continues the same global counter ('2'), not a reset one.
+    assert [label for label, _ in factory.fn_sink] == ['1', '2']
+    (outer_label, outer_records), (inner_label, inner_records) = factory.fn_sink
+    assert _texts(outer_records[0][0]) == 'Outer with2 ref.'  # '2': inner's anchor
+    assert _texts(inner_records[0][0]) == 'Inner.'
+
+
+def test_07():
+    "BR (forced line break) becomes a ForceBreakBox in the row"
+    from ..core.texels import BR
+    normal = {'base': 'normal'}
+    texel = Group([
+        Text('Before'), BR(), Text('After'), _nl(normal, endmark=True)])
+    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
+    records = list(factory.generate_rows(texel, 0))
+
+    # Placing the ForceBreakBox where the actual break happens (mid-
+    # paragraph, forcing a new page there) is generate_pages' job, not
+    # RowFactory's - here it's just one more box among the paragraph's
+    # others, wrapped into a single row like any other (line_width=400,
+    # short text: no wrapping).
+    assert len(records) == 1
+    row = records[0][0]
+    assert _texts(row) == 'BeforeAfter'
+    assert any(isinstance(box, ForceBreakBox) for box in row.childs)

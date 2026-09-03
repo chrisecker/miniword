@@ -356,95 +356,12 @@ class RestartMemo:
         return new
 
 
-class FootnoteSupply:
-    """Supplies footnote row records for placement, rendered as late
-    as possible: a footnote's content is only turned into rows when a
-    record is actually pulled, at whatever line_width is current at
-    that moment - not the geometry in effect when the footnote was
-    anchored (which may be pages earlier than where it ends up placed).
-
-    Two queues: pending_texels holds not-yet-rendered (or interrupted,
-    partially rendered) footnotes as (label, content_texel, restart)
-    - restart is None for a fresh start, else RowFactory's own restart
-    tuple; a live RowFactory/generator drains whichever footnote is
-    currently being pulled from, one record at a time. Footnotes
-    nested inside a footnote's own content (its fn_sink) are queued
-    right after it, preserving document order.
-    """
-
-    def __init__(self, stylesheet, device):
-        self.stylesheet = stylesheet
-        self.device = device
-        self.pending_texels = []  # [(label, content_texel, restart), ...]
-        self._content_texel = None
-        self._factory = None      # RowFactory currently being drained
-        self._generator = None    # its generate_rows() generator
-        self._label = None        # label of the footnote being drained
-        self._is_first = False    # marker goes on the first fresh record
-
-    def append(self, label, content_texel):
-        """Queue a not-yet-rendered footnote (e.g. from fn_sink)."""
-        self.pending_texels.append((label, content_texel, None))
-
-    def next_record(self, line_width):
-        """Return (label, record) for the next footnote row, or None
-        if nothing is pending. label is the footnote's label on the
-        very first record of a freshly started footnote (attach as a
-        hanging marker there), else None (already attached earlier)."""
-        while True:
-            if self._generator is not None:
-                try:
-                    record = next(self._generator)
-                except StopIteration:
-                    nested = [(lbl, txt, None)
-                              for lbl, txt in self._factory.fn_sink]
-                    self.pending_texels = nested + self.pending_texels
-                    self._generator = None
-                    self._factory = None
-                    self._content_texel = None
-                    continue
-                label = self._label if self._is_first else None
-                self._is_first = False
-                return label, record
-            if not self.pending_texels:
-                return None
-            label, content_texel, restart = self.pending_texels.pop(0)
-            self._content_texel = content_texel
-            self._label = label
-            self._is_first = restart is None
-            self._factory = RowFactory(self.stylesheet, self.device, line_width)
-            self._generator = self._factory.generate_rows(
-                content_texel, restartmemo=restart)
-
-    def snapshot(self):
-        """Recipe to resume all still-pending footnotes later. The
-        in-progress footnote (if any) resumes from its own last
-        paragraph boundary (RowFactory.restartmemo) - never mid-
-        paragraph, same as RowFactory's own restart contract. Nested
-        footnotes already collected in its fn_sink are queued right
-        after it."""
-        pending = list(self.pending_texels)
-        if self._factory is not None:
-            nested = [(lbl, txt, None) for lbl, txt in self._factory.fn_sink]
-            pending = ([(self._label, self._content_texel,
-                         self._factory.restartmemo)] + nested + pending)
-        return pending
-
-    @classmethod
-    def from_snapshot(cls, stylesheet, device, pending):
-        """Rebuild a FootnoteSupply from a previous snapshot()."""
-        supply = cls(stylesheet, device)
-        supply.pending_texels = list(pending)
-        return supply
-
-
 # ---------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------
 
 from ..core.styles import testsheet
 from ..textmodel.texeltree import Text, NewLine, Group
-from ..textmodel.submodel import Footnote
 from .testdevice import TESTDEVICE
 from .boxes import TextBox
 
@@ -606,94 +523,6 @@ def _texts(row):
 
 
 def test_04():
-    "FootnoteSupply: drains queued footnotes in order"
-    normal = {'base': 'normal'}
-    fn1 = Group([Text('First note.'), _nl(normal, endmark=True)])
-    fn2 = Group([Text('Second note.'), _nl(normal, endmark=True)])
-
-    supply = FootnoteSupply(testsheet, TESTDEVICE)
-    supply.append('1', fn1)
-    supply.append('2', fn2)
-
-    pulled = []
-    while True:
-        item = supply.next_record(400)
-        if item is None:
-            break
-        pulled.append(item)
-
-    assert len(pulled) == 2
-    label0, record0 = pulled[0]
-    label1, record1 = pulled[1]
-    assert label0 == '1'
-    assert _texts(record0[0]) == 'First note.'
-    assert label1 == '2'
-    assert _texts(record1[0]) == 'Second note.'
-
-
-def test_05():
-    "Nested footnotes queue right after parent"
-    normal = {'base': 'normal'}
-    inner = Footnote(Group([Text('Inner.'), _nl(normal, endmark=True)]))
-    outer_content = Group([
-        Text('Outer with'), inner, Text(' ref.'), _nl(normal, endmark=True)])
-
-    supply = FootnoteSupply(testsheet, TESTDEVICE)
-    supply.append('X', outer_content)
-
-    pulled = []
-    while True:
-        item = supply.next_record(400)
-        if item is None:
-            break
-        pulled.append(item)
-
-    # The outer footnote's one row, then the nested footnote's own
-    # (separately queued) row right after it.
-    assert len(pulled) == 2
-    label0, record0 = pulled[0]
-    label1, record1 = pulled[1]
-    assert label0 == 'X'
-    assert _texts(record0[0]) == 'Outer with1 ref.'  # '1': inner's anchor
-    assert label1 == '1'  # the nested footnote itself
-    assert _texts(record1[0]) == 'Inner.'
-
-
-def test_06():
-    "snapshot/from_snapshot resumes mid-footnote"
-    normal = {'base': 'normal'}
-    fn = Group([
-        Text('Para one.'), _nl(normal),
-        Text('Para two.'), _nl(normal, endmark=True),
-    ])
-
-    def _drain(supply):
-        out = []
-        while True:
-            item = supply.next_record(400)
-            if item is None:
-                break
-            out.append((item[0], _texts(item[1][0])))
-        return out
-
-    full_supply = FootnoteSupply(testsheet, TESTDEVICE)
-    full_supply.append('1', fn)
-    assert _drain(full_supply) == [('1', 'Para one.'), (None, 'Para two.')]
-
-    supply = FootnoteSupply(testsheet, TESTDEVICE)
-    supply.append('1', fn)
-    first = supply.next_record(400)
-    assert (first[0], _texts(first[1][0])) == ('1', 'Para one.')
-
-    # Snapshot right after the first paragraph, rebuild, continue: the
-    # second paragraph must still arrive, without a marker (label is
-    # None - it was only ever meant for the footnote's true first row).
-    snap = supply.snapshot()
-    resumed = FootnoteSupply.from_snapshot(testsheet, TESTDEVICE, snap)
-    assert _drain(resumed) == [(None, 'Para two.')]
-
-
-def test_07():
     "add_footnote/can_addfootnote work with records"
     memo = RestartMemo()
     memo.geometry = (100, 50)
