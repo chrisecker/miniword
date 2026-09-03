@@ -53,7 +53,7 @@ class DraftNode:
     """
 
     rows = ()
-    decorations = ()
+    shadings = ()
     footnotes = ()
     footnote_height = 0
     floats = ()
@@ -149,7 +149,7 @@ class DraftNode:
         draft.startspage = True
         draft.init_xy()
         draft.rows = ()
-        draft.decorations = ()
+        draft.shadings = ()
         draft.floats = ()
         draft.footnotes = ()
         draft.footnote_height = 0
@@ -183,13 +183,13 @@ class DraftNode:
                         memo.footnotes, memo, draw_separator=bool(memo.rows))
                     page = Page(memo.rows, self.geometry, footnotebox,
                                 device=device)
-                    page.decorations = memo.decorations
+                    page.shadings = memo.shadings
                     pages.append(page)
                 memo = RestartMemo()
                 memo.geometry = node.geometry
                 memo.border = node.border
             memo.rows += node.rows
-            memo.decorations += node.decorations
+            memo.shadings += node.shadings
             memo.floats += node.floats
             memo.footnotes += node.footnotes
             memo.footnote_height = node.footnote_height
@@ -205,7 +205,7 @@ class RestartMemo:
     content that did not fit on the last completed page.
     """
     rows = ()
-    decorations = ()
+    shadings = ()
     footnotes = ()
     footnote_height = 0
     floats = ()
@@ -226,7 +226,7 @@ class RestartMemo:
     def start_draft(self):
         node = DraftNode()
         node.rows = self.rows
-        node.decorations = self.decorations
+        node.shadings = self.shadings
         node.floats = self.floats
         node.footnotes = self.footnotes
         node.footnote_height = self.footnote_height
@@ -490,7 +490,7 @@ def final_pages(state, pending_fn_rows, device, allow_page_breaks):
         if state.rows:
             footnotebox = position_footnotes(state.footnotes, state)
             page = Page(state.rows, state.geometry, footnotebox, device=device)
-            page.decorations = state.decorations
+            page.shadings = state.shadings
             yield page
         return
 
@@ -611,7 +611,7 @@ def generate_pages(texel, i, restartmemo, factory,
                         line, factory, dims.width_rest, draft, pending_fn_rows)
                     if s.block_color:
                         pad = s.block_padding or 0
-                        draft.decorations += ((
+                        draft.shadings += ((
                             margin[3] - pad, y_before - pad,
                             factory.line_width + 2 * pad,
                             row.height + row.depth + 2 * pad,

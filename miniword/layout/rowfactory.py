@@ -18,8 +18,9 @@ footnote_counter/fn_sink back into the parent (update_from_child).
 _iter_paragraphs_with_neighbors also yields the parstyle of the
 previous/next paragraph; _process_paragraph derives begins_block/
 ends_block from it (block_key/BLOCK_KEYS), which typesetter.
-typeset_into_rect uses to group block decorations - used by
-Table_handler and for footnote content.
+typeset_into_rect uses to group block shadings/borders. Table_handler
+only collects each cell's row records; turning them into cell boxes
+is up to the TableBox it hands them to.
 
 Texel types handled: Text, NewLine, Footnote, Table. Line wrapping via
 simple_linewrap, alignment via align_x/justify_line, indentation via
@@ -28,10 +29,11 @@ _dims.
 
 from copy import copy as shallow_copy
 
-from ..textmodel.texeltree import Text, NewLine, Single, Container, \
+from ..textmodel.texeltree import Text, NewLine, Container, \
     Group, length, iter_childs
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.textmodel import get_texel
+from ..textmodel.submodel import Footnote  # used only by the tests below
 from ..core.styles import testsheet, style_default, updated, n_levels
 from .boxes import TextBox, NewlineBox, EndBox, Row
 from .testdevice import TESTDEVICE
@@ -143,15 +145,14 @@ class RowFactory:
                         self.device)
 
     def Footnote_handler(self, texel, parstyle):
+        from ..footnotes.footnotes import format_fn_label
         self.footnote_counter += 1
-        label = '%d)' % self.footnote_counter
+        label = texel.label or format_fn_label(self.footnote_counter, texel.numbering)
         self.fn_sink.append((label, texel.content))
-        style = mk_style(self.stylesheet, parstyle,
-                          {'vertical_position': 'superscript'})
+        style = mk_style(self.stylesheet, parstyle, texel.style)
         return TextBox(label, style, self.device)
 
     def Table_handler(self, texel, parstyle):
-        from .typesetter import typeset_into_rect  # avoids a circular import
         ncols = texel.ncols
         col_width = self.line_width / ncols
         cells = []
@@ -161,7 +162,7 @@ class RowFactory:
             seed = (0, {}, self.footnote_counter)
             records = list(child.generate_rows(cell_texel, restartmemo=seed))
             self.update_from_child(child)
-            cells.append(typeset_into_rect(records, col_width, self.device))
+            cells.append(records)
         return TableBox(cells, ncols, col_width, self.device, length(texel))
 
     def NewLine_handler(self, texel, parstyle):
@@ -254,15 +255,6 @@ def _is_same_block(style_a, style_b):
 # Tests
 # ---------------------------------------------------------------------
 
-class Footnote(Single):
-    """Footnote texel stand-in for the tests: length 1, carries its
-    content as a separate sub-texel."""
-    text = '†'
-
-    def __init__(self, content, style=None):
-        Single.__init__(self, style)
-        self.content = content
-
 
 class Table(Container):
     """Table texel stand-in for the tests: childs are the cell
@@ -275,22 +267,24 @@ class Table(Container):
 
 
 class TableBox:
-    """Holds one finished box per cell (built via typeset_into_rect).
-    Width = ncols * col_width, height = sum of per-table-row heights
-    (each row's height is the max over its cells)."""
+    """Turns each cell's row records into a box (create_cell) at
+    col_width. Width = ncols * col_width, height = sum of per-table-row
+    heights (each row's height is the max over its cells)."""
 
     def __init__(self, cells, ncols, col_width, device, length_):
-        self.cells = cells
+        from ..tables.table_boxes import create_cell
+        self.cells = [create_cell(records, col_width, device)
+                      for records in cells]
         self.ncols = ncols
         self.col_width = col_width
         self.device = device
         self.length = length_
         self.width = ncols * col_width
 
-        nrows = -(-len(cells) // ncols)  # ceil division
+        nrows = -(-len(self.cells) // ncols)  # ceil division
         row_heights = []
         for r in range(nrows):
-            cells_in_row = cells[r * ncols:(r + 1) * ncols]
+            cells_in_row = self.cells[r * ncols:(r + 1) * ncols]
             row_heights.append(max(
                 (c.height + c.depth for c in cells_in_row), default=0))
         self.height = sum(row_heights)
@@ -329,8 +323,14 @@ def _texts(row):
 
 
 def _rows(box):
-    "Row list of a RowsBox (e.g. CellBox), extracted from .data (x, y, row)."
-    return [row for _, _, row in box.data]
+    "Row list of a RowsBox/CellBox, recursively unpacked from .data (x, y, row)."
+    rows = []
+    for _, _, child in box.data:
+        if isinstance(child, Row):
+            rows.append(child)
+        else:
+            rows.extend(_rows(child))
+    return rows
 
 
 def test_00():
@@ -359,7 +359,7 @@ def test_00():
 
 
 def test_01():
-    "Restarting at a paragraph boundary yields the same rows as an uninterrupted run"
+    "Restart at a paragraph boundary matches full run"
     texel = _make_doc()
 
     full_factory = RowFactory(testsheet, TESTDEVICE, line_width=20)
@@ -401,7 +401,7 @@ def _make_footnote_doc():
 
 
 def test_02():
-    "Footnotes: anchor inline, content via the sink, counter survives a restart"
+    "Footnotes: anchor inline, counter survives reset"
     texel = _make_footnote_doc()
     factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
 
@@ -414,21 +414,21 @@ def test_02():
             factory.fn_sink.clear()
 
     assert len(records) == 2
-    assert _texts(records[0][0]) == 'See1) here'
-    assert _texts(records[1][0]) == 'And2) again'
-    assert [label for label, _ in drained] == ['1)', '2)']
+    assert _texts(records[0][0]) == 'See1 here'
+    assert _texts(records[1][0]) == 'And2 again'
+    assert [label for label, _ in drained] == ['1', '2']
 
     partial = RowFactory(testsheet, TESTDEVICE, line_width=400)
     gen = partial.generate_rows(texel, 0)
     next(gen)
     memo = partial.restartmemo
     assert memo[2] == 1  # footnote_counter
-    assert [label for label, _ in partial.fn_sink] == ['1)']
+    assert [label for label, _ in partial.fn_sink] == ['1']
 
     resumed = RowFactory(testsheet, TESTDEVICE, line_width=400)
     resumed_records = list(resumed.generate_rows(texel, restartmemo=memo))
-    assert _texts(resumed_records[0][0]) == 'And2) again'
-    assert [label for label, _ in resumed.fn_sink] == ['2)']
+    assert _texts(resumed_records[0][0]) == 'And2 again'
+    assert [label for label, _ in resumed.fn_sink] == ['2']
 
     from .typesetter import typeset_into_rect
     label, content = drained[1]
@@ -451,8 +451,8 @@ def _make_table_doc():
         Text('Cell two'), Footnote(fn_cell), _nl(normal, endmark=True)])
     table = Table([cell0, cell1], ncols=2)
 
-    # P0 before the table: footnote "1)". Cell 1: footnote "2)". P1
-    # after the table: footnote "3)".
+    # P0 before the table: footnote "1". Cell 1: footnote "2". P1
+    # after the table: footnote "3".
     return Group([
         Text('Before'), Footnote(fn_before), _nl(normal),
         table, _nl(normal),
@@ -461,14 +461,14 @@ def _make_table_doc():
 
 
 def test_03():
-    "Tables: a child factory per cell with a real column width, footnote_counter/fn_sink flow back to the parent"
+    "Tables: per-cell child factory, fn_sink flows up"
     texel = _make_table_doc()
     factory = RowFactory(testsheet, TESTDEVICE, line_width=40)  # col_width=20
     records = list(factory.generate_rows(texel, 0))
 
     assert len(records) == 3  # P0 row, table row, P1 row
-    assert _texts(records[0][0]) == 'Before1)'
-    assert _texts(records[2][0]) == 'After3)'
+    assert _texts(records[0][0]) == 'Before1'
+    assert _texts(records[2][0]) == 'After3'
 
     table_row = records[1][0]
     table_box = table_row.childs[0]
@@ -486,8 +486,8 @@ def test_03():
     assert ''.join(_texts(r) for r in _rows(cell0)) == \
         'This cell wraps at twenty.'
 
-    assert _texts(_rows(table_box.cells[1])[0]) == 'Cell two2)'
-    assert [label for label, _ in factory.fn_sink] == ['1)', '2)', '3)']
+    assert _texts(_rows(table_box.cells[1])[0]) == 'Cell two2'
+    assert [label for label, _ in factory.fn_sink] == ['1', '2', '3']
 
 
 def _make_layout_doc():
@@ -510,7 +510,7 @@ def _make_layout_doc():
 
 
 def test_04():
-    "Indentation and alignment (left/right/center/justify)"
+    "Indentation and alignment (all 4 modes)"
     texel = _make_layout_doc()
     factory = RowFactory(testsheet, TESTDEVICE, line_width=20)
     rows = [r[0] for r in factory.generate_rows(texel, 0)]
@@ -535,7 +535,7 @@ def test_04():
 
 
 def test_05():
-    "Paragraph lookahead in the main flow: begins_block/ends_block are correct across paragraph boundaries, not just an alias of begins_par/ends_par"
+    "begins_block/ends_block, not just alias of par"
     boxed = {'base': 'normal', 'block_color': '#eee'}
     plain = {'base': 'normal'}
     texel = Group([

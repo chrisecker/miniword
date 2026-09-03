@@ -36,7 +36,7 @@ class Page(Box):
     margin        = (2 * cm,) * 4  # XXX
     page          = 0
     height        = 0
-    decorations   = ()
+    shadings      = ()
     restartmemo   = None
 
     def __init__(self, rowdata, geometry, footnotebox=None, device=TESTDEVICE):
@@ -69,7 +69,7 @@ class Page(Box):
         self.draw_decorations(x, y, gc)
 
     def draw_decorations(self, x, y, gc):
-        for dx, dy, dw, dh, color in self.decorations:
+        for dx, dy, dw, dh, color in self.shadings:
             self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
 
     def draw_footnotes(self, x, y, gc):

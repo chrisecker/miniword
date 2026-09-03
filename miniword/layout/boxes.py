@@ -280,6 +280,7 @@ class Box:
         if r is None:
             # None of the childs contains xy!
             return 0
+        return r
 
     def _select_index(self, l, x, y):# XXX as Function
         r = []
@@ -645,30 +646,53 @@ class VGroup(VBox):
         return VGroup(l, device=self.device)
 
     
-class RowsBox(Box):    
+class RowsBox(Box):
     """
     Baseclass for Page, FootnoteBox and CellBox.
 
     Data consists of row-boxes and their x,y-position. y values must
-    be monotonically increasing. decorations (shading, images, ...)
-    are possible.
+    be monotonically increasing. shadings (filled rects) and borders
+    (outlined rects, same tuple shape) are drawn together by
+    draw_decorations.
     """
-    data = ()
-    decorations = ()
+
+    def __init__(self, data=(), width=0, height=0, depth=0, offset=(0,0),
+                 shadings=(), borders=(), device=None):
+        if device is not None:
+            self.device = device
+        self.data = data
+        self.width = width
+        self.height = height
+        self.depth = depth
+        self.offset = offset
+        self.shadings = shadings
+        self.borders = borders
+        self.length = sum(len(row) for _, _, row in self.data)
 
     def __len__(self):
-        return sum(len(row) for _, _, row in self.data)
+        return self.length
 
     def iter_boxes(self, i, x, y):
         j1 = i
+        ox, oy = self.offset
+        x += ox
+        y += oy
         for x_, y_, row in self.data:
             j2 = j1 + len(row)
             yield j1, j2, x + x_, y + y_, row
             j1 = j2
 
+    def get_index(self, x, y):
+        return select_i_by_y(x, y, self.iter_boxes(0, 0, 0))
+        
     def draw_decorations(self, x, y, gc):
-        for dx, dy, dw, dh, color in self.decorations:
+        ox, oy = self.offset
+        x += ox
+        y += oy
+        for dx, dy, dw, dh, color in self.shadings:
             self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
+        for dx, dy, dw, dh, color in self.borders:
+            self.device.draw_rect(x + dx, y + dy, dw, dh, gc)
 
     def draw(self, x, y, gc):
         self.draw_decorations(x, y, gc)

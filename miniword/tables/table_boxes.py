@@ -2,7 +2,7 @@
 
 """TableBox rendering for Table texels."""
 
-from ..layout.boxes import Box, TextBox, EmptyTextBox, EMPTYSTYLE
+from ..layout.boxes import Box, RowsBox, TextBox, EmptyTextBox, EMPTYSTYLE
 from ..layout.testdevice import TESTDEVICE
 from .tables import from_strings
 
@@ -11,48 +11,41 @@ from .tables import from_strings
 # CellBox
 # ---------------------------------------------------------------------------
 
-class CellBox(Box):
-    """Vertical stack of wrapped lines for a table cell."""
-    def __init__(self, rows, device=None, hpad=0, vpad=0, style=None):
-        if device is not None:
-            self.device = device
-        self.style = style or {}
-        self._rows = rows
-        self._lpad = hpad // 2
-        self._tpad = vpad // 2
-        total_h = sum(r.height + r.depth for r in rows)
-        w, h, d = self.device.measure("M", self.style)
-        self.fill = max(0, h + d - total_h)
-        self.height = self.fill + total_h + vpad
-        self.depth = 0
-        self.width = (max((r.width for r in rows), default=0)
-                      if rows else 0) + hpad
-        # length = sum of row lengths + 1 for trailing separator
-        self.length = sum(len(r) for r in rows) + 1
+class CellBox(RowsBox):
+    """Cell background/border (style['cell_bgcolor']/['cell_border'])
+    are this box's own concern, drawn directly and unaffected by
+    offset. shadings/borders (inherited from RowsBox) are block-level
+    decorations tied to row content, living on a wrapped child box
+    instead - those move with offset."""
 
-    def __len__(self):
-        return self.length
+    def __init__(self, data, style, *args, **kwds):
+        self.style = style
+        RowsBox.__init__(self, data, *args, **kwds)
+        self.length += 1
 
-    def get_index(self, x, y):
-        y_rel = y - self.fill - self._tpad
-        x_rel = x - self._lpad
-        cy = 0
-        offset = 0
-        for row in self._rows:
-            if y_rel <= cy + row.height + row.depth or row is self._rows[-1]:
-                return offset + row.get_index(x_rel, y_rel - cy)
-            cy += row.height + row.depth
-            offset += len(row)
-        return self.length - 1
+    def draw_decorations(self, x, y, gc):
+        bgcolor = self.style.get('cell_bgcolor')
+        if bgcolor is not None:
+            self.device.fill_rect(x, y, self.width, self.height, bgcolor, gc)
+        if self.style.get('cell_border') is not None:
+            self.device.draw_rect(x, y, self.width, self.height, gc)
+        RowsBox.draw_decorations(self, x, y, gc)
 
-    def iter_boxes(self, i, x, y):
-        x0 = x + self._lpad
-        y0 = y + self.fill + self._tpad
-        j = i
-        for row in self._rows:
-            yield j, j + len(row), x0, y0, row
-            y0 += row.height + row.depth
-            j += len(row)
+
+def create_cell(records, width, device, hpad=0, vpad=0, style=None):
+    """Build a CellBox from row records. width is the available
+    (outer) width; the content is wrapped/decorated at width - hpad
+    (typeset_into_rect) and wrapped as CellBox's single child, offset
+    by the cell padding (lpad, tpad)."""
+    from ..layout.typesetter import typeset_into_rect  # avoids a circular import
+    style = style or {}
+    lpad, tpad = hpad // 2, vpad // 2
+    rows_box = typeset_into_rect(records, width - hpad, device)
+    height = rows_box.height + vpad
+
+    return CellBox([(0, 0, rows_box)], style, width, height, 0,
+                    (lpad, tpad), (), (), device)
+
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +316,35 @@ CELL_VPAD = 6   # vertical padding per row
 # Tests
 # ---------------------------------------------------------------------------
 
+from ..core.styles import testsheet
+from ..textmodel.texeltree import Text, NewLine, Group
+
+
+def _nl(parstyle, endmark=False):
+    nl = NewLine().set_parstyle(parstyle)
+    if endmark:
+        nl.is_endmark = 1
+    return nl
+
+
+def _stack_rows(rows):
+    """Stack rows vertically into (x, y, row) data tuples, plus total height.
+    No block decorations - for box-level tests that build a CellBox directly,
+    bypassing create_cell."""
+    data, y = [], 0
+    for row in rows:
+        data.append((0, y, row))
+        y += row.height + row.depth
+    return data, y
+
+
+def _mk_cell(rows, device):
+    """Build a CellBox directly from a flat rows list (for box-level tests)."""
+    data, height = _stack_rows(rows)
+    width = max((r.width for r in rows), default=0)
+    return CellBox(data, {}, width=width, height=height, device=device)
+
+
 def mk_box_table(texts, col_width=60, row_height=14, device=None):
     """Build a TableBox directly from strings (for box-level tests)."""
     dev = device or TESTDEVICE
@@ -332,7 +354,7 @@ def mk_box_table(texts, col_width=60, row_height=14, device=None):
         row = []
         for text in row_texts:
             rows = [PageRow([TextBox(text, EMPTYSTYLE, dev)], device=dev)]
-            row.append(CellBox(rows, dev))
+            row.append(_mk_cell(rows, dev))
         cells.append(row)
     n_rows = len(cells)
     n_cols = len(cells[0]) if cells else 0
@@ -340,7 +362,7 @@ def mk_box_table(texts, col_width=60, row_height=14, device=None):
 
 
 def test_11():
-    "split_table_box divides rows, preserves total length, links prev/next"
+    "split_table_box: preserves length, prev/next"
     table = mk_box_table([['A', 'B'], ['C', 'D'], ['E', 'F']])
     b1, b2 = split_table_box(table, 2)
     assert b1.n_rows == 2
@@ -351,7 +373,7 @@ def test_11():
 
 
 def test_07():
-    "navigation: TableNavRow.get_index selects the cell matching x at y=row_height"
+    "TableNavRow.get_index selects cell by x"
     table = mk_box_table([['A', 'B', 'C'],
                           ['D', 'E', 'F']])
     nav = TableNavRow(table, 1)
@@ -364,25 +386,25 @@ def test_07():
 
 
 def test_08():
-    "navigation: for a multi-line cell, get_index at y=height lands in the last row"
+    "Multi-line cell: get_index(y=height) hits last"
     from ..layout.pagegen import Row as PageRow
     dev = TESTDEVICE
     row1 = PageRow([TextBox('top',    EMPTYSTYLE, dev)], device=dev)
     row2 = PageRow([TextBox('bottom', EMPTYSTYLE, dev)], device=dev)
-    cell = CellBox([row1, row2], dev)
+    cell = _mk_cell([row1, row2], dev)
 
     i = cell.get_index(0, cell.height)
     assert i >= len(row1), f"expected index in row2 (>={len(row1)}), got {i}"
 
 
 def test_09():
-    "navigation: Up from top of row r lands at bottom of multi-line cells in row r-1"
+    "Up from row r lands at bottom of row r-1"
     from ..layout.pagegen import Row as PageRow
     dev = TESTDEVICE
 
     def make_cell(*texts):
         rows = [PageRow([TextBox(t, EMPTYSTYLE, dev)], device=dev) for t in texts]
-        return CellBox(rows, dev)
+        return _mk_cell(rows, dev)
 
     row0 = [make_cell('line1', 'line2'), make_cell('lineA', 'lineB')]
     row1 = [make_cell('X'),              make_cell('Y')]
@@ -399,11 +421,46 @@ def test_09():
         ci2 = ci1 + len(table.cells[0][col])
         assert ci1 <= i < ci2, f"x={x}: expected col {col} [{ci1},{ci2}), got {i}"
 
-        len_first_row = len(row0[col]._rows[0])
+        len_first_row = len(row0[col].data[0][2])
         assert i - ci1 >= len_first_row, (
             f"x={x}: expected bottom row (offset>={len_first_row}), got {i - ci1}"
         )
 
+
+def test_10():
+    "create_cell: wraps RowsBox, offset by padding"
+    from ..layout.rowfactory import RowFactory
+    boxed = {'base': 'normal', 'block_color': '#f00', 'block_padding': 1}
+    texel = Group([Text('X'), _nl(boxed, endmark=True)])
+    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
+    records = list(factory.generate_rows(texel, 0))
+
+    box = create_cell(records, 14, TESTDEVICE, hpad=4, vpad=2,
+                       style={'cell_bgcolor': '#eee'})
+    assert isinstance(box, CellBox)
+
+    # width stays the available (outer) width; content was wrapped/
+    # decorated at width - hpad = 10.
+    assert box.width == 14
+    assert box.height == 5  # 1 (row) + 2*block_padding + vpad
+    assert box.offset == (2, 1)  # lpad, tpad
+
+    # Cell background is CellBox's own concern (read from style at
+    # draw time), not stored as a shading - own shadings/borders stay
+    # empty.
+    assert box.style.get('cell_bgcolor') == '#eee'
+    assert box.shadings == ()
+    assert box.borders == ()
+
+    # Exactly one child: the RowsBox from typeset_into_rect, unshifted
+    # (position (0,0) - offset does the shifting).
+    assert len(box.data) == 1
+    dx, dy, rows_box = box.data[0]
+    assert (dx, dy) == (0, 0)
+
+    # Block color at the content width (14 - hpad = 10), at its own
+    # coordinates - untouched by CellBox's offset.
+    assert rows_box.shadings == [(0, 0, 10, 3, '#f00')]
 
 
 # ---------------------------------------------------------------------------
