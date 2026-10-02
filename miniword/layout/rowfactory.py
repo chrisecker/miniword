@@ -70,11 +70,39 @@ from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
 from .linewrap import simple_linewrap
-from .pagegen import split_at_breaks, MIN_LABEL_INDENT, LABEL_GAP, \
-    A4, FOOTNOTE_FRACTION
 from .stretchable import justify_line
-from .pagegen import align_x
 
+
+# Needed for testing
+A4 = 210 * mm, 297 * mm
+
+FOOTNOTE_FRACTION = 0.10  # max fraction of page height reserved for footnotes
+MIN_LABEL_INDENT = 10  # minimum hanging indent for footnote label (pt)
+LABEL_GAP = 3          # gap between label and content (pt)
+
+
+def split_at_breaks(boxlist):
+    """Split boxlist at ForceBreakBox markers; each marker ends its segment."""
+    segments, current = [], []
+    for box in boxlist:
+        current.append(box)
+        if isinstance(box, ForceBreakBox):
+            segments.append(current)
+            current = []
+    if current:
+        segments.append(current)
+    return segments
+
+
+def align_x(alignment, left, width, text_width):
+    """x-position of a row's left edge for the given paragraph alignment."""
+    if alignment in ('left', 'justify'):
+        return left
+    if alignment == 'right':
+        return left + (width - text_width)
+    if alignment == 'center':
+        return left + 0.5 * (width - text_width)
+    assert False
 
 
 class State:
