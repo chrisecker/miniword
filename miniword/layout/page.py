@@ -10,37 +10,22 @@ class ForceBreakBox(NewlineBox):
 class FootnoteBox(RowsBox):
     """A column of footnote rows, optionally preceded by a separator line.
 
+    Takes ready-made row data ((x, y, row), ...) plus height and
+    decorations - e.g. from stack_rows - and doesn't stack rows itself.
+
     Like any box, its rows are positioned relative to its own top-left
     corner; the box's position on the page is carried separately (see
     Page.footnotebox, a (x, y, box) tuple).
 
     The separator is omitted when the footnote box fills the whole
     remaining page (no normal text above it).
-
-    shadings/borders are optional, e.g. from typesetter.block_decorations
-    for callers that group footnote row records into them; callers that
-    just pass a plain row list (no decorations) get none, as before.
     """
 
-    def __init__(self, rows, width, draw_separator=True, device=None,
-                 shadings=(), borders=()):
-        if device is not None:
-            self.device = device
+    def __init__(self, data, width, height, shadings=(), borders=(),
+                 device=None, draw_separator=True):
+        RowsBox.__init__(self, data, width, height, 0, (0, 0),
+                         shadings, borders, device)
         self.draw_separator = draw_separator
-
-        data = []
-        y = 0
-        for row in rows:
-            data.append((0, y, row))
-            y += row.height + row.depth
-        self.data = data
-
-        self.width = max(width, max((row.width for row in rows), default=0))
-        self.height = y
-        self.depth = 0
-        self.length = sum(len(row) for row in rows)
-        self.shadings = shadings
-        self.borders = borders
 
     def draw(self, x, y, gc):
         if self.draw_separator:
