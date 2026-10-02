@@ -558,6 +558,11 @@ def generate_pages(texel, i, restartmemo, factory,
         if allow_page_breaks and s.page_break_before and not draft.is_empty():
             draft = draft.create_newpage()
 
+        if s.counter == 'section':
+            # Every section paragraph clears the item counter -- also an
+            # unnumbered heading, for which make_marker isn't called.
+            counters['item'] = [0] * n_levels
+
         level = factory.indent_level
         dims = line_dims(s, level, margin, factory.line_width)
         # read once per paragraph, not per line: avoids repeated attribute
@@ -775,3 +780,32 @@ def test_05():
             n += len(page.footnotebox[2].childs)
     assert n == 2
 
+
+
+def test_06():
+    "an unnumbered section heading restarts the numbered-list items"
+    from .factory import Factory
+    from ..core.document import Document
+    from ..core.styles import updated, style_default
+    from ..textmodel.texeltree import T, NL, grouped
+
+    doc = Document()
+    doc.basestyles.set('head', updated(style_default, {'counter': 'section'}))
+    doc.basestyles.set('num', updated(style_default,
+                                      {'paragraph_type': 'numbered'}))
+    num  = NL.set_parstyle({'base': 'num'})
+    head = NL.set_parstyle({'base': 'head'})
+    doc.textmodel.texel = grouped([T('a'), num, T('b'), num,
+                                   T('Heading'), head,
+                                   T('c'), num])
+
+    factory_ = Factory(doc.basestyles, TESTDEVICE)
+    memo = restartmemo_from_settings(doc.settings)
+    texel = doc.textmodel.get_xtexel()
+
+    markers = []
+    for page in generate_pages(texel, 0, memo, factory_):
+        for _, _, row in page.rows:
+            if getattr(row, 'marker', None):
+                markers.append(row.marker)
+    assert markers == ['1.', '2.', '1.'], markers
