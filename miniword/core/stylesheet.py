@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from .documentnode import DocumentNode
 from ..textmodel.styles import create_style
+from . styles import style_default, updated
 
 
 class StyleSheet(DocumentNode):
@@ -32,6 +33,18 @@ class StyleSheet(DocumentNode):
 
     def contains(self, key):
         return key in self.data
+
+    def mk_style(self, parstyle, style):
+        # XXX implement caching
+        basestyle = self.get(parstyle.get('base', 'normal')) or {}
+        return updated(style_default, basestyle, parstyle, style)
+
+    def mk_parstyle(self, parstyle):
+        # XXX implement caching
+        basestyle = self.get(parstyle.get('base', 'normal')) or {}
+        return updated(style_default, basestyle, parstyle)
+
+    
 
 
 def undo_basestyle_change(basestyles, name, old_style, new_style):
