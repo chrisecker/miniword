@@ -376,13 +376,12 @@ class Table(Container):
 
 
 class TableBox:
-    """Turns each cell's row records into a box (create_cell) at
+    """Turns each cell's row records into a box (typeset_into_rect) at
     col_width. Width = ncols * col_width, height = sum of per-table-row
     heights (each row's height is the max over its cells)."""
 
     def __init__(self, cells, ncols, col_width, device, length_):
-        from ..tables.table_boxes import create_cell
-        self.cells = [create_cell(records, col_width, device)
+        self.cells = [typeset_into_rect(records, col_width, device)
                       for records in cells]
         self.ncols = ncols
         self.col_width = col_width
