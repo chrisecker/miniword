@@ -1,37 +1,59 @@
 # -*- coding: utf-8 -*-
 
 """
-RowFactory turns a texel into row records, paragraph by paragraph.
+Ein Entwurf für die Datei rowfactory.py 18.09.2026
 
-generate_rows drives _iter_paragraphs_with_neighbors (built on
-textmodel.utils.iter_paragraphs). For each paragraph, the leaf texels
-are dispatched to box-building handlers (Text_handler, Footnote_handler,
-Table_handler); _finish_paragraph wraps the boxes into lines and yields
-row records: (row, parstyle, begins_par, ends_par, begins_block,
-ends_block).
+Grundsätzliches Vorgehen von RowFactory und Zusammenhang mit der
+Seitengenerierung:
 
-Footnote_handler renders a footnote's content into row records right
-away (via a child factory, like Table_handler does for a cell) and
-collects them in fn_sink; only the anchor appears inline. Rendering
-eagerly, in document order, is what keeps fn_sink - and therefore
-footnote numbering and placement order - correct even for footnotes
-nested inside other footnotes: a nested Footnote_handler call runs
-(and merges via update_from_child) before the outer one returns,
-never deferred to a later, decoupled placement pass. Table_handler
-builds a child factory per cell (create_child), lets it generate rows
-on its own, and merges footnote_counter/fn_sink back into the parent
-(update_from_child).
+Rowfactory generiert absatzweise Row-Records nach der Vorlage in
+Texel, ab der Position i. Dabei ist i der Anfang eines Absatzes.
 
-_iter_paragraphs_with_neighbors also yields the parstyle of the
-previous/next paragraph; _process_paragraph derives begins_block/
-ends_block from it (block_key/BLOCK_KEYS), which typesetter.
-typeset_into_rect uses to group block shadings/borders. Table_handler
-only collects each cell's row records; turning them into cell boxes
-is up to the TableBox it hands them to.
+Der Pagebreaker arbeitet auch absatzweise. Dabei ist er mit der
+Rowfactory synchron: Der Pagebreaker bekommt eine Liste mit
+Row-Records und arbeitet sie ab. Erst wenn diese Rows gesetzt sind,
+fordert er das nächste Paket mit Records an.
 
-Texel types handled: Text, NewLine, Footnote, Table. Line wrapping via
-simple_linewrap, alignment via align_x/justify_line, indentation via
-_dims.
+Texel enthalten nicht nur row-Material, sondern können auch
+Nebeneffekte haben, beispielsweise die Zähler für die
+Abschnittnummerierungen ändern oder zu setzendes Fußnotenmaterial,
+Floats in die Puffer speichern. Denkbar ist auch dass,
+Seiteneigenschaften (Größe, Ausrichtung, Rand, Nummerierung)
+umgestellt wird.
+
+Diese Nebeneffekte werden während des Satzes des Absatzes (genauer: am
+Anfang davon) umgesetzt. Diese absatzweise bearbeitung ist einfach,
+führt aber natürlich zu einer Unschärfe: die Seite auf der eine
+Fußnote erscheint ist unabhängig von der genauen Position des
+Fußnotenankers in dem Absatz, relevant ist vielmehr der Absatz.
+
+Der Prozess der Seitengenerierung soll an Seitengrenzen fortgesetzt
+werden können. Dazu enthalten Seiten (üblicherweise) ein Restartmemo,
+das Informationen zum Neustarten enthält. Die wichtigste Zustandsgröße
+ist das Tupel "rows". Aus der Länge des gepufferten (noch nicht
+gesetzten)-Row-Material folgt der Index (relativ zum Seitenanfang) von
+dem als nächstes Rows generiert werden müssen. Der Rows-Puffer ist
+daher im Restartmemo enthalten. Auch die anderen Puffer (Floats,
+Fußnoten, ...) werden in dem Memo gespeichert.
+
+Weiter sind Zustandswerte des Typesettingprozesses enthalten,
+beispielsweise Abschnitts- und Fußnotenzähler. Es gibt aber nicht nur
+Zustandswerte des Typesetters, auch die Factory hat Zustandswerte, die
+abgelegt werden. Das ist insbesondere die Zeilenbreite, die Factory
+kennen muss um die Boxen in Zeilen zu portionieren.
+
+Es wird daher ein State-Objekt verwendet, in das sowohl Typesetter als
+auch RowFactory die Positionsabhängigen-State Variablen einträgt. Da
+RowFactory immer absatzweise arbeitet, brauchen wir von ihr nur solche
+Werte eintragen die über den Absatz hinaus bestand haben. Werte die
+ohnehin für jeden neuen Absatz neu gesetzt werden (beispielsweise
+Styles) brauchen nicht abgelegt zu werden, da die Factory immer nur an
+Absatzgrenzen neu gestartet wird.
+
+Das Memo gibt immer den Zustand mit dem eine Seite *aufgehört*
+hat. Achtung: in früheren Versionen haben wir in dem Memo den
+Anfangszustnd vor der Seite gespeichert. Der Endzustand hat aber
+Vorteile.
 """
 
 from copy import copy as shallow_copy
@@ -41,88 +63,103 @@ from ..textmodel.texeltree import Text, NewLine, Container, \
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.textmodel import get_texel
 from ..textmodel.submodel import Footnote  # used only by the tests below
-from ..core.styles import testsheet, style_default, updated, n_levels
-from .boxes import TextBox, NewlineBox, EndBox, Row
-from .page import ForceBreakBox
+from ..core.styles import testsheet, style_default, n_levels
+from ..core.units import mm, cm
+from .boxes import TextBox, NewlineBox, EndBox, Row, RowsBox
+from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
 from .linewrap import simple_linewrap
+from .pagegen import split_at_breaks, MIN_LABEL_INDENT, LABEL_GAP, \
+    A4, FOOTNOTE_FRACTION
 from .stretchable import justify_line
 from .pagegen import align_x
 
 
-def mk_style(stylesheet, parstyle, style):
-    basestyle = stylesheet.get(parstyle.get('base', 'normal')) or {}
-    return updated(style_default, basestyle, parstyle, style)
 
+class State:
+    """State shared by RowFactory and generate_pages. A copy of it is
+    stored as a page's restartmemo. The buffers are lists (stack_rows
+    takes from their front): never work on a stored memo itself, only
+    on memo.copy().
 
-def mk_parstyle(stylesheet, parstyle):
-    basestyle = stylesheet.get(parstyle.get('base', 'normal')) or {}
-    return updated(style_default, basestyle, parstyle)
+    Holds no absolute index positions - pages can move in index space
+    (inserting/deleting before them). Where to continue is computed
+    from the page start plus the length of rows (see generate_pages)."""
 
+    # defaults for testing
+    geometry = A4
+    border = 2 * cm, 2 * cm, 2 * cm, 2 * cm
 
-class RowFactory:
-
-    def __init__(self, stylesheet, device=TESTDEVICE, line_width=400):
-        self.stylesheet = stylesheet
-        self.device = device
-        self.line_width = line_width
+    def __init__(self, width):
+        self.width = width
+        self.rows = []       # row records generated, but not yet placed
+        self.footnotes = []  # footnote row records, in document order
+        self.floats = []
         self.counters = {}
         self.footnote_counter = 0
-        self.fn_sink = []  # [(label, content_texel), ...]
-        self.restartmemo = (0, {}, 0)  # (i, counters, footnote_counter)
 
-    # ---- Row generation --------------------------------------------
+    def copy(self):
+        clone = shallow_copy(self)
+        clone.rows = list(self.rows)
+        clone.footnotes = list(self.footnotes)
+        clone.floats = list(self.floats)
+        clone.counters = copy_counters(self.counters)
+        return clone
 
-    def generate_rows(self, texel, i=0, restartmemo=None):
-        """Yield row records (row, parstyle, begins_par, ends_par,
-        begins_block, ends_block) for texel[i:]. Starts fresh at i, or
-        resumes from restartmemo (position, counters, footnote_counter)."""
-        if restartmemo is not None:
-            i, counters, self.footnote_counter = restartmemo
-            self.counters = copy_counters(counters)
-        else:
-            self.counters = {}
-            self.footnote_counter = 0
-        self.fn_sink = []
-        self.restartmemo = (i, copy_counters(self.counters),
-                             self.footnote_counter)
+    
+class Factory:
+    # A simple factory which creates the basic boxes from their texels
+    
+    def __init__(self, stylesheet, device):
+        self.stylesheet = stylesheet
+        self.device = device
+
+    def create_box(self, texel, parstyle):
+        handler = getattr(self, texel.__class__.__name__ + '_handler')
+        return handler(texel, parstyle)
+        
+    def Text_handler(self, texel, parstyle):
+        return TextBox(texel.text,
+            self.stylesheet.mk_style(parstyle, texel.style),
+            self.device)
+
+    def NewLine_handler(self, texel, parstyle):
+        style = self.stylesheet.mk_style(parstyle, texel.style)
+        cls = EndBox if texel.is_endmark else NewlineBox
+        return cls(style, self.device)
+
+    def BR_handler(self, texel, parstyle):
+        # A forced line break (Shift-Enter) within a paragraph - ends
+        # its line even if more text would still fit. The box itself
+        # is built here; _finish_paragraph (via split_at_breaks) is
+        # what actually forces the break when wrapping.
+        style = self.stylesheet.mk_style(parstyle, texel.style)
+        return ForceBreakBox(style, self.device)
+
+    
+
+class RowFactory(Factory):
+    # A factory which generates rows.
+
+    def __init__(self, state, stylesheet, device):
+        Factory.__init__(self, stylesheet, device)
+        self.state = state
+
+    def generate(self, texel, i):
         for i1, i2, texels, p_prev, p, p_next in \
                 self._iter_paragraphs_with_neighbors(texel, i):
-            yield from self._process_paragraph(i1, i2, texels, p_prev, p, p_next)
-
-    # ---- Child factory for self-contained sub-layouts ---------------
-
-    def create_child(self):
-        """Child factory for a sub-layout (e.g. a table cell). Shares
-        caches/stylesheet/device/line_width via shallow_copy."""
-        return shallow_copy(self)
-
-    def update_from_child(self, child):
-        """Merges footnote_counter and fn_sink from the child. The
-        child's counters/position stay local to the child."""
-        self.footnote_counter = child.footnote_counter
-        self.fn_sink.extend(child.fn_sink)
-
-    # ---- Paragraph lookahead -----------------------------------------
+            yield self._process_paragraph(i1, i2, texels, p_prev, p, p_next)
 
     def _iter_paragraphs_with_neighbors(self, texel, i):
-        """Yield (i1, i2, texels, p_prev, p, p_next) per paragraph in
-        texel[i:]: i1/i2/texels as in iter_paragraphs (paragraph start/
-        end, leaf texel list), p the resolved parstyle of the paragraph
-        itself, p_prev/p_next that of the previous/next paragraph (None
-        at the start/end of texel[i:]).
-
-        For i>0, p_prev for the first yielded paragraph is looked up
-        via the texel at position i-1 (the previous paragraph's
-        NewLine) instead of assumed to be None."""
+        # helper: iterate pragraphs, also yield prev and next parstyle
         p_prev = get_texel(texel, i - 1).parstyle if i > 0 else None
         if p_prev is not None:
-            p_prev = mk_parstyle(self.stylesheet, p_prev)
+            p_prev = self.stylesheet.mk_parstyle(p_prev)
         buffered = None  # (i1, i2, texels, p)
 
         for i1, i2, texels in iter_paragraphs(texel, i):
-            p = mk_parstyle(self.stylesheet, texels[-1].parstyle)
+            p = self.stylesheet.mk_parstyle(texels[-1].parstyle)
             if buffered is not None:
                 b_i1, b_i2, b_texels, b_p = buffered
                 yield b_i1, b_i2, b_texels, p_prev, b_p, p
@@ -133,83 +170,34 @@ class RowFactory:
             i1, i2, texels, p = buffered
             yield i1, i2, texels, p_prev, p, None
 
-    # ---- Paragraph processing -----------------------------------------
-
     def _process_paragraph(self, i1, i2, texels, p_prev, p, p_next):
-        boxes = [self.create_boxes(elem, p) for elem in texels]
+        boxes = [self.create_box(elem, p) for elem in texels]
         begins_block = not _is_same_block(p, p_prev)
         ends_block = not _is_same_block(p, p_next)
-        yield from self._finish_paragraph(boxes, i1, i2, p, begins_block, ends_block)
+        
+        level = p.get('fixed_indent') or 0
 
-    def create_boxes(self, texel, parstyle):
-        handler = getattr(self, texel.__class__.__name__ + '_handler')
-        return handler(texel, parstyle)
-
-    # ---- Leaf handlers: texel, paragraph's parstyle -> Box -------------
-
-    def Text_handler(self, texel, parstyle):
-        return TextBox(texel.text,
-                        mk_style(self.stylesheet, parstyle, texel.style),
-                        self.device)
-
-    def Footnote_handler(self, texel, parstyle):
-        from ..footnotes.footnotes import format_fn_label
-        self.footnote_counter += 1
-        label = texel.label or format_fn_label(self.footnote_counter, texel.numbering)
-        child = self.create_child()
-        seed = (0, {}, self.footnote_counter)
-        fn_records = list(child.generate_rows(texel.content, restartmemo=seed))
-        # Append this footnote's own record before merging the child's
-        # fn_sink (any footnotes nested inside it) - document order
-        # requires the parent to precede its own nested footnotes.
-        self.fn_sink.append((label, fn_records))
-        self.update_from_child(child)
-        style = mk_style(self.stylesheet, parstyle, texel.style)
-        return TextBox(label, style, self.device)
-
-    def Table_handler(self, texel, parstyle):
-        ncols = texel.ncols
-        col_width = self.line_width / ncols
-        cells = []
-        for j1, j2, cell_texel in iter_childs(texel):
-            child = self.create_child()
-            child.line_width = col_width
-            seed = (0, {}, self.footnote_counter)
-            records = list(child.generate_rows(cell_texel, restartmemo=seed))
-            self.update_from_child(child)
-            cells.append(records)
-        return TableBox(cells, ncols, col_width, self.device, length(texel))
-
-    def NewLine_handler(self, texel, parstyle):
-        style = mk_style(self.stylesheet, parstyle, texel.style)
-        cls = EndBox if texel.is_endmark else NewlineBox
-        return cls(style, self.device)
-
-    def BR_handler(self, texel, parstyle):
-        # A forced line break (Shift-Enter) within a paragraph. The
-        # generate_pages driver splits a paragraph's lines at
-        # ForceBreakBox markers to force a page break there - not
-        # handled here, RowFactory only builds the marker box itself.
-        style = mk_style(self.stylesheet, parstyle, texel.style)
-        return ForceBreakBox(style, self.device)
-
-    # ---- Finishing a paragraph -----------------------------------------
-
-    def _finish_paragraph(self, boxes, i1, i2, parstyle, begins_block, ends_block):
-        level = parstyle.get('fixed_indent') or 0
-
-        marker = self._update_counters(parstyle)
+        marker = self._update_counters(p)
         left_first, left_rest, width_first, width_rest = \
-            self._dims(parstyle, level)
-        alignment = parstyle['alignment']
-        lines = simple_linewrap(boxes, width_first, width_rest)
+            self._dims(p, level)
+        alignment = p['alignment']
+        # A forced line break (BR/ForceBreakBox) always ends its own
+        # line, even if more would still fit - each segment after one
+        # is wrapped on its own, continuing (never restarting) the
+        # paragraph's hanging indent (only the very first segment gets
+        # width_first/left_first).
+        lines = []
+        for segment in split_at_breaks(boxes):
+            w_first = width_first if not lines else width_rest
+            lines.extend(simple_linewrap(segment, w_first, width_rest))
         n = len(lines)
 
         # Must be set before the first yield: code after a yield only
         # runs on the next next() call.
-        self.restartmemo = (i2, copy_counters(self.counters),
-                             self.footnote_counter)
+        #self.restartmemo = (i2, copy_counters(self.counters),
+        #                     self.footnote_counter)
 
+        r = []
         for k, line in enumerate(lines):
             is_first, is_last = k == 0, k == n - 1
             width, left = (width_first, left_first) if is_first \
@@ -219,8 +207,9 @@ class RowFactory:
             row = Row(line, device=self.device)
             row.start = (align_x(alignment, left, width, row.width), 0)
             if is_first and marker is not None:
-                row.set_marker(marker, parstyle['marker_pos'][level], parstyle)
-            yield (row, parstyle, is_first, is_last, begins_block, ends_block)
+                row.set_marker(marker, p['marker_pos'][level], p)
+            r.append((row, p, is_first, is_last, begins_block, ends_block))
+        return r
 
     # ---- Line dimensions (indentation) ----------------------------------
 
@@ -235,7 +224,7 @@ class RowFactory:
         first_line_indent = parstyle['first_line_indent']
         left_rest = block_indent
         left_first = left_rest + first_line_indent
-        width_rest = self.line_width - block_indent
+        width_rest = self.state.width - block_indent
         width_first = width_rest - first_line_indent
         return left_first, left_rest, width_first, width_rest
 
@@ -250,17 +239,87 @@ class RowFactory:
             return parstyle['marker'][level]
         # 'numbered'
         ckey = parstyle.get('counter', 'item')
-        counter = self.counters.setdefault(ckey, [0] * n_levels)
+        counter = self.state.counters.setdefault(ckey, [0] * n_levels)
         sn = parstyle.get('start_number')
         if sn is not None:
             set_counter(level, counter, sn)
         else:
             inc_counter(level, counter)
         if ckey == 'section':
-            self.counters['item'] = [0] * n_levels
+            self.state.counters['item'] = [0] * n_levels
         return format_number(counter, level, parstyle['numbering_style'][level])
 
+    def create_child(self, width):
+        """Child factory for a sub-layout (e.g. a table cell or a
+        footnote's content), width wide. Shares stylesheet/device via
+        shallow_copy, but works on its own copy of the state - starting
+        with empty footnote/float buffers, so that afterwards these
+        hold exactly what the child added (see update_from_child)."""
+        child = shallow_copy(self)
+        child.state = self.state.copy()
+        child.state.width = width
+        child.state.footnotes = []
+        child.state.floats = []
+        return child
 
+    def update_from_child(self, child):
+        """Take over what isn't local to the child: its footnotes and
+        floats (appended, so they stay in document order) and the
+        footnote counter. Its counters and width stay local."""
+        self.state.footnotes += child.state.footnotes
+        self.state.floats += child.state.floats
+        self.state.footnote_counter = child.state.footnote_counter
+
+    def Footnote_handler(self, texel, parstyle):
+        from ..footnotes.footnotes import FootnoteAnchorBox, format_fn_label
+        self.state.footnote_counter += 1
+        label = texel.label or format_fn_label(self.state.footnote_counter,
+                                               texel.numbering)
+
+        # Reserve a hanging indent for the label, wide enough to fit it
+        # (MIN_LABEL_INDENT at least): render the content narrower by
+        # that much, then hang the label off the first row's left edge
+        # and pull continuation rows back to just MIN_LABEL_INDENT (a
+        # wide label only pushes its own first row's text, not every
+        # line of the footnote).
+        outer_style = self.stylesheet.mk_style(parstyle, {})
+        label_style = {**outer_style, 'vertical_position': 'superscript'}
+        label_w = self.device.measure(label, label_style)[0]
+        indent = max(MIN_LABEL_INDENT, label_w + LABEL_GAP)
+
+        child = self.create_child(self.state.width - indent)
+        fn_records = [record for par in child.generate(texel.content, 0)
+                      for record in par]
+        if fn_records:
+            fn_records[0][0].set_marker(label, -(label_w + LABEL_GAP), label_style)
+            extra = indent - MIN_LABEL_INDENT
+            if extra:
+                for later_record in fn_records[1:]:
+                    row = later_record[0]
+                    row.start = (row.start[0] - extra, row.start[1])
+                    row.width -= extra
+
+        # Append this footnote's own records before the child's
+        # footnotes (any footnotes nested inside it) - document order
+        # requires the parent to precede its own nested footnotes.
+        self.state.footnotes += fn_records
+        self.update_from_child(child)
+        style = self.stylesheet.mk_style(parstyle, texel.style)
+        return FootnoteAnchorBox(texel, label, style, self.device)
+
+    def Table_handler(self, texel, parstyle):
+        ncols = texel.ncols
+        col_width = self.state.width / ncols
+        cells = []
+        for j1, j2, cell_texel in iter_childs(texel):
+            child = self.create_child(col_width)
+            records = [record for par in child.generate(cell_texel, 0)
+                       for record in par]
+            self.update_from_child(child)
+            cells.append(records)
+        return TableBox(cells, ncols, col_width, self.device, length(texel))
+
+    
 BLOCK_KEYS = ('block_color', 'block_padding', 'block_border')
 
 
@@ -275,9 +334,8 @@ def _is_same_block(style_a, style_b):
 
 
 # ---------------------------------------------------------------------
-# Tests
+# Stand-ins (until tables are ported to the new factory)
 # ---------------------------------------------------------------------
-
 
 class Table(Container):
     """Table texel stand-in for the tests: childs are the cell
@@ -317,305 +375,156 @@ class TableBox:
         return self.length
 
 
-def _nl(parstyle, endmark=False):
-    nl = NewLine().set_parstyle(parstyle)
-    if endmark:
-        nl.is_endmark = 1
-    return nl
+def stack_rows(buffer, width, max_height=None):
+    """Take as many row records from the front of buffer (a list) as
+    fit into max_height - at least one - and stack them top-down,
+    collecting block shadings/borders along the way. The placed
+    records are removed from buffer; the rest stays there.
+
+    space_before/space_after apply only between paragraphs, never at
+    the stack's top or bottom. block_padding is part of the block: it
+    is reserved at a block's start/end and covered by its decoration.
+    A block cut off by max_height (or continuing beyond buffer) is
+    closed off at the last placed row.
+
+    Returns (data, height, shadings, borders)."""
+    data, shadings, borders = [], [], []
+    y = height = 0
+    group = None  # (top, color, border) of the open decoration group
+
+    def close():
+        top, color, border = group
+        rect = (0, top, width, height - top)
+        if color is not None:
+            shadings.append(rect + (color,))
+        if border is not None:
+            borders.append(rect + (border,))
+
+    n = 0
+    while n < len(buffer):
+        row, parstyle, begins_par, ends_par, begins_block, ends_block = buffer[n]
+        color, padding, border = block_key(parstyle)
+        padding = padding or 0
+        opens = begins_par and begins_block
+        closes = ends_par and ends_block
+
+        y1 = y + (parstyle.get('space_before', 0) if begins_par and data else 0)
+        if opens:
+            y1 += padding
+        bottom = y1 + row.height + row.depth + (padding if closes else 0)
+        if max_height is not None and data and bottom > max_height:
+            break
+        n += 1
+        if group is None:
+            group = (y1 - padding if opens else y1, color, border)
+        data.append((0, y1, row))
+        height = bottom
+        if closes:
+            close()
+            group = None
+        y = bottom + (parstyle.get('space_after', 0) if ends_par else 0)
+
+    if group is not None:  # cut off inside a block
+        close()
+    del buffer[:n]
+    return data, height, shadings, borders
 
 
-def _make_doc():
-    normal = {'base': 'normal'}
-    numbered = {'base': 'normal', 'paragraph_type': 'numbered',
-                'fixed_indent': 0, 'list_indent': 2}
-
-    # P0: plain paragraph. P1/P2: numbered ("1."/"2."). P3: several
-    # short words (wraps at line_width=20). P4: numbered (endmark).
-    return Group([
-        Text('Hello '), Text('World'), _nl(normal),
-        Text('First item'), _nl(numbered),
-        Text('Second item'), _nl(numbered),
-        Text('This '), Text('paragraph '), Text('has '), Text('several '),
-        Text('short '), Text('words.'), _nl(normal),
-        Text('Third item'), _nl(numbered, endmark=True),
-    ])
+    
+def typeset_into_rect(records, width, device):
+    """Lay out row records into a fixed-width RowsBox (see stack_rows)."""
+    data, height, shadings, borders = stack_rows(list(records), width)
+    return RowsBox(data, width, height, 0, (0, 0), shadings, borders, device)
 
 
-def _texts(row):
-    return ''.join(box.text for box in row.childs if isinstance(box, TextBox))
+
+SEPARATOR_GAP = 2 * mm  # space above the footnote box for its separator
 
 
-def _rows(box):
-    "Row list of a RowsBox/CellBox, recursively unpacked from .data (x, y, row)."
-    rows = []
-    for _, _, child in box.data:
-        if isinstance(child, Row):
-            rows.append(child)
-        else:
-            rows.extend(_rows(child))
-    return rows
+def fill_rows(state, source, height):
+    """Read whole paragraphs from source (RowFactory.generate) into
+    state.rows until they are at least height tall - footnotes go to
+    state.footnotes as a side effect. Stops only at paragraph ends,
+    so state always matches where source continues. Returns False
+    once source is exhausted."""
+    have = sum(r[0].height + r[0].depth for r in state.rows)
+    while have < height:
+        par = next(source, None)
+        if par is None:
+            return False
+        state.rows.extend(par)
+        have += sum(r[0].height + r[0].depth for r in par)
+    return True
+
+
+def shift(rects, dx, dy):
+    return [(x + dx, y + dy, w, h, c) for x, y, w, h, c in rects]
+
+
+def generate_pages(texel, i1, memo, stylesheet, device):
+    """Yield pages for texel, the first one starting at index i1 and
+    continuing from memo (the state the previous page ended with).
+    Works on memo.copy(), never on memo itself. Each page carries its
+    own end state as page.restartmemo."""
+    state = memo.copy()
+    factory = RowFactory(state, stylesheet, device)
+    # memo holds no absolute positions: the factory continues right
+    # after the rows still buffered from the previous page.
+    source = factory.generate(texel, i1 + sum(len(r[0]) for r in state.rows))
+    geometry = state.geometry
+    top, right, bottom, left = state.border
+    width = state.width
+    avail = geometry[1] - top - bottom
+    exhausted = False
+
+    while True:
+        if not exhausted:
+            exhausted = not fill_rows(state, source, avail)
+
+        # Footnotes first: at most FOOTNOTE_FRACTION of the page - the
+        # whole page once no body rows are left.
+        limit = avail if not state.rows else avail * FOOTNOTE_FRACTION
+        fn_data, fn_height, fn_shadings, fn_borders = \
+            stack_rows(state.footnotes, width, limit)
+        gap = SEPARATOR_GAP if fn_data else 0
+        data, height, shadings, borders = \
+            stack_rows(state.rows, width, avail - fn_height - gap)
+
+        footnotebox = None
+        if fn_data:
+            box = FootnoteBox(fn_data, width, fn_height, fn_shadings,
+                              fn_borders, device,
+                              draw_separator=bool(data))
+            y = geometry[1] - bottom - fn_height if data else top
+            footnotebox = (left, y, box)
+        page = Page([(x, top + y, row) for x, y, row in data], geometry,
+                    footnotebox, device=device)
+        page.shadings = shift(shadings, left, top)
+        page.borders = shift(borders, left, top)
+        page.restartmemo = state.copy()
+        yield page
+
+        if exhausted and not state.rows and not state.footnotes:
+            break
 
 
 def test_00():
-    "Basic pass: lines, wrapping, numbering"
-    texel = _make_doc()
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=20)
-    records = list(factory.generate_rows(texel, 0))
-
-    rows = [r[0] for r in records]
-    assert _texts(rows[0]) == 'Hello World'
-
-    assert rows[1].marker == '1.'
-    assert _texts(rows[1]) == 'First item'
-    assert rows[2].marker == '2.'
-    assert _texts(rows[2]) == 'Second item'
-
-    p3_rows = rows[3:-1]
-    assert len(p3_rows) > 1
-    assert ''.join(_texts(r) for r in p3_rows) == \
-        'This paragraph has several short words.'
-    for r in p3_rows:
-        assert r.width <= 20
-
-    assert rows[-1].marker == '3.'
-    assert _texts(rows[-1]) == 'Third item'
-
+    "Factory"
+    from einstein import get_einstein_model    
+    factory = Factory(testsheet, TESTDEVICE)
+    model = get_einstein_model()
+    l = []
+    for i1, i2, texels in iter_paragraphs(model.texel, 0):
+        p = texels[-1].parstyle
+        for texel in texels:            
+            l.append(factory.create_box(texel, p))
 
 def test_01():
-    "Restart at a paragraph boundary matches full run"
-    texel = _make_doc()
-
-    full_factory = RowFactory(testsheet, TESTDEVICE, line_width=20)
-    full_records = list(full_factory.generate_rows(texel, 0))
-
-    partial_factory = RowFactory(testsheet, TESTDEVICE, line_width=20)
-    gen = partial_factory.generate_rows(texel, 0)
-    first_three = [next(gen) for _ in range(3)]
-    memo = partial_factory.restartmemo
-
-    # Row objects are distinct instances (no __eq__), so compare text.
-    assert [_texts(r[0]) for r in first_three] == \
-        [_texts(full_records[i][0]) for i in range(3)]
-    assert memo[1]['item'][0] == 2
-
-    resumed_factory = RowFactory(testsheet, TESTDEVICE, line_width=20)
-    resumed_records = list(resumed_factory.generate_rows(texel, restartmemo=memo))
-
-    resumed_texts = [_texts(r[0]) for r in resumed_records]
-    full_tail_texts = [_texts(r[0]) for r in full_records[3:]]
-    assert resumed_texts == full_tail_texts
-    assert resumed_records[-1][0].marker == '3.'
-
-
-def _make_footnote_doc():
-    normal = {'base': 'normal'}
-    numbered = {'base': 'normal', 'paragraph_type': 'numbered', 'fixed_indent': 0}
-
-    fn1_content = Group([Text('First footnote text.'), _nl(normal, endmark=True)])
-    fn2_content = Group([
-        Text('Numbered inside footnote.'), _nl(numbered, endmark=True)])
-
-    # P0: "See<anchor>here" (footnote 1). P1: "And<anchor>again" (footnote 2, endmark).
-    return Group([
-        Text('See'), Footnote(fn1_content), Text(' here'), _nl(normal),
-        Text('And'), Footnote(fn2_content), Text(' again'),
-        _nl(normal, endmark=True),
-    ])
-
-
-def test_02():
-    "Footnotes: anchor inline, counter survives reset"
-    texel = _make_footnote_doc()
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
-
-    drained = []
-    records = []
-    for record in factory.generate_rows(texel, 0):
-        records.append(record)
-        if record[3]:  # ends_par
-            drained.extend(factory.fn_sink)
-            factory.fn_sink.clear()
-
-    assert len(records) == 2
-    assert _texts(records[0][0]) == 'See1 here'
-    assert _texts(records[1][0]) == 'And2 again'
-    assert [label for label, _ in drained] == ['1', '2']
-
-    partial = RowFactory(testsheet, TESTDEVICE, line_width=400)
-    gen = partial.generate_rows(texel, 0)
-    next(gen)
-    memo = partial.restartmemo
-    assert memo[2] == 1  # footnote_counter
-    assert [label for label, _ in partial.fn_sink] == ['1']
-
-    resumed = RowFactory(testsheet, TESTDEVICE, line_width=400)
-    resumed_records = list(resumed.generate_rows(texel, restartmemo=memo))
-    assert _texts(resumed_records[0][0]) == 'And2 again'
-    assert [label for label, _ in resumed.fn_sink] == ['2']
-
-    # fn_sink already holds rendered row records (rendered eagerly, at
-    # Footnote_handler time) - no separate render step needed here.
-    from .typesetter import typeset_into_rect
-    label, fn_records = drained[1]
-    fn_box = typeset_into_rect(fn_records, 400, TESTDEVICE)
-    assert _rows(fn_box)[0].marker == '1.'
-
-
-def _make_table_doc():
-    normal = {'base': 'normal'}
-    fn_before = Group([Text('Note before table.'), _nl(normal, endmark=True)])
-    fn_cell = Group([Text('Note inside cell.'), _nl(normal, endmark=True)])
-    fn_after = Group([Text('Note after table.'), _nl(normal, endmark=True)])
-
-    cell0 = Group([
-        Text('This '), Text('cell '), Text('wraps '), Text('at '),
-        Text('twenty.'), _nl(normal, endmark=True)])
-    cell1 = Group([
-        Text('Cell two'), Footnote(fn_cell), _nl(normal, endmark=True)])
-    table = Table([cell0, cell1], ncols=2)
-
-    # P0 before the table: footnote "1". Cell 1: footnote "2". P1
-    # after the table: footnote "3".
-    return Group([
-        Text('Before'), Footnote(fn_before), _nl(normal),
-        table, _nl(normal),
-        Text('After'), Footnote(fn_after), _nl(normal, endmark=True),
-    ])
-
-
-def test_03():
-    "Tables: per-cell child factory, fn_sink flows up"
-    texel = _make_table_doc()
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=40)  # col_width=20
-    records = list(factory.generate_rows(texel, 0))
-
-    assert len(records) == 3  # P0 row, table row, P1 row
-    assert _texts(records[0][0]) == 'Before1'
-    assert _texts(records[2][0]) == 'After3'
-
-    table_row = records[1][0]
-    table_box = table_row.childs[0]
-    assert isinstance(table_box, TableBox)
-
-    assert table_box.width == 40
-    assert table_box.col_width == 20
-
-    cell0 = table_box.cells[0]
-    assert cell0.width == 20
-
-    assert len(_rows(cell0)) > 1
-    for row in _rows(cell0):
-        assert row.width <= 20
-    assert ''.join(_texts(r) for r in _rows(cell0)) == \
-        'This cell wraps at twenty.'
-
-    assert _texts(_rows(table_box.cells[1])[0]) == 'Cell two2'
-    assert [label for label, _ in factory.fn_sink] == ['1', '2', '3']
-
-
-def _make_layout_doc():
-    indented = {'base': 'normal', 'fixed_indent': 1,
-                'indent_levels': (0, 5, 10), 'first_line_indent': -3}
-    centered = {'base': 'normal', 'alignment': 'center'}
-    right = {'base': 'normal', 'alignment': 'right'}
-    justify = {'base': 'normal', 'alignment': 'justify'}
-
-    # P0: hanging indent, 5 equal-width words (wraps after 4 words at
-    # width_first=18). P1: centered. P2: right-aligned. P3: justified.
-    return Group([
-        Text('Aaa '), Text('Bbb '), Text('Ccc '), Text('Ddd '), Text('Eee '),
-        _nl(indented),
-        Text('Centered'), _nl(centered),
-        Text('Right aligned'), _nl(right),
-        Text('This '), Text('is '), Text('justified '), Text('text.'),
-        _nl(justify, endmark=True),
-    ])
-
-
-def test_04():
-    "Indentation and alignment (all 4 modes)"
-    texel = _make_layout_doc()
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=20)
-    rows = [r[0] for r in factory.generate_rows(texel, 0)]
-
-    assert _texts(rows[0]) == 'Aaa Bbb Ccc Ddd '
-    assert rows[0].start[0] == 2
-    assert _texts(rows[1]) == 'Eee '
-    assert rows[1].start[0] == 5
-
-    centered_row = rows[2]
-    assert _texts(centered_row) == 'Centered'
-    assert centered_row.start[0] == 0.5 * (20 - centered_row.width)
-
-    right_row = rows[3]
-    assert _texts(right_row) == 'Right aligned'
-    assert right_row.start[0] == 20 - right_row.width
-
-    justified_rows = rows[4:]
-    assert len(justified_rows) == 2
-    assert justified_rows[0].width > 18
-    assert justified_rows[1].width == 5  # 'text.' + EndBox
-
-
-def test_05():
-    "begins_block/ends_block, not just alias of par"
-    boxed = {'base': 'normal', 'block_color': '#eee'}
-    plain = {'base': 'normal'}
-    texel = Group([
-        Text('One'), _nl(boxed),
-        Text('Two'), _nl(boxed),
-        Text('Three'), _nl(plain, endmark=True),
-    ])
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
-    records = list(factory.generate_rows(texel, 0))
-    assert len(records) == 3
-
-    # (row, parstyle, begins_par, ends_par, begins_block, ends_block)
-    assert records[0][4:6] == (True, False)
-    assert records[1][4:6] == (False, True)
-    assert records[2][4:6] == (True, True)
-    assert all(r[2:4] == (True, True) for r in records)
-
-
-def test_06():
-    "Footnotes nested inside a footnote's content queue right after it"
-    normal = {'base': 'normal'}
-    inner = Footnote(Group([Text('Inner.'), _nl(normal, endmark=True)]))
-    outer_content = Group([
-        Text('Outer with'), inner, Text(' ref.'), _nl(normal, endmark=True)])
-    texel = Group([
-        Text('See'), Footnote(outer_content), Text(' here'),
-        _nl(normal, endmark=True)])
-
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
-    records = list(factory.generate_rows(texel, 0))
-    assert _texts(records[0][0]) == 'See1 here'
-
-    # fn_sink: the outer footnote's own (rendered eagerly, in-line)
-    # content, immediately followed by the nested one - both already
-    # rendered to row records, in document order. The nested footnote
-    # continues the same global counter ('2'), not a reset one.
-    assert [label for label, _ in factory.fn_sink] == ['1', '2']
-    (outer_label, outer_records), (inner_label, inner_records) = factory.fn_sink
-    assert _texts(outer_records[0][0]) == 'Outer with2 ref.'  # '2': inner's anchor
-    assert _texts(inner_records[0][0]) == 'Inner.'
-
-
-def test_07():
-    "BR (forced line break) becomes a ForceBreakBox in the row"
-    from ..core.texels import BR
-    normal = {'base': 'normal'}
-    texel = Group([
-        Text('Before'), BR(), Text('After'), _nl(normal, endmark=True)])
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
-    records = list(factory.generate_rows(texel, 0))
-
-    # Placing the ForceBreakBox where the actual break happens (mid-
-    # paragraph, forcing a new page there) is generate_pages' job, not
-    # RowFactory's - here it's just one more box among the paragraph's
-    # others, wrapped into a single row like any other (line_width=400,
-    # short text: no wrapping).
-    assert len(records) == 1
-    row = records[0][0]
-    assert _texts(row) == 'BeforeAfter'
-    assert any(isinstance(box, ForceBreakBox) for box in row.childs)
+    "RowFactory"
+    from einstein import get_einstein_model
+    state = State(width=80)
+    factory = RowFactory(state, testsheet, TESTDEVICE)
+    model = get_einstein_model()
+    for x in factory.generate(model.texel, 0):
+        print(x)
+    
