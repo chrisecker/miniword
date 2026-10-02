@@ -1022,18 +1022,7 @@ class _DocBuilder:
 
         for start, end, ptype, indent in self.pars:
             # NL is at end-1 (the \n we appended)
-            nl_pos = end - 1
-            if ptype.startswith('h') or ptype in ('pre', 'list', 'numbered', 'quote'):
-                base = ptype
-            else:
-                base = 'body'
-            ps = {'base': base}
-            if ptype in ('list', 'numbered'):
-                ps['paragraph_type'] = ptype
-            doc.textmodel.set_parstyle(nl_pos, ps)
-            if indent:
-                doc.textmodel.set_parproperties(
-                    nl_pos, nl_pos + 1, indent=indent)
+            _apply_parstyle(doc, end - 1, ptype, indent)
 
         for start, end, props in self.runs:
             doc.textmodel.set_properties(start, end, **props)
@@ -1324,6 +1313,18 @@ def test_08c():
     "nesting inside a uniformly-indented list is still relative, not absolute"
     pars = _parse("  - Top\n    - Nested\n  - Top again\n")
     assert [indent for base, ptype, indent, runs in pars] == [0, 1, 0]
+
+
+@for_each_parser
+def test_08d(load):
+    "three-level nested list (with continuation line) ends up in NewLine.indent"
+    md = ("- Top\n  continued.\n"
+          "  - Level 1\n"
+          "    - Level 2a\n"
+          "    - Level 2b\n"
+          "  - Level 1 again\n")
+    pars = _extract_pars(load(md))
+    assert [indent for base, ptype, indent, runs in pars] == [0, 1, 2, 2, 1]
 
 
 def test_09():
