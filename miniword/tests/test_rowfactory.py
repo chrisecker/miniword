@@ -19,7 +19,7 @@ from ..footnotes.footnotes import FootnoteAnchorBox
 from ..layout.boxes import TextBox, NewlineBox, EndBox, Row, RowsBox
 from ..layout.page import ForceBreakBox, FootnoteBox
 from ..layout.testdevice import TESTDEVICE
-from ..layout.rowfactory import State, RowFactory, Table, TableBox, stack_rows, \
+from ..layout.rowfactory import State, RowFactory, Table, TableBox, RowStack, \
     typeset_into_rect, generate_pages, block_key, FOOTNOTE_FRACTION, \
     MIN_LABEL_INDENT, LABEL_GAP
 
@@ -113,7 +113,7 @@ def find_boxes(paragraphs, cls):
 
 
 # ---------------------------------------------------------------------
-# Helpers: records for stack_rows
+# Helpers: records for RowStack
 # ---------------------------------------------------------------------
 
 def mk_row(height=1, length=1):
@@ -137,6 +137,14 @@ def mk_records(*spec):
             records.append((mk_row(), style, j == 0, j == nrows - 1,
                             begins_block, ends_block))
     return records
+
+
+def stack(buffer, width, max_height=None):
+    """One RowStack.take on a fresh stack. Returns (data, height,
+    shadings, borders)."""
+    rowstack = RowStack(width)
+    rowstack.take(buffer, max_height)
+    return (rowstack.data(), rowstack.height) + rowstack.decorations()
 
 
 # ---------------------------------------------------------------------
@@ -365,6 +373,25 @@ def test_WRAP_8():
     paragraphs, state = generate(doc(par('a'), par(), par('b')))
     assert [len(p) for p in paragraphs] == [1, 1, 1]
     assert isinstance(paragraphs[1][0][0].childs[0], NewlineBox)
+
+
+def test_WRAP_9():
+    "WRAP-9: line_spacing is applied to the row, as before"
+    def hd(line_spacing):
+        row = flat(generate(doc(par('ab', line_spacing=line_spacing)))[0])[0][0]
+        return row.height, row.depth
+    assert hd(1.0) == (1, 0)
+    assert hd(1.5) == (1.25, 0.25)
+    assert hd(0.2) == (0.75, -0.25)  # negative leading at most -0.5
+
+    # applies to footnote content too, and stacks without further ado
+    note = Footnote(Group([Text('note'), nl(endmark=True, line_spacing=2.0)]))
+    paragraphs, state = generate(doc(par('a', note, line_spacing=1.5),
+                                     par('b', line_spacing=1.5)))
+    assert state.footnotes[0][0].height + state.footnotes[0][0].depth == 2
+    rowstack = RowStack(100)
+    rowstack.take(flat(paragraphs))
+    assert [y for y, _ in rowstack.placed] == [0, 1.5]
 
 
 # ---------------------------------------------------------------------
@@ -635,7 +662,7 @@ def test_STATE_3():
 
 
 # ---------------------------------------------------------------------
-# STACK - stack_rows
+# STACK - RowStack
 # ---------------------------------------------------------------------
 
 def ys(data):
@@ -645,7 +672,7 @@ def ys(data):
 def test_STACK_1():
     "STACK-1: without max_height everything is taken"
     buffer = mk_records((2, ps()), (3, ps()))
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    data, height, shadings, borders = stack(buffer, 10)
     assert len(data) == 5 and buffer == []
     assert height == 5
 
@@ -654,7 +681,7 @@ def test_STACK_2():
     "STACK-2: with max_height exactly the fitting records are taken"
     buffer = mk_records((5, ps()))
     rest = buffer[3:]
-    data, height, shadings, borders = stack_rows(buffer, 10, 3)
+    data, height, shadings, borders = stack(buffer, 10, 3)
     assert len(data) == 3 and height == 3
     assert buffer == rest
 
@@ -663,7 +690,7 @@ def test_STACK_3():
     "STACK-3: at least one record is always taken"
     buffer = mk_records((2, ps()))
     buffer[0][0].height = 10
-    data, height, shadings, borders = stack_rows(buffer, 10, 3)
+    data, height, shadings, borders = stack(buffer, 10, 3)
     assert len(data) == 1 and height == 10
     assert len(buffer) == 1
 
@@ -672,7 +699,7 @@ def test_STACK_4():
     "STACK-4: space_before/space_after only between paragraphs"
     style = ps(space_before=2, space_after=3)
     buffer = mk_records((1, style), (1, style))
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    data, height, shadings, borders = stack(buffer, 10)
     assert ys(data) == [0, 1 + 3 + 2]
     assert height == 7
 
@@ -680,7 +707,7 @@ def test_STACK_4():
 def test_STACK_5():
     "STACK-5: block_padding is reserved at the block's start and end"
     buffer = mk_records((1, ps(block_color='red', block_padding=2)))
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    data, height, shadings, borders = stack(buffer, 10)
     assert ys(data) == [2]
     assert height == 5
     assert shadings == [(0, 0, 10, 5, 'red')]
@@ -690,7 +717,7 @@ def test_STACK_6():
     "STACK-6: consecutive paragraphs of the same block give one rect"
     style = ps(block_color='red', block_padding=1)
     buffer = mk_records((1, style), (1, style))
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    data, height, shadings, borders = stack(buffer, 10)
     assert ys(data) == [1, 2]
     assert shadings == [(0, 0, 10, 4, 'red')]
 
@@ -699,18 +726,18 @@ def test_STACK_7():
     "STACK-7: different blocks give separate rects"
     buffer = mk_records((1, ps(block_color='red')),
                         (1, ps(block_color='blue')))
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    data, height, shadings, borders = stack(buffer, 10)
     assert shadings == [(0, 0, 10, 1, 'red'), (0, 1, 10, 1, 'blue')]
 
 
 def test_STACK_8():
     "STACK-8: no rect without color and border"
     buffer = mk_records((2, ps()))
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    data, height, shadings, borders = stack(buffer, 10)
     assert shadings == [] and borders == []
 
     buffer = mk_records((2, ps(block_border='black')))
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    data, height, shadings, borders = stack(buffer, 10)
     assert shadings == []
     assert borders == [(0, 0, 10, 2, 'black')]
 
@@ -718,7 +745,7 @@ def test_STACK_8():
 def test_STACK_9():
     "STACK-9: a block cut off by max_height closes at the last placed row"
     buffer = mk_records((4, ps(block_color='red', block_padding=1)))
-    data, height, shadings, borders = stack_rows(buffer, 10, 3)
+    data, height, shadings, borders = stack(buffer, 10, 3)
     assert ys(data) == [1, 2]
     assert shadings == [(0, 0, 10, 3, 'red')]
     assert len(buffer) == 2
@@ -727,8 +754,8 @@ def test_STACK_9():
 def test_STACK_10():
     "STACK-10: a stack starting mid-block has no top padding"
     buffer = mk_records((4, ps(block_color='red', block_padding=1)))
-    stack_rows(buffer, 10, 3)  # takes the first two rows
-    data, height, shadings, borders = stack_rows(buffer, 10)
+    stack(buffer, 10, 3)  # takes the first two rows
+    data, height, shadings, borders = stack(buffer, 10)
     assert ys(data) == [0, 1]
     assert shadings == [(0, 0, 10, 3, 'red')]  # bottom padding only
 
@@ -737,13 +764,34 @@ def test_STACK_11():
     "STACK-11: typeset_into_rect gives a RowsBox and leaves records alone"
     style = ps(block_color='red', block_padding=1, space_after=2)
     records = mk_records((2, style), (1, ps()))
-    expected = stack_rows(list(records), 10)
+    expected = stack(list(records), 10)
     box = typeset_into_rect(records, 10, TESTDEVICE)
     assert isinstance(box, RowsBox)
     assert len(records) == 3
     assert box.data == expected[0]
     assert box.height == expected[1]
     assert box.shadings == expected[2] and box.borders == expected[3]
+
+
+def test_STACK_12():
+    "STACK-12: continuing a stack equals stacking at once"
+    style = ps(block_color='red', block_padding=1, space_before=2,
+               space_after=3)
+    records = mk_records((2, style), (1, style), (2, ps()), (1, style))
+    expected = stack(list(records), 10)
+    rowstack = RowStack(10)
+    for k in range(len(records)):
+        rowstack.take([records[k]])
+    assert (rowstack.data(), rowstack.height) + rowstack.decorations() \
+        == expected
+
+
+def test_STACK_13():
+    "STACK-13: with force=False nothing oversized is taken"
+    buffer = mk_records((1, ps()))
+    rowstack = RowStack(10)
+    rowstack.take(buffer, 0.5, force=False)
+    assert rowstack.placed == [] and len(buffer) == 1
 
 
 # ---------------------------------------------------------------------
@@ -756,10 +804,10 @@ def body_bottom(page):
 
 
 def test_PAGE_1():
-    "PAGE-1: an empty document gives exactly one empty page"
-    pages = pages_from(Group([]), small_memo())
+    "PAGE-1: a document of just ENDMARK gives exactly one page"
+    pages = pages_from(doc([nl(endmark=True)]), small_memo())
     assert len(pages) == 1
-    assert pages[0].rows == [] and pages[0].footnotebox is None
+    assert len(pages[0].rows) == 1 and pages[0].footnotebox is None
 
 
 def test_PAGE_2():
@@ -845,6 +893,73 @@ def test_PAGE_8():
                 if row_text(row) != 'plain']
     for ry, row in red_rows:
         assert y <= ry and ry + row.height <= y + h
+
+
+def lines(name, n):
+    """Items for a paragraph of exactly n rows name0, name1, ..."""
+    items = []
+    for k in range(n):
+        items += [BR(), name + str(k)] if k else [name + '0']
+    return items
+
+
+def test_PAGE_9():
+    "PAGE-9: no other paragraph's text between a footnote and its text"
+    # Page 20 high, footnotes may take 2. After A (12 rows) B's
+    # footnote still fits, B itself (space_before 2) doesn't: B's
+    # footnote comes first - allowed, nothing in between. C must not
+    # put its footnote on that page as well: B's text would be in
+    # between.
+    texel = doc(par(*lines('a', 12)),
+                par(*lines('b', 3) + [fn('note b')], space_before=2),
+                par(*lines('c', 6) + [fn('note c')]),
+                *[par(*lines('d%d_' % k, 4)) for k in range(6)])
+    pages = pages_from(texel, small_memo(width=30, height=20))
+    order = []  # reading order: body rows of a page, then its footnotes
+    for p in pages:
+        order += [('row', row_text(r)) for _, _, r in p.rows]
+        order += [('note', row_text(r).strip()) for r in footnote_rows(p)]
+    early = 0
+    for name in 'bc':
+        note = order.index(('note', 'note ' + name))
+        first = order.index(('row', name + '0'))
+        if note < first:
+            early += 1
+            between = [text for kind, text in order[note:first]
+                       if kind == 'row']
+            assert between == [], (name, between)
+    assert early  # the situation must actually occur
+
+
+def test_PAGE_10():
+    "PAGE-10: page_break_before starts a new page, but not an empty one"
+    def body(pages):
+        return [[row_text(r) for _, _, r in p.rows] for p in pages]
+    memo = small_memo(height=20)
+
+    pages = pages_from(doc(par('a'), par('b', page_break_before=True),
+                           par('c')), memo)
+    assert body(pages) == [['a'], ['b', 'c']]
+
+    # at the very top, and twice in a row: no empty pages
+    pages = pages_from(doc(par('a', page_break_before=True),
+                           par('b', page_break_before=True),
+                           par('c', page_break_before=True)), memo)
+    assert body(pages) == [['a'], ['b'], ['c']]
+
+    # the paragraph's footnote goes with it
+    pages = pages_from(doc(par('a'), par('b', fn('note b'),
+                                         page_break_before=True)), memo)
+    assert body(pages) == [['a'], ['b[1]']]
+    assert footnote_rows(pages[0]) == []
+    assert [row_text(r).strip() for r in footnote_rows(pages[1])] == \
+        ['note b']
+
+    # restarting from the first page gives the same
+    texel = doc(par('a'), par('b', page_break_before=True), par('c'))
+    pages = pages_from(texel, memo)
+    again = pages_from(texel, pages[0].restartmemo, len(pages[0]))
+    assert [page_sig(p) for p in again] == [page_sig(p) for p in pages[1:]]
 
 
 # ---------------------------------------------------------------------
@@ -962,6 +1077,14 @@ def test_RESTART_8():
     second = pages_from(texel, memo)
     assert [page_sig(p) for p in first] == [page_sig(p) for p in second]
     assert state_sig(memo) == before
+
+
+def test_RESTART_9():
+    "RESTART-9: restarting from the last page's memo yields no page"
+    for texel in (doc([nl(endmark=True)]), long_doc()):
+        pages = pages_from(texel, small_memo())
+        end = sum(len(p) for p in pages)
+        assert pages_from(texel, pages[-1].restartmemo, end) == []
 
 
 # ---------------------------------------------------------------------

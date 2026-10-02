@@ -105,9 +105,24 @@ def align_x(alignment, left, width, text_width):
     assert False
 
 
+
+def apply_line_spacing(row, line_spacing):
+    """Line spacing as in the previous typesetter: extra leading of
+    (height + depth) * (line_spacing - 1), at least -0.5, split evenly
+    above and below the row.
+
+    XXX Scales the leading of tall rows too (e.g. a formula with a
+    large depth). Must be replaced by a TeX-like fixed baseline
+    distance (plus a minimal gap for too tall rows) once there are
+    formulas."""
+    extra = max((row.height + row.depth) * (line_spacing - 1), -0.5)
+    row.height += extra / 2
+    row.depth += extra / 2
+
+
 class State:
     """State shared by RowFactory and generate_pages. A copy of it is
-    stored as a page's restartmemo. The buffers are lists (stack_rows
+    stored as a page's restartmemo. The buffers are lists (RowStack.take
     takes from their front): never work on a stored memo itself, only
     on memo.copy().
 
@@ -234,6 +249,7 @@ class RowFactory(Factory):
                 line = justify_line(line, width)
             row = Row(line, device=self.device)
             row.start = (align_x(alignment, left, width, row.width), 0)
+            apply_line_spacing(row, p['line_spacing'])
             if is_first and marker is not None:
                 row.set_marker(marker, p['marker_pos'][level], p)
             r.append((row, p, is_first, is_last, begins_block, ends_block))
@@ -402,86 +418,91 @@ class TableBox:
         return self.length
 
 
-def stack_rows(buffer, width, max_height=None):
-    """Take as many row records from the front of buffer (a list) as
-    fit into max_height - at least one - and stack them top-down,
-    collecting block shadings/borders along the way. The placed
-    records are removed from buffer; the rest stays there.
+def _row_bottom(y, record):
+    """Bottom of a record placed at y, incl. its block's closing padding."""
+    row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+    bottom = y + row.height + row.depth
+    if ends_par and ends_block:
+        bottom += block_key(parstyle)[1] or 0
+    return bottom
+
+
+class RowStack:
+    """Stacks row records top-down (placed: [(y, record), ...]). Used
+    for a page's body and footnotes and for table cells. Stacking can
+    be continued, e.g. paragraph by paragraph, by calling take again.
 
     space_before/space_after apply only between paragraphs, never at
-    the stack's top or bottom. block_padding is part of the block: it
-    is reserved at a block's start/end and covered by its decoration.
-    A block cut off by max_height (or continuing beyond buffer) is
-    closed off at the last placed row.
+    the stack's top. block_padding is reserved at a block's start and
+    end and covered by its decoration."""
 
-    Returns (data, height, shadings, borders)."""
-    data, shadings, borders = [], [], []
-    y = height = 0
-    group = None  # (top, color, border) of the open decoration group
+    def __init__(self, width):
+        self.width = width
+        self.placed = []
 
-    def close():
-        top, color, border = group
-        rect = (0, top, width, height - top)
-        if color is not None:
-            shadings.append(rect + (color,))
-        if border is not None:
-            borders.append(rect + (border,))
+    @property
+    def height(self):
+        return _row_bottom(*self.placed[-1]) if self.placed else 0
 
-    n = 0
-    while n < len(buffer):
-        row, parstyle, begins_par, ends_par, begins_block, ends_block = buffer[n]
-        color, padding, border = block_key(parstyle)
-        padding = padding or 0
-        opens = begins_par and begins_block
-        closes = ends_par and ends_block
+    def take(self, buffer, max_height=None, force=None):
+        """Move as many records from the front of buffer as fit into
+        max_height. With force (default: the stack is empty) the first
+        one is taken even if it doesn't fit."""
+        if force is None:
+            force = not self.placed
+        n = 0
+        for record in buffer:
+            row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+            y = self.height
+            if self.placed and begins_par:
+                y += self.placed[-1][1][1].get('space_after', 0) \
+                    + parstyle.get('space_before', 0)
+            if begins_par and begins_block:
+                y += block_key(parstyle)[1] or 0
+            if max_height is not None and not (force and n == 0) \
+                    and _row_bottom(y, record) > max_height:
+                break
+            self.placed.append((y, record))
+            n += 1
+        del buffer[:n]
 
-        y1 = y + (parstyle.get('space_before', 0) if begins_par and data else 0)
-        if opens:
-            y1 += padding
-        bottom = y1 + row.height + row.depth + (padding if closes else 0)
-        if max_height is not None and data and bottom > max_height:
-            break
-        n += 1
-        if group is None:
-            group = (y1 - padding if opens else y1, color, border)
-        data.append((0, y1, row))
-        height = bottom
-        if closes:
-            close()
-            group = None
-        y = bottom + (parstyle.get('space_after', 0) if ends_par else 0)
+    def data(self):
+        return [(0, y, record[0]) for y, record in self.placed]
 
-    if group is not None:  # cut off inside a block
-        close()
-    del buffer[:n]
-    return data, height, shadings, borders
+    def decorations(self):
+        """Block shadings/borders. A block cut off at either end of
+        the stack is closed off there."""
+        shadings, borders = [], []
+        top = None
+        for k, (y, record) in enumerate(self.placed):
+            row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+            color, padding, border = block_key(parstyle)
+            if top is None:
+                opens = begins_par and begins_block
+                top = y - (padding or 0) if opens else y
+            if (ends_par and ends_block) or k == len(self.placed) - 1:
+                rect = (0, top, self.width, _row_bottom(y, record) - top)
+                if color is not None:
+                    shadings.append(rect + (color,))
+                if border is not None:
+                    borders.append(rect + (border,))
+                top = None
+        return shadings, borders
+
+    def create_box(self, device, cls=RowsBox, **kw):
+        shadings, borders = self.decorations()
+        return cls(data=self.data(), width=self.width, height=self.height,
+                   shadings=shadings, borders=borders, device=device, **kw)
 
 
-    
 def typeset_into_rect(records, width, device):
-    """Lay out row records into a fixed-width RowsBox (see stack_rows)."""
-    data, height, shadings, borders = stack_rows(list(records), width)
-    return RowsBox(data, width, height, 0, (0, 0), shadings, borders, device)
-
+    """Lay out row records into a fixed-width RowsBox (see RowStack)."""
+    stack = RowStack(width)
+    stack.take(list(records))
+    return stack.create_box(device)
 
 
 SEPARATOR_GAP = 2 * mm  # space above the footnote box for its separator
-
-
-def fill_rows(state, source, height):
-    """Read whole paragraphs from source (RowFactory.generate) into
-    state.rows until they are at least height tall - footnotes go to
-    state.footnotes as a side effect. Stops only at paragraph ends,
-    so state always matches where source continues. Returns False
-    once source is exhausted."""
-    have = sum(r[0].height + r[0].depth for r in state.rows)
-    while have < height:
-        par = next(source, None)
-        if par is None:
-            return False
-        state.rows.extend(par)
-        have += sum(r[0].height + r[0].depth for r in par)
-    return True
 
 
 def shift(rects, dx, dy):
@@ -492,7 +513,15 @@ def generate_pages(texel, i1, memo, stylesheet, device):
     """Yield pages for texel, the first one starting at index i1 and
     continuing from memo (the state the previous page ended with).
     Works on memo.copy(), never on memo itself. Each page carries its
-    own end state as page.restartmemo."""
+    own end state as page.restartmemo. Only pages with content are
+    yielded: restarting from the last page's memo yields none.
+
+    Works paragraph by paragraph: a paragraph is only read once the
+    previous one is placed, then its footnotes are placed, then its
+    rows. A footnote may thus end up before its text, but never with
+    another paragraph's text in between. A paragraph with
+    page_break_before starts a new page, unless the page has no body
+    rows yet."""
     state = memo.copy()
     factory = RowFactory(state, stylesheet, device)
     # memo holds no absolute positions: the factory continues right
@@ -500,32 +529,45 @@ def generate_pages(texel, i1, memo, stylesheet, device):
     source = factory.generate(texel, i1 + sum(len(r[0]) for r in state.rows))
     geometry = state.geometry
     top, right, bottom, left = state.border
-    width = state.width
     avail = geometry[1] - top - bottom
     exhausted = False
 
     while True:
-        if not exhausted:
-            exhausted = not fill_rows(state, source, avail)
+        body, notes = RowStack(state.width), RowStack(state.width)
+        while True:
+            if not state.rows and not exhausted:
+                par = next(source, None)
+                if par is None:
+                    exhausted = True
+                else:
+                    state.rows.extend(par)
+            if body.placed and state.rows and state.rows[0][2] \
+                    and state.rows[0][1].get('page_break_before'):
+                break  # the paragraph (and its footnotes) start a new page
+            last = exhausted and not state.rows
+            # Footnotes: at most FOOTNOTE_FRACTION of the page (all of
+            # it once no body rows are left), never over the body.
+            limit = avail if last else avail * FOOTNOTE_FRACTION
+            if body.placed:
+                limit = min(limit, avail - body.height - SEPARATOR_GAP)
+            notes.take(state.footnotes, limit, force=not body.placed
+                       and not notes.placed)
+            gap = SEPARATOR_GAP if notes.placed else 0
+            body.take(state.rows, avail - notes.height - gap)
+            if state.rows or last:
+                break
 
-        # Footnotes first: at most FOOTNOTE_FRACTION of the page - the
-        # whole page once no body rows are left.
-        limit = avail if not state.rows else avail * FOOTNOTE_FRACTION
-        fn_data, fn_height, fn_shadings, fn_borders = \
-            stack_rows(state.footnotes, width, limit)
-        gap = SEPARATOR_GAP if fn_data else 0
-        data, height, shadings, borders = \
-            stack_rows(state.rows, width, avail - fn_height - gap)
-
+        if not body.placed and not notes.placed:
+            return  # nothing left: the generator just ends
         footnotebox = None
-        if fn_data:
-            box = FootnoteBox(fn_data, width, fn_height, fn_shadings,
-                              fn_borders, device,
-                              draw_separator=bool(data))
-            y = geometry[1] - bottom - fn_height if data else top
+        if notes.placed:
+            box = notes.create_box(device, FootnoteBox,
+                                   draw_separator=bool(body.placed))
+            y = geometry[1] - bottom - notes.height if body.placed else top
             footnotebox = (left, y, box)
-        page = Page([(x, top + y, row) for x, y, row in data], geometry,
-                    footnotebox, device=device)
+        page = Page([(x, top + y, row) for x, y, row in body.data()],
+                    geometry, footnotebox, device=device)
+        shadings, borders = body.decorations()
         page.shadings = shift(shadings, left, top)
         page.borders = shift(borders, left, top)
         page.restartmemo = state.copy()
