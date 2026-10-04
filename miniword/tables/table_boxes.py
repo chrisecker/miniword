@@ -37,7 +37,7 @@ def create_cell(records, width, device, hpad=0, vpad=0, style=None):
     (outer) width; the content is wrapped/decorated at width - hpad
     (typeset_into_rect) and wrapped as CellBox's single child, offset
     by the cell padding (lpad, tpad)."""
-    from ..layout.typesetter import typeset_into_rect  # avoids a circular import
+    from ..layout.rowfactory import typeset_into_rect  # avoids a circular import
     style = style or {}
     lpad, tpad = hpad // 2, vpad // 2
     rows_box = typeset_into_rect(records, width - hpad, device)
@@ -348,7 +348,7 @@ def _mk_cell(rows, device):
 def mk_box_table(texts, col_width=60, row_height=14, device=None):
     """Build a TableBox directly from strings (for box-level tests)."""
     dev = device or TESTDEVICE
-    from ..layout.pagegen import Row as PageRow
+    from ..layout.boxes import Row as PageRow
     cells = []
     for row_texts in texts:
         row = []
@@ -387,7 +387,7 @@ def test_07():
 
 def test_08():
     "Multi-line cell: get_index(y=height) hits last"
-    from ..layout.pagegen import Row as PageRow
+    from ..layout.boxes import Row as PageRow
     dev = TESTDEVICE
     row1 = PageRow([TextBox('top',    EMPTYSTYLE, dev)], device=dev)
     row2 = PageRow([TextBox('bottom', EMPTYSTYLE, dev)], device=dev)
@@ -399,7 +399,7 @@ def test_08():
 
 def test_09():
     "Up from row r lands at bottom of row r-1"
-    from ..layout.pagegen import Row as PageRow
+    from ..layout.boxes import Row as PageRow
     dev = TESTDEVICE
 
     def make_cell(*texts):
@@ -429,11 +429,11 @@ def test_09():
 
 def test_10():
     "create_cell: wraps RowsBox, offset by padding"
-    from ..layout.rowfactory import RowFactory
+    from ..layout.rowfactory import RowFactory, State
     boxed = {'base': 'normal', 'block_color': '#f00', 'block_padding': 1}
     texel = Group([Text('X'), _nl(boxed, endmark=True)])
-    factory = RowFactory(testsheet, TESTDEVICE, line_width=400)
-    records = list(factory.generate_rows(texel, 0))
+    factory = RowFactory(State(400), testsheet, TESTDEVICE)
+    records = [r for par in factory.generate(texel, 0) for r in par]
 
     box = create_cell(records, 14, TESTDEVICE, hpad=4, vpad=2,
                        style={'cell_bgcolor': '#eee'})
