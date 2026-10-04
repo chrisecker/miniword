@@ -36,6 +36,7 @@ modules = [
     "miniword.layout.factory",
     "miniword.layout.rowfactory",
     "miniword.tests.test_rowfactory",
+    "miniword.tests.test_footnotes",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

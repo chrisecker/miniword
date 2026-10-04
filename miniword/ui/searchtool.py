@@ -4,8 +4,7 @@ import wx
 from ..textmodel.viewbase import ViewBase
 from ..textmodel.modelbase import Model
 from ..textmodel.properties import overridable_property
-from ..textmodel.utils import iter_leafes
-from ..textmodel.submodel import Footnote
+from ..footnotes.footnotes import iter_footnotes
 from ..textmodel.texeltree import get_text as texel_get_text
 from .sidepanel import SidePanel
 from .colours import colours
@@ -74,12 +73,10 @@ class Search(ViewBase, Model):
                 return
 
         # flow=1: footnotes — single traversal builds fn_ranges and searches
-        fn_offset = 0
         fn_num    = 0
         fn_ranges = []
-        for _, _, texel in iter_leafes(self.model.texel, 0, True):
-            if not isinstance(texel, Footnote):
-                continue
+        for fn_offset, chain, _ in iter_footnotes(self.model.texel):
+            texel = chain[-1][1]  # nested footnotes included
             fn_num  += 1
             fn_text  = texel_get_text(texel.content)[:-1]  # exclude ENDMARK
             fn_len   = len(fn_text) + 1                    # +1 for ENDMARK
@@ -96,7 +93,6 @@ class Search(ViewBase, Model):
                     self._results  = results
                     self.valid     = True
                     return
-            fn_offset += fn_len
         self.fn_ranges = fn_ranges
 
         self.truncated = False
@@ -616,3 +612,24 @@ def test_04():
     fn_results = [(i1, i2) for flow, i1, i2, *_ in search.results if flow == 1]
     assert len(fn_results) > 0
     assert all(flow in (0, 1) for flow, *_ in search.results)
+
+
+def test_05():
+    "search in nested footnotes: flow=1 positions and numbers"
+    from ..textmodel.textmodel import TextModel
+    from ..footnotes.footnotes import _nested_doc
+    xtexel, f1, f2, f3 = _nested_doc()
+    model = TextModel()
+    model.set_xtexel(xtexel)
+    search = Search(model)
+
+    # flow: F1 'xy[F2]z' 0..5, F2 'uv' 5..8, F3 'w' 8..10
+    search.search('v')
+    assert [(flow, i1, i2) for flow, i1, i2, *_ in search.results] == \
+        [(1, 6, 7)]
+    assert search.fn_number(6) == 2
+    search.search('w')
+    assert [(flow, i1, i2) for flow, i1, i2, *_ in search.results] == \
+        [(1, 8, 9)]
+    assert search.fn_number(8) == 3
+

@@ -567,6 +567,31 @@ def test_FN_6():
     assert [r[0].marker for r in state.footnotes] == ['1', '2', '3']
 
 
+def test_FN_7():
+    "FN-7: the footnote flow matches footnotes.iter_footnotes"
+    from ..footnotes.footnotes import iter_footnotes
+    from ..textmodel.texeltree import get_text
+    f3 = fn('three')
+    f2 = fn('two', f3)
+    f1 = fn('one', f2, ' more')
+    cell = Group(par('cell', fn('in cell'), endmark=True))
+    table = Table([cell, Group(par('x', endmark=True))], ncols=2)
+    texel = doc(par('a', f1, 'b', fn('four')), par(table),
+                par('c', fn('five'), endmark=True))
+    paragraphs, state = generate(texel, width=60)
+    flow = [record[0] for record in state.footnotes]
+    expected = list(iter_footnotes(texel))
+    assert sum(len(row) for row in flow) == \
+        sum(length(chain[-1][1].content) for _, chain, _ in expected)
+    # every footnote starts with a labelled row at its offset
+    starts, i = [], 0
+    for row in flow:
+        if row.marker is not None:
+            starts.append(i)
+        i += len(row)
+    assert starts == [offset for offset, _, _ in expected]
+
+
 # ---------------------------------------------------------------------
 # TAB - Tables
 # ---------------------------------------------------------------------
