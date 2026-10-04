@@ -21,7 +21,7 @@ from ..textmodel.submodel import Footnote, _get_text
 from ..texteditor.editor import TwoFlowEditor
 from ..footnotes.footnotes import iter_footnotes
 from ..layout.pagebuilder import PageBuilder
-from ..layout.factory import Factory
+from ..layout.rowfactory import Factory
 from ..layout.boxes import TextBox
 from ..core.styles import testsheet
 

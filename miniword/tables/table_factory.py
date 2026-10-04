@@ -98,7 +98,7 @@ def build_table_box(texel, factory, row_height=None):
 
 def test_03():
     "build_table_box produces TableBox with correct length"
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..core.styles import testsheet
     from .tables import from_strings
     texts = [['Hi', 'World'], ['Foo', 'Bar']]

@@ -115,10 +115,8 @@ def demo_00():
     from ..textmodel.textmodel import TextModel
     from ..textmodel.texeltree import grouped, T, ENDMARK
     from ..layout.cairodevice import CairoDevice
-    from ..layout.pagegen import generate_pages, RestartMemo
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import generate_pages, state_from_settings
     from ..core.styles import testsheet
-    from ..core.units import cm
 
     model = TextModel('Miniword ist ein freies Textsatzsystem.\n')
     fn = Footnote(grouped([T('Ein leichtgewichtiges Satzsystem, geschrieben in Python.'), ENDMARK]))
@@ -126,13 +124,11 @@ def demo_00():
     fn_model.texel = grouped([fn])
     model.insert(7, fn_model)   # Anker nach "Miniword"
 
-    device  = CairoDevice()
-    factory = Factory(testsheet, device)
-    memo    = RestartMemo()
-    memo.geometry = (595, 842)  # A4 in pt
-    memo.border   = (2*cm, 2*cm, 2*cm, 2*cm)
+    device = CairoDevice()
+    memo   = state_from_settings({})  # A4
 
-    pages = list(generate_pages(model.get_xtexel(), 0, memo, factory))
+    pages = list(generate_pages(model.get_xtexel(), 0, memo, testsheet,
+                                device))
     page  = pages[0]
 
     surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 595, 842)

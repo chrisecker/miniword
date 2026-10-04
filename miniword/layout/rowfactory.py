@@ -175,9 +175,12 @@ def state_from_settings(settings):
 class Factory:
     # A simple factory which creates the basic boxes from their texels
     
-    def __init__(self, stylesheet, device):
+    def __init__(self, stylesheet, device=TESTDEVICE):
         self.stylesheet = stylesheet
         self.device = device
+
+    def clear_caches(self):
+        self.device.clear_caches()
 
     def create_box(self, texel, parstyle):
         handler = getattr(self, texel.__class__.__name__ + '_handler')
@@ -204,6 +207,24 @@ class Factory:
     def Tabulator_handler(self, texel, parstyle):
         style = self.stylesheet.mk_style(parstyle, texel.style)
         return TabulatorBox(style, self.device)
+
+    def Image_handler(self, texel, parstyle):
+        # Decoded images come from the application-wide LRU
+        # (imageio.decode_cached); no content, or content that can't be
+        # decoded, gives a placeholder.
+        from ..images.images import ImageBox, ErrorPlaceholderBox
+        from ..images.imageio import decode_cached, crop_surface
+        data = decode_cached(texel.content)
+        if data is None:
+            return ErrorPlaceholderBox(50, 50, self.device)
+        bitmap = data.bitmap
+        w, h = data.width_px, data.height_px
+        if texel.crop:
+            cl, cr, ct, cb = texel.crop
+            w, h = w - cl - cr, h - ct - cb
+            bitmap = crop_surface(bitmap, cl, ct, w, h)
+        return ImageBox(bitmap, w * texel.scale_x, h * texel.scale_y, data,
+                        self.device)
 
     
 

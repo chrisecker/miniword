@@ -12,7 +12,7 @@ from .builderbase import BuilderBase
 from .rect import Rect
 from .rowfactory import generate_pages, state_from_settings, block_key
 from .page import show_page
-from .factory import Factory
+from .rowfactory import Factory
 from .layoutbase import LayoutBase
 from .cairodevice import CairoDevice
 
@@ -503,7 +503,7 @@ def demo_00():
     from ..texteditor.editor import Editor
     editor = Editor(model)
 
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..core.styles import testsheet
 
     factory = Factory(testsheet, device=CairoDevice())
@@ -787,7 +787,7 @@ def demo_01():
     from ..texteditor.editor import Editor
     editor = Editor(model)
 
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..core.styles import testsheet
 
     factory = Factory(testsheet, device=CairoDevice())

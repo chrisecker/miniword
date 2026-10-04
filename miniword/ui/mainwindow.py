@@ -7,7 +7,7 @@ from .settingsinspector import SettingsInspector
 from ..texteditor.editor import TwoFlowEditor
 from ..texteditor.textcanvas import TextCanvas
 from ..layout.pagebuilder import PageBuilder
-from ..layout.factory import Factory
+from ..layout.rowfactory import Factory
 from ..layout.cairodevice import CairoDevice
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W

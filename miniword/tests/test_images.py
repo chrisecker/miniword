@@ -247,8 +247,7 @@ def test_IMG_5():
     data = png(4, 2)
     model = TextModel()
     model.texel = grouped([T('a'), image(content=data), T('b')])
-    editor = Editor()
-    editor.root = model
+    editor = Editor(model)
     old = images_in(model.texel)[0]
 
     editor.set_texel_attributes(1, old, scale_x=2.0)
@@ -617,8 +616,7 @@ def test_SIZE_4():
     img = image(content=png(40, 20), crop=(5, 5, 0, 10), scale_x=2.0,
                 scale_y=2.0)
     model.texel = grouped([img])
-    editor = Editor()
-    editor.root = model
+    editor = Editor(model)
     editor.set_texel_attributes(0, img, scale_x=3.0, scale_y=1.0)
     assert images_in(model.texel)[0].scale_x == 3.0
     editor.undo()
@@ -661,8 +659,7 @@ def test_CROP_3():
     model = TextModel()
     img = image(content=png(40, 20))
     model.texel = grouped([img])
-    editor = Editor()
-    editor.root = model
+    editor = Editor(model)
     editor.set_texel_attributes(0, img, crop=(1, 3, 0, 3))
     assert images_in(model.texel)[0].crop == (1, 3, 0, 3)
     editor.undo()
@@ -675,8 +672,7 @@ def test_CROP_4():
     model = TextModel()
     img = image(content=png(40, 20), crop=(1, 1, 1, 1))
     model.texel = grouped([img])
-    editor = Editor()
-    editor.root = model
+    editor = Editor(model)
     editor.set_texel_attributes(0, img, crop=None)
     assert images_in(model.texel)[0].crop is None
 
@@ -777,8 +773,7 @@ def test_PB_2():
     model = TextModel('\n'.join('paragraph %d' % k for k in range(30)))
     builder = mk_builder(model)
     model.add_view(builder)
-    editor = Editor()
-    editor.root = model
+    editor = Editor(model)
 
     def check():
         builder.assure_finished()
@@ -808,8 +803,7 @@ def test_PB_3():
     model = TextModel('abc')
     builder = mk_builder(model)
     model.add_view(builder)
-    editor = Editor()
-    editor.root = model
+    editor = Editor(model)
     editor.index = 1
     editor.insert_texel(image(content=png(20, 15)))
     img = images_in(model.texel)[0]

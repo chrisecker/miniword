@@ -567,7 +567,7 @@ def test_00():
 def test_01():
     "pagebuilder as view"
     from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..layout.pagebuilder import PageBuilder
     
     app = wx.App(redirect=False)    
@@ -609,7 +609,7 @@ def demo_01():
     "Texteditor based on the pages builder"     
     from ..layout.pagebuilder import PageBuilder
     from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
         
     app = wx.App(redirect=True)
     model = TextModel()
@@ -643,7 +643,7 @@ def demo_02():
     from ..textmodel.submodel import mk_test, _get_text
     from ..layout.pagebuilder import PageBuilder
     from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
         
     app = wx.App(redirect=True)
     model = mk_test()

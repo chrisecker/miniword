@@ -484,7 +484,7 @@ def demo_00():
     "Search panel on a TextEditor showing the Einstein text"
     from einstein import get_einstein_model
     from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder
     from ..texteditor.editor import Editor

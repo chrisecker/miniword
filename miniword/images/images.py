@@ -215,7 +215,7 @@ def demo_00():
     from ..textmodel.texeltree import grouped, Text
     from ..core.document import Document
     from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder
     from ..texteditor.editor import Editor

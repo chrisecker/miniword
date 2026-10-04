@@ -308,7 +308,7 @@ def _build_layout(model):
         wx.App(False)
     from .editor import Editor
     from ..layout.pagebuilder import PageBuilder
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..core.styles import testsheet
 

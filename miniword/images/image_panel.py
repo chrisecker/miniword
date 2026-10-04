@@ -12,6 +12,20 @@ from ..ui.design import flat_button, make_panel, add_section, add_row
 from ..ui.flatbutton import ResetButton
 
 
+def size_to_scale(changed, value, natural, scales, proportional):
+    """Scale factors after entering size value for axis changed ('x' or
+    'y'). natural is the image's natural (width, height), scales the
+    current (scale_x, scale_y). With proportional both axes get the new
+    factor, otherwise the other axis keeps its own."""
+    k = 0 if changed == 'x' else 1
+    new = value / natural[k] if natural[k] else 1.0
+    if proportional:
+        return new, new
+    result = list(scales)
+    result[k] = new
+    return tuple(result)
+
+
 class ImageInspector(SidePanel):
     """Image Tool: insert new images and inspect/edit existing ones.
 
@@ -172,19 +186,14 @@ class ImageInspector(SidePanel):
     def _on_size(self, changed):
         if self._updating or self._image is None:
             return
-        proportional = self.chk_proportional.GetValue()
-        if changed == 'x':
-            v = self.txt_size_x.GetValue()
-            if v is None:
-                return
-            scale_x = v / self._natural_w if self._natural_w else 1.0
-            scale_y = scale_x if proportional else (self.txt_scale_y.GetValue() or 1.0)
-        else:
-            v = self.txt_size_y.GetValue()
-            if v is None:
-                return
-            scale_y = v / self._natural_h if self._natural_h else 1.0
-            scale_x = scale_y if proportional else (self.txt_scale_x.GetValue() or 1.0)
+        v = (self.txt_size_x if changed == 'x' else self.txt_size_y).GetValue()
+        if v is None:
+            return
+        scale_x, scale_y = size_to_scale(
+            changed, v, (self._natural_w, self._natural_h),
+            (self.txt_scale_x.GetValue() or 1.0,
+             self.txt_scale_y.GetValue() or 1.0),
+            self.chk_proportional.GetValue())
         self._update_fields(scale_x, scale_y)
 
     def _on_scale(self, changed):
@@ -332,7 +341,7 @@ def demo_00():
     from ..textmodel.texeltree import Text, NL
     from ..core.document import Document
     from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder
     from ..texteditor.editor import Editor
