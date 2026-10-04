@@ -10,13 +10,14 @@ TESTDEVICE measures every character as 1 wide, every box as 1 high
 (depth 0) - all widths/heights below rely on that.
 """
 
-from ..textmodel.texeltree import Text, NewLine, Group, length
+from ..textmodel.texeltree import Text, NewLine, Group, Tabulator, length
 from ..textmodel.submodel import Footnote
 from ..textmodel.utils import iter_paragraphs
 from ..core.texels import BR
 from ..core.styles import testsheet, n_levels
 from ..footnotes.footnotes import FootnoteAnchorBox
-from ..layout.boxes import TextBox, NewlineBox, EndBox, Row, RowsBox
+from ..layout.boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, \
+    RowsBox
 from ..layout.page import ForceBreakBox, FootnoteBox
 from ..layout.testdevice import TESTDEVICE
 from ..layout.rowfactory import State, state_from_settings, RowFactory, \
@@ -233,7 +234,8 @@ def long_doc(n=12, prefix='', fn_every=3, last_text=None):
 
 def test_FAC_1():
     "FAC-1: every texel type gives the matching box"
-    texel = doc(par('ab', BR(), 'cd', fn('x')), par('end', endmark=True))
+    texel = doc(par('ab', BR(), 'cd', Tabulator(), fn('x')),
+                par('end', endmark=True))
     paragraphs, state = generate(texel)
     types = [type(box) for record in flat(paragraphs)
              for box in record[0].childs]
@@ -242,6 +244,7 @@ def test_FAC_1():
     assert EndBox in types
     assert ForceBreakBox in types
     assert FootnoteAnchorBox in types
+    assert TabulatorBox in types
 
 
 def test_FAC_1_table():
@@ -267,7 +270,7 @@ def test_FAC_2():
 
 def test_FAC_3():
     "FAC-3: per paragraph, row lengths add up to i2 - i1"
-    texel = doc(par('Hello ', fn('a note'), 'world'),
+    texel = doc(par('Hello ', fn('a note'), Tabulator(), 'world'),
                 par('one ', BR(), 'two ', fn('x'), fn('y')),
                 par(),
                 par('last', endmark=True))
