@@ -310,7 +310,7 @@ def _build_layout(model):
     from ..layout.pagebuilder import PageBuilder
     from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
 
     factory = Factory(testsheet, device=CairoDevice())
     builder = PageBuilder(model, factory)

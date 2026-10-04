@@ -504,7 +504,7 @@ def demo_00():
     editor = Editor(model)
 
     from ..layout.rowfactory import Factory
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
 
     factory = Factory(testsheet, device=CairoDevice())
     builder = PageBuilder(model, factory)
@@ -586,7 +586,7 @@ def test_00():
 def test_01():
     "generate_pages"
     from einstein import get_einstein
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
 
     xtexel     = get_einstein()
     state      = state_from_settings({})
@@ -599,7 +599,7 @@ def test_01():
 def test_02():
     "restartmemo"
     from einstein import get_einstein
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
 
     info = state_from_settings({
         'paper': 'custom', 'paper_width': 100, 'paper_height': 10,
@@ -630,7 +630,7 @@ def test_02():
 def test_03():
     "relayout: abort condition reached after page 1"
     from einstein import get_einstein_model
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
 
     if wx.App.Get() is None:
         wx.App(False)
@@ -673,7 +673,7 @@ def _small_builder(model):
 
 
 def testsheet_():
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
     return testsheet
 
 
@@ -715,7 +715,8 @@ def test_04():
 def test_05():
     "same_continuation: equal after a restart, differs where it must"
     from einstein import get_einstein
-    from ..core.styles import testsheet, n_levels
+    from ..core.styles import n_levels
+    from ..core.stylesheet import testsheet
     from .testdevice import TESTDEVICE
 
     texel = get_einstein()
@@ -788,7 +789,7 @@ def demo_01():
     editor = Editor(model)
 
     from ..layout.rowfactory import Factory
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
 
     factory = Factory(testsheet, device=CairoDevice())
     builder = PageBuilder(model, factory)

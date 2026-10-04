@@ -183,7 +183,7 @@ def demo_00():
     import wx
     from einstein import get_einstein_model
     from ..core.document import Document
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
     from .rowfactory import Factory
     from .cairodevice import CairoDevice
     from .pagebuilder import PageBuilder

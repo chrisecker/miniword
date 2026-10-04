@@ -50,7 +50,7 @@ import wx
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import T, grouped, length, NewLine
 from ..core.document import Document
-from ..core.styles import testsheet
+from ..core.stylesheet import testsheet
 from ..images import imageio
 from ..images.images import ImageBox, ErrorPlaceholderBox, ImageData
 from ..layout.testdevice import TESTDEVICE

@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from .documentnode import DocumentNode
 from ..textmodel.styles import create_style
+from .styles import style_default, updated, normal, h0, h1, h2, h3
 
 
 class StyleSheet(DocumentNode):
@@ -70,6 +71,11 @@ def test_00():
     
 
 
-# At the end: styles imports StyleSheet (for testsheet), so it must
-# be defined first, whichever module is imported first.
-from .styles import style_default, updated
+
+# A stylesheet for tests (and demos) only - documents bring their own.
+testsheet = StyleSheet()
+testsheet.set('normal', normal)
+testsheet.set('h0', h0)
+testsheet.set('h1', h1)
+testsheet.set('h2', h2)
+testsheet.set('h3', h3)

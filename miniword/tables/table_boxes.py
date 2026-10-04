@@ -316,7 +316,7 @@ CELL_VPAD = 6   # vertical padding per row
 # Tests
 # ---------------------------------------------------------------------------
 
-from ..core.styles import testsheet
+from ..core.stylesheet import testsheet
 from ..textmodel.texeltree import Text, NewLine, Group
 
 
@@ -471,7 +471,7 @@ def demo_00():
     """Interactive demo: click and shift-click to select cells."""
     import wx
     from ..core.document import Document
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
     from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder

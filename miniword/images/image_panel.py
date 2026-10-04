@@ -340,7 +340,7 @@ def demo_00():
     import os
     from ..textmodel.texeltree import Text, NL
     from ..core.document import Document
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
     from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder

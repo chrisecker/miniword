@@ -14,7 +14,8 @@ from ..textmodel.texeltree import Text, NewLine, Group, Tabulator, length
 from ..textmodel.submodel import Footnote
 from ..textmodel.utils import iter_paragraphs
 from ..core.texels import BR
-from ..core.styles import testsheet, n_levels
+from ..core.styles import n_levels
+from ..core.stylesheet import testsheet
 from ..footnotes.footnotes import FootnoteAnchorBox
 from ..layout.boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, \
     RowsBox

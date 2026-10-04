@@ -24,7 +24,7 @@ from ..footnotes.footnotes import iter_footnotes
 from ..layout.pagebuilder import PageBuilder
 from ..layout.rowfactory import Factory
 from ..layout.boxes import TextBox
-from ..core.styles import testsheet
+from ..core.stylesheet import testsheet
 
 
 def fnote(*items):

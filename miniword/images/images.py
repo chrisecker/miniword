@@ -217,7 +217,7 @@ def demo_00():
     import wx
     from ..textmodel.texeltree import grouped, Text
     from ..core.document import Document
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
     from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder

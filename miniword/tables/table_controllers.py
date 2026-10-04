@@ -451,7 +451,7 @@ def test_04():
     from ..textmodel.textmodel import TextModel
     from ..textmodel.texeltree import length as texel_length
     from ..layout.rowfactory import RowFactory, State
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
     from ..layout.testdevice import TESTDEVICE
 
     texts = [['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']]
@@ -527,7 +527,7 @@ def test_05():
 
 
 def _setup_demo(frame, doc):
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
     from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder

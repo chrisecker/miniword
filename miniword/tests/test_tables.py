@@ -23,7 +23,7 @@ from ..textmodel.texeltree import T, Group, grouped, NewLine, length, \
 from ..textmodel.submodel import Footnote, _get_text
 from ..textmodel.texeltree import ENDMARK
 from ..core.document import Document
-from ..core.styles import testsheet
+from ..core.stylesheet import testsheet
 from ..layout.testdevice import TESTDEVICE
 from ..layout.rowfactory import State, RowFactory, Factory, generate_pages
 from ..layout.boxes import Row, TextBox

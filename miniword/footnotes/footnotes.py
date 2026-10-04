@@ -116,7 +116,7 @@ def demo_00():
     from ..textmodel.texeltree import grouped, T, ENDMARK
     from ..layout.cairodevice import CairoDevice
     from ..layout.rowfactory import generate_pages, state_from_settings
-    from ..core.styles import testsheet
+    from ..core.stylesheet import testsheet
 
     model = TextModel('Miniword ist ein freies Textsatzsystem.\n')
     fn = Footnote(grouped([T('Ein leichtgewichtiges Satzsystem, geschrieben in Python.'), ENDMARK]))
