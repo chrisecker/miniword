@@ -39,54 +39,33 @@ def decode(blob_data):
         return None
 
 
-class DecodedCache:
-    """Application-wide LRU cache of decoded images: {content (bytes):
-    ImageData or None}. Bounded by memory, not by number: the decoded
-    pixels (4 bytes each) plus the content, which the key keeps alive.
-    The least recently used entries are dropped beyond limit; the newest
-    entry always stays. Failed decodes are cached as None."""
-
-    def __init__(self, limit):
-        self.limit = limit
-        self.entries = OrderedDict()
-        self.size = 0
-
-    @staticmethod
-    def _size(content, data):
-        pixels = 4 * data.width_px * data.height_px if data else 0
-        return len(content) + pixels
-
-    def get(self, content):
-        try:
-            data = self.entries[content]
-        except KeyError:
-            data = decode(content)  # module global: tests may patch it
-            self.entries[content] = data
-            self.size += self._size(content, data)
-            while self.size > self.limit and len(self.entries) > 1:
-                old, old_data = self.entries.popitem(last=False)
-                self.size -= self._size(old, old_data)
-        else:
-            self.entries.move_to_end(content)
-        return data
-
-    def clear(self):
-        self.entries.clear()
-        self.size = 0
-
-
+# Application-wide LRU cache of decoded images, oldest entry first:
+# {content (bytes): ImageData or None}. Bounded by memory, not by number:
+# the decoded pixels (4 bytes each) plus the content the key keeps alive.
 DECODED_LIMIT = 256 * 1024 * 1024
-decoded_cache = DecodedCache(DECODED_LIMIT)
+decoded = OrderedDict()
+
+
+def _entry_size(content, data):
+    return len(content) + (4 * data.width_px * data.height_px if data else 0)
 
 
 def decode_cached(content):
-    """ImageData for image content via the application-wide LRU
-    (decoded_cache), decoding on first use. Equal content in different
-    bytes objects shares one entry (bytes compare by value). None for no
-    content or content that can't be decoded."""
+    """ImageData for image content via the application-wide LRU (decoded),
+    decoding on first use. Equal content in different bytes objects shares
+    one entry. None for no content or content that can't be decoded (cached
+    as well). Beyond DECODED_LIMIT the least recently used entries are
+    dropped; the newest one always stays."""
     if content is None:
         return None
-    return decoded_cache.get(content)
+    if content in decoded:
+        decoded.move_to_end(content)
+        return decoded[content]
+    data = decoded[content] = decode(content)  # module global: tests patch it
+    size = sum(_entry_size(c, d) for c, d in decoded.items())
+    while size > DECODED_LIMIT and len(decoded) > 1:
+        size -= _entry_size(*decoded.popitem(last=False))
+    return data
 
 
 def crop_surface(surface, cx, cy, cw, ch):

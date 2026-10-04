@@ -58,6 +58,8 @@ from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
 from .linewrap import simple_linewrap
 from .stretchable import justify_line
+from ..tables.table_boxes import TableBox, create_cell, split_at_height, \
+    CELL_HPAD, CELL_VPAD
 
 
 # Needed for testing
@@ -266,7 +268,7 @@ class RowFactory(Factory):
         # RowStack.take can split it across pages.
         lines = []
         for segment in split_at_tables(boxes):
-            if is_table_segment(segment):
+            if isinstance(segment[0], TableBox):
                 lines.append(segment)
                 continue
             for sub in split_at_breaks(segment):
@@ -398,8 +400,6 @@ class RowFactory(Factory):
         (borders, background, alignment) in its parstyle. Each cell is set
         by a child factory, so the footnote counter and footnotes flow on
         through the cells."""
-        from ..tables.table_boxes import TableBox, create_cell, \
-            CELL_HPAD, CELL_VPAD
         ncols, nrows = texel.ncols, texel.nrows
         col_widths = table_col_widths(texel.col_widths, ncols,
                                       self.state.width)
@@ -456,14 +456,8 @@ def table_col_widths(col_widths, ncols, width):
     return [width / ncols] * ncols
 
 
-def is_table_segment(boxes):
-    from ..tables.table_boxes import TableBox
-    return len(boxes) == 1 and isinstance(boxes[0], TableBox)
-
-
 def split_at_tables(boxes):
     """Split boxes at tables: each TableBox becomes a segment of its own."""
-    from ..tables.table_boxes import TableBox
     segments, current = [], []
     for box in boxes:
         if isinstance(box, TableBox):
@@ -478,43 +472,36 @@ def split_at_tables(boxes):
     return segments
 
 
-def _table_row(row, box):
-    """A copy of row (a table's own row) holding table fragment box,
-    keeping row's extra leading."""
-    old = row.childs[0]
-    new = shallow_copy(row)
-    new.childs = [box]
-    new.length = len(box)
-    new.width = box.width
-    new.height = box.height + (row.height - old.height)
-    new.depth = box.depth + (row.depth - old.depth)
-    return new
-
-
 def split_table_record(record, height):
     """Split a record whose row is a table (break_level >= 1) so that
     the first part fits into height. Returns (first, rest) records or
     None if the row is no splittable table or can't be split. The first
-    part keeps begins_par, the rest ends_par."""
-    from ..tables.table_boxes import split_at_height
+    part keeps begins_par, the rest ends_par; both keep the row's extra
+    leading."""
     row, parstyle, begins_par, ends_par, begins_block, ends_block = record
-    if not is_table_segment(row.childs):
-        return None
     box = row.childs[0]
-    if box.break_level < 1:
+    if len(row.childs) != 1 or not isinstance(box, TableBox) \
+            or box.break_level < 1:
         return None
-    leading = (row.height - box.height) + (row.depth - box.depth)
-    frag, rest = split_at_height(box, height - leading)
+    top, bottom = row.height - box.height, row.depth - box.depth
+    frag, rest = split_at_height(box, height - top - bottom)
     if rest is None:
         return None
     frag.row_offset = box.row_offset
     rest.row_offset = box.row_offset + frag.n_rows
-    first_row = _table_row(row, frag)
-    rest_row = _table_row(row, rest)
-    rest_row.marker = None
-    return ((first_row, parstyle, begins_par, False, begins_block,
-             ends_block),
-            (rest_row, parstyle, False, ends_par, begins_block, ends_block))
+
+    def table_row(part, marker):
+        new = shallow_copy(row)
+        new.childs = [part]
+        new.length, new.width = len(part), part.width
+        new.height, new.depth = part.height + top, part.depth + bottom
+        new.marker = marker
+        return new
+
+    return ((table_row(frag, row.marker), parstyle, begins_par, False,
+             begins_block, ends_block),
+            (table_row(rest, None), parstyle, False, ends_par,
+             begins_block, ends_block))
 
 
 def _row_bottom(y, record):

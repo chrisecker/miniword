@@ -661,7 +661,8 @@ def test_03():
     
 
 def _small_builder(model):
-    builder = PageBuilder(model, Factory(testsheet_()))
+    from ..core.stylesheet import testsheet
+    builder = PageBuilder(model, Factory(testsheet))
     builder.settings = {
         'paper': 'custom', 'paper_width': 100, 'paper_height': 20,
         'margin_top': 1, 'margin_right': 1, 'margin_bottom': 1,
@@ -670,11 +671,6 @@ def _small_builder(model):
     builder.rebuild()
     builder.assure_finished()
     return builder
-
-
-def testsheet_():
-    from ..core.stylesheet import testsheet
-    return testsheet
 
 
 def _page_sigs(builder):

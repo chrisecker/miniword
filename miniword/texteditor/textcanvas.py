@@ -13,14 +13,7 @@ import string
 import pickle
 import sys
 from math import ceil
-
-
-def _footnote_at(editor, flow, abs_i):
-    """Return fn_offset for the footnote anchored at abs_i-1 of flow
-    (nested footnotes have their anchor in the footnote flow), or
-    None."""
-    from ..footnotes.footnotes import footnote_anchored_at
-    return footnote_anchored_at(editor.root.texel, flow, abs_i - 1)
+from ..footnotes.footnotes import footnote_anchored_at
 
 
 """
@@ -330,7 +323,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         flow  = self.layout.get_flow(x, y)
         i     = self.layout.get_index(x, y, flow)
         if i is not None and event.ControlDown():
-            fn_offset = _footnote_at(editor, flow, i)
+            # the anchor just before i (nested ones in the footnote flow)
+            fn_offset = footnote_anchored_at(editor.root.texel, flow, i - 1)
             if fn_offset is not None:
                 editor.switch_target(1, fn_offset)
                 editor.set_index(editor.local_idx(fn_offset))
@@ -363,10 +357,12 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             i       = self.layout.get_index(x, y, flow)
             is_link = False
             if i is not None:
-                if _footnote_at(editor, flow, i) is not None:
+                if footnote_anchored_at(editor.root.texel, flow, i - 1) \
+                        is not None:
                     is_link = True
                 elif flow == 0:
-                    is_link = bool(editor.root.get_style(max(0, i - 1)).get('href', ''))
+                    style = editor.root.get_style(max(0, i - 1))
+                    is_link = bool(style.get('href', ''))
             self.SetCursor(wx.Cursor(wx.CURSOR_HAND if is_link else wx.CURSOR_IBEAM))
             return event.Skip()
         x, y = self.window_to_content(event.Position)

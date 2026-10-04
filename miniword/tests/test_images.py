@@ -17,8 +17,8 @@ implementation chooses differently):
   extension found from the content's magic bytes (.png, .jpg, .gif,
   fallback .bin).
 - imageio.decode_cached(content): decoded images via the
-  application-wide LRU imageio.decoded_cache (keyed by content, bounded
-  by memory: limit, size, clear()). No cache on the document.
+  application-wide LRU imageio.decoded (an OrderedDict keyed by content,
+  bounded by memory: imageio.DECODED_LIMIT). No cache on the document.
 - Saving/loading TXL (Document.save/Document.load) hydrates Image
   texels with their content; blob keys are blob_key(content).
 - rowfactory.RowFactory(state, stylesheet, device) with an
@@ -168,7 +168,7 @@ class DecodeCounter:
     """Counts calls of imageio.decode while installed (with-statement).
     Starts with an empty application-wide cache."""
     def __enter__(self):
-        imageio.decoded_cache.clear()
+        imageio.decoded.clear()
         self.calls = 0
         self.original = imageio.decode
         def counting(data):
@@ -442,38 +442,33 @@ def test_CACHE_3():
     texel = par('a', image(content=data))
     pages = list(generate_pages(texel, 0, State(400), testsheet,
                                 TESTDEVICE))
-    cache = imageio.decoded_cache
     for page in pages:
         memo = page.restartmemo
-        assert all(value is not cache and value is not cache.entries
+        assert all(value is not imageio.decoded
                    for value in vars(memo).values())
     assert not hasattr(Document(), 'image_cache')
 
 
 def test_CACHE_5():
     "CACHE-5: the LRU keeps its memory limit, dropping the oldest"
-    cache = imageio.decoded_cache
     images = [png(10, 10, (k / 4, 0, 0)) for k in range(4)]
     def size(data):
         return len(data) + 4 * 10 * 10  # content plus decoded pixels
-    old_limit = cache.limit
+    old_limit = imageio.DECODED_LIMIT
     try:
-        cache.clear()
-        cache.limit = sum(size(images[k]) for k in (0, 2, 3))
+        imageio.decoded.clear()
+        imageio.DECODED_LIMIT = sum(size(images[k]) for k in (0, 2, 3))
         for data in images[:3]:
             imageio.decode_cached(data)
         imageio.decode_cached(images[0])  # now the most recently used
         imageio.decode_cached(images[3])  # drops the oldest: images[1]
-        assert images[1] not in cache.entries
-        assert all(data in cache.entries
-                   for data in (images[0], images[2], images[3]))
-        assert cache.size <= cache.limit
-        cache.limit = 1  # smaller than one image: the newest stays
+        assert list(imageio.decoded) == [images[2], images[0], images[3]]
+        imageio.DECODED_LIMIT = 1  # smaller than one image: newest stays
         imageio.decode_cached(images[1])
-        assert list(cache.entries) == [images[1]]
+        assert list(imageio.decoded) == [images[1]]
     finally:
-        cache.limit = old_limit
-        cache.clear()
+        imageio.DECODED_LIMIT = old_limit
+        imageio.decoded.clear()
 
 
 def test_CACHE_6():
