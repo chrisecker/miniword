@@ -1,59 +1,44 @@
 # -*- coding: utf-8 -*-
 
 """
-Ein Entwurf für die Datei rowfactory.py 18.09.2026
+Row and page generation.
 
-Grundsätzliches Vorgehen von RowFactory und Zusammenhang mit der
-Seitengenerierung:
+RowFactory turns texels into row records, paragraph by paragraph:
 
-Rowfactory generiert absatzweise Row-Records nach der Vorlage in
-Texel, ab der Position i. Dabei ist i der Anfang eines Absatzes.
+    (row, parstyle, begins_par, ends_par, begins_block, ends_block)
 
-Der Pagebreaker arbeitet auch absatzweise. Dabei ist er mit der
-Rowfactory synchron: Der Pagebreaker bekommt eine Liste mit
-Row-Records und arbeitet sie ab. Erst wenn diese Rows gesetzt sind,
-fordert er das nächste Paket mit Records an.
+begins_block/ends_block tell whether the paragraph starts/ends a block
+of paragraphs sharing the same block style (block_color, block_padding,
+block_border); they depend on the neighbouring paragraphs.
 
-Texel enthalten nicht nur row-Material, sondern können auch
-Nebeneffekte haben, beispielsweise die Zähler für die
-Abschnittnummerierungen ändern oder zu setzendes Fußnotenmaterial,
-Floats in die Puffer speichern. Denkbar ist auch dass,
-Seiteneigenschaften (Größe, Ausrichtung, Rand, Nummerierung)
-umgestellt wird.
+generate_pages() lays these records out on pages, in step with the
+factory: it reads one paragraph, places that paragraph's footnotes,
+then its rows, and only then reads the next paragraph. A footnote may
+thus end up on a page before its text, but never with another
+paragraph's text in between.
 
-Diese Nebeneffekte werden während des Satzes des Absatzes (genauer: am
-Anfang davon) umgesetzt. Diese absatzweise bearbeitung ist einfach,
-führt aber natürlich zu einer Unschärfe: die Seite auf der eine
-Fußnote erscheint ist unabhängig von der genauen Position des
-Fußnotenankers in dem Absatz, relevant ist vielmehr der Absatz.
+Side effects of texels (footnotes, counters, later floats or page
+settings) are recorded in a State shared by RowFactory and
+generate_pages: the buffers rows/footnotes/floats (lists), the list and
+footnote counters, the text width. Footnotes, table cells: child
+factories (create_child/update_from_child) with a copy of the state;
+footnotes and the footnote counter flow back, other counters don't.
 
-Der Prozess der Seitengenerierung soll an Seitengrenzen fortgesetzt
-werden können. Dazu enthalten Seiten (üblicherweise) ein Restartmemo,
-das Informationen zum Neustarten enthält. Die wichtigste Zustandsgröße
-ist das Tupel "rows". Aus der Länge des gepufferten (noch nicht
-gesetzten)-Row-Material folgt der Index (relativ zum Seitenanfang) von
-dem als nächstes Rows generiert werden müssen. Der Rows-Puffer ist
-daher im Restartmemo enthalten. Auch die anderen Puffer (Floats,
-Fußnoten, ...) werden in dem Memo gespeichert.
+Restarting: each page carries a copy of the State as its restartmemo -
+the state the page *ended* with. Never work on a memo itself, only on
+memo.copy(). A memo holds no absolute index positions, as pages move in
+index space when text is inserted or deleted before them; where to
+continue is computed from the page's start plus the length of the rows
+still buffered in the memo.
 
-Weiter sind Zustandswerte des Typesettingprozesses enthalten,
-beispielsweise Abschnitts- und Fußnotenzähler. Es gibt aber nicht nur
-Zustandswerte des Typesetters, auch die Factory hat Zustandswerte, die
-abgelegt werden. Das ist insbesondere die Zeilenbreite, die Factory
-kennen muss um die Boxen in Zeilen zu portionieren.
+RowStack stacks records (spacing, block padding, block decorations) and
+splits a table that doesn't fit at a row boundary - the rest stays in
+the buffer, and so in the memo. Images are decoded via the
+application-wide cache imageio.decode_cached.
 
-Es wird daher ein State-Objekt verwendet, in das sowohl Typesetter als
-auch RowFactory die Positionsabhängigen-State Variablen einträgt. Da
-RowFactory immer absatzweise arbeitet, brauchen wir von ihr nur solche
-Werte eintragen die über den Absatz hinaus bestand haben. Werte die
-ohnehin für jeden neuen Absatz neu gesetzt werden (beispielsweise
-Styles) brauchen nicht abgelegt zu werden, da die Factory immer nur an
-Absatzgrenzen neu gestartet wird.
-
-Das Memo gibt immer den Zustand mit dem eine Seite *aufgehört*
-hat. Achtung: in früheren Versionen haben wir in dem Memo den
-Anfangszustnd vor der Seite gespeichert. Der Endzustand hat aber
-Vorteile.
+Tests: miniword/tests/test_rowfactory.py (list in
+develnotes/rowfactory_tests.md), test_tables.py, test_images.py,
+test_footnotes.py.
 """
 
 from copy import copy as shallow_copy
@@ -61,7 +46,7 @@ from copy import copy as shallow_copy
 from ..textmodel.texeltree import length, NL, grouped
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.textmodel import get_texel
-from ..core.styles import testsheet, n_levels
+from ..core.styles import n_levels
 from ..core.units import mm, cm
 from ..core.styles import updated
 from ..core.papersizes import PAPER_SIZES
@@ -699,25 +684,3 @@ def generate_pages(texel, i1, memo, stylesheet, device):
 
         if exhausted and not state.rows and not state.footnotes:
             break
-
-
-def test_00():
-    "Factory"
-    from einstein import get_einstein_model    
-    factory = Factory(testsheet, TESTDEVICE)
-    model = get_einstein_model()
-    l = []
-    for i1, i2, texels in iter_paragraphs(model.texel, 0):
-        p = texels[-1].parstyle
-        for texel in texels:            
-            l.append(factory.create_box(texel, p))
-
-def test_01():
-    "RowFactory"
-    from einstein import get_einstein_model
-    state = State(width=80)
-    factory = RowFactory(state, testsheet, TESTDEVICE)
-    model = get_einstein_model()
-    for x in factory.generate(model.texel, 0):
-        print(x)
-    
