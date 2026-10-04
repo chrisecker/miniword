@@ -7,7 +7,7 @@ from .settingsinspector import SettingsInspector
 from ..texteditor.editor import TwoFlowEditor
 from ..texteditor.textcanvas import TextCanvas
 from ..layout.pagebuilder import PageBuilder
-from ..layout.factory import Factory
+from ..layout.rowfactory import Factory
 from ..layout.cairodevice import CairoDevice
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
@@ -401,7 +401,6 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _create_editor_canvas(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
-        factory.blobs = self.document.blobs
         builder = PageBuilder(self.document.textmodel, factory)
         builder.rebuild()
         builder.assure_y(1)  # build first row, so initial geometry is known

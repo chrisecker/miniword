@@ -23,6 +23,15 @@ type string and slot contents.
       [T("cell2")]
     )
 
+    FN(                                 -- Footnote: its content like a
+      T("note")                            document, ending with ENDMARK
+      ENDMARK
+    )
+    FN({label="*", numbering="roman"},  -- Footnote with properties
+      T("note")
+      ENDMARK({base="footnote"})
+    )
+
 Document format:
     PROPS({author="...", paper="A4"})   -- optional document properties
     TEXELS...
@@ -35,9 +44,10 @@ from ..textmodel.texeltree import (
     Text, Single, Group, Container, NewLine, Tabulator,
     NL, TAB, ENDMARK, EMPTYSTYLE,
     as_style, grouped, join, length, depth,
-    iter_childs
+    iter_childs, takeout
 )
 from ..core.texels import BR
+from ..textmodel.submodel import Footnote
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +119,9 @@ def serialize_texel(texel, indent=0):
                 return '%sBR(%s)' % (pad, s)
             return '%sBR' % pad
 
+        elif isinstance(texel, Footnote):
+            return serialize_footnote(texel, indent)
+
         else:
             from ..images import Image as _Image
             if isinstance(texel, _Image):
@@ -124,10 +137,16 @@ def serialize_texel(texel, indent=0):
                     parts['crop_y'] = texel.crop[1]
                     parts['crop_w'] = texel.crop[2]
                     parts['crop_h'] = texel.crop[3]
+                if texel.alt:
+                    parts['alt'] = texel.alt
                 s = serialize_style(parts) if parts else ''
+                # The data itself goes to the [blobs] section (txlio),
+                # the texel refers to it by its key ('' for no data).
+                from ..images.images import blob_key
+                key = blob_key(texel.content) if texel.content else ''
                 if s:
-                    return '%sIMG(%r, %s)' % (pad, texel.blob_id, s)
-                return '%sIMG(%r)' % (pad, texel.blob_id)
+                    return '%sIMG(%r, %s)' % (pad, key, s)
+                return '%sIMG(%r)' % (pad, key)
 
             s = serialize_style(texel.style) if texel.style else ''
             if s:
@@ -138,6 +157,45 @@ def serialize_texel(texel, indent=0):
         return serialize_container(texel, indent)
 
     raise ValueError("Unknown texel type: %r" % texel)
+
+
+def serialize_footnote(texel, indent=0):
+    """Serialize a Footnote: FN([{props},] texels... ENDMARK). The content
+    is written like a document, so its ENDMARK (with the parstyle of the
+    last line) survives; nested footnotes are written recursively."""
+    pad = '  ' * indent
+    props = {}
+    if texel.numbering != Footnote.numbering:
+        props['numbering'] = texel.numbering
+    if texel.label is not None:
+        props['label'] = texel.label
+    if texel.style != Footnote.style:
+        props['_style'] = texel.style
+    lines = ['%sFN(%s' % (pad, serialize_style(props) + ',' if props else '')]
+    content = texel.content
+    n = length(content)
+    body, endmark = takeout(content, n - 1, n)
+    for t in _flatten(grouped(body)):
+        lines.append(serialize_texel(t, indent + 1))
+    lines.append(_serialize_endmark(grouped(endmark), indent + 1))
+    lines.append('%s)' % pad)
+    return '\n'.join(lines)
+
+
+def _serialize_endmark(endmark, indent=0):
+    """ENDMARK, with its indent and parstyle (base "normal" omitted)."""
+    pad = '  ' * indent
+    parts = {}
+    if endmark.indent:
+        parts['indent'] = endmark.indent
+    if endmark.parstyle:
+        ps = {k: v for k, v in endmark.parstyle.items()
+              if not (k == 'base' and v == 'normal')}
+        parts.update(ps)
+    s = serialize_style(parts) if parts else ''
+    if s:
+        return '%sENDMARK(%s)' % (pad, s)
+    return '%sENDMARK' % pad
 
 
 def _serialize_slot(content, slot_style, indent):
@@ -258,18 +316,7 @@ def serialize(root, endmark=None, properties=None):
         lines.append(serialize_texel(texel, indent=0))
 
     if endmark is not None:
-        parts = {}
-        if endmark.indent:
-            parts['indent'] = endmark.indent
-        if endmark.parstyle:
-            ps = {k: v for k, v in endmark.parstyle.items()
-                  if not (k == 'base' and v == 'normal')}
-            parts.update(ps)
-        s = serialize_style(parts) if parts else ''
-        if s:
-            lines.append('ENDMARK(%s)' % s)
-        else:
-            lines.append('ENDMARK')
+        lines.append(_serialize_endmark(endmark))
 
     return '\n'.join(lines)
 
@@ -349,8 +396,9 @@ class _Tokenizer:
 
 class _Parser:
 
-    def __init__(self, text):
+    def __init__(self, text, blobs=None):
         self.tok = _Tokenizer(text)
+        self.blobs = blobs or {}  # {key: bytes} for IMG texels
 
     def parse_document(self):
         """Parse full document: optional PROPS + texels + optional ENDMARK."""
@@ -398,6 +446,8 @@ class _Parser:
             return self.parse_container()
         elif value == 'IMG':
             return self.parse_img()
+        elif value == 'FN':
+            return self.parse_footnote()
         else:
             raise ParseError("Unknown texel type: %r" % value)
 
@@ -469,11 +519,12 @@ class _Parser:
     def parse_img(self):
         self.tok.consume('IDENT')  # IMG
         self.tok.consume('LPAREN')
-        blob_id = self.parse_string()
+        key = self.parse_string()
         scale_x = 1.0
         scale_y = 1.0
         proportional = True
         crop = None
+        alt = ''
         if self.tok.peek()[0] == 'COMMA':
             self.tok.consume('COMMA')
             d = self.parse_style()
@@ -483,9 +534,13 @@ class _Parser:
             proportional = d.get('proportional', True)
             if 'crop_w' in d:
                 crop = (d.get('crop_x', 0), d.get('crop_y', 0), d['crop_w'], d['crop_h'])
+            alt = d.get('alt', '')
         self.tok.consume('RPAREN')
         from ..images import Image
-        return Image(blob_id, scale_x, scale_y, proportional, crop)
+        # Hydrate from the [blobs] section: all IMGs with the same key
+        # share one bytes object. A missing blob gives no content.
+        return Image(self.blobs.get(key), scale_x, scale_y, proportional,
+                     crop, alt)
 
     def parse_container(self):
         self.tok.consume('IDENT')  # C
@@ -561,6 +616,33 @@ class _Parser:
             c._ncols = ncols
         return c
 
+    def parse_footnote(self):
+        self.tok.consume('IDENT')  # FN
+        self.tok.consume('LPAREN')
+        props = {}
+        if self.tok.peek()[0] == 'LBRACE':
+            props = self.parse_style()
+            if self.tok.peek()[0] == 'COMMA':
+                self.tok.consume('COMMA')
+        texels = []
+        endmark = None
+        while self.tok.peek()[0] != 'RPAREN':
+            kind, value = self.tok.peek()
+            if kind == 'IDENT' and value == 'ENDMARK':
+                endmark = self.parse_endmark()
+            else:
+                texels.append(self.parse_texel())
+        self.tok.consume('RPAREN')
+        content = grouped(join(texels + [endmark or ENDMARK]))
+        fn = Footnote(content)
+        if 'numbering' in props:
+            fn = fn.set_numbering(props['numbering'])
+        if 'label' in props:
+            fn = fn.set_label(props['label'])
+        if '_style' in props:
+            fn = fn.set_style(as_style(props['_style']))
+        return fn
+
     def parse_endmark(self):
         self.tok.consume('IDENT')  # ENDMARK
         parstyle = EMPTYSTYLE
@@ -590,7 +672,10 @@ class _Parser:
                 items.append(val[1:-1])
             elif kind == 'IDENT':
                 self.tok.consume()
-                items.append(val)
+                # None/True/False are written as bare words (e.g. an
+                # automatic column in col_widths)
+                items.append({'None': None, 'True': True,
+                              'False': False}.get(val, val))
             else:
                 raise ParseError("Unexpected token in tuple: %r" % val)
             if self.tok.peek()[0] == 'COMMA':
@@ -656,14 +741,15 @@ def _make_container(ctype, childs):
     return c
 
 
-def parse(text):
-    """Parse canonical TexelTree format.
+def parse(text, blobs=None):
+    """Parse canonical TexelTree format. blobs ({key: bytes}, from a
+    file's [blobs] section) provides the data of IMG texels.
 
     Returns:
         (root, endmark, properties)
         where endmark may be None and properties may be {}
     """
-    p = _Parser(text)
+    p = _Parser(text, blobs)
     return p.parse_document()
 
 
@@ -800,4 +886,35 @@ def test_08():
     cells = t2.get_cells()
     assert cells[0][0].get_attr('border_left') == 'none'
 
+
+def test_09():
+    "footnotes: content, nesting, label, numbering, style, endmark"
+    from ..textmodel.submodel import Footnote
+    em = ENDMARK.set_parstyle({'alignment': 'right'})
+    f2 = Footnote(grouped([Text('inner'), em])).set_label('*')
+    f1 = Footnote(grouped([Text('outer '), f2, Text(' end'), NL,
+                           Text('second'), ENDMARK]))
+    f1 = f1.set_numbering('roman').set_style({'bold': True})
+    root = grouped([Text('ab'), f1, Text('cd')])
+    text = serialize(root)
+    assert text.count('FN(') == 2
+    root2, endmark, props = parse(text)
+    assert serialize(root2) == text
+    g1 = [t for t in _flatten(root2) if isinstance(t, Footnote)][0]
+    assert (g1.numbering, g1.label, dict(g1.style)) == \
+        ('roman', None, {'bold': True})
+    assert length(g1.content) == length(f1.content)
+    inner = [t for t in _flatten(g1.content) if isinstance(t, Footnote)][0]
+    assert inner.label == '*'
+    last = list(_flatten(inner.content))[-1]
+    assert last.is_endmark and last.parstyle.get('alignment') == 'right'
+
+
+def test_10():
+    "Roundtrip: None in a tuple (automatic table column)"
+    from ..tables import from_strings
+    table = from_strings([['A', 'B']]).set_col_widths([30, None])
+    root2, _, _ = parse(serialize(Group([table])))
+    t2 = list(_flatten(root2))[0]
+    assert list(t2.col_widths) == [30, None]
 

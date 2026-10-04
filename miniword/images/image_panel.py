@@ -1,6 +1,7 @@
 import os
 import wx
-from .images import Image
+from .images import Image, image_extension
+from .imageio import decode_cached
 from ..core.utils import get_path
 from .image_controllers import ImageCropController
 from ..textmodel.texeltree import grouped
@@ -9,6 +10,20 @@ from ..ui.sidepanel import SidePanel
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from ..ui.design import flat_button, make_panel, add_section, add_row
 from ..ui.flatbutton import ResetButton
+
+
+def size_to_scale(changed, value, natural, scales, proportional):
+    """Scale factors after entering size value for axis changed ('x' or
+    'y'). natural is the image's natural (width, height), scales the
+    current (scale_x, scale_y). With proportional both axes get the new
+    factor, otherwise the other axis keeps its own."""
+    k = 0 if changed == 'x' else 1
+    new = value / natural[k] if natural[k] else 1.0
+    if proportional:
+        return new, new
+    result = list(scales)
+    result[k] = new
+    return tuple(result)
 
 
 class ImageInspector(SidePanel):
@@ -24,7 +39,8 @@ class ImageInspector(SidePanel):
         self.editor   = editor
         self.document = document
         self.add_model(editor)
-        self._blob_id       = None
+        self._image         = None  # the Image texel shown, or None
+        self._content       = None  # its data (replaced by 'Replace')
         self._current_crop  = None
         self._last_image_dir = ''
         self._natural_w    = 1.0
@@ -118,10 +134,10 @@ class ImageInspector(SidePanel):
     def refresh(self, image):
         """Enable inspector and fill values from the Image texel."""
         self._updating     = True
-        self._blob_id      = image.blob_id
+        self._image        = image
+        self._content      = image.content
         self._current_crop = image.crop
-        builder = self.editor.canvas.builder if self.editor.canvas else None
-        image_data = builder.factory.get_image(image.blob_id) if builder else None
+        image_data = decode_cached(image.content)
         if image_data:
             self._natural_w = image_data.width_px
             self._natural_h = image_data.height_px
@@ -141,7 +157,8 @@ class ImageInspector(SidePanel):
 
     def clear(self):
         """Disable inspector section (cursor is not on an Image texel)."""
-        self._blob_id      = None
+        self._image        = None
+        self._content      = None
         self._crop_active  = False
         self._set_inspector_enabled(False)
         for btn in (self.btn_reset_w, self.btn_reset_h,
@@ -151,7 +168,7 @@ class ImageInspector(SidePanel):
     # ------------------------------------------------------------------
 
     def _notify(self):
-        if self._updating or self._blob_id is None:
+        if self._updating or self._image is None:
             return
         index = self.editor.index
         texel = next((t for _, _, t in get_path(self.editor.target.texel, index)
@@ -162,30 +179,25 @@ class ImageInspector(SidePanel):
         scale_y = self.txt_scale_y.GetValue() or 1.0
         self.editor.set_texel_attributes(
             index, texel,
-            blob_id=self._blob_id, scale_x=scale_x, scale_y=scale_y,
+            content=self._content, scale_x=scale_x, scale_y=scale_y,
             proportional=self.chk_proportional.GetValue(),
             crop=self._current_crop)
 
     def _on_size(self, changed):
-        if self._updating or self._blob_id is None:
+        if self._updating or self._image is None:
             return
-        proportional = self.chk_proportional.GetValue()
-        if changed == 'x':
-            v = self.txt_size_x.GetValue()
-            if v is None:
-                return
-            scale_x = v / self._natural_w if self._natural_w else 1.0
-            scale_y = scale_x if proportional else (self.txt_scale_y.GetValue() or 1.0)
-        else:
-            v = self.txt_size_y.GetValue()
-            if v is None:
-                return
-            scale_y = v / self._natural_h if self._natural_h else 1.0
-            scale_x = scale_y if proportional else (self.txt_scale_x.GetValue() or 1.0)
+        v = (self.txt_size_x if changed == 'x' else self.txt_size_y).GetValue()
+        if v is None:
+            return
+        scale_x, scale_y = size_to_scale(
+            changed, v, (self._natural_w, self._natural_h),
+            (self.txt_scale_x.GetValue() or 1.0,
+             self.txt_scale_y.GetValue() or 1.0),
+            self.chk_proportional.GetValue())
         self._update_fields(scale_x, scale_y)
 
     def _on_scale(self, changed):
-        if self._updating or self._blob_id is None:
+        if self._updating or self._image is None:
             return
         proportional = self.chk_proportional.GetValue()
         if changed == 'x':
@@ -244,7 +256,7 @@ class ImageInspector(SidePanel):
     def _on_crop_toggle(self, event):
         editor = self.editor
         if not self._crop_active:
-            if self._blob_id is None:
+            if self._image is None:
                 return
             if editor.canvas is not None:
                 # find_box() (called from the controller's __init__) needs
@@ -264,14 +276,14 @@ class ImageInspector(SidePanel):
             self._crop_active = False
 
     def _on_unset_crop(self, event):
-        if self._blob_id is None:
+        if self._image is None:
             return
         self._current_crop = None
         self._notify()
         self.btn_unset_crop.Enable(False)
 
     def _load_image_file(self):
-        """Open file dialog; return (blob_id, bytes) or (None, None)."""
+        """Open file dialog; return the file's bytes or None."""
         with wx.FileDialog(
             self, "Choose image",
             defaultDir=self._last_image_dir,
@@ -279,48 +291,39 @@ class ImageInspector(SidePanel):
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
             if dlg.ShowModal() != wx.ID_OK:
-                return None, None
+                return None
             path = dlg.GetPath()
         self._last_image_dir = os.path.dirname(path)
-        blob_id = os.path.basename(path)
-        base, ext = os.path.splitext(blob_id)
-        n = 1
-        while blob_id in self.document.blobs:
-            blob_id = '%s_%d%s' % (base, n, ext)
-            n += 1
         with open(path, 'rb') as f:
-            data = f.read()
-        return blob_id, data
+            return f.read()
 
     def _on_insert(self, event):
-        blob_id, data = self._load_image_file()
-        if blob_id is None:
+        data = self._load_image_file()
+        if data is None:
             return
-        self.document.blobs[blob_id] = data
-        self.editor.insert_texel(grouped([Image(blob_id)]))
+        self.editor.insert_texel(grouped([Image(data)]))
 
     def _on_replace(self, event):
-        if self._blob_id is None:
+        if self._image is None:
             return
-        blob_id, data = self._load_image_file()
-        if blob_id is None:
+        data = self._load_image_file()
+        if data is None:
             return
-        self.document.blobs[blob_id] = data
-        self._blob_id = blob_id
+        self._content = data
         self._notify()
 
     def _on_export(self, event):
-        if self._blob_id is None:
+        if self._image is None:
             return
-        data = self.document.blobs.get(self._blob_id)
+        data = self._content
         if data is None:
             return
-        ext = os.path.splitext(self._blob_id)[1].lower()
+        ext = image_extension(data)
         wildcard = "Image files (*%s)|*%s|All files (*.*)|*.*" % (ext, ext)
         with wx.FileDialog(
             self, "Export Image",
             defaultDir=self._last_image_dir,
-            defaultFile=self._blob_id,
+            defaultFile='image' + ext,
             wildcard=wildcard,
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:
@@ -337,8 +340,8 @@ def demo_00():
     import os
     from ..textmodel.texeltree import Text, NL
     from ..core.document import Document
-    from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..core.stylesheet import testsheet
+    from ..layout.rowfactory import Factory
     from ..layout.cairodevice import CairoDevice
     from ..layout.pagebuilder import PageBuilder
     from ..texteditor.editor import Editor
@@ -349,14 +352,12 @@ def demo_00():
         data = f.read()
 
     doc = Document()
-    doc.blobs['red.png'] = data
-    doc.textmodel.texel = grouped([Text("Before "), Image("red.png"), Text(" after."), NL])
+    doc.textmodel.texel = grouped([Text("Before "), Image(data), Text(" after."), NL])
 
     app   = wx.App(False)
     frame = wx.Frame(None, title="ImageInspector Demo", size=(700, 400))
 
     factory = Factory(testsheet, device=CairoDevice())
-    factory.blobs = doc.blobs
     builder = PageBuilder(doc.textmodel, factory)
     builder.rebuild()
 

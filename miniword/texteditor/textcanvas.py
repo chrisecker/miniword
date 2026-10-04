@@ -15,19 +15,12 @@ import sys
 from math import ceil
 
 
-def _footnote_at(editor, abs_i):
-    """Return fn_offset for the Footnote texel at abs_i-1, or None."""
-    from ..textmodel.submodel import Footnote
-    from ..textmodel.utils import iter_leafes
-    from ..textmodel.texeltree import length
-    fn_offset = 0
-    for i1, i2, texel in iter_leafes(editor.root.texel, 0, True):
-        if not isinstance(texel, Footnote):
-            continue
-        if i1 == abs_i - 1:
-            return fn_offset
-        fn_offset += length(texel.content)
-    return None
+def _footnote_at(editor, flow, abs_i):
+    """Return fn_offset for the footnote anchored at abs_i-1 of flow
+    (nested footnotes have their anchor in the footnote flow), or
+    None."""
+    from ..footnotes.footnotes import footnote_anchored_at
+    return footnote_anchored_at(editor.root.texel, flow, abs_i - 1)
 
 
 """
@@ -337,14 +330,13 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         flow  = self.layout.get_flow(x, y)
         i     = self.layout.get_index(x, y, flow)
         if i is not None and event.ControlDown():
-            if flow == 0:
-                fn_offset = _footnote_at(editor, i)
-                if fn_offset is not None:
-                    editor.switch_target(1, fn_offset)
-                    editor.set_index(editor.local_idx(fn_offset))
-                    wx.CallAfter(self.adjust_viewport)
-                    self.SetFocus()
-                    return
+            fn_offset = _footnote_at(editor, flow, i)
+            if fn_offset is not None:
+                editor.switch_target(1, fn_offset)
+                editor.set_index(editor.local_idx(fn_offset))
+                wx.CallAfter(self.adjust_viewport)
+                self.SetFocus()
+                return
             href = editor.root.get_style(max(0, i - 1)).get('href', '')
             if href:
                 import webbrowser
@@ -370,10 +362,10 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             flow    = self.layout.get_flow(x, y)
             i       = self.layout.get_index(x, y, flow)
             is_link = False
-            if i is not None and flow == 0:
-                if _footnote_at(editor, i) is not None:
+            if i is not None:
+                if _footnote_at(editor, flow, i) is not None:
                     is_link = True
-                else:
+                elif flow == 0:
                     is_link = bool(editor.root.get_style(max(0, i - 1)).get('href', ''))
             self.SetCursor(wx.Cursor(wx.CURSOR_HAND if is_link else wx.CURSOR_IBEAM))
             return event.Skip()
@@ -574,8 +566,8 @@ def test_00():
 
 def test_01():
     "pagebuilder as view"
-    from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..core.stylesheet import testsheet
+    from ..layout.rowfactory import Factory
     from ..layout.pagebuilder import PageBuilder
     
     app = wx.App(redirect=False)    
@@ -616,8 +608,8 @@ def demo_00():
 def demo_01():
     "Texteditor based on the pages builder"     
     from ..layout.pagebuilder import PageBuilder
-    from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..core.stylesheet import testsheet
+    from ..layout.rowfactory import Factory
         
     app = wx.App(redirect=True)
     model = TextModel()
@@ -650,8 +642,8 @@ def demo_02():
     "Footnotes"
     from ..textmodel.submodel import mk_test, _get_text
     from ..layout.pagebuilder import PageBuilder
-    from ..core.styles import testsheet
-    from ..layout.factory import Factory
+    from ..core.stylesheet import testsheet
+    from ..layout.rowfactory import Factory
         
     app = wx.App(redirect=True)
     model = mk_test()

@@ -272,6 +272,17 @@ class CairoDevice:
         self._current_bgcolor = _style.get('bgcolor', 'white')
         self._current_style = _style
 
+    @staticmethod
+    def _vmetrics(fe):
+        """(height, depth) of a line from cairo font extents fe
+        (ascent, descent, height, ...): the baseline lies height below
+        the top, depth above the bottom. height + depth is Cairo's
+        recommended baseline distance fe[2] (it already contains the
+        descent and the line gap) - at least ascent + descent, for fonts
+        that report less."""
+        ascent, descent, line_h = fe[0], fe[1], fe[2]
+        return max(line_h - descent, ascent), descent
+
     def measure(self, text, style):
         key = (text, tuple(sorted(style.items())))
         try:
@@ -283,9 +294,7 @@ class CairoDevice:
         _style = filled(style)
         set_font(ctx, _style)
 
-        fe = ctx.font_extents()
-        descent = fe[1]
-        line_h  = fe[2]
+        height, depth = self._vmetrics(ctx.font_extents())
 
         hb_font = self._get_hb_font(_style)
         if hb_font is not None:
@@ -294,7 +303,7 @@ class CairoDevice:
         else:
             xa = ctx.text_extents(text)[4]
 
-        result = (xa, line_h, descent)
+        result = (xa, height, depth)
 
         self._cache.set(key, result)
         return result
@@ -356,10 +365,8 @@ class CairoDevice:
         return True
 
     def draw_underline(self, x, y, width, ctx):
-        fe        = self._temp_ctx.font_extents()
-        line_h    = fe[2]
-        descent   = fe[1]
-        ul_y      = y + line_h + descent * 0.3
+        height, descent = self._vmetrics(self._temp_ctx.font_extents())
+        ul_y      = y + height + descent * 0.3
         thickness = max(0.5, descent * 0.1)
         ctx.rectangle(x, ul_y, width, thickness)
         ctx.fill()
@@ -367,8 +374,8 @@ class CairoDevice:
     def draw_strike(self, x, y, width, ctx):
         fe        = self._temp_ctx.font_extents()
         ascent    = fe[0]
-        line_h    = fe[2]
-        st_y      = y + line_h - ascent * 0.3
+        height, descent = self._vmetrics(fe)
+        st_y      = y + height - ascent * 0.3
         thickness = max(0.5, ascent * 0.05)
         ctx.rectangle(x, st_y, width, thickness)
         ctx.fill()
@@ -405,9 +412,7 @@ class CairoDevice:
         if not strings:
             return
 
-        fe      = self._temp_ctx.font_extents()
-        line_h  = fe[2]
-        descent = fe[1]
+        height, depth = self._vmetrics(self._temp_ctx.font_extents())
 
         hb_font = self._get_hb_font(self._current_style)
         size = self._current_style['font_size']
@@ -437,12 +442,12 @@ class CairoDevice:
                 c.Blue()  / 255,
                 c.Alpha() / 255,
             )
-            ctx.rectangle(x, y, total_width, line_h + descent)
+            ctx.rectangle(x, y, total_width, height + depth)
             ctx.fill()
             ctx.restore()
 
         # 2. Draw all text strings
-        baseline_y = self._snap_baseline(ctx, y + line_h)
+        baseline_y = self._snap_baseline(ctx, y + height)
         for text, tx, _, sruns in segments:
             if sruns is not None:
                 self._render_runs(sruns, tx, baseline_y, ctx)
@@ -467,9 +472,7 @@ class CairoDevice:
         elif vpos == 'subscript':
             y += self._current_style['font_size'] * 0.2
 
-        fe      = self._temp_ctx.font_extents()
-        line_h  = fe[2]
-        descent = fe[1]
+        height, depth = self._vmetrics(self._temp_ctx.font_extents())
 
         hb_font = self._get_hb_font(self._current_style)
         if hb_font is not None:
@@ -489,11 +492,11 @@ class CairoDevice:
                 c.Blue()  / 255,
                 c.Alpha() / 255,
             )
-            ctx.rectangle(x, y, xa, line_h + descent)
+            ctx.rectangle(x, y, xa, height + depth)
             ctx.fill()
             ctx.restore()
 
-        baseline_y = self._snap_baseline(ctx, y + line_h)
+        baseline_y = self._snap_baseline(ctx, y + height)
         if runs is not None:
             self._render_runs(runs, x, baseline_y, ctx)
         else:
@@ -623,6 +626,22 @@ def test_00():
     w, h, d = device.measure('M', defaultstyle)
     assert w > 0 and h > 0 and d >= 0
     assert h > d
+
+
+
+def test_00b():
+    "measure: height + depth is the font's recommended line distance"
+    app = wx.App(False)
+    device = CairoDevice()
+    w, h, d = device.measure('Ag', defaultstyle)
+    ctx = device._temp_ctx
+    set_font(ctx, filled(defaultstyle))
+    ascent, descent, line_h = ctx.font_extents()[:3]
+    assert d == descent  # the descent is counted once, as depth
+    assert abs(h + d - max(line_h, ascent + descent)) < 1e-9
+    assert h >= ascent
+    # no glyph-dependent metrics: 'oo' measures just as high
+    assert device.measure('oo', defaultstyle)[1:] == (h, d)
 
 
 def test_01():

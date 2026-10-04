@@ -78,10 +78,14 @@ def save(doc, path):
             parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
         parts.append('')
 
-    # Blobs section — only written when non-empty; unused blobs are dropped
-    from ..images.images import collect_blob_ids
-    used = collect_blob_ids(doc.textmodel.texel)
-    blobs = {k: v for k, v in doc.blobs.items() if k in used}
+    # Blobs section — only written when non-empty. Built from the image
+    # data in the texels, keyed by blob_key: equal data is written once,
+    # and there are no unused blobs.
+    from ..images.images import iter_images, blob_key
+    blobs = {}
+    for image in iter_images(doc.textmodel.texel):
+        if image.content:
+            blobs[blob_key(image.content)] = image.content
     if blobs:
         parts.append('[blobs]')
         for key, data in blobs.items():
@@ -114,12 +118,14 @@ def load(path):
         for key, style in _parse_stylesheet(sections['basestyles']).items():
             doc.basestyles.set(key, updated(style_default, style))
 
-    # Blobs — optional
+    # Blobs — optional; they hydrate the Image texels (one bytes object
+    # per blob, shared by all texels using it)
+    blobs = {}
     if 'blobs' in sections:
-        doc.blobs = _parse_blobs(sections['blobs'])
+        blobs = _parse_blobs(sections['blobs'])
 
     # Document content
-    root, endmark, settings = parse(sections['document'])
+    root, endmark, settings = parse(sections['document'], blobs)
     doc.settings = settings
     doc.textmodel.texel = root
     if endmark is not None:
@@ -245,23 +251,30 @@ def test_03():
 
 
 def test_04():
-    "blobs roundtrip: only blobs referenced by Image texels are kept"
+    "blobs roundtrip: one blob per image data, keyed by blob_key"
     import tempfile, os
     from ..textmodel.texeltree import grouped
-    from ..images.images import Image
+    from ..images.images import Image, iter_images, blob_key
 
+    data = b'\x89PNG\r\n\x1a\nfakedata'
     doc = Document()
     doc.textmodel = TextModel("Hello")
-    doc.textmodel.texel = grouped([Image('photo.png'), doc.textmodel.texel])
-    doc.blobs = {'photo.png': b'\x89PNG\r\nfakedata', 'logo.jpg': b'\xff\xd8fake'}
+    doc.textmodel.texel = grouped(
+        [Image(data, alt='Photo'), doc.textmodel.texel, Image(data)])
 
     with tempfile.NamedTemporaryFile(
             suffix='.txl', delete=False, mode='w') as f:
         path = f.name
     try:
         doc.save(path)
+        with open(path) as f:
+            text = f.read()
+        assert text.count('"%s" = ' % blob_key(data)) == 1
         doc2 = Document.load(path)
-        assert doc2.blobs == {'photo.png': b'\x89PNG\r\nfakedata'}
+        images = list(iter_images(doc2.textmodel.texel))
+        assert [image.content for image in images] == [data, data]
+        assert images[0].content is images[1].content
+        assert images[0].alt == 'Photo'
     finally:
         os.unlink(path)
 

@@ -316,7 +316,7 @@ class Editor(UndoRedo):
         i1, i2 = self.abs_idxs(j1, j2)        
         model = self.target
         styles = model.clear_styles(j1, j2)
-        info = self._set_styles, flow, i1, styles
+        info = self._set_styles, self.flow, i1, styles
         self.add_undo(info)
 
     def set_properties(self, **properties):
@@ -346,7 +346,7 @@ class Editor(UndoRedo):
     def set_parstyle(self, style):        
         model = self.target
         j = self.index
-        i = abs_idx(j)
+        i = self.abs_idx(j)
         styles = model.set_parstyle(j, style)
         info = self._set_parstyles, self.flow, i, styles
         self.add_undo(info)
@@ -612,19 +612,18 @@ class TwoFlowEditor(Editor):
         self.notify_views('target_changed')
 
     def find_footnote(self, i):
-        # helper: find the footnode-texel which holds position i in
-        # the footnote-flow.
-        offset = 0
+        # helper: find the footnote-texel which holds position i in
+        # the footnote-flow. Returns (texel, offset, chain), chain as
+        # in footnotes.iter_footnotes - nested footnotes included.
+        from ..footnotes.footnotes import iter_footnotes
         last = None
-        for i1, i2, texel in iter_leafes(self.root.texel, 0, True):
-            if not isinstance(texel, Footnote):
-                continue
+        for offset, chain, anchor in iter_footnotes(self.root.texel):
+            texel = chain[-1][1]
             n = length(texel.content)
-            if i < offset+n:
-                return texel, offset, i1
-            last = texel, offset, i1
-            offset += n
-        if last is not None and i == offset:
+            if offset <= i < offset + n:
+                return texel, offset, chain
+            last = texel, offset, chain
+        if last is not None and i == last[1] + length(last[0].content):
             # i is the position right after the last character of the
             # last footnote, ie. a valid cursor position at its end.
             return last
@@ -632,10 +631,14 @@ class TwoFlowEditor(Editor):
 
     def get_footnotemodel(self, i):
         # Helper: Create a content model for the footnote at character
-        # offset i in the footnote flow.
-        root = self.root
-        texel, offset, anchor = self.find_footnote(i)
-        return SubModel(root, anchor, offset, texel.content)
+        # offset i in the footnote flow. For a nested footnote it is
+        # a SubModel of the enclosing footnote's SubModel, so changes
+        # are written back level by level up to the root.
+        texel, offset, chain = self.find_footnote(i)
+        model = self.root
+        for anchor, footnote in chain:
+            model = SubModel(model, anchor, offset, footnote.content)
+        return model
 
 
 def test_00():
@@ -769,6 +772,57 @@ def test_03():
     editor.undo()
     t = _get_text(editor.root.texel)
     assert "XYZErschienen" not in t
+
+def test_03b():
+    "nested footnotes: typing goes into the right footnote, undo works"
+    from ..textmodel.submodel import _get_text
+    from ..footnotes.footnotes import _nested_doc
+
+    xtexel, f1, f2, f3 = _nested_doc()
+    root = TextModel()
+    root.set_xtexel(xtexel)
+    editor = TwoFlowEditor()
+    editor.root = root
+    assert _get_text(root.texel) == 'ab[xy[uv]z]cd[w]'
+
+    # flow: F1 'xy[F2]z' 0..5, F2 'uv' 5..8, F3 'w' 8..10
+    assert editor.find_footnote(5)[1] == 5
+    assert editor.find_footnote(8)[1] == 8
+
+    editor.switch_target(1, 5)
+    assert editor.offset == 5
+    editor.index = editor.local_idx(5)
+    editor.insert_text('X')
+    assert _get_text(root.texel) == 'ab[xy[Xuv]z]cd[w]'
+
+    editor.switch_target(1, 9)
+    assert editor.offset == 9
+    editor.index = editor.local_idx(9)
+    editor.insert_text('Y')
+    assert _get_text(root.texel) == 'ab[xy[Xuv]z]cd[Yw]'
+
+    editor.undo()
+    editor.undo()
+    assert _get_text(root.texel) == 'ab[xy[uv]z]cd[w]'
+
+def test_03c():
+    "clear_styles and set_parstyle, with undo"
+    editor = Editor()
+    editor.insert_text('Hello World')
+    editor.selection = (0, 5)
+    editor.set_properties(bold=True)
+    assert editor.root.get_style(2).get('bold')
+    editor.clear_styles()
+    assert not editor.root.get_style(2).get('bold')
+    editor.undo()
+    assert editor.root.get_style(2).get('bold')
+
+    editor.index = 3
+    editor.set_parstyle({'base': 'normal', 'alignment': 'right'})
+    assert editor.root.get_parstyle(3).get('alignment') == 'right'
+    editor.undo()
+    assert editor.root.get_parstyle(3).get('alignment') != 'right'
+
 
 def test_04():
     "controller"

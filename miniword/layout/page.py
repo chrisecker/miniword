@@ -1,4 +1,4 @@
-from .boxes import Box, VBox, NewlineBox, Row, select_i_by_y, get_text
+from .boxes import Box, VBox, RowsBox, NewlineBox, Row, select_i_by_y, get_text
 from .testdevice import TESTDEVICE
 from ..core.units import mm, cm, pt
 
@@ -7,8 +7,11 @@ class ForceBreakBox(NewlineBox):
     """Sentinel box for a forced line break (BR texel)."""
 
 
-class FootnoteBox(VBox):
+class FootnoteBox(RowsBox):
     """A column of footnote rows, optionally preceded by a separator line.
+
+    Takes ready-made row data ((x, y, row), ...) plus height and
+    decorations - e.g. from stack_rows - and doesn't stack rows itself.
 
     Like any box, its rows are positioned relative to its own top-left
     corner; the box's position on the page is carried separately (see
@@ -18,9 +21,10 @@ class FootnoteBox(VBox):
     remaining page (no normal text above it).
     """
 
-    def __init__(self, rows, width, draw_separator=True, device=None):
-        VBox.__init__(self, rows, device=device)
-        self.width = max(self.width, width)
+    def __init__(self, data, width, height, shadings=(), borders=(),
+                 device=None, draw_separator=True):
+        RowsBox.__init__(self, data, width, height, 0, (0, 0),
+                         shadings, borders, device)
         self.draw_separator = draw_separator
 
     def draw(self, x, y, gc):
@@ -28,7 +32,7 @@ class FootnoteBox(VBox):
             sep_y = y - 4   # 4pt gap above the line
             self.device.draw_line(x, sep_y, x + self.width * 0.3, sep_y,
                                    0.5, gc)
-        VBox.draw(self, x, y, gc)
+        RowsBox.draw(self, x, y, gc)
 
 
 class Page(Box):
@@ -36,7 +40,8 @@ class Page(Box):
     margin        = (2 * cm,) * 4  # XXX
     page          = 0
     height        = 0
-    decorations   = ()
+    shadings      = ()
+    borders       = ()
     restartmemo   = None
 
     def __init__(self, rowdata, geometry, footnotebox=None, device=TESTDEVICE):
@@ -69,8 +74,10 @@ class Page(Box):
         self.draw_decorations(x, y, gc)
 
     def draw_decorations(self, x, y, gc):
-        for dx, dy, dw, dh, color in self.decorations:
+        for dx, dy, dw, dh, color in self.shadings:
             self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
+        for dx, dy, dw, dh, color in self.borders:
+            self.device.draw_rect(x + dx, y + dy, dw, dh, gc)
 
     def draw_footnotes(self, x, y, gc):
         if self.footnotebox is not None:

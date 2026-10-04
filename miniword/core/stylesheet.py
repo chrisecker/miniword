@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from .documentnode import DocumentNode
 from ..textmodel.styles import create_style
+from .styles import style_default, updated, normal, h0, h1, h2, h3
 
 
 class StyleSheet(DocumentNode):
@@ -33,6 +34,18 @@ class StyleSheet(DocumentNode):
     def contains(self, key):
         return key in self.data
 
+    def mk_style(self, parstyle, style):
+        # XXX implement caching
+        basestyle = self.get(parstyle.get('base', 'normal')) or {}
+        return updated(style_default, basestyle, parstyle, style)
+
+    def mk_parstyle(self, parstyle):
+        # XXX implement caching
+        basestyle = self.get(parstyle.get('base', 'normal')) or {}
+        return updated(style_default, basestyle, parstyle)
+
+    
+
 
 def undo_basestyle_change(basestyles, name, old_style, new_style):
     """Undo/redo helper for basestyle edits (see Editor.add_undo)."""
@@ -56,3 +69,15 @@ def test_00():
 
 
     
+
+
+
+# A stylesheet for tests (and demos) only - documents bring their own.
+# Single spacing and no space after paragraphs keep test metrics simple.
+_plain = dict(line_spacing=1.0, space_after=0)
+testsheet = StyleSheet()
+testsheet.set('normal', updated(normal, _plain))
+testsheet.set('h0', updated(h0, _plain))
+testsheet.set('h1', updated(h1, _plain))
+testsheet.set('h2', updated(h2, _plain))
+testsheet.set('h3', updated(h3, _plain))

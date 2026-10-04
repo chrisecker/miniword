@@ -31,6 +31,84 @@ _HANDLE_DEFS = [
 ]
 
 
+def resize_box(state, handle, dx, dy, proportional):
+    """New image rect after dragging handle by (dx, dy). state is
+    ((x, y), w, h); left/top handles move the origin. Sizes stay >= 1.
+    With proportional the aspect ratio is kept (edge handles keep the
+    image centred on the other axis)."""
+    h_name, x_f, y_f = next(h for h in _HANDLE_DEFS if h[0] == handle)
+    (x, y), w, h = state
+
+    new_x, new_y, new_w, new_h = x, y, w, h
+    if x_f == 0.0:
+        diff = min(dx, w - 1)
+        new_x += diff
+        new_w -= diff
+    elif x_f == 1.0:
+        new_w = max(1, w + dx)
+
+    if y_f == 0.0:
+        diff = min(dy, h - 1)
+        new_y += diff
+        new_h -= diff
+    elif y_f == 1.0:
+        new_h = max(1, h + dy)
+
+    if proportional:
+        aspect = w / h
+        if x_f == 0.5:
+            new_w = max(1, new_h * aspect)
+            new_x = (w - new_w) / 2
+        elif y_f == 0.5:
+            new_h = max(1, new_w / aspect)
+            new_y = (h - new_h) / 2
+        else:
+            if abs(dx) >= abs(dy):
+                new_h = max(1, new_w / aspect)
+                if y_f == 0.0:
+                    new_y = h - new_h
+            else:
+                new_w = max(1, new_h * aspect)
+                if x_f == 0.0:
+                    new_x = w - new_w
+
+    return (new_x, new_y), new_w, new_h
+
+
+def scale_after_resize(old_state, new_state, scale_x, scale_y):
+    """Scale factors after resizing the shown image from old_state to
+    new_state (both ((x, y), w, h)). Relative to the shown size, so a
+    crop needs no special treatment."""
+    _, w0, h0 = old_state
+    _, w, h = new_state
+    return (w / w0) * scale_x, (h / h0) * scale_y
+
+
+def drag_crop(crop, handle, dx, dy, scale, src_size):
+    """New crop [left, right, top, bottom] (source pixels) after dragging
+    edge handle ('L', 'R', 'T', 'B') by (dx, dy) screen units. scale is
+    (scale_x, scale_y), src_size the source image's (width, height).
+    No negative crop, at least 1 pixel stays."""
+    sx, sy = scale
+    sw, sh = src_size
+    cl, cr, ct, cb = crop
+    min_px = 1
+    if handle == 'L':
+        cl = max(0, min(cl + dx / sx, sw - cr - min_px))
+    elif handle == 'R':
+        cr = max(0, min(cr - dx / sx, sw - cl - min_px))
+    elif handle == 'T':
+        ct = max(0, min(ct + dy / sy, sh - cb - min_px))
+    elif handle == 'B':
+        cb = max(0, min(cb - dy / sy, sh - ct - min_px))
+    return [cl, cr, ct, cb]
+
+
+def round_crop(crop):
+    """crop rounded to whole pixels, as a tuple of ints."""
+    return tuple(int(round(v)) for v in crop)
+
+
 class ImageController(BoxController):
     @classmethod
     def match(cls, view, path):
@@ -89,44 +167,8 @@ class ImageSizeController(ImageController):
             yield name, x+fx * w, y+fy * h
 
     def drag_handle(self, handle, dx, dy, shift, ctrl):
-        h_name, x_f, y_f = next(h for h in _HANDLE_DEFS if h[0] == handle)
-
-        (x, y), w, h = self.compute_state()
-
-        new_x, new_y, new_w, new_h = x, y, w, h
-        if x_f == 0.0:
-            diff = min(dx, w - 1)
-            new_x += diff
-            new_w -= diff
-        elif x_f == 1.0:
-            new_w = max(1, w + dx)
-
-        if y_f == 0.0:
-            diff = min(dy, h - 1)
-            new_y += diff
-            new_h -= diff
-        elif y_f == 1.0:
-            new_h = max(1, h + dy)
-
-        if self.texel.proportional or shift:
-            aspect = w / h
-            if x_f == 0.5:
-                new_w = max(1, new_h * aspect)
-                new_x = (w - new_w) / 2
-            elif y_f == 0.5:
-                new_h = max(1, new_w / aspect)
-                new_y = (h - new_h) / 2
-            else:
-                if abs(dx) >= abs(dy):
-                    new_h = max(1, new_w / aspect)
-                    if y_f == 0.0:
-                        new_y = h - new_h
-                else:
-                    new_w = max(1, new_h * aspect)
-                    if x_f == 0.0:
-                        new_x = w - new_w
-
-        self.state = ((new_x, new_y), new_w, new_h)
+        self.state = resize_box(self.compute_state(), handle, dx, dy,
+                                self.texel.proportional or shift)
 
     def draw_overlay(self, gc):
         bx, by = self.box_origin
@@ -141,10 +183,9 @@ class ImageSizeController(ImageController):
         gc.stroke()
         
     def commit(self):
-        _, w0, h0 = self.compute_state()
-        _, w, h = self.state
-        new_scale_x = (w / w0) * self.texel.scale_x
-        new_scale_y = (h / h0) * self.texel.scale_y
+        new_scale_x, new_scale_y = scale_after_resize(
+            self.compute_state(), self.state,
+            self.texel.scale_x, self.texel.scale_y)
         if abs(new_scale_x - self.texel.scale_x) > 1e-6 or \
            abs(new_scale_y - self.texel.scale_y) > 1e-6:
             self.editor.set_texel_attributes(
@@ -209,19 +250,10 @@ class ImageCropController(ImageController):
         self.editor.canvas.refresh()
 
     def drag_handle(self, handle, dx, dy, shift, ctrl):
-        sx, sy = self.texel.scale_x, self.texel.scale_y
-        sw, sh = self._src_w, self._src_h
-        cl, cr, ct, cb = self._drag_start_crop
-        min_px = 1
-        if handle == 'L':
-            cl = max(0, min(cl + dx / sx, sw - cr - min_px))
-        elif handle == 'R':
-            cr = max(0, min(cr - dx / sx, sw - cl - min_px))
-        elif handle == 'T':
-            ct = max(0, min(ct + dy / sy, sh - cb - min_px))
-        elif handle == 'B':
-            cb = max(0, min(cb - dy / sy, sh - ct - min_px))
-        self._preview_crop = [cl, cr, ct, cb]
+        self._preview_crop = drag_crop(
+            self._drag_start_crop, handle, dx, dy,
+            (self.texel.scale_x, self.texel.scale_y),
+            (self._src_w, self._src_h))
 
     def draw_overlay(self, gc):
         tb = self.box
@@ -279,7 +311,7 @@ class ImageCropController(ImageController):
 
 
     def commit(self):
-        crop = tuple(int(round(v)) for v in self._preview_crop)
+        crop = round_crop(self._preview_crop)
         self.editor.set_texel_attributes(self.i1, self.texel, crop=crop)
 
 
@@ -304,8 +336,7 @@ def _setup_demo():
         data = f.read()
 
     doc = Document()
-    doc.blobs = {'red.png': data}
-    doc.textmodel.texel = grouped([Text('Before '), Image('red.png'), Text(' after.'), NL])
+    doc.textmodel.texel = grouped([Text('Before '), Image(data), Text(' after.'), NL])
 
     r = get_path(doc.textmodel.texel, 7)
     for x in r:
@@ -315,7 +346,6 @@ def _setup_demo():
     app   = wx.App(True)
     frame = wx.Frame(None, title='ImageSizeController demo', size=(420, 300))
     view  = TextEditor(frame, doc)
-    view.builder.factory.blobs = doc.blobs
     return app, frame, view
 
 def demo_00():

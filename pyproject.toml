@@ -26,6 +26,7 @@ Homepage = "https://codeberg.org/chrisecker/miniword"
 
 [tool.setuptools.packages.find]
 include = ["miniword*"]
+exclude = ["miniword.tests*"]
 
 [tool.setuptools.package-data]
 miniword = ["icons/*.svg"]

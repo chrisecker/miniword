@@ -25,7 +25,6 @@ class Document(Model):
         self.basestyles.set('normal', _normal_style)
         self.textmodel = TextModel()
         self.settings = {}
-        self.blobs = {}        # {blob_id: bytes}
         self.home_format = 'txl'   # native format; set to ext on import
 
     def set_setting(self, name, value):

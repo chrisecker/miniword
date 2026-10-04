@@ -12,7 +12,12 @@ def inc_counter(indent, counter):
     value = counter[indent]+1
     return set_counter(indent, counter, value)
     
-    
+
+def copy_counters(counters): # --> in counters
+    """Deep-copy a dict of mutable counter lists (style -> list[int])."""
+    return {k: list(v) for k, v in counters.items()}
+
+
 def to_roman(n):
     """Convert positive integer to lowercase Roman numeral string."""
     val  = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]

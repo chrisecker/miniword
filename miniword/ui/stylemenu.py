@@ -561,7 +561,7 @@ def test_01():
     app = wx.App(False)
     frame = wx.Frame(None)
     dropdown = BasestyleSelector(frame)
-    from ..core.styles import testsheet as stylesheet
+    from ..core.stylesheet import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
 
     dropdown.set_properties("h1", {}, {})
@@ -584,7 +584,7 @@ def test_02():
     app = wx.App(False)
     frame = wx.Frame(None)
     dropdown = BasestyleSelector(frame)
-    from ..core.styles import testsheet as stylesheet
+    from ..core.stylesheet import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     dropdown.set_properties("h1", {"font_size": 1}, {})
     n = len(stylesheet.keys())
@@ -597,7 +597,7 @@ def test_04():
     app = wx.App(False)
     frame = wx.Frame(None)
     dropdown = BasestyleSelector(frame)
-    from ..core.styles import testsheet as stylesheet
+    from ..core.stylesheet import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     called = []
     dropdown.on_delete_style = lambda name: called.append(name)
@@ -614,7 +614,7 @@ def test_03():
     app = wx.App(False)
     frame = wx.Frame(None)
     dropdown = BasestyleSelector(frame)
-    from ..core.styles import testsheet as stylesheet
+    from ..core.stylesheet import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     dropdown.set_properties("h1", {"font_size": 1}, {})
     dropdown.UpdateStyle("h1")
@@ -632,7 +632,7 @@ def demo_00():
     frame.Centre()
     frame.Show()
     dropdown = BasestyleSelector(frame)
-    from ..core.styles import testsheet as stylesheet
+    from ..core.stylesheet import testsheet as stylesheet
     dropdown.set_stylesheet(stylesheet)
     dropdown.SetSelection(2)
     from . import testing

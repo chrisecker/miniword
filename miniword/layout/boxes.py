@@ -280,6 +280,7 @@ class Box:
         if r is None:
             # None of the childs contains xy!
             return 0
+        return r
 
     def _select_index(self, l, x, y):# XXX as Function
         r = []
@@ -644,44 +645,60 @@ class VGroup(VBox):
     def create_group(self, l):
         return VGroup(l, device=self.device)
 
+    
+class RowsBox(Box):
+    """
+    Baseclass for Page, FootnoteBox and CellBox.
+
+    Data consists of row-boxes and their x,y-position. y values must
+    be monotonically increasing. shadings (filled rects) and borders
+    (outlined rects, same tuple shape) are drawn together by
+    draw_decorations.
+    """
+
+    def __init__(self, data=(), width=0, height=0, depth=0, offset=(0,0),
+                 shadings=(), borders=(), device=None):
+        if device is not None:
+            self.device = device
+        self.data = data
+        self.width = width
+        self.height = height
+        self.depth = depth
+        self.offset = offset
+        self.shadings = shadings
+        self.borders = borders
+        self.length = sum(len(row) for _, _, row in self.data)
+
+    def __len__(self):
+        return self.length
+
+    def iter_boxes(self, i, x, y):
+        j1 = i
+        ox, oy = self.offset
+        x += ox
+        y += oy
+        for x_, y_, row in self.data:
+            j2 = j1 + len(row)
+            yield j1, j2, x + x_, y + y_, row
+            j1 = j2
+
+    def get_index(self, x, y):
+        return select_i_by_y(x, y, self.iter_boxes(0, 0, 0))
+        
+    def draw_decorations(self, x, y, gc):
+        ox, oy = self.offset
+        x += ox
+        y += oy
+        for dx, dy, dw, dh, color in self.shadings:
+            self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
+        for dx, dy, dw, dh, color in self.borders:
+            self.device.draw_rect(x + dx, y + dy, dw, dh, gc)
+
+    def draw(self, x, y, gc):
+        self.draw_decorations(x, y, gc)
+        Box.draw(self, x, y, gc)
 
     
-def replace_boxes(box, i1, i2, stuff):
-    # Recursively replace everything between $i1$ and $i2$ by
-    # $stuff$. Insertion is done at the depth of the first box which
-    # starts at $i1$.
-    #print "replace_boxes: (i1, i2)=", (i1, i2), "box=", repr(box)[:20]
-    if box.is_group:
-        l = []
-        for j1, j2, child in box.iter_childs():
-            if i1 <= j2 and j1 <= i2: # overlapping or neighbouring
-                tmp = replace_boxes(child, max(0, i1-j1), min(j2, i2)-j1, stuff)
-                l.extend(tmp)
-                stuff = []
-            else:
-                l.append(child)
-        l.extend(stuff)
-        return box.from_childs(l)
-    if i1 == i2:
-        if i1 == 0:
-            return list(stuff)+[box]
-        elif i1 == len(box):
-            return [box]+list(stuff)
-    if i1<=0 and i2>=len(box):
-        # Replace evertyhing by stuff
-        return stuff
-
-    l = []
-    for j1, j2, child in box.iter_childs():
-        if i1 <= j2 and j1 <= i2: # overlapping or neighbouring
-            tmp = replace_boxes(child, max(0, i1-j1), min(j2, i2)-j1, stuff)
-            l.extend(tmp)
-            stuff = []
-        else:
-            l.append(child)
-    l.extend(stuff)
-    return box.from_childs(l)
-
 
 def tree_depth(box):
     # For debugging
@@ -788,49 +805,6 @@ def test_03():
     assert tree_depth(b) == 1
     b = grouped([box])
     assert tree_depth(b) == 0
-
-def test_04():
-    "replace_boxes"
-
-    def get_alltext(l):
-        return ''.join(get_text(box) for box in l)
-
-    t1 = TextBox('0123456789')
-    t2 = TextBox('abcdefghij')
-    t3 = TextBox('xyz')
-    assert str(replace_boxes(t1, 0, 10, [t2])) == "[TB('abcdefghij')]"
-    l = replace_boxes(t1, 0, 0, [t2])
-    assert get_alltext(l) == 'abcdefghij0123456789'
-
-    l = replace_boxes(t1, 10, 10, [t2])
-    assert get_alltext(l) == '0123456789abcdefghij'
-
-    g = VGroup([t1, t2])
-    assert get_text(g) == '0123456789abcdefghij'
-
-    l = replace_boxes(g, 0, 20, [t3])
-    assert get_alltext(l) == 'xyz'
-    
-    l = replace_boxes(g, 0, 10, [t3])
-    assert get_alltext(l) == 'xyzabcdefghij'
-
-    l = replace_boxes(g, 10, 20, [t3])
-    assert get_alltext(l) == '0123456789xyz'
-
-    l = replace_boxes(g, 10, 10, [t3])
-    assert get_alltext(l) == '0123456789xyzabcdefghij'
-
-    l = replace_boxes(g, 20, 20, [t3])
-    assert get_alltext(l) == '0123456789abcdefghijxyz'
-
-    l = replace_boxes(g, 0, 0, [t3])
-    assert get_alltext(l) == 'xyz0123456789abcdefghij'
-
-    g2 = VGroup([])
-    assert get_text(g2) == ''
-    l = replace_boxes(g2, 0, 0, [t3])
-    assert get_alltext(l) == 'xyz'
-
 
 def test_05():
     "get_cursorrect"

@@ -124,24 +124,20 @@ class LinksPanel(SidePanel):
 
     def on_insert(self, event=None):
         from ..textmodel.submodel import Footnote
-        from ..textmodel.texeltree import ENDMARK, length
-        from ..textmodel.utils import iter_leafes
+        from ..textmodel.texeltree import ENDMARK
+        from ..footnotes.footnotes import footnote_anchored_at
         editor = self.editor
         with editor.atomic():
             editor.remove()
+            flow = getattr(editor, 'flow', 0)  # in a footnote: nested
             anchor = editor.abs_idx(editor.index)
             editor.insert_texel(Footnote(ENDMARK))
-        fn_offset = 0
-        for i1, i2, texel in iter_leafes(editor.root.texel, 0, True):
-            if not isinstance(texel, Footnote):
-                continue
-            if i1 == anchor:
-                editor.switch_target(1, fn_offset)
-                editor.set_index(editor.local_idx(fn_offset))
-                if editor.canvas:
-                    wx.CallAfter(editor.canvas.adjust_viewport)
-                break
-            fn_offset += length(texel.content)
+        fn_offset = footnote_anchored_at(editor.root.texel, flow, anchor)
+        if fn_offset is not None:
+            editor.switch_target(1, fn_offset)
+            editor.set_index(editor.local_idx(fn_offset))
+            if editor.canvas:
+                wx.CallAfter(editor.canvas.adjust_viewport)
 
     def on_numbering_changed(self, event=None):
         fn = self.active_footnote()
