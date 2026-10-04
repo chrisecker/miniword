@@ -17,6 +17,7 @@ import wx
 
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import T, G, grouped, ENDMARK, NewLine
+from ..textmodel.utils import iter_leafes
 from ..textmodel.submodel import Footnote, _get_text
 from ..texteditor.editor import TwoFlowEditor
 from ..footnotes.footnotes import iter_footnotes
@@ -228,3 +229,60 @@ def test_NFN_6():
     editor.undo()
     editor.undo()
     assert 'cell [outer [inner]] end' in text(model)
+
+
+def save_load(model):
+    """Save a document with model's texel to TXL and load it again."""
+    import os
+    import tempfile
+    from ..core.document import Document
+    doc = Document()
+    doc.textmodel.texel = model.texel
+    with tempfile.NamedTemporaryFile(suffix='.txl', delete=False) as f:
+        path = f.name
+    try:
+        doc.save(path)
+        return Document.load(path).textmodel
+    finally:
+        os.unlink(path)
+
+
+def test_NFN_7():
+    "NFN-7: footnotes survive saving and loading TXL"
+    from ..textmodel.texeltree import ENDMARK as EM
+    f3 = fnote('z')
+    f2 = Footnote(grouped([T('y'), f3, NewLine(), T('second line'),
+                           EM.set_parstyle({'base': 'normal',
+                                            'alignment': 'right'})]))
+    f1 = fnote('x', f2.set_label('*')).set_numbering('roman')
+    model = mk_model('ab', f1, 'cd', fnote('w'))
+    loaded = save_load(model)
+    assert text(loaded) == text(model) == \
+        'ab[x[y[z]\nsecond line]]cd[w]'
+    g1, g2, g3, g4 = footnotes(loaded)
+    assert (g1.numbering, g2.label) == ('roman', '*')
+    assert offsets(loaded) == offsets(model)
+    last = list(iter_leafes(g2.content, 0))[-1][2]
+    assert last.is_endmark and last.parstyle.get('alignment') == 'right'
+
+    # and the loaded footnotes can be edited
+    editor = mk_editor(loaded)
+    type_at(editor, offsets(loaded)[2], 'Q')
+    assert text(loaded) == 'ab[x[y[Qz]\nsecond line]]cd[w]'
+
+
+def test_NFN_8():
+    "NFN-8: an image in a footnote is saved with its data"
+    import io
+    import cairocffi as cairo
+    from ..images.images import Image, iter_images
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 3, 2)
+    buf = io.BytesIO()
+    surface.write_to_png(buf)
+    data = buf.getvalue()
+    model = mk_model('ab', fnote('see ', Image(data, alt='pic')), 'cd')
+    loaded = save_load(model)
+    images = list(iter_images(loaded.texel))
+    assert [(image.content, image.alt) for image in images] == \
+        [(data, 'pic')]
+

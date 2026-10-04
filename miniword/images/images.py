@@ -125,10 +125,13 @@ def blob_key(content):
 
 
 def iter_images(texel):
-    """Yield all Image texels within texel (descending into groups and
-    containers, e.g. tables)."""
+    """Yield all Image texels within texel (descending into groups,
+    containers, e.g. tables, and footnote contents)."""
+    from ..textmodel.submodel import Footnote
     if isinstance(texel, Image):
         yield texel
+    elif isinstance(texel, Footnote):
+        yield from iter_images(texel.content)
     elif texel.is_group or texel.is_container:
         for i1, i2, child in iter_childs(texel):
             yield from iter_images(child)
