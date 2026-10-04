@@ -418,6 +418,44 @@ def test_EDIT_1():
     assert [page_sig(p) for p in builder._layout.childs] == expected
 
 
+def test_EDIT_2():
+    "EDIT-2: paragraph properties of selected cells change only those cells"
+    from ..ui.styleinspector import paragraph_ranges
+    from ..textmodel.utils import iter_leafes
+    tbl = from_strings([['aa', 'bb'], ['cc', 'dd']])
+    model = TextModel()
+    model.texel = doc_texel('x', None, tbl, None, 'y')
+    t0 = 2  # the table's position
+
+    def alignments():
+        t = [t for _, _, t in iter_leafes(model.texel, 0)
+             if isinstance(t, Table)][0]
+        cells = [s.parstyle.get('alignment') for s in t.childs[2::2]]
+        outer = [nl.parstyle.get('alignment')
+                 for _, _, nl in iter_leafes(model.texel, 0)
+                 if isinstance(nl, NewLine) and nl not in t.childs]
+        return cells, outer
+
+    for rect, expected in (((1, 1, 1, 1), [None, None, None, 'right']),
+                           ((0, 0, 1, 0), ['right', None, 'right', None])):
+        model.texel = doc_texel('x', None,
+                                from_strings([['aa', 'bb'], ['cc', 'dd']]),
+                                None, 'y')
+        # MatrixController.selected: content plus separator per cell
+        cells = [(t0 + a, t0 + b) for a, b in tbl.get_cell_ranges(*rect)]
+        for i1, i2 in paragraph_ranges(model, cells):
+            model.set_parproperties(i1, i2, alignment='right')
+        assert alignments() == (expected, [None, None]), rect
+
+    # a selection inside a cell's text covers just that cell's paragraph
+    model.texel = doc_texel('x', None,
+                            from_strings([['aa', 'bb'], ['cc', 'dd']]),
+                            None, 'y')
+    (i1, i2), = paragraph_ranges(model, [(t0 + 10, t0 + 11)])  # in 'dd'
+    model.set_parproperties(i1, i2, alignment='center')
+    assert alignments() == ([None, None, None, 'center'], [None, None])
+
+
 # FILE - saving and loading
 
 def roundtrip(texel):

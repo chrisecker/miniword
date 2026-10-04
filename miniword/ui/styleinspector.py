@@ -77,6 +77,22 @@ class AlignBar(ButtonBar):
             self.add(name, svg)
 
 
+def paragraph_ranges(model, ranges):
+    """ranges, each extended to cover complete lines. A range that already
+    does (e.g. a table cell from MatrixController.selected: its content
+    plus the separator, which ends the cell's last paragraph) is kept as
+    it is - expand_lines would widen a range across a cell's content and
+    separator to the whole table."""
+    result = []
+    for i1, i2 in ranges:
+        if i2 > i1 and model.linestart(i1) == i1 \
+                and model.lineend(i2 - 1) == i2 - 1:
+            result.append((i1, i2))
+        else:
+            result.append(model.expand_lines(i1, i2))
+    return result
+
+
 class IndentBar(ButtonBar):
     def __init__(self, parent):
         ButtonBar.__init__(self, parent, exclusive=False)
@@ -750,7 +766,7 @@ class StyleInspector(SidePanel):
         selected = editor.selected_ranges()
         target = editor.target
         if selected:
-            return [target.expand_lines(i1, i2) for i1, i2 in selected]
+            return paragraph_ranges(target, selected)
         i = editor.index
         return [target.expand_lines(i, i)]
 
