@@ -1,69 +1,45 @@
 """Build TableBox and CellBox from Table texels.
 
 Kept separate from table_boxes.py to avoid a circular import:
-  table_boxes <- table_factory <- layout.pagegen <- tables.table_boxes
+  table_boxes <- table_factory <- layout.rowfactory <- tables.table_boxes
 """
 
-from ..layout.boxes import EmptyTextBox
 from ..layout.testdevice import TESTDEVICE
 from ..textmodel.texeltree import length as texel_length, Group, NewLine
-from .table_boxes import CellBox, TableBox, CELL_HPAD, CELL_VPAD
+from .table_boxes import CellBox, TableBox, CELL_HPAD, CELL_VPAD, create_cell
 
 
 def build_cell(cell_texel, sep, col_width, factory, footnotes=None):
-    """Build a CellBox for one cell; cell style comes from the following separator.
+    """Build a CellBox for one cell; cell style comes from the following
+    separator. The content is set by a RowFactory of its own, wrapped at
+    col_width minus the cell padding.
 
-    footnotes: list to collect FootnoteBox rows for any footnote anchored
+    footnotes: list to collect the row records of footnotes anchored
     inside this cell, so the caller can hand them up to the enclosing
-    page instead of them silently vanishing (cells are rendered through
-    their own nested generate_pages call, with its own draft/page that
-    is otherwise discarded once the cell's rows are extracted).
+    page. (Their numbering starts afresh in every cell - the new
+    pipeline numbers them through RowFactory.Table_handler.)
     """
-    from ..layout.pagegen import generate_pages, RestartMemo, Row as PageRow
-
-    memo = RestartMemo()
-    memo.geometry = (col_width, 10**9)
-    memo.border   = (CELL_VPAD // 2, CELL_HPAD // 2,
-                     CELL_VPAD // 2, CELL_HPAD // 2)
+    from ..layout.rowfactory import RowFactory, State  # circular import
 
     # Use sep's parstyle and indent as the paragraph delimiter.
-    # Must be a plain NewLine — the Factory has no Separator_handler.
+    # Must be a plain NewLine - the factory has no Separator_handler.
     nl = NewLine()
     nl.parstyle = sep.parstyle
     nl.indent   = getattr(sep, 'indent', 0)
     content = Group([cell_texel, nl])
 
-    # Save factory state modified by generate_pages so the outer caller
-    # (generate_pages for the page) is not corrupted.
-    saved = {k: getattr(factory, k, None)
-             for k in ('line_width', 'parstyle', 'markerstyle', 'indent_level')}
+    state = State(col_width - CELL_HPAD)
+    rowfactory = RowFactory(state, factory.stylesheet, factory.device)
+    records = [record for par in rowfactory.generate(content, 0)
+               for record in par]
+    if footnotes is not None:
+        footnotes.extend(state.footnotes)
 
-    page = None
-    for page in generate_pages(content, 0, memo, factory, allow_page_breaks=False,
-                                footnotes=footnotes):
-        pass  # expect exactly one page
-
-    for k, v in saved.items():
-        if v is not None:
-            setattr(factory, k, v)
-
-    rows = [row for _, _, row in page.rows] if page else []
-
-    if not rows:
-        line = EmptyTextBox(style=factory.mk_style({}), device=factory.device)
-        rows = [PageRow([line], device=factory.device)]
-
-    cell = CellBox(rows, factory.device, hpad=0, vpad=0,
-                   style=getattr(sep, 'parstyle', {}))
-    cell._tpad  = CELL_VPAD // 2
-    cell.width  = col_width
-    if page and page.rows:
-        _, y_last, last_row = page.rows[-1]
-        cell.height = y_last + last_row.height + last_row.depth + CELL_VPAD // 2
-    else:
-        cell.height = cell.fill + CELL_VPAD
-    # sep is counted as part of the paragraph but belongs to the table structure;
-    # cell.length must equal texel_length(cell_texel) + 1 (the separator slot).
+    cell = create_cell(records, col_width, factory.device, hpad=CELL_HPAD,
+                       vpad=CELL_VPAD, style=getattr(sep, 'parstyle', {}))
+    # sep is counted as part of the paragraph but belongs to the table
+    # structure; cell.length must equal texel_length(cell_texel) + 1
+    # (the separator slot).
     cell.length = texel_length(cell_texel) + 1
     return cell
 
@@ -111,7 +87,7 @@ def build_table_box(texel, factory, row_height=None):
                          device=factory.device)
     # Footnotes anchored inside a cell belong to the enclosing page, not
     # to the cell's own (otherwise discarded) nested draft -- see
-    # build_cell's footnotes param. Picked up by pagegen.generate_pages.
+    # build_cell's footnotes param.
     table_box.footnotes = footnotes
     return table_box
 
