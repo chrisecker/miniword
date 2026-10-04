@@ -115,13 +115,15 @@ def updated(default, *styles):
     return r
 
 
-# This stylesheet is intended for internal testing:
+# The base style of every document. Line spacing and the space after a
+# paragraph follow LibreOffice's "Text Body" (115 %, 0.25 cm): single
+# spacing (1.0) is the font's own line distance, which looks tight.
 normal = updated(
     text_default,
     structure_default,
     layout_default,
     other_default,
-    dict(name="Normal"),
+    dict(name="Normal", line_spacing=1.15, space_after=7),
 )
 
 h0 = updated(normal, dict(name="Heading 1", role="h1", font_size=18, bold=True,

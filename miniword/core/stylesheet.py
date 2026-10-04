@@ -73,9 +73,11 @@ def test_00():
 
 
 # A stylesheet for tests (and demos) only - documents bring their own.
+# Single spacing and no space after paragraphs keep test metrics simple.
+_plain = dict(line_spacing=1.0, space_after=0)
 testsheet = StyleSheet()
-testsheet.set('normal', normal)
-testsheet.set('h0', h0)
-testsheet.set('h1', h1)
-testsheet.set('h2', h2)
-testsheet.set('h3', h3)
+testsheet.set('normal', updated(normal, _plain))
+testsheet.set('h0', updated(h0, _plain))
+testsheet.set('h1', updated(h1, _plain))
+testsheet.set('h2', updated(h2, _plain))
+testsheet.set('h3', updated(h3, _plain))
