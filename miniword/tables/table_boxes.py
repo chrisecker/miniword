@@ -305,7 +305,7 @@ class TableNavRow:
 
 
 # ---------------------------------------------------------------------------
-# Constants used by table_factory.py
+# Cell padding (used by RowFactory.Table_handler)
 # ---------------------------------------------------------------------------
 
 CELL_HPAD = 8   # horizontal padding per column

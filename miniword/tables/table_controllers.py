@@ -447,11 +447,10 @@ def test_00():
 
 def test_04():
     "MatrixController.copy"
-    from .table_factory import build_table_box
     from .tables import from_strings, Table
     from ..textmodel.textmodel import TextModel
     from ..textmodel.texeltree import length as texel_length
-    from ..layout.rowfactory import Factory
+    from ..layout.rowfactory import RowFactory, State
     from ..core.styles import testsheet
     from ..layout.testdevice import TESTDEVICE
 
@@ -459,8 +458,8 @@ def test_04():
     table = from_strings(texts)
     model = TextModel()
     model.texel = table
-    factory = Factory(testsheet, TESTDEVICE)
-    box = build_table_box(table, factory, row_height=14)
+    factory = RowFactory(State(300), testsheet, TESTDEVICE)
+    box = factory.create_box(table, testsheet.mk_parstyle({}))
 
     copied_model = []
     class FakeLayout:

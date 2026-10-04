@@ -58,12 +58,10 @@ Vorteile.
 
 from copy import copy as shallow_copy
 
-from ..textmodel.texeltree import Text, NewLine, Container, \
-    Group, length, iter_childs
+from ..textmodel.texeltree import length, NL, grouped
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.textmodel import get_texel
-from ..textmodel.submodel import Footnote  # used only by the tests below
-from ..core.styles import testsheet, style_default, n_levels
+from ..core.styles import testsheet, n_levels
 from ..core.units import mm, cm
 from ..core.styles import updated
 from ..core.papersizes import PAPER_SIZES
@@ -275,10 +273,16 @@ class RowFactory(Factory):
         # is wrapped on its own, continuing (never restarting) the
         # paragraph's hanging indent (only the very first segment gets
         # width_first/left_first).
+        # A table gets a row of its own (not wrapped), so that
+        # RowStack.take can split it across pages.
         lines = []
-        for segment in split_at_breaks(boxes):
-            w_first = width_first if not lines else width_rest
-            lines.extend(simple_linewrap(segment, w_first, width_rest))
+        for segment in split_at_tables(boxes):
+            if is_table_segment(segment):
+                lines.append(segment)
+                continue
+            for sub in split_at_breaks(segment):
+                w_first = width_first if not lines else width_rest
+                lines.extend(simple_linewrap(sub, w_first, width_rest))
         n = len(lines)
 
         # Must be set before the first yield: code after a yield only
@@ -396,16 +400,43 @@ class RowFactory(Factory):
         return FootnoteAnchorBox(texel, label, style, self.device)
 
     def Table_handler(self, texel, parstyle):
-        ncols = texel.ncols
-        col_width = self.state.width / ncols
-        cells = []
-        for j1, j2, cell_texel in iter_childs(texel):
-            child = self.create_child(col_width)
-            records = [record for par in child.generate(cell_texel, 0)
-                       for record in par]
-            self.update_from_child(child)
-            cells.append(records)
-        return TableBox(cells, ncols, col_width, self.device, length(texel))
+        """A TableBox for a Table texel: childs are [SEP, content, SEP,
+        content, ..., SEP], the separator after a cell carries its style
+        (borders, background, alignment) in its parstyle. Each cell is set
+        by a child factory, so the footnote counter and footnotes flow on
+        through the cells."""
+        from ..tables.table_boxes import TableBox, create_cell, \
+            CELL_HPAD, CELL_VPAD
+        ncols, nrows = texel.ncols, texel.nrows
+        col_widths = table_col_widths(texel.col_widths, ncols,
+                                      self.state.width)
+        cell_texels = texel.childs[1::2]
+        seps = texel.childs[2::2]
+        grid = []
+        for r in range(nrows):
+            row = []
+            for c in range(ncols):
+                k = r * ncols + c
+                sep = seps[k]
+                # The separator ends the cell's last paragraph.
+                nl = NL.set_parstyle(sep.parstyle)
+                nl = nl.set_indent(getattr(sep, 'indent', 0))
+                content = grouped([cell_texels[k], nl])
+                child = self.create_child(col_widths[c] - CELL_HPAD)
+                records = [record for par in child.generate(content, 0)
+                           for record in par]
+                self.update_from_child(child)
+                cell = create_cell(records, col_widths[c], self.device,
+                                   CELL_HPAD, CELL_VPAD, sep.parstyle or {})
+                # the separator slot belongs to the table structure
+                cell.length = length(cell_texels[k]) + 1
+                row.append(cell)
+            grid.append(row)
+        row_heights = [max(cell.height + cell.depth for cell in row)
+                       for row in grid]
+        return TableBox(grid, col_widths, row_heights,
+                        header_rows=texel.nheader,
+                        break_level=texel.breaklevel, device=self.device)
 
     
 BLOCK_KEYS = ('block_color', 'block_padding', 'block_border')
@@ -421,43 +452,76 @@ def _is_same_block(style_a, style_b):
     return block_key(style_a) == block_key(style_b)
 
 
-# Stand-ins until tables are ported to the new factory
+def table_col_widths(col_widths, ncols, width):
+    """Column widths: explicit ones as given, the rest (None) share what
+    is left of width; without col_widths all columns are equal."""
+    if col_widths:
+        explicit = [w for w in col_widths if w is not None]
+        n_auto = sum(1 for w in col_widths if w is None)
+        auto_w = (width - sum(explicit)) / n_auto if n_auto else 0
+        return [w if w is not None else auto_w for w in col_widths]
+    return [width / ncols] * ncols
 
-class Table(Container):
-    """Table texel stand-in for the tests: childs are the cell
-    contents (row by row, ncols per table row)."""
 
-    def __init__(self, cell_texels, ncols):
-        self.ncols = ncols
-        self.childs = list(cell_texels)
-        self.compute_weights()
+def is_table_segment(boxes):
+    from ..tables.table_boxes import TableBox
+    return len(boxes) == 1 and isinstance(boxes[0], TableBox)
 
 
-class TableBox:
-    """Turns each cell's row records into a box (typeset_into_rect) at
-    col_width. Width = ncols * col_width, height = sum of per-table-row
-    heights (each row's height is the max over its cells)."""
+def split_at_tables(boxes):
+    """Split boxes at tables: each TableBox becomes a segment of its own."""
+    from ..tables.table_boxes import TableBox
+    segments, current = [], []
+    for box in boxes:
+        if isinstance(box, TableBox):
+            if current:
+                segments.append(current)
+                current = []
+            segments.append([box])
+        else:
+            current.append(box)
+    if current:
+        segments.append(current)
+    return segments
 
-    def __init__(self, cells, ncols, col_width, device, length_):
-        self.cells = [typeset_into_rect(records, col_width, device)
-                      for records in cells]
-        self.ncols = ncols
-        self.col_width = col_width
-        self.device = device
-        self.length = length_
-        self.width = ncols * col_width
 
-        nrows = -(-len(self.cells) // ncols)  # ceil division
-        row_heights = []
-        for r in range(nrows):
-            cells_in_row = self.cells[r * ncols:(r + 1) * ncols]
-            row_heights.append(max(
-                (c.height + c.depth for c in cells_in_row), default=0))
-        self.height = sum(row_heights)
-        self.depth = 0
+def _table_row(row, box):
+    """A copy of row (a table's own row) holding table fragment box,
+    keeping row's extra leading."""
+    old = row.childs[0]
+    new = shallow_copy(row)
+    new.childs = [box]
+    new.length = len(box)
+    new.width = box.width
+    new.height = box.height + (row.height - old.height)
+    new.depth = box.depth + (row.depth - old.depth)
+    return new
 
-    def __len__(self):
-        return self.length
+
+def split_table_record(record, height):
+    """Split a record whose row is a table (break_level >= 1) so that
+    the first part fits into height. Returns (first, rest) records or
+    None if the row is no splittable table or can't be split. The first
+    part keeps begins_par, the rest ends_par."""
+    from ..tables.table_boxes import split_at_height
+    row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+    if not is_table_segment(row.childs):
+        return None
+    box = row.childs[0]
+    if box.break_level < 1:
+        return None
+    leading = (row.height - box.height) + (row.depth - box.depth)
+    frag, rest = split_at_height(box, height - leading)
+    if rest is None:
+        return None
+    frag.row_offset = box.row_offset
+    rest.row_offset = box.row_offset + frag.n_rows
+    first_row = _table_row(row, frag)
+    rest_row = _table_row(row, rest)
+    rest_row.marker = None
+    return ((first_row, parstyle, begins_par, False, begins_block,
+             ends_block),
+            (rest_row, parstyle, False, ends_par, begins_block, ends_block))
 
 
 def _row_bottom(y, record):
@@ -493,7 +557,8 @@ class RowStack:
         if force is None:
             force = not self.placed
         n = 0
-        for record in buffer:
+        while n < len(buffer):
+            record = buffer[n]
             (row, parstyle, begins_par, ends_par,
              begins_block, ends_block) = record
             y = self.height
@@ -502,9 +567,20 @@ class RowStack:
                     + parstyle.get('space_before', 0)
             if begins_par and begins_block:
                 y += block_key(parstyle)[1] or 0
-            if max_height is not None and not (force and n == 0) \
+            forced = force and n == 0
+            if max_height is not None \
                     and _row_bottom(y, record) > max_height:
-                break
+                # A table that doesn't fit is split at a row boundary:
+                # the first part goes here, the rest stays in buffer.
+                parts = split_table_record(record, max_height - y)
+                if parts is not None:
+                    first, rest = parts
+                    if forced or _row_bottom(y, first) <= max_height:
+                        self.placed.append((y, first))
+                        buffer[n] = rest
+                        break
+                if not forced:
+                    break
             self.placed.append((y, record))
             n += 1
         del buffer[:n]

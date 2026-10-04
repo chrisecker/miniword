@@ -37,6 +37,7 @@ modules = [
     "miniword.tests.test_rowfactory",
     "miniword.tests.test_footnotes",
     "miniword.tests.test_images",
+    "miniword.tests.test_tables",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",
@@ -50,7 +51,6 @@ modules = [
     # tables
     "miniword.tables.tables",
     "miniword.tables.table_boxes",
-    "miniword.tables.table_factory",
     "miniword.tables.table_controllers",
     "miniword.tables.table_panel",
 

@@ -21,8 +21,9 @@ from ..layout.boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, \
 from ..layout.page import ForceBreakBox, FootnoteBox
 from ..layout.testdevice import TESTDEVICE
 from ..layout.rowfactory import State, state_from_settings, RowFactory, \
-    Table, TableBox, RowStack, typeset_into_rect, generate_pages, \
+    RowStack, typeset_into_rect, generate_pages, \
     block_key, FOOTNOTE_FRACTION, MIN_LABEL_INDENT, LABEL_GAP
+from ..tables.table_boxes import TableBox
 
 
 # ---------------------------------------------------------------------
@@ -102,10 +103,30 @@ def iter_rows(box):
     if isinstance(box, Row):
         yield box
         return
+    if isinstance(box, list):  # a row of a TableBox's cells
+        for child in box:
+            yield from iter_rows(child)
+        return
     for _, _, child in getattr(box, 'data', ()):
         yield from iter_rows(child)
     for child in getattr(box, 'cells', ()):
         yield from iter_rows(child)
+
+
+def Table(cells, ncols):
+    """A real table from cell contents written as paragraphs (Group
+    ending with a NewLine): the cell's last NewLine becomes the
+    separator after it."""
+    from ..tables.tables import Table as RealTable
+    from ..textmodel.utils import iter_leafes
+    entries = []
+    for cell in cells:
+        leaves = [t for _, _, t in iter_leafes(cell, 0)]
+        last = leaves.pop()
+        assert isinstance(last, NewLine)
+        content = Group(leaves) if leaves else Group([])
+        entries.append((content, {}))
+    return RealTable(*entries, ncols=ncols)
 
 
 def find_boxes(paragraphs, cls):
@@ -564,7 +585,7 @@ def test_FN_6():
                    Group(par('x', endmark=True))], ncols=2)
     texel = doc(par('before', fn('one')), par(table),
                 par('after', fn('three')))
-    paragraphs, state = generate(texel, width=40)
+    paragraphs, state = generate(texel, width=100)
     assert [row_text(r[0]).strip() for r in state.footnotes] == \
         ['one', 'in cell', 'three']
     assert [r[0].marker for r in state.footnotes] == ['1', '2', '3']
@@ -620,7 +641,7 @@ def test_TAB_2():
     table = Table([cell, Group(par('x', endmark=True))], ncols=2)
     texel = doc(par('a', fn('one'), **numbered()), par(table),
                 par('b', fn('two'), **numbered()))
-    paragraphs, state = generate(texel, width=40)
+    paragraphs, state = generate(texel, width=100)
     assert markers(paragraphs)[0] == '1.'
     assert markers(paragraphs)[2] == '2.'
     assert state.footnote_counter == 3
