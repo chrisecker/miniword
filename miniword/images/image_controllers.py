@@ -304,8 +304,7 @@ def _setup_demo():
         data = f.read()
 
     doc = Document()
-    doc.blobs = {'red.png': data}
-    doc.textmodel.texel = grouped([Text('Before '), Image('red.png'), Text(' after.'), NL])
+    doc.textmodel.texel = grouped([Text('Before '), Image(data), Text(' after.'), NL])
 
     r = get_path(doc.textmodel.texel, 7)
     for x in r:
@@ -315,7 +314,6 @@ def _setup_demo():
     app   = wx.App(True)
     frame = wx.Frame(None, title='ImageSizeController demo', size=(420, 300))
     view  = TextEditor(frame, doc)
-    view.builder.factory.blobs = doc.blobs
     return app, frame, view
 
 def demo_00():

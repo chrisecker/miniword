@@ -124,10 +124,16 @@ def serialize_texel(texel, indent=0):
                     parts['crop_y'] = texel.crop[1]
                     parts['crop_w'] = texel.crop[2]
                     parts['crop_h'] = texel.crop[3]
+                if texel.alt:
+                    parts['alt'] = texel.alt
                 s = serialize_style(parts) if parts else ''
+                # The data itself goes to the [blobs] section (txlio),
+                # the texel refers to it by its key ('' for no data).
+                from ..images.images import blob_key
+                key = blob_key(texel.content) if texel.content else ''
                 if s:
-                    return '%sIMG(%r, %s)' % (pad, texel.blob_id, s)
-                return '%sIMG(%r)' % (pad, texel.blob_id)
+                    return '%sIMG(%r, %s)' % (pad, key, s)
+                return '%sIMG(%r)' % (pad, key)
 
             s = serialize_style(texel.style) if texel.style else ''
             if s:
@@ -349,8 +355,9 @@ class _Tokenizer:
 
 class _Parser:
 
-    def __init__(self, text):
+    def __init__(self, text, blobs=None):
         self.tok = _Tokenizer(text)
+        self.blobs = blobs or {}  # {key: bytes} for IMG texels
 
     def parse_document(self):
         """Parse full document: optional PROPS + texels + optional ENDMARK."""
@@ -469,11 +476,12 @@ class _Parser:
     def parse_img(self):
         self.tok.consume('IDENT')  # IMG
         self.tok.consume('LPAREN')
-        blob_id = self.parse_string()
+        key = self.parse_string()
         scale_x = 1.0
         scale_y = 1.0
         proportional = True
         crop = None
+        alt = ''
         if self.tok.peek()[0] == 'COMMA':
             self.tok.consume('COMMA')
             d = self.parse_style()
@@ -483,9 +491,13 @@ class _Parser:
             proportional = d.get('proportional', True)
             if 'crop_w' in d:
                 crop = (d.get('crop_x', 0), d.get('crop_y', 0), d['crop_w'], d['crop_h'])
+            alt = d.get('alt', '')
         self.tok.consume('RPAREN')
         from ..images import Image
-        return Image(blob_id, scale_x, scale_y, proportional, crop)
+        # Hydrate from the [blobs] section: all IMGs with the same key
+        # share one bytes object. A missing blob gives no content.
+        return Image(self.blobs.get(key), scale_x, scale_y, proportional,
+                     crop, alt)
 
     def parse_container(self):
         self.tok.consume('IDENT')  # C
@@ -656,14 +668,15 @@ def _make_container(ctype, childs):
     return c
 
 
-def parse(text):
-    """Parse canonical TexelTree format.
+def parse(text, blobs=None):
+    """Parse canonical TexelTree format. blobs ({key: bytes}, from a
+    file's [blobs] section) provides the data of IMG texels.
 
     Returns:
         (root, endmark, properties)
         where endmark may be None and properties may be {}
     """
-    p = _Parser(text)
+    p = _Parser(text, blobs)
     return p.parse_document()
 
 

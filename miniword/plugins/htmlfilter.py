@@ -52,7 +52,6 @@ class _HTMLBlockBuilder(HTMLParser):
         self._rowspans_before_row = set()
         self._cell_text = None       # current cell's accumulated text, or None
         self._cell_span = (1, 1)     # (colspan, rowspan) of the cell being read
-        self._img_count = 0
 
     # --- helpers ---
 
@@ -172,10 +171,9 @@ class _HTMLBlockBuilder(HTMLParser):
         elif tag == 'img':
             src = attrs.get('src', '')
             if 'base64,' in src:
-                self._img_count += 1
-                blob_id = attrs.get('alt') or 'pasted_image_%d.png' % self._img_count
+                alt = attrs.get('alt') or ''
                 data = b64decode(src.split('base64,', 1)[1])
-                self._runs.append(('', {'_image': (blob_id, data)}))
+                self._runs.append(('', {'_image': (alt, data)}))
 
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
@@ -244,8 +242,8 @@ def html_text_to_fragment(html, target_doc):
     second, disconnected style under the parser's canonical name; any
     other roles get the standard styles registered as a fallback (mirrors
     md_text_to_fragment, so HTML-paste and Markdown-paste converge on the
-    same style vocabulary). Embedded (data-URI) images are routed into
-    target_doc's own blob store.
+    same style vocabulary). Embedded (data-URI) images carry their data
+    in the Image texels (equal data interned, see mdfilter._build_blocks).
     """
     from types import SimpleNamespace
     from miniword.textmodel.textmodel import TextModel
@@ -254,7 +252,7 @@ def html_text_to_fragment(html, target_doc):
     builder.feed(html)
     builder.close()
 
-    shim = SimpleNamespace(textmodel=TextModel(''), blobs=target_doc.blobs)
+    shim = SimpleNamespace(textmodel=TextModel(''))
     _build_blocks(shim, builder.blocks)
 
     covered = _adopt_existing_styles(shim.textmodel, target_doc)
@@ -412,13 +410,14 @@ def test_11():
     import base64
     b64 = base64.b64encode(doc_data).decode('ascii')
     from miniword.core.document import Document
-    from miniword.images.images import collect_blob_ids
+    from miniword.images.images import iter_images
 
     html = '<p>Before <img src="data:image/png;base64,%s" alt="photo.png"> after</p>' % b64
     doc = Document()
     texel = html_text_to_fragment(html, doc)
-    assert doc.blobs.get('photo.png') == doc_data
-    assert collect_blob_ids(texel) == {'photo.png'}
+    images = list(iter_images(texel))
+    assert [(image.content, image.alt) for image in images] == \
+        [(doc_data, 'photo.png')]
 
 
 def test_12():

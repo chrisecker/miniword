@@ -16,15 +16,15 @@ implementation chooses differently):
 - images.blob_key(content): first 16 hex digits of SHA-256 plus the
   extension found from the content's magic bytes (.png, .jpg, .gif,
   fallback .bin).
-- Document.image_cache: the document's cache of decoded images, keyed
-  by content.
+- imageio.decode_cached(content): decoded images via the
+  application-wide LRU imageio.decoded_cache (keyed by content, bounded
+  by memory: limit, size, clear()). No cache on the document.
 - Saving/loading TXL (Document.save/Document.load) hydrates Image
   texels with their content; blob keys are blob_key(content).
-- rowfactory.RowFactory(state, stylesheet, device, image_cache=None)
-  with an Image_handler: ImageBox from the (cached) decoded content,
+- rowfactory.RowFactory(state, stylesheet, device) with an
+  Image_handler: ImageBox from the decoded content (decode_cached),
   ErrorPlaceholderBox if there is none or it can't be decoded.
-- PageBuilder(model, factory, image_cache=None), factory being a
-  rowfactory.Factory.
+- PageBuilder(model, factory), factory being a rowfactory.Factory.
 - image_controllers.resize_box(state, handle, dx, dy, proportional),
   image_controllers.scale_after_resize(old_state, new_state, scale_x,
   scale_y), image_controllers.drag_crop(crop, handle, dx, dy, scale,
@@ -36,8 +36,8 @@ implementation chooses differently):
 Imports of the new API are done inside the tests, so that every test
 fails on its own until its part is implemented.
 
-Not covered here yet (concept steps 3 and 4): MEM-1, MEM-3, MEM-4,
-FILE-7, CACHE-4, RENDER-4, PANEL-2, PASTE, MDEXP, LINK.
+Not covered here yet (concept step 4 and UI): FILE-7, CACHE-4,
+RENDER-4, PANEL-2, PASTE-5..8, MDEXP, LINK.
 """
 
 import io
@@ -165,8 +165,10 @@ def sha_key(data, ext):
 
 
 class DecodeCounter:
-    """Counts calls of imageio.decode while installed (with-statement)."""
+    """Counts calls of imageio.decode while installed (with-statement).
+    Starts with an empty application-wide cache."""
     def __enter__(self):
+        imageio.decoded_cache.clear()
         self.calls = 0
         self.original = imageio.decode
         def counting(data):
@@ -179,17 +181,15 @@ class DecodeCounter:
         imageio.decode = self.original
 
 
-def boxes(texel, cache, width=400):
+def boxes(texel, width=400):
     """All boxes RowFactory makes of texel."""
-    factory = RowFactory(State(width), testsheet, TESTDEVICE,
-                         image_cache=cache)
+    factory = RowFactory(State(width), testsheet, TESTDEVICE)
     return [box for par in factory.generate(texel, 0)
             for record in par for box in record[0].childs]
 
 
-def image_boxes(texel, cache=None, width=400):
-    return [box for box in boxes(texel, {} if cache is None else cache,
-                                 width)
+def image_boxes(texel, width=400):
+    return [box for box in boxes(texel, width)
             if isinstance(box, (ImageBox, ErrorPlaceholderBox))]
 
 
@@ -276,6 +276,48 @@ def test_MEM_2():
     assert loaded[0].content is loaded[1].content
 
 
+def data_uri(data):
+    import base64
+    return 'data:image/png;base64,' + base64.b64encode(data).decode('ascii')
+
+
+def md_images(md):
+    from ..plugins.mdfilter import md_text_to_fragment
+    return images_in(md_text_to_fragment(md, Document()))
+
+
+def html_images(html, doc=None):
+    from ..plugins.htmlfilter import html_text_to_fragment
+    return images_in(html_text_to_fragment(html, doc or Document()))
+
+
+def test_MEM_1():
+    "MEM-1: equal data in two objects: one blob, shared after reloading"
+    data = png(4, 2)
+    copy = bytes(bytearray(data))
+    doc = mk_doc(image(content=data), 'x', image(content=copy))
+    doc2, text = roundtrip(doc)
+    assert text.count('"%s" = ' % sha_key(data, '.png')) == 1
+    a, b = images_in(doc2.textmodel.texel)
+    assert a.content is b.content
+
+
+def test_MEM_3():
+    "MEM-3: Markdown import of the same data URI twice shares one object"
+    uri = data_uri(png(4, 2))
+    a, b = md_images('![a](%s)\n\n![b](%s)\n' % (uri, uri))
+    assert a.content is b.content
+    assert (a.alt, b.alt) == ('a', 'b')
+
+
+def test_MEM_4():
+    "MEM-4: HTML import of the same data URI twice shares one object"
+    uri = data_uri(png(4, 2))
+    a, b = html_images('<p><img src="%s" alt="a"> <img src="%s"></p>'
+                       % (uri, uri))
+    assert a.content is b.content
+
+
 # FILE - saving and loading TXL
 
 def test_FILE_1():
@@ -356,16 +398,15 @@ def test_FILE_8():
     assert img.content is data
 
 
-# CACHE - decoded images
+# CACHE - application-wide image caches
 
 def test_CACHE_1():
     "CACHE-1: every image is decoded only once"
     data = png(4, 2)
     texel = par('a', image(content=data), 'b', image(content=data))
-    cache = {}
     with DecodeCounter() as counter:
-        image_boxes(texel, cache)
-        image_boxes(texel, cache)
+        image_boxes(texel)
+        image_boxes(texel)
     assert counter.calls == 1
 
 
@@ -376,37 +417,72 @@ def test_CACHE_1b():
     assert copy is not data
     texel = par(image(content=data), image(content=copy))
     with DecodeCounter() as counter:
-        image_boxes(texel, {})
+        image_boxes(texel)
     assert counter.calls == 1
 
 
 def test_CACHE_2():
-    "CACHE-2: two views of one document share the decoded images"
+    "CACHE-2: two views, two documents with the same image: decoded once"
     from ..layout.pagebuilder import PageBuilder
     app()
     data = png(4, 2)
-    doc = mk_doc('a', image(content=data), 'b')
-    assert doc.image_cache == {}
+    doc1 = mk_doc('a', image(content=data), 'b')
+    doc2 = mk_doc('c', image(content=bytes(bytearray(data))))
     with DecodeCounter() as counter:
-        for k in range(2):
+        for doc in (doc1, doc1, doc2):
             builder = PageBuilder(doc.textmodel,
-                                  RowFactoryBase(testsheet, TESTDEVICE),
-                                  image_cache=doc.image_cache)
+                                  RowFactoryBase(testsheet, TESTDEVICE))
             builder.rebuild()
             builder.assure_finished()
     assert counter.calls == 1
 
 
 def test_CACHE_3():
-    "CACHE-3: the cache is not part of the State/restart memo"
+    "CACHE-3: no image cache in the State/restart memo or the document"
     data = png(4, 2)
-    cache = {}
     texel = par('a', image(content=data))
     pages = list(generate_pages(texel, 0, State(400), testsheet,
-                                TESTDEVICE, image_cache=cache))
+                                TESTDEVICE))
+    cache = imageio.decoded_cache
     for page in pages:
         memo = page.restartmemo
-        assert all(value is not cache for value in vars(memo).values())
+        assert all(value is not cache and value is not cache.entries
+                   for value in vars(memo).values())
+    assert not hasattr(Document(), 'image_cache')
+
+
+def test_CACHE_5():
+    "CACHE-5: the LRU keeps its memory limit, dropping the oldest"
+    cache = imageio.decoded_cache
+    images = [png(10, 10, (k / 4, 0, 0)) for k in range(4)]
+    def size(data):
+        return len(data) + 4 * 10 * 10  # content plus decoded pixels
+    old_limit = cache.limit
+    try:
+        cache.clear()
+        cache.limit = sum(size(images[k]) for k in (0, 2, 3))
+        for data in images[:3]:
+            imageio.decode_cached(data)
+        imageio.decode_cached(images[0])  # now the most recently used
+        imageio.decode_cached(images[3])  # drops the oldest: images[1]
+        assert images[1] not in cache.entries
+        assert all(data in cache.entries
+                   for data in (images[0], images[2], images[3]))
+        assert cache.size <= cache.limit
+        cache.limit = 1  # smaller than one image: the newest stays
+        imageio.decode_cached(images[1])
+        assert list(cache.entries) == [images[1]]
+    finally:
+        cache.limit = old_limit
+        cache.clear()
+
+
+def test_CACHE_6():
+    "CACHE-6: data that can't be decoded is tried only once"
+    with DecodeCounter() as counter:
+        assert imageio.decode_cached(b'no image at all') is None
+        assert imageio.decode_cached(b'no image at all') is None
+    assert counter.calls == 1
 
 
 # RENDER - RowFactory.Image_handler
@@ -445,8 +521,7 @@ def test_RENDER_6():
     data = png(4, 2)
     texel = grouped([par('ab', image(content=data), 'cd'),
                      par(image(content=data))])
-    factory = RowFactory(State(400), testsheet, TESTDEVICE,
-                         image_cache={})
+    factory = RowFactory(State(400), testsheet, TESTDEVICE)
     paragraphs = list(factory.generate(texel, 0))
     for (i1, i2, _), records in zip(iter_paragraphs(texel, 0), paragraphs):
         assert sum(len(r[0]) for r in records) == i2 - i1
@@ -459,8 +534,7 @@ def test_RENDER_7():
     memo.border = (1, 1, 1, 1)
     texel = grouped([par('a'), par(image(content=png(10, 500))),
                      par('b')])
-    pages = list(generate_pages(texel, 0, memo, testsheet, TESTDEVICE,
-                                image_cache={}))
+    pages = list(generate_pages(texel, 0, memo, testsheet, TESTDEVICE))
     assert sum(len(p) for p in pages) == length(texel)
 
 
@@ -621,6 +695,48 @@ def test_PANEL_1():
         (3.0, 0.5)
 
 
+# PASTE - copy & paste, import
+
+def test_PASTE_1():
+    "PASTE-1: an image copied from A to B (via pickle) keeps its data"
+    import pickle
+    data = png(4, 2)
+    a = mk_doc('x', image(content=data, alt='Photo'), 'y')
+    clip = pickle.loads(pickle.dumps(a.textmodel.copy(1, 2)))
+    b = mk_doc('abc')
+    b.textmodel.insert(1, clip)
+    img, = images_in(b.textmodel.texel)
+    assert img.content == data and img.alt == 'Photo'
+    b2, text = roundtrip(b)
+    assert images_in(b2.textmodel.texel)[0].content == data
+
+
+def test_PASTE_2():
+    "PASTE-2: HTML paste doesn't overwrite an existing image"
+    old, new = png(4, 2), png(3, 3, (0, 0, 1))
+    doc = mk_doc(image(content=old, alt='photo.png'), 'x')
+    img, = html_images('<p><img src="%s" alt="photo.png"></p>'
+                       % data_uri(new), doc)
+    assert img.content == new
+    assert images_in(doc.textmodel.texel)[0].content is old
+
+
+def test_PASTE_3():
+    "PASTE-3: two different images with the same name both survive"
+    a, b = png(4, 2), png(3, 3, (0, 0, 1))
+    x, y = html_images('<p><img src="%s" alt="photo.png">'
+                       '<img src="%s" alt="photo.png"></p>'
+                       % (data_uri(a), data_uri(b)))
+    assert (x.content, y.content) == (a, b)
+
+
+def test_PASTE_4():
+    "PASTE-4: Markdown import of a data URI gives an image with content"
+    data = png(4, 2)
+    img, = md_images('Text ![Photo](%s) more.\n' % data_uri(data))
+    assert img.content == data and img.alt == 'Photo'
+
+
 # PB - PageBuilder and app
 
 def page_sig(page):
@@ -630,10 +746,9 @@ def page_sig(page):
                         for _, _, row in page.rows])
 
 
-def mk_builder(model, cache):
+def mk_builder(model):
     from ..layout.pagebuilder import PageBuilder
-    builder = PageBuilder(model, RowFactoryBase(testsheet, TESTDEVICE),
-                          image_cache=cache)
+    builder = PageBuilder(model, RowFactoryBase(testsheet, TESTDEVICE))
     builder.settings = {
         'paper': 'custom', 'paper_width': 60, 'paper_height': 40,
         'margin_top': 1, 'margin_right': 1, 'margin_bottom': 1,
@@ -645,11 +760,11 @@ def mk_builder(model, cache):
 
 
 def test_PB_1():
-    "PB-1: the PageBuilder works with a rowfactory.Factory and a cache"
+    "PB-1: the PageBuilder shows images with a rowfactory.Factory"
     app()
     model = TextModel()
     model.texel = grouped([T('a'), image(content=png(10, 5)), T('b')])
-    builder = mk_builder(model, {})
+    builder = mk_builder(model)
     boxes = [box for page in builder._layout.childs
              for _, _, row in page.rows for box in row.childs]
     assert any(isinstance(box, ImageBox) for box in boxes)
@@ -660,15 +775,14 @@ def test_PB_2():
     from ..texteditor.editor import Editor
     app()
     model = TextModel('\n'.join('paragraph %d' % k for k in range(30)))
-    cache = {}
-    builder = mk_builder(model, cache)
+    builder = mk_builder(model)
     model.add_view(builder)
     editor = Editor()
     editor.root = model
 
     def check():
         builder.assure_finished()
-        expected = [page_sig(p) for p in mk_builder(model, cache)
+        expected = [page_sig(p) for p in mk_builder(model)
                     ._layout.childs]
         assert [page_sig(p) for p in builder._layout.childs] == expected
 
@@ -692,7 +806,7 @@ def test_PB_3():
     from ..texteditor.editor import Editor
     app()
     model = TextModel('abc')
-    builder = mk_builder(model, {})
+    builder = mk_builder(model)
     model.add_view(builder)
     editor = Editor()
     editor.root = model
@@ -709,4 +823,4 @@ def test_PB_3():
     assert images_in(model.texel)[0].scale_x == 2.0
     builder.assure_finished()
     assert [page_sig(p) for p in builder._layout.childs] == \
-        [page_sig(p) for p in mk_builder(model, {})._layout.childs]
+        [page_sig(p) for p in mk_builder(model)._layout.childs]

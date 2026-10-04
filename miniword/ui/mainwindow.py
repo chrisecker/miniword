@@ -401,7 +401,6 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _create_editor_canvas(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
-        factory.blobs = self.document.blobs
         builder = PageBuilder(self.document.textmodel, factory)
         builder.rebuild()
         builder.assure_y(1)  # build first row, so initial geometry is known

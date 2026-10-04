@@ -62,7 +62,7 @@ def _doc_to_md(doc):
         ptype  = ps.get('paragraph_type', 'normal')
         indent = nl.indent
 
-        inline = _elems_to_inline(content, doc.blobs, footnotes)
+        inline = _elems_to_inline(content, footnotes)
         if not inline.strip():
             continue  # empty paragraph — skip
 
@@ -135,10 +135,11 @@ def _table_to_md(table):
     return lines
 
 
-def _elems_to_inline(elems, blobs=None, footnotes=None):
-    """Convert a list of leaf texels (excluding the NL) to Markdown inline."""
+def _elems_to_inline(elems, footnotes=None):
+    """Convert a list of leaf texels (excluding the NL) to Markdown inline.
+    Images are embedded as data URIs - a document stays one file."""
     from miniword.textmodel.texeltree import get_text
-    from miniword.images.images import Image as ImageTexel
+    from miniword.images.images import Image as ImageTexel, image_mime
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
     segments = []
     for elem in elems:
@@ -148,12 +149,11 @@ def _elems_to_inline(elems, blobs=None, footnotes=None):
                 segments.append('[^%d]' % len(footnotes))
             continue
         if isinstance(elem, ImageTexel):
-            data = (blobs or {}).get(elem.blob_id, b'')
+            data = elem.content
             if data:
-                ext  = os.path.splitext(elem.blob_id)[1].lower()
-                mime = _IMG_MIME.get(ext, 'image/png')
                 b64  = base64.b64encode(data).decode('ascii')
-                segments.append('![%s](data:%s;base64,%s)' % (elem.blob_id, mime, b64))
+                segments.append('![%s](data:%s;base64,%s)'
+                                % (elem.alt, image_mime(data), b64))
             continue
         text = get_text(elem)
         if not text:
@@ -206,9 +206,6 @@ import re
 import os
 import base64
 
-_IMG_MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-             '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml'}
-
 _IMG_RE    = re.compile(r'!\[([^\]]*)\]\(data:[^;]+;base64,([^)]+)\)')
 
 _ATX_RE    = re.compile(r'^ {0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
@@ -233,8 +230,8 @@ def _load_builtin(text):
 
 
 def _build_builtin(doc, text):
-    """Parse text as Markdown and build it into doc.textmodel (+ doc.blobs
-    for embedded images). doc only needs those two attributes -- used both
+    """Parse text as Markdown and build it into doc.textmodel. doc only
+    needs that attribute -- used both
     for whole-file import (doc is a real Document) and for paste (doc is a
     lightweight stand-in, see md_text_to_fragment)."""
     _build_blocks(doc, _parse_md_paragraphs(text))
@@ -242,9 +239,19 @@ def _build_builtin(doc, text):
 
 def _build_blocks(doc, blocks):
     """Build pre-parsed blocks (see _parse_md_paragraphs's return shape:
-    (ptype, indent, runs) or ('table', grid)) into doc.textmodel (+
-    doc.blobs). Shared by the built-in MD parser and the HTML-paste
-    converter (htmlfilter.py) so both produce identically-styled output."""
+    (ptype, indent, runs) or ('table', grid)) into doc.textmodel. Shared
+    by the built-in MD parser and the HTML-paste converter (htmlfilter.py)
+    so both produce identically-styled output.
+
+    Image data is interned for this run: equal data (e.g. the same
+    data URI twice) ends up as one bytes object."""
+    interned = {}
+    for block in blocks:
+        if block[0] != 'table':
+            for run_text, run_props in block[2]:
+                if run_props.get('_image'):
+                    alt, data = run_props['_image']
+                    run_props['_image'] = alt, interned.setdefault(data, data)
 
     def insert_nl():
         pos = len(doc.textmodel.get_text())
@@ -310,10 +317,9 @@ def _insert_text_block_with_specials(doc, ptype, indent, runs):
             fn_model.texel = grouped([fn])
             doc.textmodel.insert(pos, fn_model)
         elif run_props.get('_image'):
-            blob_id, data = run_props['_image']
-            doc.blobs[blob_id] = data
+            alt, data = run_props['_image']
             img_model = doc.textmodel.create_textmodel()
-            img_model.texel = grouped([Image(blob_id)])
+            img_model.texel = grouped([Image(data, alt=alt)])
             doc.textmodel.insert(pos, img_model)
         elif run_text:
             doc.textmodel.insert_text(pos, run_text)
@@ -531,8 +537,8 @@ def _parse_inline(text, fn_defs=None):
         raw = m.group(0)
         if raw.startswith('!['):
             img = _IMG_RE.match(raw)
-            blob_id, data = img.group(1), base64.b64decode(img.group(2))
-            parts.append(('', {'_image': (blob_id, data)}))
+            alt, data = img.group(1), base64.b64decode(img.group(2))
+            parts.append(('', {'_image': (alt, data)}))
         elif raw.startswith('[^'):
             ref = raw[2:-1]
             content = (fn_defs or {}).get(ref, ref)
@@ -721,13 +727,13 @@ def md_text_to_fragment(text, target_doc):
     Paragraphs whose role (heading, list, ...) target_doc already has a
     style for adopt that style's name (see _adopt_existing_styles); any
     other roles get the standard MD styles registered as a fallback (see
-    _register_styles(..., overwrite=False)). Embedded images are routed
-    into target_doc's own blob store. No new Document is created.
+    _register_styles(..., overwrite=False)). Embedded images carry their
+    data in the Image texels. No new Document is created.
     """
     from types import SimpleNamespace
     from miniword.textmodel.textmodel import TextModel
 
-    shim = SimpleNamespace(textmodel=TextModel(''), blobs=target_doc.blobs)
+    shim = SimpleNamespace(textmodel=TextModel(''))
     try:
         import mistune  # noqa: F401 -- availability check only
         _build_mistune(shim, text)
@@ -788,7 +794,7 @@ def _load_mistune(text):
 
 def _build_mistune(doc, text):
     """Like _build_builtin, but via the (optional) mistune parser. doc only
-    needs .textmodel (set here) and .blobs."""
+    needs .textmodel."""
     import mistune
     tokens = mistune.create_markdown(
         renderer='ast',
@@ -957,9 +963,9 @@ class _DocBuilder:
         elif t == 'image':
             url = node.get('attrs', {}).get('url', '')
             if 'base64,' in url:
-                blob_id = self._flatten_text(node.get('children', []))
+                alt = self._flatten_text(node.get('children', []))
                 data = base64.b64decode(url.split('base64,', 1)[1])
-                self._marks.append((len(self.text), 'image', (blob_id, data)))
+                self._marks.append((len(self.text), 'image', (alt, data)))
             # non-data-URI images aren't supported on import (matches the
             # built-in parser, which only recognizes data-URI images)
         elif t == 'block_text':
@@ -1046,15 +1052,16 @@ class _DocBuilder:
         # shifts positions after it, so not-yet-inserted (earlier) marks
         # stay valid, and marks at the same position (e.g. adjacent
         # footnote refs "x[^1][^2]") still end up in left-to-right order.
+        interned = {}  # equal image data -> one bytes object
         for start, kind, payload in reversed(self._marks):
             model = doc.textmodel.create_textmodel()
             if kind == 'footnote':
                 fn = Footnote(grouped([T(payload), ENDMARK]))
                 model.texel = grouped([fn])
             elif kind == 'image':
-                blob_id, data = payload
-                doc.blobs[blob_id] = data
-                model.texel = grouped([Image(blob_id)])
+                alt, data = payload
+                data = interned.setdefault(data, data)
+                model.texel = grouped([Image(data, alt=alt)])
             else:  # 'table': already a full texel, no grouped() wrapper
                 model.texel = payload
             doc.textmodel.insert(start, model)
@@ -1486,10 +1493,9 @@ def test_17():
     from miniword.textmodel.texeltree import grouped, Text, NL
 
     doc = Document()
-    doc.blobs['photo.png'] = b'\x89PNG'
 
     # default scale — no warnings
-    img = ImageTexel('photo.png')
+    img = ImageTexel(b'\x89PNG\r\n\x1a\n', alt='photo.png')
     doc.textmodel.texel = grouped([Text('before '), img, Text(' after'), NL])
     warnings = _check_md(doc)
     assert "images" not in warnings
@@ -1499,13 +1505,13 @@ def test_17():
     assert 'before' in md and 'after' in md
 
     # non-default scale — warns
-    img_scaled = ImageTexel('photo.png', scale_x=0.5, scale_y=0.5)
+    img_scaled = img.set_scale_x(0.5).set_scale_y(0.5)
     doc.textmodel.texel = grouped([img_scaled, NL])
     warnings = _check_md(doc)
     assert "image size/scale" in warnings
 
     # crop set — warns
-    img_cropped = ImageTexel('photo.png', crop=(10, 10, 100, 100))
+    img_cropped = img.set_crop((10, 10, 100, 100))
     doc.textmodel.texel = grouped([img_cropped, NL])
     warnings = _check_md(doc)
     assert "image crop" in warnings
@@ -1605,15 +1611,16 @@ def test_23(load):
 @for_each_parser
 def test_24(load):
     "image import: data from URI"
-    from miniword.images.images import Image as ImageTexel, collect_blob_ids
+    from miniword.images.images import iter_images
 
-    data = b'\x89PNG\r\nfakedata'
+    data = b'\x89PNG\r\n\x1a\nfakedata'
     b64 = base64.b64encode(data).decode('ascii')
     md = "Before.\n\n![photo.png](data:image/png;base64,%s)\n\nAfter.\n" % b64
     doc = load(md)
 
-    assert doc.blobs.get('photo.png') == data
-    assert collect_blob_ids(doc.textmodel.texel) == {'photo.png'}
+    images = list(iter_images(doc.textmodel.texel))
+    assert [(image.content, image.alt) for image in images] == \
+        [(data, 'photo.png')]
 
     out = _doc_to_md(doc)
     assert '![photo.png](data:image/png;base64,%s)' % b64 in out
@@ -1623,15 +1630,16 @@ def test_24(load):
 def test_25(load):
     "load test/tesla.md"
     import os
-    from miniword.images.images import collect_blob_ids
+    from miniword.images.images import iter_images
 
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(here, 'test', 'tesla.md')
     with open(path, encoding='utf-8') as f:
         doc = load(f.read())
 
-    assert collect_blob_ids(doc.textmodel.texel) == {'teslasmall.jpg'}
-    assert 'teslasmall.jpg' in doc.blobs
+    images = list(iter_images(doc.textmodel.texel))
+    assert [image.alt for image in images] == ['teslasmall.jpg']
+    assert images[0].content
     # the huge base64 data must not end up as plain text in the model
     assert len(doc.textmodel) < 2000
 

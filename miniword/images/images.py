@@ -1,41 +1,21 @@
 """
 Inline image support: Image texel, boxes, inspector, tests.
 
-Image texel parameters:
-    blob_id  -- key into Document.blobs (str)
+Image texel parameters (see develnotes/images_concept.md):
+    content  -- the image data (bytes), or None (placeholder)
+    alt      -- alternative text (Markdown, HTML), default ''
     scale_x  -- horizontal scale factor, default 1.0
     scale_y  -- vertical scale factor, default 1.0
-    crop     -- (left, right, top, bottom) margins in source pixels, or None for full image
+    crop     -- (left, right, top, bottom) margins in source pixels, or
+                None for the full image
 
-TXL format:
-    IMG("photo.png")
-    IMG("photo.png", {scale_x=0.5, scale_y=0.5})
-    IMG("photo.png", {scale_x=2.0, scale_y=2.0, crop_x=10, crop_y=20, crop_w=400, crop_h=300})
+Texels and their data are immutable: editing an image means inserting
+a new texel (with new data for pixel operations).
 
-Factory.Image_handler() sketch (to be added to factory.py):
-
-    def Image_handler(self, texel, i1, i2):
-        from .images import ImageBox, PlaceholderBox
-        blob = self.blobs.get(texel.blob_id)
-        if blob is None:
-            return [PlaceholderBox(50, 50, self.device)]
-        bitmap, src_w, src_h = self.device.load_image(blob)
-        x, y, w, h = texel.crop if texel.crop else (0, 0, src_w, src_h)
-        return [ImageBox(bitmap, w * texel.scale_x, h * texel.scale_y, self.device)]
-
-DocumentView integration sketch:
-    - current_style_changed / cursor_changed: check if texel at index is Image
-    - if yes: call image_inspector.refresh(image, index)
-    - on_change callback: replace_image(index, blob_id, scale_x, scale_y, crop)
-
-    def replace_image(self, i, blob_id, scale_x, scale_y, crop):
-        from .textmodel.texeltree import grouped
-        img = Image(blob_id, scale_x, scale_y, crop)
-        tmp = self.model.create_textmodel()
-        tmp.texel = grouped([img])
-        with self.atomic():
-            self.model.remove(i, i + 1)
-            self.model.insert(i, tmp)
+TXL format: the data lives in the file's [blobs] section, the texel only
+refers to it by blob_key(content):
+    IMG("3f9a0c1e27b4d685.png")
+    IMG("3f9a0c1e27b4d685.png", {scale_x=0.5, scale_y=0.5, alt="Photo"})
 """
 
 import wx
@@ -52,14 +32,19 @@ from ..layout.testdevice import TESTDEVICE
 class Image(Single):
     """Inline image texel. Length=1, no parstyle, no indent."""
     text    = '\x0C'   # form feed — unique placeholder
-    blob_id      = None
+    content      = None   # image data (bytes) or None
+    alt          = ''
     scale_x      = 1.0
     scale_y      = 1.0
     proportional = True   # True → editor enforces fixed aspect ratio
     crop         = None   # None or (left, right, top, bottom) in source pixels
 
-    def __init__(self, blob_id, scale_x=1.0, scale_y=1.0, proportional=True, crop=None):
-        self.blob_id = blob_id
+    def __init__(self, content=None, scale_x=1.0, scale_y=1.0,
+                 proportional=True, crop=None, alt=''):
+        assert content is None or type(content) is bytes, \
+            "image content must be immutable bytes"
+        if content is not None:
+            self.content = content
         if scale_x != 1.0:
             self.scale_x = scale_x
         if scale_y != 1.0:
@@ -68,6 +53,19 @@ class Image(Single):
             self.proportional = False
         if crop is not None:
             self.crop = crop
+        if alt:
+            self.alt = alt
+
+    def set_content(self, content):
+        assert content is None or type(content) is bytes
+        clone = copy(self)
+        clone.content = content
+        return clone
+
+    def set_alt(self, alt):
+        clone = copy(self)
+        clone.alt = alt
+        return clone
 
     def set_scale_x(self, value):
         clone = copy(self)
@@ -89,24 +87,51 @@ class Image(Single):
         clone.crop = crop
         return clone
 
-    def set_blob_id(self, blob_id):
-        clone = copy(self)
-        clone.blob_id = blob_id
-        return clone
-
     def __repr__(self):
-        return 'IMG(%r)' % self.blob_id
+        if self.content is None:
+            return 'IMG(None)'
+        return 'IMG(%s)' % blob_key(self.content)
 
 
-def collect_blob_ids(texel):
-    """Return the set of blob_ids referenced by Image texels within texel."""
+_MAGIC = [
+    (b'\x89PNG\r\n\x1a\n', '.png'),
+    (b'\xff\xd8\xff', '.jpg'),
+    (b'GIF87a', '.gif'),
+    (b'GIF89a', '.gif'),
+]
+
+_MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif',
+         '.bin': 'application/octet-stream'}
+
+
+def image_extension(content):
+    """File extension for image data, from its magic bytes ('.bin' if
+    unknown)."""
+    for magic, ext in _MAGIC:
+        if content.startswith(magic):
+            return ext
+    return '.bin'
+
+
+def image_mime(content):
+    return _MIME[image_extension(content)]
+
+
+def blob_key(content):
+    """Key of image data in a file's [blobs] section: the first 16 hex
+    digits of its SHA-256 plus the extension. Equal data - equal key."""
+    import hashlib
+    return hashlib.sha256(content).hexdigest()[:16] + image_extension(content)
+
+
+def iter_images(texel):
+    """Yield all Image texels within texel (descending into groups and
+    containers, e.g. tables)."""
     if isinstance(texel, Image):
-        return {texel.blob_id}
-    ids = set()
-    if texel.is_group or texel.is_container:
+        yield texel
+    elif texel.is_group or texel.is_container:
         for i1, i2, child in iter_childs(texel):
-            ids |= collect_blob_ids(child)
-    return ids
+            yield from iter_images(child)
 
 
 # ---------------------------------------------------------------------------
@@ -203,17 +228,16 @@ def demo_00():
             return f.read()
 
     doc = Document()
-    doc.blobs = {'red.png': load_blob('red.png'), 'blue.png': load_blob('blue.png')}
+    red, blue = load_blob('red.png'), load_blob('blue.png')
     doc.textmodel.texel = grouped([
-        Text("Text before "), Image("red.png"), Text(" text after."), NL,
-        Text("Second paragraph with "), Image("blue.png", scale_x=0.5, scale_y=0.5), Text("."), NL,
+        Text("Text before "), Image(red), Text(" text after."), NL,
+        Text("Second paragraph with "), Image(blue, scale_x=0.5, scale_y=0.5), Text("."), NL,
     ])
 
     app = wx.App(False)
     frame = wx.Frame(None, title="Image Demo", size=(500, 400))
 
     factory = Factory(testsheet, device=CairoDevice())
-    factory.blobs = doc.blobs
     builder = PageBuilder(doc.textmodel, factory)
     builder.rebuild()
 
@@ -232,8 +256,8 @@ def demo_00():
 def test_00():
     "Image texel: defaults"
     from ..textmodel.texeltree import length
-    img = Image("photo.png")
-    assert img.blob_id == "photo.png"
+    img = Image()
+    assert img.content is None and img.alt == ''
     assert img.scale_x == 1.0
     assert img.scale_y == 1.0
     assert img.crop    is None
@@ -243,7 +267,8 @@ def test_00():
 
 def test_01():
     "Image texel: scale_x, scale_y and crop"
-    img = Image("photo.png", scale_x=0.5, scale_y=2.0, crop=(10, 20, 400, 300))
+    img = Image(b'data', scale_x=0.5, scale_y=2.0, crop=(10, 20, 400, 300))
+    assert img.content == b'data'
     assert img.scale_x == 0.5
     assert img.scale_y == 2.0
     assert img.crop    == (10, 20, 400, 300)
