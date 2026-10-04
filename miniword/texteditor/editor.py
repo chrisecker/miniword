@@ -316,7 +316,7 @@ class Editor(UndoRedo):
         i1, i2 = self.abs_idxs(j1, j2)        
         model = self.target
         styles = model.clear_styles(j1, j2)
-        info = self._set_styles, flow, i1, styles
+        info = self._set_styles, self.flow, i1, styles
         self.add_undo(info)
 
     def set_properties(self, **properties):
@@ -346,7 +346,7 @@ class Editor(UndoRedo):
     def set_parstyle(self, style):        
         model = self.target
         j = self.index
-        i = abs_idx(j)
+        i = self.abs_idx(j)
         styles = model.set_parstyle(j, style)
         info = self._set_parstyles, self.flow, i, styles
         self.add_undo(info)
@@ -804,6 +804,25 @@ def test_03b():
     editor.undo()
     editor.undo()
     assert _get_text(root.texel) == 'ab[xy[uv]z]cd[w]'
+
+def test_03c():
+    "clear_styles and set_parstyle, with undo"
+    editor = Editor()
+    editor.insert_text('Hello World')
+    editor.selection = (0, 5)
+    editor.set_properties(bold=True)
+    assert editor.root.get_style(2).get('bold')
+    editor.clear_styles()
+    assert not editor.root.get_style(2).get('bold')
+    editor.undo()
+    assert editor.root.get_style(2).get('bold')
+
+    editor.index = 3
+    editor.set_parstyle({'base': 'normal', 'alignment': 'right'})
+    assert editor.root.get_parstyle(3).get('alignment') == 'right'
+    editor.undo()
+    assert editor.root.get_parstyle(3).get('alignment') != 'right'
+
 
 def test_04():
     "controller"
