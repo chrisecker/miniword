@@ -282,6 +282,18 @@ def test_TBL_11():
     assert len(box) == length(table([[cell('outer'), cell(inner)]]))
 
 
+def test_TBL_12():
+    "TBL-12: footnotes in a cell are set at the page's text width"
+    words = ' '.join('w%02d' % k for k in range(15))  # 59 characters
+    tbl = table([[cell('c', fnote(words)), 'x']])
+    paragraphs, state = generate(doc_texel(tbl, None), width=100)
+    rows = [r[0] for r in state.footnotes]
+    # cell: 50 - CELL_HPAD - label indent = 32 would need two rows;
+    # page: 100 - label indent = 90 needs one
+    assert len(rows) == 1
+    assert row_text(rows[0]).strip() == words
+
+
 # SPLIT - splitting across pages
 
 def test_SPLIT_1():

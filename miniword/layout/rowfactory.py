@@ -138,6 +138,10 @@ class State:
 
     def __init__(self, width):
         self.width = width
+        # Footnotes are shown in the page's footnote area, so their
+        # content is set at the page's text width - also when the anchor
+        # sits in a narrower table cell. Children (create_child) keep it.
+        self.footnote_width = width
         self.rows = []       # row records generated, but not yet placed
         self.footnotes = []  # footnote row records, in document order
         self.floats = []
@@ -378,7 +382,7 @@ class RowFactory(Factory):
         label_w = self.device.measure(label, label_style)[0]
         indent = max(MIN_LABEL_INDENT, label_w + LABEL_GAP)
 
-        child = self.create_child(self.state.width - indent)
+        child = self.create_child(self.state.footnote_width - indent)
         fn_records = [record for par in child.generate(texel.content, 0)
                       for record in par]
         if fn_records:
