@@ -10,7 +10,7 @@ from . import boxes
 from .boxes import VBox, select_i_by_xy, select_i_by_y
 from .builderbase import BuilderBase
 from .rect import Rect
-from .pagegen import RestartMemo, generate_pages, restartmemo_from_settings
+from .rowfactory import generate_pages, state_from_settings, block_key
 from .page import show_page
 from .factory import Factory
 from .layoutbase import LayoutBase
@@ -40,6 +40,28 @@ def trace(fn):
     return wrapper
 
 NOOP = lambda: None
+
+
+def same_continuation(old, new):
+    """Do the restart memos old and new continue the same way?
+
+    Not a general comparison of States: it relies on both memos being
+    taken at the same position of the same text (as in
+    PageBuilder.can_finish, for the old pages behind a change). Then
+    comparing sizes is enough, the rows themselves are equal - except
+    for the record flags and block styles, which depend on the
+    neighbouring paragraphs and may have changed."""
+    def sizes(records):
+        return [(len(record[0]),) + tuple(record[2:6])
+                + (block_key(record[1]),) for record in records]
+    return (old.width == new.width
+            and old.geometry == new.geometry
+            and old.border == new.border
+            and old.counters == new.counters
+            and old.footnote_counter == new.footnote_counter
+            and sizes(old.rows) == sizes(new.rows)
+            and sizes(old.footnotes) == sizes(new.footnotes)
+            and len(old.floats) == len(new.floats))
 
 
 
@@ -208,7 +230,8 @@ class PageBuilder(BuilderBase):
     # Required by wxtextview:
     device          = property(lambda self: self.factory.device)
     stylesheet      = property(lambda self: self.factory.stylesheet)
-    rest_memo       = 0, ()
+    rest_memo       = 0, (), None  # (i_rest, rest pages, end memo of
+                                   # the old page just before rest)
     _pending_range  = None  # (j1, j2) while inhibited, else None
     # Stats for debugging:
     nbefore  = 0
@@ -231,12 +254,13 @@ class PageBuilder(BuilderBase):
 
     def create_generator(self, texel, p, state, factory):
         # Override this method to use a different generator.
-        return generate_pages(texel, p, state, factory)
+        return generate_pages(texel, p, state, factory.stylesheet,
+                              factory.device)
 
     generator = None
 
     @trace
-    def start(self, state, irest, rest):
+    def start(self, state, irest, rest, rest_memo=None):
         """Start the update task.
 
         Missing pages will be appended to the layout, using rest as a
@@ -246,7 +270,7 @@ class PageBuilder(BuilderBase):
         layout = self._layout
         self.nbefore = len(layout.childs)
 
-        self.rest_memo = irest, rest
+        self.rest_memo = irest, rest, rest_memo
         texel = self.model.get_xtexel()
         if self.generator is not None:
             if DEBUG: print("overriding old generator")
@@ -267,23 +291,24 @@ class PageBuilder(BuilderBase):
         try:
             page = next(self.generator)
             layout = self._layout
-            rest_i, rest = self.rest_memo
-            k2 = len(layout)  # position before appending = start of new page
-            state = page.restartmemo
-            if state is not None and rest and k2 == rest_i:
-                if self.can_finish(state):
-                    return self.finish()
+            rest_i, rest, rest_memo = self.rest_memo
             layout.append_page(page)
-            k2 = len(layout)
-            while rest_i < k2 and rest:
-                _ = rest.pop(0)
-                rest_i += len(_)
-            self.rest_memo = rest_i, rest
+            k2 = len(layout)  # end of the new page
+            while rest and rest_i < k2:  # old pages overtaken by the new one
+                old = rest.pop(0)
+                rest_i += len(old)
+                rest_memo = old.restartmemo
+            self.rest_memo = rest_i, rest, rest_memo
+            # restartmemo is a page's end state: the rest can be reused
+            # if the new page ends where the rest starts, in the same
+            # state as the old page before the rest did.
+            if rest and k2 == rest_i and self.can_finish(page.restartmemo):
+                return self.finish()
         except StopIteration:
             # The generator produced fresh pages for the entire remainder
             # of the document, so any leftover 'rest' (never matched via
             # can_finish) is stale and must be dropped, not appended.
-            self.rest_memo = 0, ()
+            self.rest_memo = 0, (), None
             return self.finish()
 
     def build_background(self):
@@ -344,17 +369,17 @@ class PageBuilder(BuilderBase):
         """Rebuild the entire layout from i=0; nothing is reused."""
         if DEBUG: print("rebuild")
         self._layout = self.layout_class([])
-        self.start(restartmemo_from_settings(self.settings), 0, ())
+        self.start(state_from_settings(self.settings), 0, ())
 
     def finish(self):
         """Clean up, append rest pages, update statistics."""
-        rest_i, rest = self.rest_memo
+        rest_i, rest, rest_memo = self.rest_memo
         self.nrest = len(rest)
         if rest:
             if DEBUG: print("finish: appending %d rest pages" % self.nrest)
             for page in rest:
                 self._layout.append_page(page)
-            self.rest_memo = 0, ()
+            self.rest_memo = 0, (), None
         
         # Clean up
         self.generator = None
@@ -394,72 +419,52 @@ class PageBuilder(BuilderBase):
             # empty layout, or first page is dirty: no pages_before,
             # rebuild from the start
             pages_before = []
-            state = restartmemo_from_settings(self.settings)
+            state = state_from_settings(self.settings)
         else:
-            # Shift start left to account for spillover
+            # restartmemo is a page's end state: page k1 restarts from
+            # the memo of page k1-1. Its buffered rows cover [q1, q1 +
+            # their length) - i1 must not lie within, otherwise (or
+            # without memo) go back further.
             pages = layout.childs
-            while True:
-                state = pages[k1].restartmemo
-                if state and q1 + state.get_length() <= i1:
-                    # i1 must not lie within the spillover region
+            while k1 > 0:
+                state = pages[k1 - 1].restartmemo
+                if state is not None and \
+                        q1 + sum(len(r[0]) for r in state.rows) <= i1:
                     break
                 k1 -= 1
-                assert k1 >= 0  # The first page must have a RestartMemo
-                                # with length 0.
                 q1 -= len(pages[k1])
-
+            if k1 == 0:
+                state = state_from_settings(self.settings)
             pages_before = layout.childs[:k1]
 
         if k2 is None:
-            i_rest    = 0
-            pages_rest = []
+            i_rest, pages_rest, rest_memo = 0, [], None
         elif layout.is_finished:
             pages_rest = layout.childs[k2:]
             i_rest     = q2 + delta
+            rest_memo  = layout.childs[k2 - 1].restartmemo
         else:
-            i_rest, pages_rest = self.rest_memo
+            i_rest, pages_rest, rest_memo = self.rest_memo
             i_rest += delta
 
         self._layout = self.layout_class(pages_before)
-        self.start(state, i_rest, pages_rest)
+        self.start(state, i_rest, pages_rest, rest_memo)
         wx.CallAfter(self.build_background)
 
     def can_finish(self, state):
         """Update rest_memo and check whether the remaining pages can
         be reused without further reflow."""
-        layout = self._layout
-        rest_i, rest = self.rest_memo
+        rest_i, rest, rest_memo = self.rest_memo
 
-        k2 = len(layout)
-        if k2 > len(self.model):
+        if len(self._layout) > len(self.model):
             return True
 
-        if not rest:
-            # No rest pages remain but document is not finished.
-            # Return False so that additional pages are generated.
+        if not rest or rest_memo is None:
+            # No rest pages (or no memo to compare with) but document
+            # is not finished: more pages have to be generated.
             return False
 
-        # Check whether we can short-circuit by reusing the rest.
-        old_restartmemo = rest[0].restartmemo
-
-        # Condition 1: page must have a RestartMemo
-        if old_restartmemo is None:
-            return False
-
-        # Condition 2: RestartMemo must have the same number of rows.
-        n1 = len(old_restartmemo.rows)
-        n2 = len(state.rows)
-        if n1 != n2:
-            return False
-
-        # Condition 3: RestartMemo must have the same length.
-        n1 = old_restartmemo.get_length()
-        n2 = state.get_length()
-        if n1 != n2:
-            return False
-
-        # Condition 4: numbered-list counter state must match.
-        if old_restartmemo.counters != state.counters:
+        if not same_continuation(rest_memo, state):
             return False
 
         if DEBUG: print("can finish!")
@@ -584,9 +589,10 @@ def test_01():
     from ..core.styles import testsheet
 
     xtexel     = get_einstein()
-    restartmemo = RestartMemo()
+    state      = state_from_settings({})
     factory    = Factory(testsheet)
-    pages = list(generate_pages(xtexel, 0, restartmemo, factory))
+    pages = list(generate_pages(xtexel, 0, state, factory.stylesheet,
+                                factory.device))
     assert len(pages) > 0
 
 
@@ -595,15 +601,17 @@ def test_02():
     from einstein import get_einstein
     from ..core.styles import testsheet
 
-    info          = RestartMemo()
-    info.geometry = (100, 10)
-    info.border   = 1, 1, 1, 1
+    info = state_from_settings({
+        'paper': 'custom', 'paper_width': 100, 'paper_height': 10,
+        'margin_top': 1, 'margin_right': 1, 'margin_bottom': 1,
+        'margin_left': 1})
 
     xtexel  = get_einstein()
     factory = Factory(testsheet)
     pages = []
     i1 = i2 = 0
-    for page in generate_pages(xtexel, 0, info, factory):
+    for page in generate_pages(xtexel, 0, info, factory.stylesheet,
+                               factory.device):
         i2 = i1 + len(page)
         pages.append((i1, i2, page))
         i1 = i2
@@ -614,7 +622,9 @@ def test_02():
     assert info is not None
 
     # build from page 3 on
-    newpages = list(generate_pages(xtexel, i1, info, factory))
+    i1 = i2  # restartmemo is the end state: continue after page 3
+    newpages = list(generate_pages(xtexel, i1, info, factory.stylesheet,
+                                   factory.device))
     assert len(newpages) > 0
 
 def test_03():
@@ -649,6 +659,104 @@ def test_03():
     assert n_rebuilt == 1
     assert nrest == n_pages - 1
     
+
+def _small_builder(model):
+    builder = PageBuilder(model, Factory(testsheet_()))
+    builder.settings = {
+        'paper': 'custom', 'paper_width': 100, 'paper_height': 20,
+        'margin_top': 1, 'margin_right': 1, 'margin_bottom': 1,
+        'margin_left': 1,
+    }
+    builder.rebuild()
+    builder.assure_finished()
+    return builder
+
+
+def testsheet_():
+    from ..core.styles import testsheet
+    return testsheet
+
+
+def _page_sigs(builder):
+    return [(len(page), [y for _, y, _ in page.rows], page.shadings)
+            for page in builder._layout.childs]
+
+
+def test_04():
+    "relayout: a block change on a page boundary updates the next page"
+    from ..textmodel.textmodel import TextModel
+
+    if wx.App.Get() is None:
+        wx.App(False)
+
+    red = dict(base='normal', block_color='red', block_padding=2)
+    model = TextModel('\n'.join('paragraph %d' % k for k in range(60)))
+    builder = _small_builder(model)
+
+    # a page that ends exactly at a paragraph boundary: P on it, P+1
+    # starts the next page
+    pages = builder._layout.childs
+    ends = [sum(len(p) for p in pages[:k + 1]) for k in range(len(pages))]
+    k = next(k for k in range(len(pages) - 1)
+             if pages[k].restartmemo.rows[0][2])
+    e = ends[k]
+    # P+1 red; then make P red as well: P+1's block now continues P's,
+    # so P+1 loses its top padding on the next page
+    model.set_parstyle(e, red)
+    builder = _small_builder(model)
+    model.set_parstyle(e - 1, red)
+    j = model.next_newline(e - 1)
+    builder.rebuild_range(e - 1, j + 1, 0)
+    builder.assure_finished()
+
+    assert _page_sigs(builder) == _page_sigs(_small_builder(model))
+
+
+def test_05():
+    "same_continuation: equal after a restart, differs where it must"
+    from einstein import get_einstein
+    from ..core.styles import testsheet, n_levels
+    from .testdevice import TESTDEVICE
+
+    texel = get_einstein()
+    memo = state_from_settings({
+        'paper': 'custom', 'paper_width': 100, 'paper_height': 20,
+        'margin_top': 1, 'margin_right': 1, 'margin_bottom': 1,
+        'margin_left': 1})
+    pages = list(generate_pages(texel, 0, memo, testsheet, TESTDEVICE))
+    assert len(pages) >= 3  # page 1 must have followers
+    k = 1
+    end = len(pages[0]) + len(pages[1])
+    memo = pages[k].restartmemo
+    assert memo.rows
+    again = generate_pages(texel, end, memo, testsheet, TESTDEVICE)
+    for new, old in zip(again, pages[k + 1:]):
+        assert same_continuation(old.restartmemo, new.restartmemo)
+
+    assert same_continuation(memo, memo.copy())
+
+    def flip_begins_block(m):
+        record = m.rows[0]
+        m.rows[0] = record[:4] + (not record[4],) + record[5:]
+
+    def other_block_style(m):
+        record = m.rows[0]
+        style = dict(record[1], block_color='red')
+        m.rows[0] = (record[0], style) + record[2:]
+
+    for change in (lambda m: m.rows.pop(),
+                   lambda m: m.footnotes.append(m.rows[0]),
+                   lambda m: m.counters.update(item=[9] * n_levels),
+                   lambda m: setattr(m, 'footnote_counter', 99),
+                   lambda m: m.floats.append('x'),
+                   lambda m: setattr(m, 'width', 1),
+                   flip_begins_block,
+                   other_block_style):
+        other = memo.copy()
+        change(other)
+        assert not same_continuation(memo, other)
+        assert not same_continuation(other, memo)
+
 
 def demo_01():
     global DEBUG; DEBUG = True

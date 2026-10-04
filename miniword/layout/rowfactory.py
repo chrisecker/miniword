@@ -65,6 +65,9 @@ from ..textmodel.textmodel import get_texel
 from ..textmodel.submodel import Footnote  # used only by the tests below
 from ..core.styles import testsheet, style_default, n_levels
 from ..core.units import mm, cm
+from ..core.styles import updated
+from ..core.papersizes import PAPER_SIZES
+from ..core.document import settings_default
 from .boxes import TextBox, NewlineBox, EndBox, Row, RowsBox
 from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
@@ -149,6 +152,23 @@ class State:
         clone.floats = list(self.floats)
         clone.counters = copy_counters(self.counters)
         return clone
+
+
+def state_from_settings(settings):
+    """Initial State for document settings: paper size, margins and
+    the resulting text width."""
+    props = updated(settings_default, settings)
+    paper = props['paper']
+    if paper in PAPER_SIZES:
+        w, h = PAPER_SIZES[paper]
+    else:
+        w, h = props['paper_width'], props['paper_height']
+    border = (props['margin_top'], props['margin_right'],
+              props['margin_bottom'], props['margin_left'])
+    state = State(w - border[1] - border[3])
+    state.geometry = (w, h)
+    state.border = border
+    return state
 
     
 class Factory:
@@ -255,8 +275,6 @@ class RowFactory(Factory):
             r.append((row, p, is_first, is_last, begins_block, ends_block))
         return r
 
-    # ---- Line dimensions (indentation) ----------------------------------
-
     def _dims(self, parstyle, level):
         """Compute left_first/left_rest/width_first/width_rest:
         list_indent applies only for list/numbered paragraphs, plus
@@ -271,8 +289,6 @@ class RowFactory(Factory):
         width_rest = self.state.width - block_indent
         width_first = width_rest - first_line_indent
         return left_first, left_rest, width_first, width_rest
-
-    # ---- Numbering -------------------------------------------------------
 
     def _update_counters(self, parstyle):
         ptype = parstyle.get('paragraph_type', 'normal')
@@ -291,7 +307,8 @@ class RowFactory(Factory):
             inc_counter(level, counter)
         if ckey == 'section':
             self.state.counters['item'] = [0] * n_levels
-        return format_number(counter, level, parstyle['numbering_style'][level])
+        style = parstyle['numbering_style'][level]
+        return format_number(counter, level, style)
 
     def create_child(self, width):
         """Child factory for a sub-layout (e.g. a table cell or a
@@ -335,7 +352,8 @@ class RowFactory(Factory):
         fn_records = [record for par in child.generate(texel.content, 0)
                       for record in par]
         if fn_records:
-            fn_records[0][0].set_marker(label, -(label_w + LABEL_GAP), label_style)
+            fn_records[0][0].set_marker(label, -(label_w + LABEL_GAP),
+                                        label_style)
             extra = indent - MIN_LABEL_INDENT
             if extra:
                 for later_record in fn_records[1:]:
@@ -377,9 +395,7 @@ def _is_same_block(style_a, style_b):
     return block_key(style_a) == block_key(style_b)
 
 
-# ---------------------------------------------------------------------
-# Stand-ins (until tables are ported to the new factory)
-# ---------------------------------------------------------------------
+# Stand-ins until tables are ported to the new factory
 
 class Table(Container):
     """Table texel stand-in for the tests: childs are the cell
@@ -452,7 +468,8 @@ class RowStack:
             force = not self.placed
         n = 0
         for record in buffer:
-            row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+            (row, parstyle, begins_par, ends_par,
+             begins_block, ends_block) = record
             y = self.height
             if self.placed and begins_par:
                 y += self.placed[-1][1][1].get('space_after', 0) \
@@ -475,7 +492,8 @@ class RowStack:
         shadings, borders = [], []
         top = None
         for k, (y, record) in enumerate(self.placed):
-            row, parstyle, begins_par, ends_par, begins_block, ends_block = record
+            (row, parstyle, begins_par, ends_par,
+             begins_block, ends_block) = record
             color, padding, border = block_key(parstyle)
             if top is None:
                 opens = begins_par and begins_block
@@ -565,7 +583,7 @@ def generate_pages(texel, i1, memo, stylesheet, device):
                                    draw_separator=bool(body.placed))
             y = geometry[1] - bottom - notes.height if body.placed else top
             footnotebox = (left, y, box)
-        page = Page([(x, top + y, row) for x, y, row in body.data()],
+        page = Page([(left + x, top + y, row) for x, y, row in body.data()],
                     geometry, footnotebox, device=device)
         shadings, borders = body.decorations()
         page.shadings = shift(shadings, left, top)

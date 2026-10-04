@@ -19,9 +19,9 @@ from ..footnotes.footnotes import FootnoteAnchorBox
 from ..layout.boxes import TextBox, NewlineBox, EndBox, Row, RowsBox
 from ..layout.page import ForceBreakBox, FootnoteBox
 from ..layout.testdevice import TESTDEVICE
-from ..layout.rowfactory import State, RowFactory, Table, TableBox, RowStack, \
-    typeset_into_rect, generate_pages, block_key, FOOTNOTE_FRACTION, \
-    MIN_LABEL_INDENT, LABEL_GAP
+from ..layout.rowfactory import State, state_from_settings, RowFactory, \
+    Table, TableBox, RowStack, typeset_into_rect, generate_pages, \
+    block_key, FOOTNOTE_FRACTION, MIN_LABEL_INDENT, LABEL_GAP
 
 
 # ---------------------------------------------------------------------
@@ -378,7 +378,8 @@ def test_WRAP_8():
 def test_WRAP_9():
     "WRAP-9: line_spacing is applied to the row, as before"
     def hd(line_spacing):
-        row = flat(generate(doc(par('ab', line_spacing=line_spacing)))[0])[0][0]
+        texel = doc(par('ab', line_spacing=line_spacing))
+        row = flat(generate(texel)[0])[0][0]
         return row.height, row.depth
     assert hd(1.0) == (1, 0)
     assert hd(1.5) == (1.25, 0.25)
@@ -585,7 +586,7 @@ def test_TAB_1():
 
 
 def test_TAB_2():
-    "TAB-2: footnotes and footnote counter flow back from cells, counters don't"
+    "TAB-2: footnotes and their counter flow back from cells, counters don't"
     cell = Group(par('c', fn('in cell'), **numbered())
                  + par('d', endmark=True, **numbered()))
     table = Table([cell, Group(par('x', endmark=True))], ncols=2)
@@ -659,6 +660,24 @@ def test_STATE_3():
     assert state.floats == ['fa', 'fb']
     assert state.footnote_counter == 7
     assert state.counters['item'][0] == 1
+
+
+def test_STATE_4():
+    "STATE-4: state_from_settings takes paper size and margins"
+    from ..core.units import mm, cm
+    state = state_from_settings({})
+    assert state.geometry == (210 * mm, 297 * mm)
+    assert state.border == (2.5 * cm,) * 4
+    assert abs(state.width - (210 * mm - 5 * cm)) < 1e-9
+    assert state.rows == [] and state.counters == {}
+
+    state = state_from_settings({'paper': 'custom', 'paper_width': 100,
+                                 'paper_height': 200, 'margin_left': 10,
+                                 'margin_right': 20, 'margin_top': 5,
+                                 'margin_bottom': 6})
+    assert state.geometry == (100, 200)
+    assert state.border == (5, 20, 6, 10)
+    assert state.width == 70
 
 
 # ---------------------------------------------------------------------
@@ -880,7 +899,7 @@ def test_PAGE_7():
 
 
 def test_PAGE_8():
-    "PAGE-8: decorations are shifted by the border and match the rows"
+    "PAGE-8: rows and decorations are shifted by the border"
     texel = doc(par('aaa bbb ccc', block_color='red'), par('plain'))
     memo = small_memo(width=20, height=10)
     memo.border = (2, 1, 1, 3)
@@ -889,6 +908,8 @@ def test_PAGE_8():
     assert len(page.shadings) == 1
     x, y, w, h, color = page.shadings[0]
     assert x == 3 and y == 2 and color == 'red'
+    assert all(rx == 3 for rx, _, _ in page.rows)  # left border
+    assert all(ry >= 2 for _, ry, _ in page.rows)  # top border
     red_rows = [(ry, row) for _, ry, row in page.rows
                 if row_text(row) != 'plain']
     for ry, row in red_rows:

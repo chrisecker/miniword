@@ -1,7 +1,6 @@
 from collections import OrderedDict
 from .documentnode import DocumentNode
 from ..textmodel.styles import create_style
-from . styles import style_default, updated
 
 
 class StyleSheet(DocumentNode):
@@ -69,3 +68,8 @@ def test_00():
 
 
     
+
+
+# At the end: styles imports StyleSheet (for testsheet), so it must
+# be defined first, whichever module is imported first.
+from .styles import style_default, updated
