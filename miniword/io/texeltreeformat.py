@@ -672,7 +672,10 @@ class _Parser:
                 items.append(val[1:-1])
             elif kind == 'IDENT':
                 self.tok.consume()
-                items.append(val)
+                # None/True/False are written as bare words (e.g. an
+                # automatic column in col_widths)
+                items.append({'None': None, 'True': True,
+                              'False': False}.get(val, val))
             else:
                 raise ParseError("Unexpected token in tuple: %r" % val)
             if self.tok.peek()[0] == 'COMMA':
@@ -905,4 +908,13 @@ def test_09():
     assert inner.label == '*'
     last = list(_flatten(inner.content))[-1]
     assert last.is_endmark and last.parstyle.get('alignment') == 'right'
+
+
+def test_10():
+    "Roundtrip: None in a tuple (automatic table column)"
+    from ..tables import from_strings
+    table = from_strings([['A', 'B']]).set_col_widths([30, None])
+    root2, _, _ = parse(serialize(Group([table])))
+    t2 = list(_flatten(root2))[0]
+    assert list(t2.col_widths) == [30, None]
 
