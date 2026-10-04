@@ -525,6 +525,16 @@ def test_CNT_6():
     assert markers(paragraphs) == ['1.', '2.']
 
 
+def test_CNT_7():
+    "CNT-7: an unnumbered section heading restarts the numbered items"
+    head = dict(counter='section')
+    paragraphs, state = generate(doc(par('a', **numbered()),
+                                     par('b', **numbered()),
+                                     par('Heading', **head),
+                                     par('c', **numbered())))
+    assert markers(paragraphs) == ['1.', '2.', None, '1.']
+
+
 # ---------------------------------------------------------------------
 # FN - Footnotes
 # ---------------------------------------------------------------------

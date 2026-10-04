@@ -311,6 +311,10 @@ class RowFactory(Factory):
 
     def _update_counters(self, parstyle):
         ptype = parstyle.get('paragraph_type', 'normal')
+        if ptype != 'numbered' and parstyle.get('counter') == 'section':
+            # Every section paragraph clears the item counter - also an
+            # unnumbered heading, which doesn't count itself.
+            self.state.counters['item'] = [0] * n_levels
         if ptype == 'normal':
             return None
         level = parstyle.get('fixed_indent') or 0
