@@ -229,7 +229,9 @@ def get_newlines(texel, i1, i2, _offset=0):
 def transform_range(texel, i1, i2, fun):
     """Apply fun to all texels in [i1, i2), descending into containers.
 
-    Returns a list of texels.  Groups and Containers are treated identically.
+    Returns a list of texels. A Group may come back as a list of its
+    parts. A Container's childs are positional (e.g. table cells), so
+    each of them stays exactly one texel.
     """
     if texel.is_group or texel.is_container:
         r1 = []; r2 = []; r3 = []
@@ -238,6 +240,9 @@ def transform_range(texel, i1, i2, fun):
                 r1.append(child)
             elif j1 >= i2:
                 r3.append(child)
+            elif texel.is_container:
+                r2.append(grouped(
+                    transform_range(child, i1 - j1, i2 - j1, fun)))
             else:
                 r2 = fuse(r2, transform_range(child, i1 - j1, i2 - j1, fun))
         if texel.is_container:
@@ -578,3 +583,25 @@ def test_13():
     for i in range(1, 1 + length(f) + 1):
         assert get_weight(g2, 2, i) == 0
     assert get_weight(g2, 2, length(g2)) == 1
+
+
+def test_14():
+    "transform_range keeps a container's childs (one texel per child)"
+    from .texeltree import T, G, NL, Fraction, get_text
+    def bold(texel):
+        return texel.set_style({'bold': True})
+    # numerator is a Group, denominator a Text: both become several
+    # texels when only partly in range - must not leak into the
+    # container's childs
+    f = Fraction(G([T('ab'), T('cd')]), T('xyz'))
+    g = G([T('1'), f, NL])
+    n = length(g)
+    for i1, i2 in [(2, 4), (3, 5), (6, 7), (2, 7), (0, n)]:
+        t = grouped(transform_range(g, i1, i2, bold))
+        assert length(t) == n
+        assert get_text(t) == get_text(g)
+        fractions = [x for _, _, x in iter_leafes(t, 0)
+                     if isinstance(x, Fraction)]
+        assert len(fractions) == 1
+        assert len(fractions[0].childs) == len(f.childs), (i1, i2)
+
