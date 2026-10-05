@@ -438,8 +438,8 @@ BLOCK_KEYS = ('block_color', 'block_offset', 'block_border_width',
 
 
 def block_key(parstyle):
-    """What makes consecutive paragraphs one block: the block style and
-    the left edge (block_left) and right indent."""
+    """Consecutive paragraphs with equal keys form one block: equal
+    block style and indents."""
     return tuple(parstyle.get(k) for k in BLOCK_KEYS) \
         + (block_left(parstyle),)
 

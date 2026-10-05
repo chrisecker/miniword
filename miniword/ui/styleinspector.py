@@ -1057,8 +1057,9 @@ class StyleInspector(SidePanel):
             getattr(self, 'reset_' + key).set_x(key in overrides)
         self.block_border_color.set_colour(properties['block_border_color'])
         self.reset_block_border_color.set_x('block_border_color' in overrides)
+        sides = properties['block_border_sides'] or ''  # None: mixed
         for side, button in self.block_border_sides.buttons.items():
-            button.SetValue(side in properties['block_border_sides'])
+            button.SetValue(side in sides)
         self.reset_block_border_sides.set_x('block_border_sides' in overrides)
         # line color and sides only matter with a line
         has_line = bool(properties['block_border_width'])
@@ -1208,6 +1209,13 @@ def test_01():
         inspector.widow_orphan.SetValue(False)
         click(inspector.widow_orphan, wx.wxEVT_CHECKBOX)
         assert model.get_parstyle(0)['widow_orphan_control'] is False
+
+        # two paragraphs with different values (None in properties)
+        model.set_parstyle(5, dict(block_offset=3, right_indent=2))
+        editor.selection = (0, len(model))
+        inspector.update()
+        assert inspector.widow_orphan.Get3StateValue() == \
+            wx.CHK_UNDETERMINED
     finally:
         frame.Destroy()
 
