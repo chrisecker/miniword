@@ -297,3 +297,33 @@ def test_02():
         assert len(doc2.basestyles.items()) == 1
     finally:
         os.unlink(path)
+
+
+def test_05():
+    "old files: block_padding in basestyles and paragraphs -> block_offset"
+    import tempfile, os
+    from ..textmodel.texeltree import Group, Text, NewLine
+
+    doc = Document()
+    doc.textmodel.texel = Group([
+        Text('code'), NewLine().set_parstyle({'base': 'code',
+                                              'block_offset': 2})])
+    doc.basestyles.set('code', dict(style_default, block_color='#eee',
+                                    block_offset=4))
+
+    with tempfile.NamedTemporaryFile(
+            suffix='.txl', delete=False, mode='w') as f:
+        path = f.name
+    try:
+        doc.save(path)
+        text = open(path).read()
+        assert text.count('block_offset') == 2
+        open(path, 'w').write(text.replace('block_offset', 'block_padding'))
+        doc2 = Document.load(path)
+        code = doc2.basestyles.get('code')
+        assert code['block_offset'] == 4 and 'block_padding' not in code
+        nl = doc2.textmodel.texel.childs[-1]
+        assert nl.parstyle.get('block_offset') == 2
+        assert 'block_padding' not in nl.parstyle
+    finally:
+        os.unlink(path)

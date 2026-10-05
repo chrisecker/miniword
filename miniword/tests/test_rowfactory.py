@@ -22,7 +22,7 @@ from ..layout.boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, \
 from ..layout.page import ForceBreakBox, FootnoteBox
 from ..layout.testdevice import TESTDEVICE
 from ..layout.rowfactory import State, state_from_settings, RowFactory, \
-    RowStack, typeset_into_rect, generate_pages, \
+    RowStack, typeset_into_rect, clip_x, generate_pages, \
     block_key, FOOTNOTE_FRACTION, MIN_LABEL_INDENT, LABEL_GAP
 from ..tables.table_boxes import TableBox
 
@@ -784,21 +784,21 @@ def test_STACK_4():
 
 
 def test_STACK_5():
-    "STACK-5: block_padding is reserved at the block's start and end"
-    buffer = mk_records((1, ps(block_color='red', block_padding=2)))
+    "STACK-5: block_offset is reserved above and below, not sideways"
+    buffer = mk_records((1, ps(block_color='red', block_offset=2)))
     data, height, shadings, borders = stack(buffer, 10)
     assert ys(data) == [2]
     assert height == 5
-    assert shadings == [(0, 0, 10, 5, 'red')]
+    assert shadings == [(-2, 0, 14, 5, 'red')]
 
 
 def test_STACK_6():
     "STACK-6: consecutive paragraphs of the same block give one rect"
-    style = ps(block_color='red', block_padding=1)
+    style = ps(block_color='red', block_offset=1)
     buffer = mk_records((1, style), (1, style))
     data, height, shadings, borders = stack(buffer, 10)
     assert ys(data) == [1, 2]
-    assert shadings == [(0, 0, 10, 4, 'red')]
+    assert shadings == [(-1, 0, 12, 4, 'red')]
 
 
 def test_STACK_7():
@@ -810,38 +810,40 @@ def test_STACK_7():
 
 
 def test_STACK_8():
-    "STACK-8: no rect without color and border"
-    buffer = mk_records((2, ps()))
+    "STACK-8: no rect without color and border width"
+    buffer = mk_records((2, ps(block_offset=1)))
     data, height, shadings, borders = stack(buffer, 10)
     assert shadings == [] and borders == []
 
-    buffer = mk_records((2, ps(block_border='black')))
+    buffer = mk_records((2, ps(block_border_width=1)))
     data, height, shadings, borders = stack(buffer, 10)
     assert shadings == []
-    assert borders == [(0, 0, 10, 2, 'black')]
+    assert borders == [(-1, 0, 12, 4, ('black', 1, 'tblr'))]
 
 
 def test_STACK_9():
     "STACK-9: a block cut off by max_height closes at the last placed row"
-    buffer = mk_records((4, ps(block_color='red', block_padding=1)))
+    buffer = mk_records((4, ps(block_color='red', block_offset=1)))
     data, height, shadings, borders = stack(buffer, 10, 3)
     assert ys(data) == [1, 2]
-    assert shadings == [(0, 0, 10, 3, 'red')]
+    assert shadings == [(-1, 0, 12, 3, 'red')]
     assert len(buffer) == 2
 
 
 def test_STACK_10():
-    "STACK-10: a stack starting mid-block has no top padding"
-    buffer = mk_records((4, ps(block_color='red', block_padding=1)))
+    "STACK-10: a stack starting mid-block has no top offset"
+    buffer = mk_records((4, ps(block_color='red', block_offset=1)))
     stack(buffer, 10, 3)  # takes the first two rows
     data, height, shadings, borders = stack(buffer, 10)
     assert ys(data) == [0, 1]
-    assert shadings == [(0, 0, 10, 3, 'red')]  # bottom padding only
+    assert shadings == [(-1, 0, 12, 3, 'red')]  # bottom offset only
 
 
 def test_STACK_11():
     "STACK-11: typeset_into_rect gives a RowsBox and leaves records alone"
-    style = ps(block_color='red', block_padding=1, space_after=2)
+    # its decorations are cut at the sides (see BLOCK-9)
+    style = ps(block_color='red', block_offset=1, space_after=2,
+               block_border_width=1)
     records = mk_records((2, style), (1, ps()))
     expected = stack(list(records), 10)
     box = typeset_into_rect(records, 10, TESTDEVICE)
@@ -849,12 +851,14 @@ def test_STACK_11():
     assert len(records) == 3
     assert box.data == expected[0]
     assert box.height == expected[1]
-    assert box.shadings == expected[2] and box.borders == expected[3]
+    assert box.shadings == clip_x(expected[2], 10)
+    assert box.borders == clip_x(expected[3], 10)
+    assert box.shadings[0][0] == 0 and box.shadings[0][2] == 10
 
 
 def test_STACK_12():
     "STACK-12: continuing a stack equals stacking at once"
-    style = ps(block_color='red', block_padding=1, space_before=2,
+    style = ps(block_color='red', block_offset=1, space_before=2,
                space_after=3)
     records = mk_records((2, style), (1, style), (2, ps()), (1, style))
     expected = stack(list(records), 10)
@@ -871,6 +875,115 @@ def test_STACK_13():
     rowstack = RowStack(10)
     rowstack.take(buffer, 0.5, force=False)
     assert rowstack.placed == [] and len(buffer) == 1
+
+
+# ---------------------------------------------------------------------
+# BLOCK - right indent, block offset and border lines
+# (develnotes/padding_concept.md: the text stays at its indents, the
+# decoration grows outward)
+# ---------------------------------------------------------------------
+
+def test_BLOCK_1():
+    "BLOCK-1: right_indent narrows the lines and moves right alignment"
+    text = 'aaa bbb ccc ddd eee fff ggg'
+    records = flat(generate(doc(par(text, right_indent=2)), width=10)[0])
+    assert len(records) > 1
+    for row, *_ in records:
+        assert row.start[0] + row.width <= 8, row_text(row)
+    records = flat(generate(doc(par('ab', right_indent=2,
+                                    alignment='right')), width=10)[0])
+    assert records[0][0].start[0] == 6
+
+
+def test_BLOCK_2():
+    "BLOCK-2: the block offset doesn't change the line breaks"
+    text = 'aaa bbb ccc ddd eee fff ggg'
+    plain = flat(generate(doc(par(text)), width=10)[0])
+    boxed = flat(generate(doc(par(text, block_color='red', block_offset=3,
+                                  block_border_width=1)), width=10)[0])
+    assert [(row_text(r[0]), r[0].start) for r in boxed] == \
+        [(row_text(r[0]), r[0].start) for r in plain]
+
+
+def test_BLOCK_3():
+    "BLOCK-3: the border line lies outside the offset, also vertically"
+    style = ps(block_color='red', block_offset=1, block_border_width=1,
+               block_border_color='blue')
+    buffer = mk_records((1, style))
+    data, height, shadings, borders = stack(buffer, 10)
+    assert ys(data) == [2]
+    assert height == 5
+    assert shadings == [(-1, 1, 12, 3, 'red')]
+    assert borders == [(-2, 0, 14, 5, ('blue', 1, 'tblr'))]
+
+
+def test_BLOCK_4():
+    "BLOCK-4: block_border_sides selects the lines; space stays the same"
+    style = ps(block_border_width=1, block_border_sides='tb')
+    data, height, shadings, borders = stack(mk_records((1, style)), 10)
+    assert ys(data) == [1] and height == 3
+    assert borders == [(-1, 0, 12, 3, ('black', 1, 'tb'))]
+
+
+def test_BLOCK_5():
+    "BLOCK-5: the decoration follows the paragraph's indents"
+    style = ps(block_color='red', fixed_indent=1, indent_levels=LEVELS,
+               right_indent=2)
+    data, height, shadings, borders = stack(mk_records((1, style)), 20)
+    assert shadings == [(4, 0, 14, 1, 'red')]
+    style = dict(style, block_offset=1)
+    data, height, shadings, borders = stack(mk_records((1, style)), 20)
+    assert shadings == [(3, 0, 16, 3, 'red')]
+
+
+def test_BLOCK_6():
+    "BLOCK-6: a hanging first line and list markers lie inside"
+    style = ps(block_color='red', fixed_indent=1, indent_levels=LEVELS,
+               first_line_indent=-2)
+    data, height, shadings, borders = stack(mk_records((1, style)), 20)
+    assert shadings == [(2, 0, 18, 1, 'red')]
+    style = ps(block_color='red', paragraph_type='list', fixed_indent=1,
+               indent_levels=LEVELS, list_indent=3)
+    data, height, shadings, borders = stack(mk_records((1, style)), 20)
+    assert shadings == [(4, 0, 16, 1, 'red')]  # without list_indent
+
+
+def test_BLOCK_7():
+    "BLOCK-7: paragraphs with different indents are separate blocks"
+    red = ps(block_color='red', block_offset=1)
+    indented = dict(red, right_indent=2)
+    data, height, shadings, borders = stack(
+        mk_records((1, red), (1, indented)), 10)
+    assert ys(data) == [1, 4]
+    assert shadings == [(-1, 0, 12, 3, 'red'), (-1, 3, 10, 3, 'red')]
+
+
+def test_BLOCK_8():
+    "BLOCK-8: on the page the decoration reaches into the margin"
+    texel = doc(par('aaa', block_color='red', block_offset=1,
+                    block_border_width=1), par('plain'))
+    memo = small_memo(width=20, height=10)
+    memo.border = (2, 1, 1, 3)
+    memo.geometry = (24, 13)
+    page = pages_from(texel, memo)[0]
+    assert page.shadings == [(2, 3, 22, 3, 'red')]
+    assert page.borders == [(1, 2, 24, 5, ('black', 1, 'tblr'))]
+    assert page.rows[0][:2] == (3, 4)
+
+
+def test_BLOCK_9():
+    "BLOCK-9: a table cell's decoration stays inside the cell"
+    cell = Group([Text('ab'), nl(block_color='red', block_offset=5),
+                  Text('c'), nl()])  # Table drops the last nl's style
+    texel = Group([Table([cell], 1), nl()])
+    paragraphs, state = generate(texel, width=10)
+    cellbox = find_boxes(paragraphs, TableBox)[0].cells[0][0]
+    dx, dy = cellbox.offset  # the cell padding
+    content = cellbox.data[0][2]
+    assert len(content.shadings) == 1
+    x, y, w, h, color = content.shadings[0]
+    assert dx + x >= 0 and dx + x + w <= cellbox.width
+    assert dy + y >= 0 and dy + y + h <= cellbox.height
 
 
 # ---------------------------------------------------------------------

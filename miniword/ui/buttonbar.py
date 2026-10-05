@@ -14,10 +14,14 @@ class ButtonBarEvent(wx.CommandEvent):
 
 
 class ButtonBar(wx.Panel):
-    def __init__(self, parent, *, exclusive=False, button_size=36):
+    def __init__(self, parent, *, exclusive=False, toggle=False,
+                 button_size=36):
+        """exclusive: toggle buttons, one pressed at a time; toggle:
+        toggle buttons, each pressed or not on its own."""
         super().__init__(parent)
 
         self.exclusive  = exclusive
+        self.toggle     = toggle or exclusive
         self.buttons    = {}
         self._svg_names = {}
 
@@ -30,7 +34,7 @@ class ButtonBar(wx.Panel):
     def add(self, name, svg_name):
         self._svg_names[name] = svg_name
 
-        if self.exclusive:
+        if self.toggle:
             btn = wx.ToggleButton(self, label="")
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_toggle)
         else:
@@ -71,6 +75,7 @@ class ButtonBar(wx.Panel):
     def _on_toggle(self, event):
         clicked = event.GetEventObject()
         for name, btn in self.buttons.items():
-            btn.SetValue(btn is clicked)
+            if self.exclusive:
+                btn.SetValue(btn is clicked)
             if btn is clicked:
                 self._fire(name)

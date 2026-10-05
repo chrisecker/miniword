@@ -292,6 +292,14 @@ class StyleInspector(SidePanel):
         add_row2('First line', panel, contentsizer, self.indent_first, self.reset_first)
         self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
 
+        self.right_indent = LengthInput(panel, category='typographic')
+        self.reset_right_indent = ResetButton(panel, ['right_indent'])
+        add_row2('Right', panel, contentsizer, self.right_indent,
+                 self.reset_right_indent)
+        self.right_indent.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(right_indent=e.value))
+
         ### structure tab ###
         panel, contentsizer = make_tab(notebook, 'Structure')
         self._structure_page = panel
@@ -406,22 +414,50 @@ class StyleInspector(SidePanel):
         ### other tab ###
         panel, contentsizer = make_tab(notebook, 'Other')
 
-        add_section("Block", panel, contentsizer)
+        add_section("Border and background", panel, contentsizer)
         self.block_color = ColourButton(panel)
         self.reset_block_color = ResetButton(panel, ['block_color'])
-        add_row(contentsizer, wx.StaticText(panel, label="Color"),
+        add_row(contentsizer, wx.StaticText(panel, label="Background"),
                 self.block_color, self.reset_block_color)
         self.block_color.callback = lambda: self.set_parproperties(
             block_color=self.block_color.get_colour())
 
-        self.block_padding = LengthInput(panel, category='typographic')
-        self.reset_block_padding = ResetButton(panel, ['block_padding'])
-        add_row(contentsizer, wx.StaticText(panel, label="Padding"),
-                self.block_padding, self.reset_block_padding)
-        self.block_padding.Bind(
+        self.block_offset = LengthInput(panel, category='typographic')
+        self.reset_block_offset = ResetButton(panel, ['block_offset'])
+        add_row(contentsizer, wx.StaticText(panel, label="Offset"),
+                self.block_offset, self.reset_block_offset)
+        self.block_offset.Bind(
             EVT_UNIT_CHANGED,
-            lambda e: self.set_parproperties(
-                block_padding=self.block_padding.GetValue()))
+            lambda e: self.set_parproperties(block_offset=e.value))
+
+        self.block_border_width = LengthInput(panel, category='typographic')
+        self.reset_block_border_width = ResetButton(
+            panel, ['block_border_width'])
+        add_row(contentsizer, wx.StaticText(panel, label="Border"),
+                self.block_border_width, self.reset_block_border_width)
+        self.block_border_width.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(block_border_width=e.value))
+
+        self.block_border_color = ColourButton(panel)
+        self.reset_block_border_color = ResetButton(
+            panel, ['block_border_color'])
+        add_row(contentsizer, wx.StaticText(panel, label="Border color"),
+                self.block_border_color, self.reset_block_border_color)
+        self.block_border_color.callback = lambda: self.set_parproperties(
+            block_border_color=self.block_border_color.get_colour())
+
+        # one toggle button per side, named by its letter in 'tblr'
+        self.block_border_sides = ButtonBar(panel, toggle=True)
+        for side, name in zip('tblr', ('top', 'bottom', 'left', 'right')):
+            self.block_border_sides.add(side, 'block_border_%s.svg' % name)
+            self.block_border_sides.buttons[side].SetToolTip(name.title())
+        self.reset_block_border_sides = ResetButton(
+            panel, ['block_border_sides'])
+        add_row(contentsizer, wx.StaticText(panel, label="Sides"),
+                self.block_border_sides, self.reset_block_border_sides)
+        self.block_border_sides.Bind(EVT_BUTTONBAR,
+                                     self.on_block_border_sides)
 
         add_section("Page break", panel, contentsizer)
         self.page_break_before = wx.CheckBox(panel, -1, "Break before",
@@ -432,6 +468,16 @@ class StyleInspector(SidePanel):
             wx.EVT_CHECKBOX,
             lambda e: self.set_parproperties(
                 page_break_before=self.page_break_before.GetValue()))
+
+        self.widow_orphan = wx.CheckBox(
+            panel, -1, "Prevent widows and orphans", style=wx.CHK_3STATE)
+        self.widow_orphan.SetToolTip(
+            "No single line of a paragraph alone at the top or bottom "
+            "of a page")
+        self.reset_widow_orphan = ResetButton(
+            panel, ['widow_orphan_control'])
+        add_row(contentsizer, self.widow_orphan, self.reset_widow_orphan)
+        self.widow_orphan.Bind(wx.EVT_CHECKBOX, self.on_widow_orphan)
 
         add_section("Semantics", panel, contentsizer)
         self.role = wx.Choice(panel, choices=[lbl for lbl, _ in _ROLES])
@@ -458,7 +504,10 @@ class StyleInspector(SidePanel):
                 self.reset_marker_pos, self.reset_marker_color, self.reset_marker_size,
                 self.reset_bullet, self.reset_numbering, self.reset_start,
                 self.reset_page_break_before, self.reset_block_color,
-                self.reset_block_padding, self.reset_role]:
+                self.reset_block_offset, self.reset_block_border_width,
+                self.reset_block_border_color, self.reset_block_border_sides,
+                self.reset_right_indent, self.reset_widow_orphan,
+                self.reset_role]:
             resetter.callback = self.clear_parproperties
 
     def dpi_changed(self):
@@ -545,6 +594,15 @@ class StyleInspector(SidePanel):
 
     def on_list_indent(self, event):
         self.set_parproperties(list_indent=event.value)
+
+    def on_widow_orphan(self, event):
+        self.set_parproperties(
+            widow_orphan_control=self.widow_orphan.GetValue())
+
+    def on_block_border_sides(self, event):
+        buttons = self.block_border_sides.buttons
+        sides = ''.join(side for side in 'tblr' if buttons[side].GetValue())
+        self.set_parproperties(block_border_sides=sides)
 
     def on_indent_first(self, event):
         value = event.value
@@ -874,6 +932,9 @@ class StyleInspector(SidePanel):
         x = 'line_spacing' in overrides
         self.reset_line_spacing.set_x(x)
         
+        self.right_indent.SetValue(properties['right_indent'])
+        self.reset_right_indent.set_x('right_indent' in overrides)
+
         first = properties['first_line_indent']
         self.indent_first.SetValue(first)
         x = 'first_line_indent' in overrides
@@ -991,8 +1052,25 @@ class StyleInspector(SidePanel):
         self.block_color.set_colour(properties['block_color'])
         self.reset_block_color.set_x('block_color' in overrides)
 
-        self.block_padding.SetValue(properties['block_padding'])
-        self.reset_block_padding.set_x('block_padding' in overrides)
+        for key in ('block_offset', 'block_border_width'):
+            getattr(self, key).SetValue(properties[key])
+            getattr(self, 'reset_' + key).set_x(key in overrides)
+        self.block_border_color.set_colour(properties['block_border_color'])
+        self.reset_block_border_color.set_x('block_border_color' in overrides)
+        for side, button in self.block_border_sides.buttons.items():
+            button.SetValue(side in properties['block_border_sides'])
+        self.reset_block_border_sides.set_x('block_border_sides' in overrides)
+        # line color and sides only matter with a line
+        has_line = bool(properties['block_border_width'])
+        self.block_border_color.Enable(has_line)
+        self.block_border_sides.Enable(has_line)
+
+        value = properties['widow_orphan_control']
+        if value is None:  # paragraphs with different values
+            self.widow_orphan.Set3StateValue(wx.CHK_UNDETERMINED)
+        else:
+            self.widow_orphan.SetValue(value)
+        self.reset_widow_orphan.set_x('widow_orphan_control' in overrides)
 
         role = properties.get('role')
         role_values = [v for _, v in _ROLES]
@@ -1087,6 +1165,53 @@ def test_00():
     assert m.get_parstyle(5)['x'] == 2 # Z
     assert m.get_parstyle(6)['x'] == 2 # w
     
+def test_01():
+    "border/background and page break controls <-> paragraph properties"
+    from types import SimpleNamespace
+    from ..core.stylesheet import testsheet
+    from ..texteditor.editor import Editor
+
+    def click(control, event_type):
+        event = wx.CommandEvent(event_type, control.GetId())
+        event.SetEventObject(control)
+        event.SetInt(int(control.GetValue()))
+        control.ProcessWindowEvent(event)
+
+    if wx.App.Get() is None:
+        wx.App(False)
+    frame = wx.Frame(None)
+    try:
+        model = TextModel("Eins\nZwei")
+        editor = Editor(model)
+        # mk_style takes the stylesheet from the canvas' builder
+        editor.canvas = SimpleNamespace(
+            builder=SimpleNamespace(stylesheet=testsheet))
+        inspector = StyleInspector(frame, editor, testsheet)
+        inspector.update()
+        sides = inspector.block_border_sides
+        # without a line, line color and sides are greyed out
+        assert not inspector.block_border_color.IsEnabled()
+        assert not sides.IsEnabled()
+        assert inspector.widow_orphan.GetValue()
+
+        inspector.set_parproperties(block_border_width=1,
+                                    block_border_sides='tb')
+        inspector.update()
+        assert inspector.block_border_color.IsEnabled()
+        assert [b.GetValue() for b in sides.buttons.values()] == \
+            [True, True, False, False]  # t, b, l, r
+
+        sides.buttons['l'].SetValue(True)
+        click(sides.buttons['l'], wx.wxEVT_TOGGLEBUTTON)
+        assert model.get_parstyle(0)['block_border_sides'] == 'tbl'
+
+        inspector.widow_orphan.SetValue(False)
+        click(inspector.widow_orphan, wx.wxEVT_CHECKBOX)
+        assert model.get_parstyle(0)['widow_orphan_control'] is False
+    finally:
+        frame.Destroy()
+
+
 def _test_01():
     "collect styles"
     # XXX Update this

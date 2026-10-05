@@ -588,11 +588,11 @@ def _github_defs(size, mm):
         'h6':       {'role': 'h6',       'name': 'Heading 6', 'font_size': max(8, round(10 * s)), 'italic': True, 'fixed_indent': 5},
         'pre':      {'role': 'pre',      'name': 'Code',      'font_size': max(8, round(10 * s)),
                      'font_family': 'Courier New',
-                     'block_color': '#F6F8FA', 'block_padding': 2 * mm * s},
+                     'block_color': '#F6F8FA', 'block_offset': 2 * mm * s},
         'list':     {'role': 'list',     'name': 'List',      'font_size': size, 'space_after': 0, 'paragraph_type': 'list'},
         'numbered': {'role': 'numbered', 'name': 'Numbered',  'font_size': size, 'space_after': 0, 'paragraph_type': 'numbered'},
         'quote':    {'role': 'quote',    'name': 'Quote',     'font_size': size,
-                     'block_color': '#F0F0F0', 'block_padding': 2 * mm * s},
+                     'block_color': '#F0F0F0', 'block_offset': 2 * mm * s},
     }
 
 
@@ -616,13 +616,13 @@ def _preset_defs(preset, mm):
             'h6':       {'role': 'h6',       'name': 'Heading 6', 'font_family': 'Times New Roman', 'font_size': 10,
                          'italic': True, 'fixed_indent': 5},
             'pre':      {'role': 'pre',      'name': 'Code',      'font_size': 10, 'font_family': 'Courier New',
-                         'block_color': '#F0F0F0', 'block_padding': 2 * mm},
+                         'block_color': '#F0F0F0', 'block_offset': 2 * mm},
             'list':     {'role': 'list',     'name': 'List',      'font_family': 'Times New Roman', 'font_size': 12,
                          'space_after': 0, 'paragraph_type': 'list'},
             'numbered': {'role': 'numbered', 'name': 'Numbered',  'font_family': 'Times New Roman', 'font_size': 12,
                          'space_after': 0, 'paragraph_type': 'numbered'},
             'quote':    {'role': 'quote',    'name': 'Quote',     'font_family': 'Times New Roman', 'italic': True,
-                         'block_padding': 2 * mm},
+                         'block_offset': 2 * mm},
         }
     if preset == 'compact':
         return {

@@ -430,7 +430,7 @@ def test_09():
 def test_10():
     "create_cell: wraps RowsBox, offset by padding"
     from ..layout.rowfactory import RowFactory, State
-    boxed = {'base': 'normal', 'block_color': '#f00', 'block_padding': 1}
+    boxed = {'base': 'normal', 'block_color': '#f00', 'block_offset': 1}
     texel = Group([Text('X'), _nl(boxed, endmark=True)])
     factory = RowFactory(State(400), testsheet, TESTDEVICE)
     records = [r for par in factory.generate(texel, 0) for r in par]
@@ -442,7 +442,7 @@ def test_10():
     # width stays the available (outer) width; content was wrapped/
     # decorated at width - hpad = 10.
     assert box.width == 14
-    assert box.height == 5  # 1 (row) + 2*block_padding + vpad
+    assert box.height == 5  # 1 (row) + 2*block_offset + vpad
     assert box.offset == (2, 1)  # lpad, tpad
 
     # Cell background is CellBox's own concern (read from style at

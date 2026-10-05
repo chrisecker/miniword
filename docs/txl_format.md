@@ -44,7 +44,7 @@ conventionally matches the original filename.
 
 ### Properties
 
-Properties control text rendering and structure. There are three categories:
+Properties control text rendering and structure. There are four categories:
 
 **Text Properties** – carried by `T` elements:
 
@@ -68,6 +68,26 @@ Properties control text rendering and structure. There are three categories:
 | `space_after`       | `0`      | Space after paragraph in pt              |
 | `line_spacing`      | `1.0`    | Line spacing factor                      |
 | `page_break_before` | `False`  | Force page break before paragraph        |
+| `widow_orphan_control` | `True` | No single line of a paragraph alone at the top or bottom of a page |
+| `right_indent`      | `0`      | Distance from the right text edge in pt  |
+
+**Block Properties** – carried by `NL` elements:
+
+Consecutive paragraphs with equal block properties and equal indents form a
+block, decorated with one background and one border. The text stays at its
+indents; background and border grow outward by `block_offset` (sideways
+into the page margin). Above and below the block, `block_offset` +
+`block_border_width` is reserved.
+
+| Name                 | Default   | Description                                         |
+| -------------------- | --------- | --------------------------------------------------- |
+| `block_color`        | `None`    | Background color (`None` = no background)           |
+| `block_offset`       | `0`       | Distance between text and background/border in pt   |
+| `block_border_width` | `0`       | Border line width in pt (`0` = no border)           |
+| `block_border_color` | `"black"` | Border line color                                   |
+| `block_border_sides` | `"tblr"`  | Sides with a border line: letters from `t`, `b`, `l`, `r` (top, bottom, left, right) |
+
+Older files may contain `block_padding`; it is read as `block_offset`.
 
 **List Properties** – carried by `NL` and `TAB` elements:
 

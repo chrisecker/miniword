@@ -646,13 +646,27 @@ class VGroup(VBox):
         return VGroup(l, device=self.device)
 
     
+def draw_border(device, x, y, w, h, style, gc):
+    """Border lines inside the rect (x, y, w, h); style is (color,
+    width, sides) with sides letters from 'tblr'."""
+    color, width, sides = style
+    if 't' in sides:
+        device.fill_rect(x, y, w, width, color, gc)
+    if 'b' in sides:
+        device.fill_rect(x, y + h - width, w, width, color, gc)
+    if 'l' in sides:
+        device.fill_rect(x, y, width, h, color, gc)
+    if 'r' in sides:
+        device.fill_rect(x + w - width, y, width, h, color, gc)
+
+
 class RowsBox(Box):
     """
     Baseclass for Page, FootnoteBox and CellBox.
 
     Data consists of row-boxes and their x,y-position. y values must
-    be monotonically increasing. shadings (filled rects) and borders
-    (outlined rects, same tuple shape) are drawn together by
+    be monotonically increasing. shadings (x, y, w, h, color) and
+    borders (x, y, w, h, (color, width, sides)) are drawn together by
     draw_decorations.
     """
 
@@ -691,8 +705,8 @@ class RowsBox(Box):
         y += oy
         for dx, dy, dw, dh, color in self.shadings:
             self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
-        for dx, dy, dw, dh, color in self.borders:
-            self.device.draw_rect(x + dx, y + dy, dw, dh, gc)
+        for dx, dy, dw, dh, style in self.borders:
+            draw_border(self.device, x + dx, y + dy, dw, dh, style, gc)
 
     def draw(self, x, y, gc):
         self.draw_decorations(x, y, gc)

@@ -8,8 +8,8 @@ RowFactory turns texels into row records, paragraph by paragraph:
     (row, parstyle, begins_par, ends_par, begins_block, ends_block)
 
 begins_block/ends_block tell whether the paragraph starts/ends a block
-of paragraphs sharing the same block style (block_color, block_padding,
-block_border); they depend on the neighbouring paragraphs.
+of paragraphs sharing the same block style (BLOCK_KEYS) and indents;
+they depend on the neighbouring paragraphs.
 
 generate_pages() lays these records out on pages, in step with the
 factory: it reads one paragraph, places that paragraph's footnotes,
@@ -307,7 +307,8 @@ class RowFactory(Factory):
         first_line_indent = parstyle['first_line_indent']
         left_rest = block_indent
         left_first = left_rest + first_line_indent
-        width_rest = self.state.width - block_indent
+        width_rest = self.state.width - block_indent \
+            - parstyle['right_indent']
         width_first = width_rest - first_line_indent
         return left_first, left_rest, width_first, width_rest
 
@@ -432,11 +433,29 @@ class RowFactory(Factory):
                         break_level=texel.breaklevel, device=self.device)
 
     
-BLOCK_KEYS = ('block_color', 'block_padding', 'block_border')
+BLOCK_KEYS = ('block_color', 'block_offset', 'block_border_width',
+              'block_border_color', 'block_border_sides', 'right_indent')
 
 
 def block_key(parstyle):
-    return tuple(parstyle.get(k) for k in BLOCK_KEYS)
+    """What makes consecutive paragraphs one block: the block style and
+    the left edge (block_left) and right indent."""
+    return tuple(parstyle.get(k) for k in BLOCK_KEYS) \
+        + (block_left(parstyle),)
+
+
+def block_left(parstyle):
+    """Left text edge of a paragraph's block: its indent, including a
+    hanging first line; list markers lie inside (no list_indent)."""
+    levels = parstyle.get('indent_levels')
+    left = levels[parstyle.get('fixed_indent') or 0] if levels else 0
+    return left + min(0, parstyle.get('first_line_indent', 0))
+
+
+def block_space(parstyle):
+    """Space reserved above and below a block: offset plus line width."""
+    return (parstyle.get('block_offset') or 0) \
+        + (parstyle.get('block_border_width') or 0)
 
 
 def _is_same_block(style_a, style_b):
@@ -509,7 +528,7 @@ def _row_bottom(y, record):
     row, parstyle, begins_par, ends_par, begins_block, ends_block = record
     bottom = y + row.height + row.depth
     if ends_par and ends_block:
-        bottom += block_key(parstyle)[1] or 0
+        bottom += block_space(parstyle)
     return bottom
 
 
@@ -519,8 +538,9 @@ class RowStack:
     be continued, e.g. paragraph by paragraph, by calling take again.
 
     space_before/space_after apply only between paragraphs, never at
-    the stack's top. block_padding is reserved at a block's start and
-    end and covered by its decoration."""
+    the stack's top. block_space is reserved at a block's start and
+    end and covered by its decoration, which also grows sideways by the
+    same amount (into the page margin)."""
 
     def __init__(self, width):
         self.width = width
@@ -546,7 +566,7 @@ class RowStack:
                 y += self.placed[-1][1][1].get('space_after', 0) \
                     + parstyle.get('space_before', 0)
             if begins_par and begins_block:
-                y += block_key(parstyle)[1] or 0
+                y += block_space(parstyle)
             forced = force and n == 0
             if max_height is not None \
                     and _row_bottom(y, record) > max_height:
@@ -569,24 +589,33 @@ class RowStack:
         return [(0, y, record[0]) for y, record in self.placed]
 
     def decorations(self):
-        """Block shadings/borders. A block cut off at either end of
-        the stack is closed off there."""
+        """Block shadings (x, y, w, h, color) and border lines (x, y, w,
+        h, (color, width, sides)), the rect being the line's outer edge.
+        A block cut off at either end of the stack is closed off there."""
         shadings, borders = [], []
         top = None
         for k, (y, record) in enumerate(self.placed):
             (row, parstyle, begins_par, ends_par,
              begins_block, ends_block) = record
-            color, padding, border = block_key(parstyle)
             if top is None:
                 opens = begins_par and begins_block
-                top = y - (padding or 0) if opens else y
-            if (ends_par and ends_block) or k == len(self.placed) - 1:
-                rect = (0, top, self.width, _row_bottom(y, record) - top)
-                if color is not None:
-                    shadings.append(rect + (color,))
-                if border is not None:
-                    borders.append(rect + (border,))
-                top = None
+                top = y - block_space(parstyle) if opens else y
+            if not ((ends_par and ends_block) or k == len(self.placed) - 1):
+                continue
+            bottom = _row_bottom(y, record)
+            space = block_space(parstyle)
+            x1 = block_left(parstyle) - space
+            x2 = self.width - (parstyle.get('right_indent') or 0) + space
+            line = parstyle.get('block_border_width') or 0
+            color = parstyle.get('block_color')
+            if color is not None:
+                shadings.append((x1 + line, top + line, x2 - x1 - 2 * line,
+                                 bottom - top - 2 * line, color))
+            if line:
+                style = (parstyle.get('block_border_color', 'black'), line,
+                         parstyle.get('block_border_sides', 'tblr'))
+                borders.append((x1, top, x2 - x1, bottom - top, style))
+            top = None
         return shadings, borders
 
     def create_box(self, device, cls=RowsBox, **kw):
@@ -596,10 +625,19 @@ class RowStack:
 
 
 def typeset_into_rect(records, width, device):
-    """Lay out row records into a fixed-width RowsBox (see RowStack)."""
+    """Lay out row records into a fixed-width RowsBox (see RowStack).
+    Block decorations are cut at the sides to stay inside the rect."""
     stack = RowStack(width)
     stack.take(list(records))
-    return stack.create_box(device)
+    box = stack.create_box(device)
+    box.shadings = clip_x(box.shadings, width)
+    box.borders = clip_x(box.borders, width)
+    return box
+
+
+def clip_x(rects, width):
+    return [(max(x, 0), y, min(x + w, width) - max(x, 0), h, c)
+            for x, y, w, h, c in rects]
 
 
 SEPARATOR_GAP = 2 * mm  # space above the footnote box for its separator

@@ -1,4 +1,5 @@
-from .boxes import Box, VBox, RowsBox, NewlineBox, Row, select_i_by_y, get_text
+from .boxes import Box, VBox, RowsBox, NewlineBox, Row, select_i_by_y, \
+    get_text, draw_border
 from .testdevice import TESTDEVICE
 from ..core.units import mm, cm, pt
 
@@ -76,8 +77,8 @@ class Page(Box):
     def draw_decorations(self, x, y, gc):
         for dx, dy, dw, dh, color in self.shadings:
             self.device.fill_rect(x + dx, y + dy, dw, dh, color, gc)
-        for dx, dy, dw, dh, color in self.borders:
-            self.device.draw_rect(x + dx, y + dy, dw, dh, gc)
+        for dx, dy, dw, dh, style in self.borders:
+            draw_border(self.device, x + dx, y + dy, dw, dh, style, gc)
 
     def draw_footnotes(self, x, y, gc):
         if self.footnotebox is not None:

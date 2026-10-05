@@ -720,6 +720,8 @@ class _Parser:
             if self.tok.peek()[0] == 'COMMA':
                 self.tok.consume('COMMA')
         self.tok.consume('RBRACE')
+        if 'block_padding' in d:  # files before block_offset (2026-10)
+            d.setdefault('block_offset', d.pop('block_padding'))
         return d
 
     def parse_string(self):
@@ -918,3 +920,27 @@ def test_10():
     t2 = list(_flatten(root2))[0]
     assert list(t2.col_widths) == [30, None]
 
+
+def test_11():
+    "Old files: block_padding is read as block_offset"
+    root, _, _ = parse('T(\'a\')\nNL({block_color="red", block_padding=3})')
+    nl = list(_flatten(root))[-1]
+    assert nl.parstyle.get('block_offset') == 3
+    assert 'block_padding' not in nl.parstyle
+    # a block_offset written as well wins
+    root, _, _ = parse(
+        'T(\'a\')\nNL({block_offset=2, block_padding=3})')
+    nl = list(_flatten(root))[-1]
+    assert dict(nl.parstyle) == {'block_offset': 2}
+
+
+def test_12():
+    "Roundtrip: right indent and block properties"
+    from ..textmodel.texeltree import NewLine
+    ps = dict(right_indent=20, block_color='red', block_offset=3,
+              block_border_width=1.5, block_border_color='blue',
+              block_border_sides='tb', widow_orphan_control=False)
+    root, _, _ = parse(serialize(Group([Text('a'),
+                                        NewLine().set_parstyle(ps)])))
+    nl = list(_flatten(root))[-1]
+    assert dict(nl.parstyle) == ps

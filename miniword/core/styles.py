@@ -57,6 +57,7 @@ structure_default = {
     "fixed_indent":    None,         # None = free, 0–8 = fixed at that level
     "indent_levels":   tuple(i * cm for i in range(n_levels)),
     "first_line_indent": 0,          # hanging indent: use negative values
+    "right_indent":    0,            # distance from the right text edge
     "list_indent":      1 * cm,      # extra indent applied to list/numbered paragraphs
     "marker":          defaultbullets + ("–",) * (n_levels-len(defaultbullets)),
     "marker_pos":      (-0.8 * cm,) * n_levels,
@@ -84,7 +85,12 @@ layout_default = {
     # "border_top":           None,  # top border
     # "border_bottom":        None,  # bottom border
     "block_color":          None,   # paragraph background color
-    "block_padding":        0,      # padding around block_color rect
+    # Frame of a block (consecutive paragraphs with equal block style):
+    # the text stays at its indents, background and line grow outward.
+    "block_offset":         0,      # distance text - background/line
+    "block_border_width":   0,      # line width, 0 = no line
+    "block_border_color":   "black",
+    "block_border_sides":   "tblr", # lines top/bottom/left/right
 }
 
 other_default = {
@@ -148,3 +154,16 @@ def test_00():
 def test_01():
     from .stylesheet import testsheet
     assert testsheet.get('normal')['font_size'] == 12
+
+
+def test_02():
+    "Defaults of the paragraph and block properties as in docs/txl_format.md"
+    expected = dict(
+        widow_orphan_control=True, right_indent=0,
+        block_color=None, block_offset=0, block_border_width=0,
+        block_border_color="black", block_border_sides="tblr")
+    for key, value in expected.items():
+        assert style_default[key] == value, key
+    assert 'block_padding' not in style_default
+    assert 'widow_control' not in style_default
+    assert 'orphan_control' not in style_default
