@@ -609,6 +609,38 @@ def shift(rects, dx, dy):
     return [(x + dx, y + dy, w, h, c) for x, y, w, h, c in rects]
 
 
+def adjust_page_break(placed, buffer):
+    """Avoid orphans and widows: at a page break inside a paragraph
+    (placed: the page's (y, record) list, buffer: the records that
+    follow), keep at least 2 lines of the paragraph on each side, as far
+    as its widow_orphan_control allows, by moving records from the
+    end of placed back to the front of buffer. Never empties the page;
+    tables are left alone."""
+    if not placed or not buffer or buffer[0][2]:  # no break inside
+        return
+    style = buffer[0][1]
+    k = 0  # the paragraph's lines on this page
+    while k < len(placed):
+        k += 1
+        if placed[-k][1][2]:  # begins_par
+            break
+    r = 0  # its lines on the next page
+    while True:
+        r += 1
+        if buffer[r - 1][3]:  # ends_par
+            break
+    records = [rec for _, rec in placed[-k:]] + buffer[:r]
+    if not style.get('widow_orphan_control', True) or \
+            any(isinstance(rec[0].childs[0], TableBox) for rec in records):
+        return
+    move = max(0, 2 - r)  # widow: take a line along
+    if 0 < k - move < 2:  # orphan: the whole paragraph moves
+        move = k
+    if 0 < move < len(placed):
+        buffer[:0] = [rec for _, rec in placed[-move:]]
+        del placed[-move:]
+
+
 def generate_pages(texel, i1, memo, stylesheet, device):
     """Yield pages for texel, the first one starting at index i1 and
     continuing from memo (the state the previous page ended with).
@@ -657,6 +689,8 @@ def generate_pages(texel, i1, memo, stylesheet, device):
             if state.rows or last:
                 break
 
+        if state.rows:  # the page is full: avoid orphans and widows
+            adjust_page_break(body.placed, state.rows)
         if not body.placed and not notes.placed:
             return  # nothing left: the generator just ends
         footnotebox = None

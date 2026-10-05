@@ -1044,6 +1044,95 @@ def test_PAGE_10():
 
 
 # ---------------------------------------------------------------------
+# ORPH - orphans and widows
+# ---------------------------------------------------------------------
+
+def page_lines(texel, height, width=20):
+    """Body row texts per page, for a page height rows high."""
+    pages = pages_from(texel, small_memo(width=width, height=height))
+    return [[row_text(row) for _, _, row in page.rows] for page in pages]
+
+
+def test_ORPH_1():
+    "ORPH-1: a paragraph's first line alone at the page bottom moves on"
+    texel = doc(par(*lines('a', 4)), par(*lines('b', 3)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'a2', 'a3'],
+                                    ['b0', 'b1', 'b2']]
+
+
+def test_ORPH_2():
+    "ORPH-2: a paragraph's last line alone at the page top takes one along"
+    texel = doc(par(*lines('a', 2)), par(*lines('b', 4)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'b0', 'b1'],
+                                    ['b2', 'b3']]
+
+
+def test_ORPH_3():
+    "ORPH-3: switched off, a paragraph breaks at any line"
+    off = dict(widow_orphan_control=False)
+    texel = doc(par(*lines('a', 4)), par(*lines('b', 3), **off))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'a2', 'a3', 'b0'],
+                                    ['b1', 'b2']]
+    texel = doc(par(*lines('a', 2)), par(*lines('b', 4), **off))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'b0', 'b1', 'b2'],
+                                    ['b3']]
+
+
+def test_ORPH_4():
+    "ORPH-4: a two-line paragraph is not split at all"
+    texel = doc(par(*lines('a', 4)), par(*lines('b', 2)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'a2', 'a3'],
+                                    ['b0', 'b1']]
+
+
+def test_ORPH_5():
+    "ORPH-5: a three-line paragraph that can't keep two lines each moves"
+    texel = doc(par(*lines('a', 3)), par(*lines('b', 3)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'a2'],
+                                    ['b0', 'b1', 'b2']]
+
+
+def test_ORPH_6():
+    "ORPH-6: within one long paragraph the last page gets two lines"
+    texel = doc(par(*lines('a', 6)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'a2', 'a3'],
+                                    ['a4', 'a5']]
+
+
+def test_ORPH_6b():
+    "ORPH-6b: a paragraph over three pages; the middle page is all of it"
+    texel = doc(par(*lines('a', 2)), par(*lines('b', 7)))
+    pages = page_lines(texel, 3)
+    assert sum(pages, []) == ['a0', 'a1'] + ['b%d' % k for k in range(7)]
+    assert all(len([t for t in p if t.startswith('b')]) != 1
+               for p in pages)
+
+
+def test_ORPH_7():
+    "ORPH-7: never an empty page - one-line pages stay as they are"
+    texel = doc(par(*lines('a', 3)))
+    assert page_lines(texel, 1) == [['a0'], ['a1'], ['a2']]
+    texel = doc(par(*lines('a', 3)), par(*lines('b', 2)))
+    pages = page_lines(texel, 2)
+    assert sum(pages, []) == ['a0', 'a1', 'a2', 'b0', 'b1']
+    assert all(pages)
+
+
+def test_ORPH_8():
+    "ORPH-8: restarting from every page reproduces the pages"
+    texel = doc(*[par(*lines('p%d_' % k, 2 + k % 4)) for k in range(12)])
+    pages = pages_from(texel, small_memo(width=20, height=5))
+    starts = page_starts(pages)
+    for k in range(len(pages) - 1):
+        again = pages_from(texel, pages[k].restartmemo, starts[k + 1])
+        assert [page_sig(p) for p in again] == \
+            [page_sig(p) for p in pages[k + 1:]], k
+    for page in pages:  # and no first line alone at a page bottom
+        texts = [row_text(r) for _, _, r in page.rows]
+        assert not (len(texts) > 1 and texts[-1].endswith('_0'))
+
+
+# ---------------------------------------------------------------------
 # RESTART - pages from a memo
 # ---------------------------------------------------------------------
 
