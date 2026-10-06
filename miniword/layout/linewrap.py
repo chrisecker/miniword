@@ -15,10 +15,12 @@ _KINSOKU_START = (
     'ァィゥェォッャュョヮヵヶ'               # small katakana
 )
 
-# Break opportunities: after a space, or after a CJK character unless a
-# kinsoku-start character follows.
+# Break opportunities: after a space, after a hyphen between letters
+# ([^\W\d_]: a letter), or after a CJK character unless a kinsoku-start
+# character follows.
 _BREAK_RE = re.compile(
     r'(?<= )'
+    r'|(?<=[^\W\d_]-)(?=[^\W\d_])'
     r'|(?<=['
     '\u4e00-\u9fff'   # CJK Unified Ideographs
     '\u3040-\u30ff'   # Hiragana + Katakana
@@ -83,10 +85,16 @@ def find_hyphen_break(box, maxw, hyphenate, continues=False):
     pos = start + word.index(core)
     hyphen = measure('-')[0]
     best = None
-    for piece in hyphenate(core)[:-1]:
-        pos += len(piece)
-        if measure(text[:pos])[0] + hyphen <= maxw:
-            best = pos
+    parts = core.split('-')  # e.g. Hals-Nasen-Ohren-Arzt
+    for k, part in enumerate(parts):
+        p = pos
+        for piece in hyphenate(part)[:-1]:
+            p += len(piece)
+            if measure(text[:p])[0] + hyphen <= maxw:
+                best = p
+        pos += len(part) + 1
+        if k < len(parts) - 1 and measure(text[:pos])[0] <= maxw:
+            best = pos  # after the word's own hyphen
     return best
 
 
@@ -157,7 +165,9 @@ def simple_linewrap(boxes, maxw, maxw2=None, wordwrap=True,
             i = find_hyphen_break(box, avail, hyphenate, continues)
             if i:
                 a, b = split_box(box, i)
-                rows.append(line + [a, HyphenBox(box.style, box.device)])
+                hyphen = [] if a.text.endswith('-') else \
+                    [HyphenBox(box.style, box.device)]  # not a second one
+                rows.append(line + [a] + hyphen)
                 boxes = [b] + boxes
                 maxw = maxw2
                 line, w, last_space = [], 0, None

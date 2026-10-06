@@ -442,6 +442,24 @@ def test_WRAP_16():
     assert [row_text(r[0]) for r in rows] == ['ab cd 中', '文日本']
 
 
+def test_WRAP_17():
+    "WRAP-17: a line may break after a hyphen within a word"
+    rows = flat(generate(doc(par('Der Hals-Nasen-Ohren-Arzt kommt')),
+                         width=14)[0])
+    assert [row_text(r[0]) for r in rows] == \
+        ['Der Hals-', 'Nasen-Ohren-', 'Arzt kommt']
+
+
+def test_WRAP_18():
+    "WRAP-18: no break at a free-standing dash or between digits"
+    from ..layout.linewrap import _BREAK_RE
+    def breaks(text):
+        return [m.start() for m in _BREAK_RE.finditer(text)]
+    assert breaks('ab - cd') == [3, 5]       # after the spaces only
+    assert breaks('2026-10-06') == []
+    assert breaks('ab-cd') == [3]
+
+
 def test_WRAP_8():
     "WRAP-8: an empty paragraph gives exactly one row"
     paragraphs, state = generate(doc(par('a'), par(), par('b')))

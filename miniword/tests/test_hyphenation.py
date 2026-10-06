@@ -125,6 +125,14 @@ def test_HY_12():
     assert hyphen.get_index(0.9, 0) == 0
 
 
+def test_HY_20():
+    "HY-20: words with hyphens: syllables of the parts, no double hyphen"
+    rows = wrap('Der Hals-Nasen-Ohren-Arzt kommt', 13, hyphenate=german)
+    assert rows == [['Der Hals-Na', '-'],  # syllable: hyphen added
+                    ['sen-Ohren-'],        # own hyphen: none added
+                    ['Arzt kommt']]
+
+
 # ---------------------------------------------------------------------
 # In the factory: document settings and the paragraph's hyphenate
 # ---------------------------------------------------------------------
@@ -231,3 +239,112 @@ def test_HY_19():
         hyphenation.PATTERN_DIR, cache = saved
         hyphenation._hyphenators.clear()
         hyphenation._hyphenators.update(cache)
+
+
+# ---------------------------------------------------------------------
+# The test document test/hyphenation.txl, set with a real font: only
+# properties that hold for any font are checked
+# ---------------------------------------------------------------------
+
+def document_records(hyphenation=True):
+    """(records per paragraph, text width) of test/hyphenation.txl."""
+    import os
+    import wx
+    from ..core.document import Document
+    from ..layout.cairodevice import CairoDevice
+    from ..layout.rowfactory import RowFactory, state_from_settings
+    global _app
+    if wx.App.Get() is None:
+        _app = wx.App(False)  # keep a reference
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    document = Document.load(os.path.join(root, 'test', 'hyphenation.txl'))
+    settings = dict(document.settings, hyphenation=hyphenation)
+    state = state_from_settings(settings)
+    factory = RowFactory(state, document.basestyles, CairoDevice())
+    texel = document.textmodel.get_xtexel()
+    return list(factory.generate(texel, 0)), state.width
+
+
+def visible(row):
+    """The row's text and whether it ends with a hyphen box."""
+    boxes = row.childs
+    hyphen = bool(boxes) and isinstance(boxes[-1], HyphenBox)
+    def box_text(box):  # justified rows hold StretchableTexts
+        if hasattr(box, 'items'):
+            return ''.join(string for string, _ in box.items)
+        return getattr(box, 'text', '')
+    text = ''.join(box_text(b) for b in boxes
+                   if not isinstance(b, HyphenBox))
+    return text.rstrip('\n'), hyphen
+
+
+def test_HY_21():
+    "HY-21: test document: no word is broken without a hyphen"
+    paragraphs, _ = document_records()
+    for records in paragraphs:
+        rows = [visible(r[0]) for r in records]
+        for (text, hyphen), (following, _) in zip(rows, rows[1:]):
+            if text[-1:].isalpha() and following[:1].isalpha():
+                assert hyphen, (text, following)
+            assert not (text[-2:-1].isdigit() and text.endswith('-')), text
+
+
+def test_HY_22():
+    "HY-22: test document: every hyphen is at a syllable boundary"
+    import re
+    paragraphs, _ = document_records()
+    count = 0
+    for records in paragraphs:
+        rows = [visible(r[0]) for r in records]
+        for (text, hyphen), (following, _) in zip(rows, rows[1:]):
+            if not hyphen:
+                continue
+            count += 1
+            head = re.search(r'[^\W\d_]+$', text).group()
+            tail = re.match(r'[^\W\d_]+', following).group()
+            word = head + tail
+            breaks, pos = set(), 0
+            for piece in german(word)[:-1]:
+                pos += len(piece)
+                breaks.add(pos)
+            assert len(head) in breaks, (head, tail, german(word))
+    assert count > 0
+
+
+def test_HY_23():
+    "HY-23: test document: no hyphens where hyphenate is switched off"
+    paragraphs, _ = document_records()
+    for records in paragraphs:
+        style = records[0][1]
+        hyphens = sum(visible(r[0])[1] for r in records)
+        if not style['hyphenate']:
+            assert hyphens == 0, style.get('role')
+    off = [records for records in paragraphs
+           if not records[0][1]['hyphenate']]
+    assert len(off) == 2  # the heading and the comparison paragraph
+
+
+def test_HY_24():
+    "HY-24: test document: justified rows with a hyphen end at the edge"
+    paragraphs, width = document_records()
+    checked = 0
+    for records in paragraphs:
+        if records[0][1]['alignment'] != 'justify':
+            continue
+        for row, *_ in records[:-1]:
+            if visible(row)[1]:
+                assert abs(row.start[0] + row.width - width) < 0.01
+                checked += 1
+    assert checked > 0
+
+
+def test_HY_25():
+    "HY-25: test document: all text is set; switched off, no hyphens"
+    on, _ = document_records()
+    off, _ = document_records(hyphenation=False)
+    for paragraphs in (on, off):
+        assert sum(len(r[0]) for p in paragraphs for r in p) == \
+            sum(len(r[0]) for p in on for r in p)
+    assert not any(visible(r[0])[1] for p in off for r in p)
+    assert sum(len(p) for p in off) >= sum(len(p) for p in on)
