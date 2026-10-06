@@ -17,6 +17,7 @@ from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
 from .linkpanel import LinksPanel
 from ..images import ImageInspector
+from ..core.config import get_config
 
 from ..images import image_controllers  # registers controllers
 from ..tables import table_controllers  # registers controllers
@@ -207,6 +208,20 @@ class _FileDropTarget(wx.FileDropTarget):
         return True
 
 
+def window_rect(saved, areas, max_w):
+    """Window rect (x, y, w, h): the saved one if it starts on one of the
+    displays' work areas (shrunk to fit it), else 90% of the first area,
+    at most max_w wide, centred."""
+    if saved is not None:
+        x, y, w, h = saved
+        for ax, ay, aw, ah in areas:
+            if ax <= x < ax + aw and ay <= y < ay + ah:
+                return x, y, min(w, ax + aw - x), min(h, ay + ah - y)
+    ax, ay, aw, ah = areas[0]
+    w, h = min(max_w, int(aw * 0.9)), int(ah * 0.9)
+    return ax + (aw - w) // 2, ay + (ah - h) // 2, w, h
+
+
 class MainFrame(wx.Frame, ViewBase):
 
     _progress_dlg = None
@@ -222,7 +237,6 @@ class MainFrame(wx.Frame, ViewBase):
         ViewBase.__init__(self)
         self.Bind(wx.EVT_CHAR_HOOK, self.on_secret_key)
 
-        self.SetSize(self.FromDIP(wx.Size(1400, 700)))
         self.SetMinSize(self.FromDIP(wx.Size(800, 480)))
         self.SetIcons(app_icon_bundle())
         self.SetName("miniword")
@@ -230,7 +244,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._load_plugins()
         self._build_layout()
         self._update_title()
-        self.Centre()
+        self._restore_geometry()
         self.SetDropTarget(_FileDropTarget(self))
 
     def _load_plugins(self):
@@ -616,6 +630,24 @@ class MainFrame(wx.Frame, ViewBase):
         if hasattr(self, '_mi_reload'):
             self._mi_reload.Enable(bool(self._current_path))
 
+    def _restore_geometry(self):
+        """Size and position as last time, else most of the screen."""
+        config = get_config()
+        displays = [wx.Display(k) for k in range(wx.Display.GetCount())]
+        displays.sort(key=lambda d: not d.IsPrimary())
+        areas = [d.GetClientArea().Get() for d in displays]
+        rect = window_rect(config.get('window_rect'), areas,
+                           self.FromDIP(1400))
+        self.SetRect(wx.Rect(*rect))
+        if config.get('window_maximized'):
+            self.Maximize()
+
+    def _save_geometry(self):
+        config = get_config()
+        config.set('window_maximized', self.IsMaximized())
+        if not self.IsMaximized() and not self.IsIconized():
+            config.set('window_rect', list(self.GetRect().Get()))
+
     def on_close(self, event):
         if hasattr(self, 'editor') and self.editor.undocount() > 0:
             dlg = wx.MessageDialog(
@@ -640,6 +672,7 @@ class MainFrame(wx.Frame, ViewBase):
             builder.generator = None
             builder._layout.is_finished = True  # stop buildto_y immediately
         get_file_history().RemoveMenu(self._recent_menu)
+        self._save_geometry()
         event.Skip()
 
     def new(self):
@@ -1157,3 +1190,60 @@ def test_03():
 
     frame.Destroy()
     app.Yield()
+
+
+def test_04():
+    "window_rect: first start fills 90% of the screen, at most max_w wide"
+    full_hd = [(0, 0, 1920, 1080)]
+    assert window_rect(None, full_hd, 1400) == (260, 54, 1400, 972)
+    laptop = [(0, 0, 1280, 800)]
+    assert window_rect(None, laptop, 1400) == (64, 40, 1152, 720)
+
+
+def test_05():
+    "window_rect: a saved rect is kept if it starts on some display"
+    two = [(0, 0, 1920, 1080), (1920, 0, 1920, 1080)]
+    assert window_rect((100, 50, 1000, 600), two, 1400) == (100, 50, 1000, 600)
+    assert window_rect((2000, 100, 800, 600), two, 1400) == \
+        (2000, 100, 800, 600)
+    # the second display is gone: back to the default
+    one = two[:1]
+    assert window_rect((2000, 100, 800, 600), one, 1400) == \
+        window_rect(None, one, 1400)
+
+
+def test_06():
+    "window_rect: a saved rect larger than its display is shrunk to it"
+    one = [(0, 0, 1280, 800)]
+    assert window_rect((10, 20, 1600, 1000), one, 1400) == (10, 20, 1270, 780)
+
+
+def test_07():
+    "the window opens as large as it was closed (config replaced by a dict)"
+    from ..core.document import Document
+    global get_config
+
+    class FakeConfig(dict):
+        def set(self, key, value):
+            self[key] = value
+
+    config = FakeConfig()
+    saved_get_config, get_config = get_config, lambda: config
+    app = wx.App.Get() or wx.App()
+    try:
+        frame = MainFrame(Document())
+        frame.Show()
+        frame.SetSize(frame.FromDIP(wx.Size(900, 600)))
+        app.Yield()
+        size = frame.GetSize()
+        frame.Close()
+        app.Yield()
+        assert config['window_rect'][2:] == [size.width, size.height]
+        assert config['window_maximized'] is False
+
+        frame = MainFrame(Document())
+        assert frame.GetSize() == size
+        frame.Destroy()
+        app.Yield()
+    finally:
+        get_config = saved_get_config
