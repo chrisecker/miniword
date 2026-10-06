@@ -60,6 +60,7 @@ modules = [
     # ui
     "miniword.ui.stylemenu",
     "miniword.ui.styleinspector",
+    "miniword.ui.unitentry",
     "miniword.ui.searchtool",
     "miniword.ui.markdownpreview",
 

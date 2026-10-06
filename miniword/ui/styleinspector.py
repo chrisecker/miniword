@@ -2,7 +2,7 @@
 
 
 import wx
-from .design import make_tab, add_section, add_row, add_row2
+from .design import make_tab, add_section, add_row
 from .flatbutton import FlatButton, ResetButton
 from .sidepanel import SidePanel
 from ..textmodel.textmodel import TextModel
@@ -258,8 +258,29 @@ class StyleInspector(SidePanel):
         self.superscript.Bind(wx.EVT_CHECKBOX, self.on_superscript)
         self.subscript.Bind(wx.EVT_CHECKBOX,   self.on_subscript)
 
+        add_section("Space", panel, contentsizer)
+
+        self.space_before = LengthInput(panel, category='typographic')
+        self.reset_space_before = ResetButton(panel, ['space_before'])
+        add_row(contentsizer, wx.StaticText(panel, label='Before'),
+                self.space_before, self.reset_space_before)
+        self.space_before.Bind(EVT_UNIT_CHANGED, self.on_space_before)
+
+        self.space_after = LengthInput(panel, category='typographic')
+        self.reset_space_after = ResetButton(panel, ['space_after'])
+        add_row(contentsizer, wx.StaticText(panel, label='After'),
+                self.space_after, self.reset_space_after)
+        self.space_after.Bind(EVT_UNIT_CHANGED, self.on_space_after)
+
+        self.line_spacing = FractionInput(panel)
+        self.reset_line_spacing = ResetButton(panel, ['line_spacing'])
+        add_row(contentsizer, wx.StaticText(panel, label='Line height'),
+                self.line_spacing, self.reset_line_spacing)
+        self.line_spacing.Bind(EVT_UNIT_CHANGED, self.on_line_spacing)
+
         ### layout tab ###
         panel, contentsizer = make_tab(notebook, 'Layout')
+        self._structure_page = panel
 
         add_section("Alignment", panel, contentsizer)
 
@@ -268,41 +289,6 @@ class StyleInspector(SidePanel):
         self.reset_align = ResetButton(panel, ['alignment'])
         add_row(contentsizer, self.align, self.reset_align)
 
-        add_section("Space", panel, contentsizer)
-
-        self.space_before = LengthInput(panel, category='typographic')
-        self.reset_space_before = ResetButton(panel, ['space_before'])
-        add_row2('Before paragraph', panel, contentsizer, self.space_before, self.reset_space_before)
-        self.space_before.Bind(EVT_UNIT_CHANGED, self.on_space_before)
-
-        self.space_after = LengthInput(panel, category='typographic')
-        self.reset_space_after = ResetButton(panel, ['space_after'])
-        add_row2('After paragraph', panel, contentsizer, self.space_after, self.reset_space_after)
-        self.space_after.Bind(EVT_UNIT_CHANGED, self.on_space_after)
-
-        self.line_spacing = FractionInput(panel)
-        self.reset_line_spacing = ResetButton(panel, ['line_spacing'])
-        add_row2('Relative line height', panel, contentsizer, self.line_spacing, self.reset_line_spacing)
-        self.line_spacing.Bind(EVT_UNIT_CHANGED, self.on_line_spacing)
-
-        add_section("Indentation", panel, contentsizer)
-
-        self.indent_first = LengthInput(panel, category='typographic')
-        self.reset_first = ResetButton(panel, ['first_line_indent'])
-        add_row2('First line', panel, contentsizer, self.indent_first, self.reset_first)
-        self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
-
-        self.right_indent = LengthInput(panel, category='typographic')
-        self.reset_right_indent = ResetButton(panel, ['right_indent'])
-        add_row2('Right', panel, contentsizer, self.right_indent,
-                 self.reset_right_indent)
-        self.right_indent.Bind(
-            EVT_UNIT_CHANGED,
-            lambda e: self.set_parproperties(right_indent=e.value))
-
-        ### structure tab ###
-        panel, contentsizer = make_tab(notebook, 'Structure')
-        self._structure_page = panel
         add_section("Indentation", panel, contentsizer)
 
         label = wx.StaticText(panel, label='Level')
@@ -314,17 +300,32 @@ class StyleInspector(SidePanel):
         _ = ResetButton(panel, ['indent'])
         add_row(contentsizer, label, self.level, self.indent, _)
 
-        label = wx.StaticText(panel, label='Fixed indent')
+        label = wx.StaticText(panel, label='Fixed level')
         self.policy = wx.CheckBox(panel)
         self.reset_policy = ResetButton(panel, ['fixed_indent'])
         self.policy.Bind(wx.EVT_CHECKBOX, self.on_policy)
         add_row(contentsizer, label, self.policy, self.reset_policy)
 
-        label = wx.StaticText(panel, label='Indentation')
+        # the left indent of the paragraph's level (indent_levels)
         self.indent_position = LengthInput(panel, category='typographic')
         self.reset_indent = ResetButton(panel, ['indent_levels'])
         self.indent_position.Bind(EVT_UNIT_CHANGED, self.on_indent_position)
-        add_row(contentsizer, label, self.indent_position, self.reset_indent)
+        add_row(contentsizer, wx.StaticText(panel, label='Left'),
+                self.indent_position, self.reset_indent)
+
+        self.indent_first = LengthInput(panel, category='typographic')
+        self.reset_first = ResetButton(panel, ['first_line_indent'])
+        add_row(contentsizer, wx.StaticText(panel, label='First line'),
+                self.indent_first, self.reset_first)
+        self.indent_first.Bind(EVT_UNIT_CHANGED, self.on_indent_first)
+
+        self.right_indent = LengthInput(panel, category='typographic')
+        self.reset_right_indent = ResetButton(panel, ['right_indent'])
+        add_row(contentsizer, wx.StaticText(panel, label='Right'),
+                self.right_indent, self.reset_right_indent)
+        self.right_indent.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(right_indent=e.value))
 
         add_section("Bullets and numbers", panel, contentsizer)
         self.paragraph_type = wx.Choice(panel, choices=["Normal", "List", "Numbered"])
@@ -332,11 +333,11 @@ class StyleInspector(SidePanel):
         self.paragraph_type.Bind(wx.EVT_CHOICE, self.on_paragraph_type)
         add_row(contentsizer, self.paragraph_type, self.reset_paragraph_type)
 
-        label = wx.StaticText(panel, label='List indent')
         self.list_indent = LengthInput(panel, category='typographic')
         self.reset_list_indent = ResetButton(panel, ['list_indent'])
         self.list_indent.Bind(EVT_UNIT_CHANGED, self.on_list_indent)
-        add_row(contentsizer, label, self.list_indent, self.reset_list_indent)
+        add_row(contentsizer, wx.StaticText(panel, label='List indent'),
+                self.list_indent, self.reset_list_indent)
 
         ### Marker properties
         spanel = self.marker_panel = wx.Panel(panel)
@@ -358,12 +359,12 @@ class StyleInspector(SidePanel):
         self.marker_color.callback = lambda: self.set_list_value(
             "marker_color", self.marker_color.get_colour())
 
-        label = wx.StaticText(spanel, label="Marker size")
         self.marker_size = SpinCtrl3(
             spanel, min=1.0, max=10.0, inc=0.1, initial=1.0, digits=1)
         self.marker_size.Bind(EVT_SPIN_VALUE, self.on_marker_size)
         self.reset_marker_size = ResetButton(spanel, ['marker_size'])
-        add_row(spanelsizer, label, self.marker_size, self.reset_marker_size)
+        add_row(spanelsizer, wx.StaticText(spanel, label='Size'),
+                self.marker_size, self.reset_marker_size)
         contentsizer.Add(spanel, 0, wx.EXPAND, 5)
 
         ### list options
@@ -470,7 +471,7 @@ class StyleInspector(SidePanel):
                 page_break_before=self.page_break_before.GetValue()))
 
         self.widow_orphan = wx.CheckBox(
-            panel, -1, "Prevent widows and orphans", style=wx.CHK_3STATE)
+            panel, -1, "Widow/orphan control", style=wx.CHK_3STATE)
         self.widow_orphan.SetToolTip(
             "No single line of a paragraph alone at the top or bottom "
             "of a page")
@@ -947,6 +948,9 @@ class StyleInspector(SidePanel):
         if fixed is not None:
             indent = fixed
         self.level.SetValue(str(indent + 1))
+        self.indent_position.SetToolTip(
+            'Left indent of level %d, for all paragraphs of this level '
+            'and style' % (indent + 1))
         self.policy.SetValue(fixed is not None)
         x = 'fixed_indent' in overrides
         self.reset_policy.set_x(x)

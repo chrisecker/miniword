@@ -61,6 +61,8 @@ class UnitInput(wx.Panel):
         display_unit — default display unit; overridden by UnitPrefs if set.
 
     SetValue/GetValue and event.value are always in canonical units.
+    The display is rounded; the exact value is kept as long as the
+    displayed text isn't edited.
     """
     units = {}
     display_unit = ""
@@ -69,12 +71,13 @@ class UnitInput(wx.Panel):
         super().__init__(parent)
         if display_unit is not None:
             self.display_unit = display_unit
-        self._last = None
+        self._last = None   # the exact value
+        self._shown = None  # the text we displayed for it
 
         dip = self.FromDIP
         self.text = wx.TextCtrl(self, value=f"10 {self.display_unit}",
                                 style=wx.TE_PROCESS_ENTER | wx.TE_RIGHT)
-        self.text.SetMinSize((dip(100), -1))
+        self.text.SetMinSize((dip(80), -1))
         h = self.text.GetBestSize().height
         btn_w = dip(14)
         btn_up = muted_button(self, "▲", size=(btn_w, h))
@@ -99,7 +102,11 @@ class UnitInput(wx.Panel):
     def set_display_unit(self, unit):
         self.display_unit = unit
         if self._last is not None:
-            self.text.SetValue(self._format(self._last))
+            self._show(self._last)
+
+    def _show(self, value):
+        self._shown = self._format(value)
+        self.text.SetValue(self._shown)
 
     def _parse(self, text):
         value, unit = _parse(text, self.units, self.display_unit)
@@ -108,17 +115,19 @@ class UnitInput(wx.Panel):
 
     def _format(self, canonical):
         factor = self.units[self.display_unit]
-        return f"{canonical / factor:g} {self.display_unit}"
+        value = round(canonical / factor, 2) or 0.0  # no "-0"
+        return f"{value:g} {self.display_unit}"
 
     def _commit(self):
         text = self.text.GetValue()
-        if not text:
-            return
+        if not text or text == self._shown:
+            return  # not edited: keep the exact value
         try:
             v = self._parse(text)
         except ValueError:
             wx.Bell()
             return
+        self._shown = text
         if v != self._last:
             self._last = v
             wx.PostEvent(self, UnitChangedEvent(value=v, text=text, source=self))
@@ -136,21 +145,25 @@ class UnitInput(wx.Panel):
     def _change_value(self, delta):
         text = self.text.GetValue().strip()
         try:
-            canonical = self._parse(text) if text else 0.0
+            if text == self._shown and self._last is not None:
+                canonical = self._last  # exact, not the rounded display
+            else:
+                canonical = self._parse(text) if text else 0.0
         except ValueError:
             return
-        factor = self.units[self.display_unit]
-        canonical += delta * factor
-        self.text.SetValue(self._format(canonical))
-        self._commit()
+        canonical += delta * self.units[self.display_unit]
+        self._last = canonical
+        self._show(canonical)
+        wx.PostEvent(self, UnitChangedEvent(value=canonical, text=self._shown,
+                                            source=self))
 
     def SetValue(self, value):
         if value is None:
             self.text.SetValue("")
-            self._last = None
+            self._last = self._shown = None
             return
         self._last = value
-        self.text.SetValue(self._format(value))
+        self._show(value)
 
     def GetValue(self):
         return self._last
@@ -219,3 +232,107 @@ def demo_00():
     panel.SetSizer(sizer)
     frame.Show()
     app.MainLoop()
+
+
+def _input(cls=None):
+    """A LengthInput (or cls) in a frame, and the list of committed
+    values it reports."""
+    global _app
+    if wx.App.Get() is None:
+        _app = wx.App(False)  # keep a reference
+    frame = wx.Frame(None)
+    entry = cls(frame) if cls else LengthInput(frame, category="typographic")
+    events = []
+    entry.Bind(EVT_UNIT_CHANGED, lambda e: events.append(e.value))
+    return frame, entry, events
+
+
+def _flush():
+    wx.GetApp().ProcessPendingEvents()
+
+
+MM = 72.0 / 25.4
+
+
+def test_00():
+    "the display is rounded to 2 decimals, trailing zeros left out"
+    frame, entry, events = _input()
+    try:
+        entry.SetValue(4.23333 * MM)
+        assert entry.text.GetValue() == "4.23 mm"
+        entry.SetValue(1.0)  # 1 pt
+        assert entry.text.GetValue() == "0.35 mm"
+        entry.SetValue(10 * MM)
+        assert entry.text.GetValue() == "10 mm"
+    finally:
+        frame.Destroy()
+
+
+def test_01():
+    "committing an unchanged display keeps the exact value"
+    frame, entry, events = _input()
+    try:
+        entry.SetValue(4.23333 * MM)
+        entry._commit()  # e.g. focus in and out, or Enter
+        _flush()
+        assert events == []
+        assert entry.GetValue() == 4.23333 * MM
+    finally:
+        frame.Destroy()
+
+
+def test_02():
+    "a typed value is taken exactly"
+    frame, entry, events = _input()
+    try:
+        entry.SetValue(4.23333 * MM)
+        entry.text.SetValue("4.23456 mm")
+        entry._commit()
+        _flush()
+        assert events == [4.23456 * MM]
+        assert entry.GetValue() == 4.23456 * MM
+    finally:
+        frame.Destroy()
+
+
+def test_03():
+    "the arrows step from the exact value"
+    frame, entry, events = _input()
+    try:
+        entry.SetValue(4.23333 * MM)
+        entry._change_value(+1)
+        _flush()
+        assert abs(entry.GetValue() - 5.23333 * MM) < 1e-9
+        assert entry.text.GetValue() == "5.23 mm"
+        assert len(events) == 1
+    finally:
+        frame.Destroy()
+
+
+def test_04():
+    "switching the unit only changes the display"
+    frame, entry, events = _input()
+    try:
+        entry.SetValue(4.23333 * MM)
+        entry.set_display_unit("pt")
+        assert entry.text.GetValue() == "12 pt"
+        entry._commit()
+        _flush()
+        assert events == [] and entry.GetValue() == 4.23333 * MM
+    finally:
+        frame.Destroy()
+
+
+def test_05():
+    "percent values are rounded the same way"
+    frame, entry, events = _input(FractionInput)
+    try:
+        entry.SetValue(1.15)
+        assert entry.text.GetValue() == "115 %"
+        entry.SetValue(1 / 3)
+        assert entry.text.GetValue() == "33.33 %"
+        entry._commit()
+        _flush()
+        assert events == [] and entry.GetValue() == 1 / 3
+    finally:
+        frame.Destroy()
