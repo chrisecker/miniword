@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import wx
 from ..textmodel.viewbase import ViewBase
 from .styleinspector import StyleInspector
@@ -30,22 +31,48 @@ from ..tables import table_controllers  # registers controllers
 # Progress dialog
 # ---------------------------------------------------------------------------
 
-class _LayoutProgressDlg(wx.Dialog):
-    def __init__(self, parent, total_chars):
-        wx.Dialog.__init__(self, parent, title="Laying out document",
-                           style=wx.CAPTION)
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        self.label = wx.StaticText(self, label="Processing page 1…")
-        sizer.Add(self.label, 0, wx.ALL, 12)
-        self.gauge = wx.Gauge(self, range=max(total_chars, 1), size=(300, 16))
-        sizer.Add(self.gauge, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 12)
-        self.SetSizerAndFit(sizer)
-        self.CentreOnParent()
+def build_to(builder, y, parent, delay=0.3):
+    """Build the pages down to y (e.g. the visible area after a rebuild);
+    a progress window if that takes longer than delay seconds. Meanwhile
+    all other windows are disabled (no input, no menus) and views don't
+    paint, build or scroll (PageBuilder.busy). Returns whether the
+    window was shown."""
+    start, total, shown = time.time(), len(builder.model) + 1, []
 
-    def update(self, n_pages, n_chars, total_chars):
-        if n_pages is not None:
-            self.label.SetLabel("Processing page %d…" % n_pages)
-        self.gauge.SetValue(min(n_chars, total_chars))
+    def progress():
+        if not shown and time.time() - start >= delay:
+            window = progress_window(parent)
+            shown.append((window, wx.WindowDisabler(window)))
+        if shown:
+            shown[0][0].gauge.SetValue(100 * len(builder.layout) // total)
+            wx.YieldIfNeeded()  # paints the window; input is disabled
+    PageBuilder.busy = True
+    try:
+        builder.assure_y(y, progress)
+    finally:
+        PageBuilder.busy = False
+        windows = [window for window, _ in shown]
+        shown.clear()  # ends the disabler: the windows are enabled again
+        for window in windows:
+            window.Destroy()
+    return bool(windows)
+
+
+def progress_window(parent):
+    """A small window 'Laying out document' with a gauge (0..100)."""
+    window = wx.Frame(parent, title="Miniword", style=wx.CAPTION
+                      | wx.FRAME_FLOAT_ON_PARENT | wx.FRAME_TOOL_WINDOW)
+    panel = wx.Panel(window)
+    sizer = wx.BoxSizer(wx.VERTICAL)
+    sizer.Add(wx.StaticText(panel, label="Laying out document…"),
+              0, wx.ALL, 12)
+    window.gauge = wx.Gauge(panel, range=100, size=(300, 16))
+    sizer.Add(window.gauge, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12)
+    panel.SetSizer(sizer)
+    window.SetClientSize(panel.GetBestSize())
+    window.CentreOnParent()
+    window.Show()
+    return window
 
 
 file_history = None
@@ -263,7 +290,6 @@ def window_rect(saved, areas, max_w):
 
 class MainFrame(wx.Frame, ViewBase):
 
-    _progress_dlg = None
     _current_path = None
     _debug_menu = None
     _secret_armed = False
@@ -686,11 +712,8 @@ class MainFrame(wx.Frame, ViewBase):
     def setting_changed(self, document, name, old):
         """Paper, margins, header/footer...: the pages are built anew
         (their restart memos hold the settings)."""
-        builder = self.canvas.builder
-        builder.settings = document.settings
-        builder.rebuild()
-        builder.build_background()
-        self.canvas.refresh()
+        self.canvas.builder.settings = document.settings
+        self._rebuild()
 
     def _restore_geometry(self):
         """Size and position as last time, else most of the screen."""
@@ -1015,25 +1038,16 @@ class MainFrame(wx.Frame, ViewBase):
 
     def basestyles_changed(self, *args):
         self.canvas.builder.clear_caches()
-        self.canvas.builder.rebuild()
-        self.canvas.Refresh()
+        self._rebuild()
 
-    def layout_progress_start(self, view):
-        if view.builder.layout.is_finished:
-            return
-        total_chars = len(view.model) + 1
-        self._progress_dlg = _LayoutProgressDlg(self, total_chars)
-        self._progress_dlg.ShowModal()
-        self._progress_dlg.Destroy()
-        self._progress_dlg = None
-
-    def layout_progress(self, view, n_pages, n_chars, total_chars):
-        if n_chars >= total_chars:
-            if self._progress_dlg:
-                self._progress_dlg.EndModal(0)
-            return
-        if self._progress_dlg:
-            self._progress_dlg.update(n_pages, n_chars, total_chars)
+    def _rebuild(self):
+        """All pages anew: the visible ones now (with progress), the
+        rest in the background."""
+        builder = self.canvas.builder
+        builder.rebuild()
+        build_to(builder, self.canvas.get_viewport().y2, self)
+        builder.build_background()
+        self.canvas.refresh()
 
 
     def _get_debug_range(self):

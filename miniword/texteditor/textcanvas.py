@@ -395,7 +395,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     # --- painting ---
 
     def on_paint(self, event):
-        #self.ensure_viewport()
+        if getattr(self.builder, 'busy', False):  # layout incomplete
+            wx.PaintDC(self)
+            return
         self._update_scroll()
 
         pdc = wx.PaintDC(self)
@@ -454,6 +456,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         return Rect(x1, y1, x2, y2)
     
     def adjust_viewport(self):
+        if getattr(self.builder, 'busy', False):  # layout incomplete
+            return
         layout = self.layout
         if len(layout) == 0:
             return

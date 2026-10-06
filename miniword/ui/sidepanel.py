@@ -1,6 +1,7 @@
 import wx
 from ..core.respath import package_dir
 from ..textmodel.viewbase import ViewBase
+from ..layout.pagebuilder import PageBuilder
 from .colours import colours
 
 PANEL_W    = 300
@@ -121,13 +122,19 @@ class SidePanel(wx.Panel, ViewBase):
         ViewBase.__init__(self)
         self._timer = wx.Timer(self)
         self.Bind(wx.EVT_SHOW, self.on_show)
-        self.Bind(wx.EVT_TIMER, lambda _: self.update())
+        self.Bind(wx.EVT_TIMER, self.on_timer)
 
     def on_show(self, event):
         if not self:
             return
         self.update_visible()
         event.Skip()
+
+    def on_timer(self, event):
+        if PageBuilder.busy:  # layout incomplete: later
+            self.queue_update()
+        else:
+            self.update()
         
     def dpi_changed(self):
         # Called from parent widget

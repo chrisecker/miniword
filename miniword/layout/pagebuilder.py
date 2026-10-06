@@ -240,6 +240,9 @@ class PageBuilder(BuilderBase):
     nbefore  = 0
     nrest    = 0
     settings = {}  # document settings dict; set by DocumentView
+    # True while build_to (ui/mainwindow) builds the visible pages with
+    # a progress window: views don't paint, build or scroll meanwhile
+    busy = False
     layout_class    = Layout
 
     def __init__(self, model, factory):
@@ -314,12 +317,23 @@ class PageBuilder(BuilderBase):
             self.rest_memo = 0, (), None
             return self.finish()
 
+    _scheduled = None  # the timer for the next background step
+
     def build_background(self):
         """One build step for the async loop: step + reschedule."""
+        self._scheduled = None
+        if self.busy:  # build_to builds; its caller restarts the loop
+            return
         self.build_step()
         if self.generator is not None:
-            wx.Yield() # Necessary!
-            wx.CallAfter(self.build_background)
+            self.schedule()
+
+    def schedule(self):
+        """The next background step, once: on a timer, so that input is
+        handled in the main loop between steps (no nested Yield, which
+        would block build_to's progress window)."""
+        if self._scheduled is None:
+            self._scheduled = wx.CallLater(1, self.build_background)
 
     @trace
     def assure_finished(self, callback=NOOP):
@@ -452,7 +466,7 @@ class PageBuilder(BuilderBase):
 
         self._layout = self.layout_class(pages_before)
         self.start(state, i_rest, pages_rest, rest_memo)
-        wx.CallAfter(self.build_background)
+        self.schedule()
 
     def can_finish(self, state):
         """Update rest_memo and check whether the remaining pages can
