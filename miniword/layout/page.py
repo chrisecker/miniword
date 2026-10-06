@@ -80,6 +80,8 @@ class Page(Box):
     chapter       = ''  # running heads, see generate_pages
     section       = ''
     layout        = None  # set by Layout.append_page: the page count
+    header_style  = {}    # basestyles 'header'/'footer', see generate_pages
+    footer_style  = {}
 
     def __init__(self, rowdata, geometry, footnotebox=None, device=TESTDEVICE):
         if device is not None:
@@ -136,14 +138,15 @@ class Page(Box):
         """Draw header and footer, vertically centered in the top and
         bottom margin; left/right at the margins, center on the page."""
         top, right, bottom, left = self.margin
-        self.device.set_style({}, gc)
         header, footer = self.header_footer_texts()
-        for texts, middle in ((header, top / 2),
-                              (footer, self.height - bottom / 2)):
+        for texts, middle, style in (
+                (header, top / 2, self.header_style),
+                (footer, self.height - bottom / 2, self.footer_style)):
+            self.device.set_style(style, gc)
             for k, text in enumerate(texts):
                 if not text:
                     continue
-                w, h, d = self.device.measure(text, {})
+                w, h, d = self.device.measure(text, style)
                 dx = (left, (self.width - w) / 2,
                       self.width - right - w)[k]
                 self.device.draw_text(text, x + dx, y + middle - h / 2, gc)

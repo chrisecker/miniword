@@ -37,6 +37,8 @@ _ROLES = [
     ('Enumeration',   'numbered'),
     ('Code',          'pre'),
     ('Quote',         'quote'),
+    ('Page header',   'header'),  # style for page headers (layout.page)
+    ('Page footer',   'footer'),
 ]
 
 

@@ -222,3 +222,60 @@ def test_HF_13():
         assert props['header_footer_mirror'] is True
     finally:
         os.unlink(path)
+
+
+# ---------------------------------------------------------------------
+# Styles: the basestyle with role 'header'/'footer', else normal
+# ---------------------------------------------------------------------
+
+class StyleDevice(TestDevice):
+    """Records each drawn text with the font size it is drawn in."""
+    def __init__(self):
+        self.texts = []
+        self.style = {}
+
+    def set_style(self, style, dc):
+        self.style = style
+
+    def draw_text(self, text, x, y, dc):
+        self.texts.append((text, self.style.get('font_size')))
+
+
+def drawn_sizes(styles):
+    """{text: font size} for a page with header 'H' and footer 'F'."""
+    from ..layout.rowfactory import generate_pages
+    device = StyleDevice()
+    memo = small_memo(width=20, height=5)
+    memo.settings = settings(header_center=('text', 'H'),
+                             footer_center=('text', 'F'))
+    page = next(generate_pages(doc(body('a', 2)), 0, memo, styles, device))
+    page.draw_for_print(0, 0, None)
+    return dict(device.texts)  # also has the body text
+
+
+def test_HF_14():
+    "HF-14: a new document has no header/footer styles"
+    from ..core.document import Document
+    assert [key for key, _ in Document().basestyles.items()] == ['normal']
+
+
+def test_HF_15():
+    "HF-15: without styles of role header/footer, normal is used"
+    from ..core.document import Document
+    styles = Document().basestyles
+    normal = styles.get('normal')['font_size']
+    sizes = drawn_sizes(styles)
+    assert sizes['H'] == normal and sizes['F'] == normal
+
+
+def test_HF_16():
+    "HF-16: the basestyles with role header/footer are used, by role"
+    from ..core.document import Document
+    styles = Document().basestyles
+    normal = styles.get('normal')
+    styles.set('style1', dict(normal, name='Kopf', role='header',
+                              font_size=7))
+    styles.set('style2', dict(normal, name='Fuß', role='footer',
+                              font_size=8))
+    sizes = drawn_sizes(styles)
+    assert sizes['H'] == 7 and sizes['F'] == 8

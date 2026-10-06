@@ -705,6 +705,14 @@ def adjust_page_break(placed, buffer):
         del placed[-move:]
 
 
+def page_style(stylesheet, role):
+    """The style for headers or footers: the basestyle with this role
+    ('header'/'footer'), else normal."""
+    base = next((key for key, style in stylesheet.items()
+                 if style.get('role') == role), 'normal')
+    return stylesheet.mk_parstyle({'base': base})
+
+
 def running_heads(placed, state):
     """(chapter, section) of a page with the rows placed: the first
     heading with role h1/h2 on it, else the one in effect before; a new
@@ -792,6 +800,8 @@ def generate_pages(texel, i1, memo, stylesheet, device):
         page.borders = shift(borders, left, top)
         page.margin = state.border
         page.settings = state.settings
+        page.header_style = page_style(stylesheet, 'header')
+        page.footer_style = page_style(stylesheet, 'footer')
         page.chapter, page.section = running_heads(body.placed, state)
         page.restartmemo = state.copy()
         yield page
