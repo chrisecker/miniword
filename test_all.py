@@ -26,6 +26,7 @@ modules = [
 
     # layout
     "miniword.layout.stretchable",
+    "miniword.layout.linewrap",
     "miniword.layout.annotation",
     "miniword.layout.boxes",
     "miniword.layout.counters",
@@ -39,6 +40,7 @@ modules = [
     "miniword.tests.test_images",
     "miniword.tests.test_tables",
     "miniword.tests.test_headerfooter",
+    "miniword.tests.test_hyphenation",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

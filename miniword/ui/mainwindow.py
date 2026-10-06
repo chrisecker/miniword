@@ -18,6 +18,8 @@ from .searchtool import SearchPanel
 from .linkpanel import LinksPanel
 from ..images import ImageInspector
 from ..core.config import get_config
+from ..core.document import Document
+from ..hyphenation import system_language
 
 from ..images import image_controllers  # registers controllers
 from ..tables import table_controllers  # registers controllers
@@ -206,6 +208,17 @@ class _FileDropTarget(wx.FileDropTarget):
             get_file_history().AddFileToHistory(path)
             save_file_history()
         return True
+
+
+def new_document(locale_name=None):
+    """A new document in the system language (for hyphenation), or that
+    of locale_name, e.g. 'de_DE'."""
+    if locale_name is None:
+        locale_name = wx.Locale.GetLanguageCanonicalName(
+            wx.Locale.GetSystemLanguage())
+    document = Document()
+    document.set_setting('language', system_language(locale_name))
+    return document
 
 
 def window_rect(saved, areas, max_w):
@@ -686,8 +699,7 @@ class MainFrame(wx.Frame, ViewBase):
         event.Skip()
 
     def new(self):
-        from ..core.document import Document
-        frame = MainFrame(Document())
+        frame = MainFrame(new_document())
         frame.Show()
 
     def open_document(self):
@@ -1280,3 +1292,14 @@ def test_08():
     finally:
         frame.Destroy()
         app.Yield()
+
+
+def test_09():
+    "new documents get the system language for hyphenation"
+    from ..core.document import settings_default
+    from ..core.utils import updated
+    doc = new_document('de_DE')
+    assert doc.settings['language'] == 'de-1996'
+    doc = new_document('fr_FR')
+    assert updated(settings_default, doc.settings)['language'] == 'en-us'
+    assert doc.settings.get('hyphenation') is None  # stays off

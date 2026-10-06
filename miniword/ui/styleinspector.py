@@ -291,6 +291,17 @@ class StyleInspector(SidePanel):
         self.reset_align = ResetButton(panel, ['alignment'])
         add_row(contentsizer, self.align, self.reset_align)
 
+        self.hyphenate = wx.CheckBox(panel, -1, "Hyphenate",
+                                     style=wx.CHK_3STATE)
+        self.hyphenate.SetToolTip(
+            "Hyphenate this paragraph (if switched on for the document)")
+        self.reset_hyphenate = ResetButton(panel, ['hyphenate'])
+        add_row(contentsizer, self.hyphenate, self.reset_hyphenate)
+        self.hyphenate.Bind(
+            wx.EVT_CHECKBOX,
+            lambda e: self.set_parproperties(
+                hyphenate=self.hyphenate.GetValue()))
+
         add_section("Indentation", panel, contentsizer)
 
         label = wx.StaticText(panel, label='Level')
@@ -501,7 +512,8 @@ class StyleInspector(SidePanel):
             resetter.callback = self.clear_char_properties
 
         for resetter in [
-                self.reset_align, self.reset_first, self.reset_line_spacing,
+                self.reset_align, self.reset_hyphenate,
+                self.reset_first, self.reset_line_spacing,
                 self.reset_space_before, self.reset_space_after, self.reset_policy,
                 self.reset_indent, self.reset_paragraph_type, self.reset_list_indent,
                 self.reset_marker_pos, self.reset_marker_color, self.reset_marker_size,
@@ -909,6 +921,13 @@ class StyleInspector(SidePanel):
         x = 'font_size' in overrides
         self.reset_size.set_x(x)
 
+        value = properties['hyphenate']
+        if value is None:  # paragraphs with different values
+            self.hyphenate.Set3StateValue(wx.CHK_UNDETERMINED)
+        else:
+            self.hyphenate.SetValue(value)
+        self.reset_hyphenate.set_x('hyphenate' in overrides)
+
         value = properties['alignment']
         if value is None:
             for name, widget in self.align.buttons.items():
@@ -1250,6 +1269,35 @@ def test_02():
         for field in (inspector.indent_position, inspector.list_indent,
                       inspector.right_indent):
             assert field.GetSize()[1] >= field.GetBestSize()[1]
+    finally:
+        frame.Destroy()
+
+
+def test_03():
+    "the Hyphenate check box sets the paragraph's hyphenate"
+    from types import SimpleNamespace
+    from ..core.stylesheet import testsheet
+    from ..texteditor.editor import Editor
+
+    if wx.App.Get() is None:
+        wx.App(False)
+    frame = wx.Frame(None)
+    try:
+        model = TextModel("Eins\nZwei")
+        editor = Editor(model)
+        editor.canvas = SimpleNamespace(
+            builder=SimpleNamespace(stylesheet=testsheet))
+        inspector = StyleInspector(frame, editor, testsheet)
+        inspector.update()
+        assert inspector.hyphenate.GetValue()
+        inspector.hyphenate.SetValue(False)
+        event = wx.CommandEvent(wx.wxEVT_CHECKBOX,
+                                inspector.hyphenate.GetId())
+        event.SetEventObject(inspector.hyphenate)
+        inspector.hyphenate.ProcessWindowEvent(event)
+        assert model.get_parstyle(0)['hyphenate'] is False
+        inspector.update()
+        assert not inspector.hyphenate.GetValue()
     finally:
         frame.Destroy()
 

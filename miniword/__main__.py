@@ -3,7 +3,7 @@ import threading
 import wx
 from .core.document import Document
 from .core.config import get_config
-from .ui.mainwindow import MainFrame
+from .ui.mainwindow import MainFrame, new_document
 from .ui.unitentry import LengthInput, UnitPrefs
 from .layout import pagebuilder
 
@@ -118,7 +118,7 @@ def main():
         frame._current_path = path
         frame._update_title()
     else:
-        frame = MainFrame(Document())
+        frame = MainFrame(new_document())
     frame.Show()
     app.MainLoop()
 

@@ -23,6 +23,8 @@ Empty sections may be omitted. Comments start with `#`.
 | `paper_width` / `paper_height`  | Number | *(A4)*  | Only when `paper="custom"`           |
 | `header_left/center/right`      | Tuple  | `("none", "")` | Header field `(kind, text)`   |
 | `footer_left/center/right`      | Tuple  | `("none", "")` | Footer field; `footer_center` defaults to `("page", "")` |
+| `hyphenation`                   | Bool   | `False` | Automatic hyphenation                |
+| `language`                      | String | `"en-us"` | Hyphenation patterns: `"en-us"`, `"de-1996"` |
 | `header_footer_first_page`      | Bool   | `True`  | Header and footer also on page 1     |
 | `header_footer_mirror`          | Bool   | `False` | Swap left and right on even pages    |
 
@@ -77,6 +79,7 @@ Properties control text rendering and structure. There are four categories:
 | `line_spacing`      | `1.0`    | Line spacing factor                      |
 | `page_break_before` | `False`  | Force page break before paragraph        |
 | `widow_orphan_control` | `True` | No single line alone at a page break |
+| `hyphenate`         | `True`   | Hyphenate (if switched on for the document) |
 | `right_indent`      | `0`      | Distance from the right text edge in pt  |
 
 **Block Properties** – carried by `NL` elements:

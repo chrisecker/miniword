@@ -29,7 +29,7 @@ include = ["miniword*"]
 exclude = ["miniword.tests*"]
 
 [tool.setuptools.package-data]
-miniword = ["icons/*.svg"]
+miniword = ["icons/*.svg", "hyphenation/patterns/*"]
 
 [project.scripts]
 miniword = "miniword.__main__:main"

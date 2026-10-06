@@ -382,6 +382,19 @@ class TextBox(_TextBoxBase):
         self.layout()
 
 
+class HyphenBox(TextBox):
+    """The hyphen at the end of a hyphenated line: drawn, but not part of
+    the text (length 0)."""
+    def __init__(self, style=EMPTYSTYLE, device=None):
+        TextBox.__init__(self, '-', style, device)
+
+    def __len__(self):
+        return 0
+
+    def get_index(self, x, y):
+        return 0  # the break point, never behind it
+
+
 class NewlineBox(_TextBoxBase):
     text = '\n'
     width = 0

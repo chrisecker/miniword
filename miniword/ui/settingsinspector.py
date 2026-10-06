@@ -9,7 +9,11 @@ from ..core.styles import updated
 
 
 from ..core.papersizes import PAPER_SIZES
+from ..hyphenation import has_patterns
 PAPER_CHOICES = list(PAPER_SIZES) + ['custom']
+
+# hyphenation languages (see miniword.hyphenation.LANGUAGES)
+LANGUAGE_CHOICES = [('English (US)', 'en-us'), ('German', 'de-1996')]
 
 # header/footer fields: pulldown label and kind (see layout.page.field_text)
 FIELD_KINDS = [
@@ -96,6 +100,21 @@ class SettingsInspector(SidePanel):
                      lambda e, k=key: self._on_margin(k, e.value))
             add_row(form, lbl, inp)
 
+        # --- Language: hyphenation ---
+        add_section("Language", scrolled, form)
+        self.choice_language = wx.Choice(
+            scrolled, choices=[l for l, _ in LANGUAGE_CHOICES])
+        self.choice_language.Bind(wx.EVT_CHOICE, lambda e: self._set_prop(
+            language=LANGUAGE_CHOICES[
+                self.choice_language.GetSelection()][1]))
+        add_row(form, wx.StaticText(scrolled, label="Language"),
+                self.choice_language)
+        self.chk_hyphenation = wx.CheckBox(scrolled, label="Hyphenation")
+        self.chk_hyphenation.Bind(
+            wx.EVT_CHECKBOX, lambda e: self._set_prop(
+                hyphenation=self.chk_hyphenation.GetValue()))
+        add_row(form, self.chk_hyphenation)
+
         # --- Header and footer: a pulldown per field, 'Text' shows a
         # text field below it ---
         self.fields = {}  # {setting: (choice, textctrl)}
@@ -166,6 +185,17 @@ class SettingsInspector(SidePanel):
         for key, inp in self._margin_inputs.items():
             inp.SetValue(props[key])
         self._show_custom(paper == 'custom')
+        languages = [code for _, code in LANGUAGE_CHOICES]
+        self.choice_language.SetSelection(  # -1: not in the list
+            languages.index(props['language'])
+            if props['language'] in languages else -1)
+        self.chk_hyphenation.SetValue(props['hyphenation'])
+        # without patterns for the language, hyphenation can't work
+        patterns = has_patterns(props['language'])
+        self.chk_hyphenation.Enable(patterns)
+        self.chk_hyphenation.SetToolTip(
+            None if patterns else
+            "No hyphenation patterns for this language")
         kinds = [kind for _, kind in FIELD_KINDS]
         for key, (choice, text) in self.fields.items():
             kind, value = props[key]
@@ -332,5 +362,40 @@ def test_04():
         assert choice.GetStringSelection() == 'Text'
         assert text.IsShown() and text.GetValue() == 'Draft'
         assert inspector.chk_mirror.GetValue()
+    finally:
+        frame.Destroy()
+
+
+def test_05():
+    "language pulldown and hyphenation check box"
+    frame, inspector, document = _inspector()
+    try:
+        assert inspector.choice_language.GetStringSelection() == \
+            'English (US)'
+        assert not inspector.chk_hyphenation.GetValue()
+        _choose(inspector.choice_language, 'German')
+        _check(inspector.chk_hyphenation, True)
+        assert document.settings['language'] == 'de-1996'
+        assert document.settings['hyphenation'] is True
+        document.set_setting('language', 'en-us')
+        inspector.update()
+        assert inspector.choice_language.GetStringSelection() == \
+            'English (US)'
+    finally:
+        frame.Destroy()
+
+
+def test_06():
+    "Hyphenation is greyed out for a language without patterns"
+    frame, inspector, document = _inspector()
+    try:
+        assert inspector.chk_hyphenation.IsEnabled()
+        document.set_setting('language', 'fr')  # e.g. from another file
+        inspector.update()
+        assert inspector.choice_language.GetSelection() == -1
+        assert not inspector.chk_hyphenation.IsEnabled()
+        _choose(inspector.choice_language, 'German')
+        inspector.update()
+        assert inspector.chk_hyphenation.IsEnabled()
     finally:
         frame.Destroy()

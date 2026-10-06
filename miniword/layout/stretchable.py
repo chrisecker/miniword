@@ -1,4 +1,4 @@
-from .boxes import Rect, Box, VBox, TextBox, find_text_pos
+from .boxes import Rect, Box, VBox, TextBox, HyphenBox, find_text_pos
 from .testdevice import TESTDEVICE
 
 
@@ -206,7 +206,7 @@ def justify_line(l, width):
     boxes = []
     for i, box in enumerate(l):
         is_last = (i == len(l) - 1)
-        if isinstance(box, TextBox):
+        if isinstance(box, TextBox) and not isinstance(box, HyphenBox):
             stretchbox = create_stretchtext(box, is_last=is_last)
             assert stretchbox.width == stretchbox.get_minwidth()
             boxes.append(stretchbox)

@@ -57,6 +57,7 @@ from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
 from .linewrap import simple_linewrap
+from ..hyphenation import get_hyphenator
 from .stretchable import justify_line
 from ..tables.table_boxes import TableBox, create_cell, split_at_height, \
     CELL_HPAD, CELL_VPAD
@@ -287,6 +288,7 @@ class RowFactory(Factory):
         # width_first/left_first).
         # A table gets a row of its own (not wrapped), so that
         # RowStack.take can split it across pages.
+        hyphenate = self._hyphenate(p)
         lines = []
         for segment in split_at_tables(boxes):
             if isinstance(segment[0], TableBox):
@@ -294,7 +296,8 @@ class RowFactory(Factory):
                 continue
             for sub in split_at_breaks(segment):
                 w_first = width_first if not lines else width_rest
-                lines.extend(simple_linewrap(sub, w_first, width_rest))
+                lines.extend(simple_linewrap(sub, w_first, width_rest,
+                                             hyphenate=hyphenate))
         n = len(lines)
 
         # Must be set before the first yield: code after a yield only
@@ -321,6 +324,16 @@ class RowFactory(Factory):
             text = ''.join(getattr(t, 'text', '') for t in texels)
             r[0][0].heading = p['role'], text.strip()
         return r
+
+    def _hyphenate(self, parstyle):
+        """The hyphenation function (word -> pieces) for a paragraph:
+        None if switched off in the document or the paragraph style, or
+        without patterns for the document's language."""
+        settings = self.state.settings
+        if not settings['hyphenation'] or not parstyle['hyphenate']:
+            return None
+        hyphenator = get_hyphenator(settings['language'])
+        return hyphenator.hyphenate if hyphenator else None
 
     def _dims(self, parstyle, level):
         """Compute left_first/left_rest/width_first/width_rest:

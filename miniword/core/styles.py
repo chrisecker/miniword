@@ -82,6 +82,7 @@ layout_default = {
     # "keep_with_next":       False, # keep together with next paragraph
     # "keep_lines_together":  False, # prevent paragraph from breaking across pages
     "widow_orphan_control": True,  # no single line alone at a page break
+    "hyphenate":            True,  # switch hyphenation off, e.g. headings
     # "border_top":           None,  # top border
     # "border_bottom":        None,  # bottom border
     "block_color":          None,   # paragraph background color

@@ -23,6 +23,8 @@ settings_default = {
     "footer_left":   ("none", ""),
     "footer_center": ("page", ""),
     "footer_right":  ("none", ""),
+    "hyphenation":   False,       # automatic hyphenation
+    "language":      "en-us",     # for hyphenation (miniword.hyphenation)
     "header_footer_first_page": True,   # also on the first page
     "header_footer_mirror":     False,  # swap left/right on even pages
 }

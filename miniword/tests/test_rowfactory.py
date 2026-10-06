@@ -422,6 +422,26 @@ def test_WRAP_13():
     assert ends == [19] * len(records)  # edge 18 plus a space
 
 
+def test_WRAP_14():
+    "WRAP-14: CJK text breaks after any character, without spaces"
+    rows = flat(generate(doc(par('中文日本語中文日本語')), width=4)[0])
+    assert [row_text(r[0]) for r in rows] == ['中文日本', '語中文日', '本語']
+
+
+def test_WRAP_15():
+    "WRAP-15: kinsoku - no line starts with closing punctuation"
+    rows = flat(generate(doc(par('日本語。中文')), width=3)[0])
+    texts = [row_text(r[0]) for r in rows]
+    assert texts == ['日本', '語。中', '文']
+    assert not any(t.startswith('。') for t in texts)
+
+
+def test_WRAP_16():
+    "WRAP-16: mixed Latin and CJK text breaks at spaces and after CJK"
+    rows = flat(generate(doc(par('ab cd 中文日本')), width=7)[0])
+    assert [row_text(r[0]) for r in rows] == ['ab cd 中', '文日本']
+
+
 def test_WRAP_8():
     "WRAP-8: an empty paragraph gives exactly one row"
     paragraphs, state = generate(doc(par('a'), par(), par('b')))

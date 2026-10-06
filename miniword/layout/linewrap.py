@@ -1,44 +1,95 @@
 ﻿# -*- coding: utf-8 -*-
 
+import re
+
 from .testdevice import TESTDEVICE
-from .boxes import TabulatorBox, TextBox, EmptyTextBox, NewlineBox, Row
+from .boxes import TabulatorBox, TextBox, EmptyTextBox, NewlineBox, Row, \
+    HyphenBox
 
 
+# CJK line breaking - once lost in the move to layout/; kept by
+# linewrap.test_02 and test_rowfactory WRAP-14..16
+_KINSOKU_START = (
+    '、。，．！？）」』】〕〉》…‥ー゛゜'   # punctuation that cannot start a line
+    'ぁぃぅぇぉっゃゅょゎ'                  # small hiragana
+    'ァィゥェォッャュョヮヵヶ'               # small katakana
+)
+
+# Break opportunities: after a space, or after a CJK character unless a
+# kinsoku-start character follows.
+_BREAK_RE = re.compile(
+    r'(?<= )'
+    r'|(?<=['
+    '\u4e00-\u9fff'   # CJK Unified Ideographs
+    '\u3040-\u30ff'   # Hiragana + Katakana
+    '\uac00-\ud7af'   # Hangul
+    '\u3400-\u4dbf'   # CJK Extension A
+    r'])'
+    r'(?![' + re.escape(_KINSOKU_START) + r'])'
+)
 
 
 def find_goodbreak(box, maxw):
-    """Search good break position at or before maxw, returns None
-       (i.e. no good split position possible) otherwise. If 
-       box.width <= maxw then len(box) is returned.
-    """    
-    if (not isinstance(box, TextBox)) or maxw <= 0:
-        # no good split is possible
+    """Search good break position at or before maxw, returns None if no good
+    split position is possible. If box.width <= maxw, len(box) is returned.
+
+    Recognises both Latin word boundaries (spaces) and CJK character
+    boundaries, including Japanese kinsoku rules.
+    """
+    if not isinstance(box, TextBox) or maxw <= 0:
         return None
-
-    if box.width<=maxw:
-        # split is not necessary
+    if box.width <= maxw:
         return len(box)
-
     text = box.text
     if not text:
         return None
 
     measure = box.measure
-    width = 0
-    ws = measure(' ')[0]
-    i = 0
-    for word in text.split(' '):
-        w = measure(word)[0]
-        if width+w <= maxw:
-            i += len(word)+1
-            width += w+ws
-            continue
-        if i==0:
-            return None
-        return min(len(text), i)
-    return None
+    last_fit = None
+    for m in _BREAK_RE.finditer(text):
+        pos = m.start()
+        # a space before the break hangs over the edge: not measured
+        check_pos = pos - 1 if pos > 0 and text[pos - 1] == ' ' else pos
+        if measure(text[:check_pos])[0] <= maxw:
+            last_fit = pos
+        else:
+            break   # widths are monotonically non-decreasing
+    return last_fit
 
     
+PUNCTUATION = '.,;:!?"\'()[]«»„“”‘’'  # stripped before hyphenating
+
+
+def find_hyphen_break(box, maxw, hyphenate, continues=False):
+    """Where to hyphenate the word reaching over maxw (part plus hyphen
+    fit), or None. hyphenate: word -> pieces. continues: the box starts
+    within a word, which is then not hyphenated."""
+    if not isinstance(box, TextBox) or maxw <= 0:
+        return None
+    text, measure = box.text, box.measure
+    start = 0
+    for word in text.split(' '):
+        end = start + len(word)
+        if measure(text[:end])[0] > maxw:
+            break
+        start = end + 1
+    else:
+        return None
+    if start == 0 and continues:
+        return None
+    core = word.strip(PUNCTUATION)
+    if not core:
+        return None
+    pos = start + word.index(core)
+    hyphen = measure('-')[0]
+    best = None
+    for piece in hyphenate(core)[:-1]:
+        pos += len(piece)
+        if measure(text[:pos])[0] + hyphen <= maxw:
+            best = pos
+    return best
+
+
 def find_anybreak(box, maxw):
     """Search possible break position at or before maxw, returns None
        otherwise."""
@@ -64,12 +115,15 @@ def split_box(box, i):
     )
 
 
-def simple_linewrap(boxes, maxw, maxw2=None, wordwrap=True):
+def simple_linewrap(boxes, maxw, maxw2=None, wordwrap=True,
+                    hyphenate=None):
     """Break boxes into rows where each row does not exceed width
     maxw.
 
     if wordwrap is True (default), tries to break at spaces. Only if
-    no spaces are found, breaking in words is considered. 
+    no spaces are found, breaking in words is considered. With
+    hyphenate (word -> pieces), a word reaching over the edge is
+    hyphenated first, before it is moved to the next row.
     """
     if maxw2 is None:
         maxw2 = maxw
@@ -89,12 +143,25 @@ def simple_linewrap(boxes, maxw, maxw2=None, wordwrap=True):
             line.append(box)
             w += box.width
 
-            if isinstance(box, TextBox) and ' ' in box.text:
-                last_space = (len(line) - 1, box.text.rindex(' ') + 1)
+            if isinstance(box, TextBox):
+                matches = list(_BREAK_RE.finditer(box.text))
+                if matches:
+                    last_space = (len(line) - 1, matches[-1].start())
             continue
 
         # Try to break box
         avail = maxw - w
+        if hyphenate is not None:
+            continues = bool(line) and isinstance(line[-1], TextBox) \
+                and not line[-1].text.endswith(' ')
+            i = find_hyphen_break(box, avail, hyphenate, continues)
+            if i:
+                a, b = split_box(box, i)
+                rows.append(line + [a, HyphenBox(box.style, box.device)])
+                boxes = [b] + boxes
+                maxw = maxw2
+                line, w, last_space = [], 0, None
+                continue
         i = None
         if wordwrap:
             i = find_goodbreak(box, avail)
@@ -153,6 +220,21 @@ def test_00():
     assert find_goodbreak(box, 9) == 8
     assert find_goodbreak(box, 10) == 10 # no split necessary
     assert find_goodbreak(box, 11) == 10 # no split necessary
+
+
+def test_02():
+    "CJK line breaking with kinsoku rules"
+    # Break after every CJK character
+    box = TextBox("中文日本語")
+    assert find_goodbreak(box, 0) is None
+    assert find_goodbreak(box, 1) == 1
+    assert find_goodbreak(box, 4) == 4
+    assert find_goodbreak(box, 5) == 5   # fits
+
+    # Kinsoku: no break before '。' (line-start prohibited)
+    # "日本。語": a break after '日' (pos 1), not before '。' (pos 2)
+    box = TextBox("日本。語")
+    assert find_goodbreak(box, 2) == 1   # pos 2 blocked by kinsoku
 
 
 def test_01():
