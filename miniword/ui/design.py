@@ -8,9 +8,11 @@ ALL_CENTER = wx.ALL|wx.ALIGN_CENTER_VERTICAL
 
 
 def make_tab(notebook, title):
-    """Add a standard notebook page with panel background and 8px padding.
+    """Add a standard notebook page with panel background and 8px padding;
+    it scrolls vertically when its content is higher than the window.
     Returns (panel, content_sizer)."""
-    panel = wx.Panel(notebook)
+    panel = wx.ScrolledWindow(notebook, style=wx.VSCROLL | wx.BORDER_NONE)
+    panel.SetScrollRate(0, panel.FromDIP(10))
     colours.set(panel, 'BackgroundColour', 'BTNFACE')
     notebook.AddPage(panel, title)
     dip = panel.FromDIP

@@ -1044,6 +1044,7 @@ class StyleInspector(SidePanel):
         self.list_panel.Show(ptype == "list")
         self.enum_panel.Show(ptype == "numbered")
         self._structure_page.Layout()
+        self._structure_page.FitInside()  # options shown/hidden: rescroll
 
         value = properties['page_break_before']
         if value is None:
@@ -1220,6 +1221,33 @@ def test_01():
         inspector.update()
         assert inspector.widow_orphan.Get3StateValue() == \
             wx.CHK_UNDETERMINED
+    finally:
+        frame.Destroy()
+
+
+def test_02():
+    "a tab higher than the window scrolls instead of squeezing its rows"
+    from types import SimpleNamespace
+    from ..core.stylesheet import testsheet
+    from ..texteditor.editor import Editor
+
+    if wx.App.Get() is None:
+        wx.App(False)
+    frame = wx.Frame(None, size=(330, 400))
+    try:
+        model = TextModel("Eins\nZwei")
+        model.set_parstyle(0, dict(paragraph_type='list'))
+        editor = Editor(model)
+        editor.canvas = SimpleNamespace(
+            builder=SimpleNamespace(stylesheet=testsheet))
+        inspector = StyleInspector(frame, editor, testsheet)
+        frame.Layout()
+        inspector.update()
+        page = inspector._structure_page  # the Layout tab, list options shown
+        assert page.GetVirtualSize()[1] > page.GetClientSize()[1]
+        for field in (inspector.indent_position, inspector.list_indent,
+                      inspector.right_indent):
+            assert field.GetSize()[1] >= field.GetBestSize()[1]
     finally:
         frame.Destroy()
 
