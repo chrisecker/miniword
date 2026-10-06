@@ -1408,6 +1408,61 @@ def test_ORPH_8():
 
 
 # ---------------------------------------------------------------------
+# KEEP - keep_with_next
+# ---------------------------------------------------------------------
+
+KEEP = dict(keep_with_next=True)
+
+
+def test_KEEP_1():
+    "KEEP-1: a paragraph with keep_with_next moves on with the next one"
+    texel = doc(par(*lines('a', 4)), par('H', **KEEP), par(*lines('b', 3)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'a2', 'a3'],
+                                    ['H', 'b0', 'b1', 'b2']]
+
+
+def test_KEEP_2():
+    "KEEP-2: several such paragraphs in a row move together"
+    texel = doc(par(*lines('a', 3)), par('H', **KEEP), par('I', **KEEP),
+                par(*lines('b', 3)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'a2'],
+                                    ['H', 'I', 'b0', 'b1', 'b2']]
+
+
+def test_KEEP_3():
+    "KEEP-3: never an empty page"
+    texel = doc(par('H', **KEEP), par('I', **KEEP), par(*lines('b', 3)))
+    pages = page_lines(texel, 2)
+    assert pages[0] == ['H', 'I']
+    assert sum(pages, []) == ['H', 'I', 'b0', 'b1', 'b2']
+
+
+def test_KEEP_4():
+    "KEEP-4: off by default; a break within the next paragraph is kept"
+    texel = doc(par(*lines('a', 4)), par('H'), par(*lines('b', 3)))
+    assert page_lines(texel, 5)[0] == ['a0', 'a1', 'a2', 'a3', 'H']
+    # the next paragraph starts on the page: H stays with it
+    texel = doc(par(*lines('a', 2)), par('H', **KEEP), par(*lines('b', 4)))
+    assert page_lines(texel, 5) == [['a0', 'a1', 'H', 'b0', 'b1'],
+                                    ['b2', 'b3']]
+
+
+def test_KEEP_5():
+    "KEEP-5: restarting from every page reproduces the pages"
+    texel = doc(*[p for k in range(8) for p in
+                  (par('H%d' % k, **KEEP), par(*lines('p%d_' % k, 2 + k % 3)))])
+    pages = pages_from(texel, small_memo(width=20, height=5))
+    starts = page_starts(pages)
+    for k in range(len(pages) - 1):
+        again = pages_from(texel, pages[k].restartmemo, starts[k + 1])
+        assert [page_sig(p) for p in again] == \
+            [page_sig(p) for p in pages[k + 1:]], k
+    for page in pages:  # no heading alone at a page bottom
+        texts = [row_text(r) for _, _, r in page.rows]
+        assert not (len(texts) > 1 and texts[-1].startswith('H')), texts
+
+
+# ---------------------------------------------------------------------
 # RESTART - pages from a memo
 # ---------------------------------------------------------------------
 

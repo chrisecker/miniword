@@ -575,8 +575,11 @@ def _parse_inline(text, fn_defs=None):
 
 def _github_defs(size, mm):
     s = size / 12
+    ls = 1.15  # line spacing of running text, as in style 'normal'
     return {
-        'body':     {'role': 'body',     'name': 'Body',      'font_size': size, 'space_after': round(4 * s)},
+        'body':     {'role': 'body',     'name': 'Body',
+                     'font_size': size, 'space_after': round(6 * s),
+                     'line_spacing': ls},
         'h1':       {'role': 'h1',       'name': 'Heading 1', 'font_size': round(24 * s), 'bold': True,
                      'space_before': round(12 * s),     'space_after': round(6 * s), 'fixed_indent': 0},
         'h2':       {'role': 'h2',       'name': 'Heading 2', 'font_size': round(18 * s), 'bold': True,
@@ -589,9 +592,14 @@ def _github_defs(size, mm):
         'pre':      {'role': 'pre',      'name': 'Code',      'font_size': max(8, round(10 * s)),
                      'font_family': 'Courier New',
                      'block_color': '#F6F8FA', 'block_offset': 2 * mm * s},
-        'list':     {'role': 'list',     'name': 'List',      'font_size': size, 'space_after': 0, 'paragraph_type': 'list'},
-        'numbered': {'role': 'numbered', 'name': 'Numbered',  'font_size': size, 'space_after': 0, 'paragraph_type': 'numbered'},
-        'quote':    {'role': 'quote',    'name': 'Quote',     'font_size': size,
+        'list':     {'role': 'list',     'name': 'List',
+                     'font_size': size, 'space_after': 0,
+                     'paragraph_type': 'list', 'line_spacing': ls},
+        'numbered': {'role': 'numbered', 'name': 'Numbered',
+                     'font_size': size, 'space_after': 0,
+                     'paragraph_type': 'numbered', 'line_spacing': ls},
+        'quote':    {'role': 'quote',    'name': 'Quote',
+                     'font_size': size, 'line_spacing': ls,
                      'block_color': '#F0F0F0', 'block_offset': 2 * mm * s},
     }
 
@@ -618,11 +626,13 @@ def _preset_defs(preset, mm):
             'pre':      {'role': 'pre',      'name': 'Code',      'font_size': 10, 'font_family': 'Courier New',
                          'block_color': '#F0F0F0', 'block_offset': 2 * mm},
             'list':     {'role': 'list',     'name': 'List',      'font_family': 'Times New Roman', 'font_size': 12,
-                         'space_after': 0, 'paragraph_type': 'list'},
+                         'space_after': 0, 'paragraph_type': 'list',
+                         'line_spacing': 1.3},
             'numbered': {'role': 'numbered', 'name': 'Numbered',  'font_family': 'Times New Roman', 'font_size': 12,
-                         'space_after': 0, 'paragraph_type': 'numbered'},
+                         'space_after': 0, 'paragraph_type': 'numbered',
+                         'line_spacing': 1.3},
             'quote':    {'role': 'quote',    'name': 'Quote',     'font_family': 'Times New Roman', 'italic': True,
-                         'block_offset': 2 * mm},
+                         'block_offset': 2 * mm, 'line_spacing': 1.3},
         }
     if preset == 'compact':
         return {
@@ -1853,3 +1863,19 @@ Code: `print("hello")` inline.
         os.unlink(out_path)
     finally:
         os.unlink(path)
+
+
+def test_35():
+    "presets: line spacing 1.15 for GitHub, 1.3 throughout Report"
+    mm = 72 / 25.4
+    for preset, size in (('github', 12), ('github_small', 10)):
+        defs = _preset_defs(preset, mm)
+        for name in ('body', 'list', 'numbered', 'quote'):
+            assert defs[name]['line_spacing'] == 1.15, (preset, name)
+        assert defs['body']['space_after'] == round(6 * size / 12)
+        assert 'line_spacing' not in defs['pre']   # code stays dense
+    report = _preset_defs('report', mm)
+    for name in ('body', 'list', 'numbered', 'quote'):
+        assert report[name]['line_spacing'] == 1.3, name
+    compact = _preset_defs('compact', mm)
+    assert all('line_spacing' not in props for props in compact.values())

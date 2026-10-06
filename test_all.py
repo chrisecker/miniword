@@ -42,6 +42,7 @@ modules = [
     "miniword.tests.test_headerfooter",
     "miniword.tests.test_hyphenation",
     "miniword.tests.test_marks",
+    "miniword.tests.test_inspector",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",
@@ -63,9 +64,7 @@ modules = [
 
     # ui
     "miniword.ui.stylemenu",
-    "miniword.ui.styleinspector",
     "miniword.ui.unitentry",
-    "miniword.ui.settingsinspector",
     "miniword.ui.searchtool",
     "miniword.ui.markdownpreview",
 

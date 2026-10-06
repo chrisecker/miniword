@@ -79,6 +79,7 @@ Properties control text rendering and structure. There are four categories:
 | `line_spacing`      | `1.0`    | Line spacing factor                      |
 | `page_break_before` | `False`  | Force page break before paragraph        |
 | `widow_orphan_control` | `True` | No single line alone at a page break |
+| `keep_with_next`    | `False`  | On the same page as the next paragraph |
 | `hyphenate`         | `True`   | Hyphenate (if switched on for the document) |
 | `right_indent`      | `0`      | Distance from the right text edge in pt  |
 

@@ -79,7 +79,7 @@ layout_default = {
     # "tab_stops":       ...,       # TODO
 
     "page_break_before": False,     # start on a new page
-    # "keep_with_next":       False, # keep together with next paragraph
+    "keep_with_next":       False,  # on the same page as the next paragraph
     # "keep_lines_together":  False, # prevent paragraph from breaking across pages
     "widow_orphan_control": True,  # no single line alone at a page break
     "hyphenate":            True,  # switch hyphenation off, e.g. headings

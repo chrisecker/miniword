@@ -726,6 +726,22 @@ def page_style(stylesheet, role):
     return stylesheet.mk_parstyle({'base': base})
 
 
+def keep_with_next(placed, buffer):
+    """At a page break between paragraphs: move the paragraphs with
+    keep_with_next at the end of placed (the page) to the front of buffer
+    (the next page), e.g. headings. Never empties the page."""
+    if not placed or not buffer or not buffer[0][2]:  # break inside
+        return
+    k = len(placed)
+    while k > 0 and placed[k - 1][1][1].get('keep_with_next'):
+        k -= 1
+        while k > 0 and not placed[k][1][2]:  # to the paragraph's start
+            k -= 1
+    if 0 < k < len(placed):
+        buffer[:0] = [record for _, record in placed[k:]]
+        del placed[k:]
+
+
 def running_heads(placed, state):
     """(chapter, section) of a page with the rows placed: the first
     heading with role h1/h2 on it, else the one in effect before; a new
@@ -798,6 +814,7 @@ def generate_pages(texel, i1, memo, stylesheet, device):
 
         if state.rows:  # the page is full: avoid orphans and widows
             adjust_page_break(body.placed, state.rows)
+            keep_with_next(body.placed, state.rows)
         if not body.placed and not notes.placed:
             return  # nothing left: the generator just ends
         footnotebox = None

@@ -291,16 +291,10 @@ class StyleInspector(SidePanel):
         self.reset_align = ResetButton(panel, ['alignment'])
         add_row(contentsizer, self.align, self.reset_align)
 
-        self.hyphenate = wx.CheckBox(panel, -1, "Hyphenate",
-                                     style=wx.CHK_3STATE)
-        self.hyphenate.SetToolTip(
+        self._par_checks = {}  # {property: (check box, reset button)}
+        self.hyphenate = self._par_checkbox(
+            panel, contentsizer, 'hyphenate', "Hyphenate",
             "Hyphenate this paragraph (if switched on for the document)")
-        self.reset_hyphenate = ResetButton(panel, ['hyphenate'])
-        add_row(contentsizer, self.hyphenate, self.reset_hyphenate)
-        self.hyphenate.Bind(
-            wx.EVT_CHECKBOX,
-            lambda e: self.set_parproperties(
-                hyphenate=self.hyphenate.GetValue()))
 
         add_section("Indentation", panel, contentsizer)
 
@@ -474,24 +468,16 @@ class StyleInspector(SidePanel):
                                      self.on_block_border_sides)
 
         add_section("Page break", panel, contentsizer)
-        self.page_break_before = wx.CheckBox(panel, -1, "Break before",
-                                             style=wx.CHK_3STATE)
-        self.reset_page_break_before = ResetButton(panel, ['page_break_before'])
-        add_row(contentsizer, self.page_break_before, self.reset_page_break_before)
-        self.page_break_before.Bind(
-            wx.EVT_CHECKBOX,
-            lambda e: self.set_parproperties(
-                page_break_before=self.page_break_before.GetValue()))
-
-        self.widow_orphan = wx.CheckBox(
-            panel, -1, "Widow/orphan control", style=wx.CHK_3STATE)
-        self.widow_orphan.SetToolTip(
+        self.page_break_before = self._par_checkbox(
+            panel, contentsizer, 'page_break_before', "Break before")
+        self.keep_with_next = self._par_checkbox(
+            panel, contentsizer, 'keep_with_next', "Keep with next",
+            "On the same page as the next paragraph, e.g. for headings")
+        self.widow_orphan = self._par_checkbox(
+            panel, contentsizer, 'widow_orphan_control',
+            "Widow/orphan control",
             "No single line of a paragraph alone at the top or bottom "
             "of a page")
-        self.reset_widow_orphan = ResetButton(
-            panel, ['widow_orphan_control'])
-        add_row(contentsizer, self.widow_orphan, self.reset_widow_orphan)
-        self.widow_orphan.Bind(wx.EVT_CHECKBOX, self.on_widow_orphan)
 
         add_section("Semantics", panel, contentsizer)
         self.role = wx.Choice(panel, choices=[lbl for lbl, _ in _ROLES])
@@ -512,17 +498,17 @@ class StyleInspector(SidePanel):
             resetter.callback = self.clear_char_properties
 
         for resetter in [
-                self.reset_align, self.reset_hyphenate,
+                self.reset_align,
                 self.reset_first, self.reset_line_spacing,
                 self.reset_space_before, self.reset_space_after, self.reset_policy,
                 self.reset_indent, self.reset_paragraph_type, self.reset_list_indent,
                 self.reset_marker_pos, self.reset_marker_color, self.reset_marker_size,
                 self.reset_bullet, self.reset_numbering, self.reset_start,
-                self.reset_page_break_before, self.reset_block_color,
+                self.reset_block_color,
                 self.reset_block_offset, self.reset_block_border_width,
                 self.reset_block_border_color, self.reset_block_border_sides,
-                self.reset_right_indent, self.reset_widow_orphan,
-                self.reset_role]:
+                self.reset_right_indent, self.reset_role] + [
+                reset for _, reset in self._par_checks.values()]:
             resetter.callback = self.clear_parproperties
 
     def dpi_changed(self):
@@ -610,9 +596,17 @@ class StyleInspector(SidePanel):
     def on_list_indent(self, event):
         self.set_parproperties(list_indent=event.value)
 
-    def on_widow_orphan(self, event):
-        self.set_parproperties(
-            widow_orphan_control=self.widow_orphan.GetValue())
+    def _par_checkbox(self, panel, sizer, key, label, tooltip=None):
+        """A check box (with reset button) for paragraph property key."""
+        checkbox = wx.CheckBox(panel, -1, label, style=wx.CHK_3STATE)
+        if tooltip:
+            checkbox.SetToolTip(tooltip)
+        reset = ResetButton(panel, [key])
+        add_row(sizer, checkbox, reset)
+        checkbox.Bind(wx.EVT_CHECKBOX, lambda e: self.set_parproperties(
+            **{key: checkbox.GetValue()}))
+        self._par_checks[key] = checkbox, reset
+        return checkbox
 
     def on_block_border_sides(self, event):
         buttons = self.block_border_sides.buttons
@@ -921,12 +915,12 @@ class StyleInspector(SidePanel):
         x = 'font_size' in overrides
         self.reset_size.set_x(x)
 
-        value = properties['hyphenate']
-        if value is None:  # paragraphs with different values
-            self.hyphenate.Set3StateValue(wx.CHK_UNDETERMINED)
-        else:
-            self.hyphenate.SetValue(value)
-        self.reset_hyphenate.set_x('hyphenate' in overrides)
+        for key, (checkbox, reset) in self._par_checks.items():
+            if properties[key] is None:  # paragraphs with different values
+                checkbox.Set3StateValue(wx.CHK_UNDETERMINED)
+            else:
+                checkbox.SetValue(properties[key])
+            reset.set_x(key in overrides)
 
         value = properties['alignment']
         if value is None:
@@ -1067,14 +1061,6 @@ class StyleInspector(SidePanel):
         self._structure_page.Layout()
         self._structure_page.FitInside()  # options shown/hidden: rescroll
 
-        value = properties['page_break_before']
-        if value is None:
-            self.page_break_before.Set3StateValue(wx.CHK_UNDETERMINED)
-        else:
-            self.page_break_before.SetValue(value)
-        x = 'page_break_before' in overrides
-        self.reset_page_break_before.set_x(x)
-
         self.block_color.set_colour(properties['block_color'])
         self.reset_block_color.set_x('block_color' in overrides)
 
@@ -1091,13 +1077,6 @@ class StyleInspector(SidePanel):
         has_line = bool(properties['block_border_width'])
         self.block_border_color.Enable(has_line)
         self.block_border_sides.Enable(has_line)
-
-        value = properties['widow_orphan_control']
-        if value is None:  # paragraphs with different values
-            self.widow_orphan.Set3StateValue(wx.CHK_UNDETERMINED)
-        else:
-            self.widow_orphan.SetValue(value)
-        self.reset_widow_orphan.set_x('widow_orphan_control' in overrides)
 
         role = properties.get('role')
         role_values = [v for _, v in _ROLES]
@@ -1177,129 +1156,6 @@ def mk_demo(redirect=False):
     frame.Show()    
     return app, view, model
     
-
-
-def test_00():
-    "get_parstyle" # just to be sure
-    m = TextModel("Eins\nZwei\ndrei")
-    m.set_parstyle(0, dict(x=1)) # -> Parstyle für "Eins\n"
-    m.set_parstyle(5, dict(x=2)) # -> Parstyle für "Zwei\n"
-    assert m.get_parstyle(0)['x'] == 1 # E
-    assert m.get_parstyle(1)['x'] == 1 # i
-    assert m.get_parstyle(2)['x'] == 1 # n
-    assert m.get_parstyle(3)['x'] == 1 # s
-    assert m.get_parstyle(4)['x'] == 1 # \n
-    assert m.get_parstyle(5)['x'] == 2 # Z
-    assert m.get_parstyle(6)['x'] == 2 # w
-    
-def test_01():
-    "border/background and page break controls <-> paragraph properties"
-    from types import SimpleNamespace
-    from ..core.stylesheet import testsheet
-    from ..texteditor.editor import Editor
-
-    def click(control, event_type):
-        event = wx.CommandEvent(event_type, control.GetId())
-        event.SetEventObject(control)
-        event.SetInt(int(control.GetValue()))
-        control.ProcessWindowEvent(event)
-
-    if wx.App.Get() is None:
-        wx.App(False)
-    frame = wx.Frame(None)
-    try:
-        model = TextModel("Eins\nZwei")
-        editor = Editor(model)
-        # mk_style takes the stylesheet from the canvas' builder
-        editor.canvas = SimpleNamespace(
-            builder=SimpleNamespace(stylesheet=testsheet))
-        inspector = StyleInspector(frame, editor, testsheet)
-        inspector.update()
-        sides = inspector.block_border_sides
-        # without a line, line color and sides are greyed out
-        assert not inspector.block_border_color.IsEnabled()
-        assert not sides.IsEnabled()
-        assert inspector.widow_orphan.GetValue()
-
-        inspector.set_parproperties(block_border_width=1,
-                                    block_border_sides='tb')
-        inspector.update()
-        assert inspector.block_border_color.IsEnabled()
-        assert [b.GetValue() for b in sides.buttons.values()] == \
-            [True, True, False, False]  # t, b, l, r
-
-        sides.buttons['l'].SetValue(True)
-        click(sides.buttons['l'], wx.wxEVT_TOGGLEBUTTON)
-        assert model.get_parstyle(0)['block_border_sides'] == 'tbl'
-
-        inspector.widow_orphan.SetValue(False)
-        click(inspector.widow_orphan, wx.wxEVT_CHECKBOX)
-        assert model.get_parstyle(0)['widow_orphan_control'] is False
-
-        # two paragraphs with different values (None in properties)
-        model.set_parstyle(5, dict(block_offset=3, right_indent=2))
-        editor.selection = (0, len(model))
-        inspector.update()
-        assert inspector.widow_orphan.Get3StateValue() == \
-            wx.CHK_UNDETERMINED
-    finally:
-        frame.Destroy()
-
-
-def test_02():
-    "a tab higher than the window scrolls instead of squeezing its rows"
-    from types import SimpleNamespace
-    from ..core.stylesheet import testsheet
-    from ..texteditor.editor import Editor
-
-    if wx.App.Get() is None:
-        wx.App(False)
-    frame = wx.Frame(None, size=(330, 400))
-    try:
-        model = TextModel("Eins\nZwei")
-        model.set_parstyle(0, dict(paragraph_type='list'))
-        editor = Editor(model)
-        editor.canvas = SimpleNamespace(
-            builder=SimpleNamespace(stylesheet=testsheet))
-        inspector = StyleInspector(frame, editor, testsheet)
-        frame.Layout()
-        inspector.update()
-        page = inspector._structure_page  # the Layout tab, list options shown
-        assert page.GetVirtualSize()[1] > page.GetClientSize()[1]
-        for field in (inspector.indent_position, inspector.list_indent,
-                      inspector.right_indent):
-            assert field.GetSize()[1] >= field.GetBestSize()[1]
-    finally:
-        frame.Destroy()
-
-
-def test_03():
-    "the Hyphenate check box sets the paragraph's hyphenate"
-    from types import SimpleNamespace
-    from ..core.stylesheet import testsheet
-    from ..texteditor.editor import Editor
-
-    if wx.App.Get() is None:
-        wx.App(False)
-    frame = wx.Frame(None)
-    try:
-        model = TextModel("Eins\nZwei")
-        editor = Editor(model)
-        editor.canvas = SimpleNamespace(
-            builder=SimpleNamespace(stylesheet=testsheet))
-        inspector = StyleInspector(frame, editor, testsheet)
-        inspector.update()
-        assert inspector.hyphenate.GetValue()
-        inspector.hyphenate.SetValue(False)
-        event = wx.CommandEvent(wx.wxEVT_CHECKBOX,
-                                inspector.hyphenate.GetId())
-        event.SetEventObject(inspector.hyphenate)
-        inspector.hyphenate.ProcessWindowEvent(event)
-        assert model.get_parstyle(0)['hyphenate'] is False
-        inspector.update()
-        assert not inspector.hyphenate.GetValue()
-    finally:
-        frame.Destroy()
 
 
 def _test_01():
