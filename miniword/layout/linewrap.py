@@ -60,12 +60,15 @@ def find_goodbreak(box, maxw):
 
     
 PUNCTUATION = '.,;:!?"\'()[]«»„“”‘’'  # stripped before hyphenating
+NBHYPHEN, SOFTHYPHEN = '\u2011', '\u00ad'
 
 
 def find_hyphen_break(box, maxw, hyphenate, continues=False):
     """Where to hyphenate the word reaching over maxw (part plus hyphen
-    fit), or None. hyphenate: word -> pieces. continues: the box starts
-    within a word, which is then not hyphenated."""
+    fit), or None. hyphenate: word -> pieces; in words with soft hyphens
+    only these count. Breaks after the word's own hyphens, but not after
+    protected ones (U+2011). continues: the box starts within a word,
+    which is then not hyphenated."""
     if not isinstance(box, TextBox) or maxw <= 0:
         return None
     text, measure = box.text, box.measure
@@ -84,17 +87,29 @@ def find_hyphen_break(box, maxw, hyphenate, continues=False):
         return None
     pos = start + word.index(core)
     hyphen = measure('-')[0]
+    soft = SOFTHYPHEN in core
     best = None
-    parts = core.split('-')  # e.g. Hals-Nasen-Ohren-Arzt
-    for k, part in enumerate(parts):
-        p = pos
-        for piece in hyphenate(part)[:-1]:
-            p += len(piece)
-            if measure(text[:p])[0] + hyphen <= maxw:
-                best = p
-        pos += len(part) + 1
-        if k < len(parts) - 1 and measure(text[:pos])[0] <= maxw:
-            best = pos  # after the word's own hyphen
+    tokens = re.split('([-%s])' % NBHYPHEN, core)  # Hals, -, Nasen, ...
+    for k, token in enumerate(tokens):
+        if token == '-':
+            pos += 1
+            if tokens[k + 1] and measure(text[:pos])[0] <= maxw:
+                best = pos  # after the word's own hyphen
+            continue
+        if token == NBHYPHEN:
+            pos += 1
+            continue
+        if soft:
+            breaks = [i + 1 for i, c in enumerate(token) if c == SOFTHYPHEN]
+        else:
+            breaks, n = [], 0
+            for piece in hyphenate(token)[:-1]:
+                n += len(piece)
+                breaks.append(n)
+        for n in breaks:
+            if measure(text[:pos + n])[0] + hyphen <= maxw:
+                best = pos + n
+        pos += len(token)
     return best
 
 
@@ -159,10 +174,12 @@ def simple_linewrap(boxes, maxw, maxw2=None, wordwrap=True,
 
         # Try to break box
         avail = maxw - w
-        if hyphenate is not None:
+        if hyphenate is not None or (isinstance(box, TextBox)
+                                     and SOFTHYPHEN in box.text):
             continues = bool(line) and isinstance(line[-1], TextBox) \
                 and not line[-1].text.endswith(' ')
-            i = find_hyphen_break(box, avail, hyphenate, continues)
+            i = find_hyphen_break(box, avail, hyphenate or (lambda w: [w]),
+                                  continues)
             if i:
                 a, b = split_box(box, i)
                 hyphen = [] if a.text.endswith('-') else \

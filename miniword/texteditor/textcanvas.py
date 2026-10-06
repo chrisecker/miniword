@@ -7,6 +7,7 @@ from ..layout.testdevice import TESTDEVICE
 from ..layout.simplelayout import SimpleBuilder
 from ..layout.rect import Rect
 from ..layout import annotation
+from ..layout import marks
 
 import wx
 import string
@@ -507,6 +508,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
 
     ### Drawing
 
+    show_marks = True  # formatting marks, see layout.marks
+
     def draw_background(self, painter):
         self.layout.draw_background(painter)
 
@@ -521,6 +524,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         for flow, items in self.squiggles.items():
             for i1, i2, *color in items:
                 annotation.squiggle(painter, layout.iter_boxes(flow), i1, i2, *color)
+        if self.show_marks:  # screen only: print and PDF don't come here
+            for flow in (0, 1):
+                marks.draw_marks(painter, layout.iter_boxes(flow))
         if self.editor is not None:
             self.editor.controller.draw(painter)
 

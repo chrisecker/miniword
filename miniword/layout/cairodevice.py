@@ -31,6 +31,12 @@ defaultstyle = dict(
 
 _VPOS_SCALE = 0.65
 
+
+def _visible(text):
+    """text without soft hyphens (cairo's toy text API would draw them;
+    HarfBuzz already hides them)."""
+    return text.replace('\u00ad', '')
+
 def filled(style, defaultstyle=defaultstyle):
     """Fill missing properties with default values."""
     new = defaultstyle.copy()
@@ -301,7 +307,7 @@ class CairoDevice:
             runs = self._shape_with_fallback(text, hb_font, _style['font_size'])
             xa = sum(sum(p.x_advance for p in pos) for _, _, pos in runs) / 64.0
         else:
-            xa = ctx.text_extents(text)[4]
+            xa = ctx.text_extents(_visible(text))[4]
 
         result = (xa, height, depth)
 
@@ -345,7 +351,8 @@ class CairoDevice:
             return widths
         ctx = self._temp_ctx
         set_font(ctx, _style)
-        return [ctx.text_extents(text[:i])[4] for i in range(1, len(text) + 1)]
+        return [ctx.text_extents(_visible(text[:i]))[4]
+                for i in range(1, len(text) + 1)]
 
     def intersects(self, ctx, rect):
         """
@@ -425,7 +432,7 @@ class CairoDevice:
                 xa = sum(sum(p.x_advance for p in pos) for _, _, pos in sruns) / 64.0
             else:
                 sruns = None
-                xa = ctx.text_extents(text)[4]
+                xa = ctx.text_extents(_visible(text))[4]
             segments.append((text, cur_x, xa, sruns))
             cur_x += xa + spacing
 
@@ -457,7 +464,7 @@ class CairoDevice:
                     ctx.text_path(text)
                     ctx.fill()
                 else:
-                    ctx.show_text(text)
+                    ctx.show_text(_visible(text))
 
         # 3. Draw underline / strikethrough as one continuous line
         if getattr(self, '_current_underline', False):
@@ -480,7 +487,7 @@ class CairoDevice:
             xa = sum(sum(p.x_advance for p in pos) for _, _, pos in runs) / 64.0
         else:
             runs = None
-            xa = ctx.text_extents(text)[4]
+            xa = ctx.text_extents(_visible(text))[4]
 
         bgcolor = getattr(self, '_current_bgcolor', 'white')
         if wx.Colour(bgcolor) != wx.WHITE:
@@ -505,7 +512,7 @@ class CairoDevice:
                 ctx.text_path(text)
                 ctx.fill()
             else:
-                ctx.show_text(text)
+                ctx.show_text(_visible(text))
 
         if getattr(self, '_current_underline', False):
             self.draw_underline(x, y, xa, ctx)

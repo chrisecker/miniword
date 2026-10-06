@@ -22,10 +22,15 @@ class TestDevice:
         pass
     
     def measure(self, text, style):
-        return len(text), 1, 0 # Dummy for testing
+        # every char 1 wide, a soft hyphen 0
+        return len(text.replace('\u00ad', '')), 1, 0
 
     def measure_parts(self, text, style):
-        return tuple(range(1, len(text)+1)) # Dummy for testing
+        parts, n = [], 0
+        for c in text:
+            n += c != '\u00ad'
+            parts.append(n)
+        return tuple(parts)
 
     def intersects(self, dc, rect):
         return True

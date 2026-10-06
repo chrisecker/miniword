@@ -210,6 +210,11 @@ class _FileDropTarget(wx.FileDropTarget):
         return True
 
 
+def show_marks():
+    """Show formatting marks? From the user's config, default yes."""
+    return get_config().get('show_formatting_marks') is not False
+
+
 def new_document(locale_name=None):
     """A new document in the system language (for hyphenation), or that
     of locale_name, e.g. 'de_DE'."""
@@ -344,6 +349,16 @@ class MainFrame(wx.Frame, ViewBase):
         edit_menu.AppendSeparator()
         edit_menu.Append(wx.ID_PREFERENCES, "&Preferences…")
         bar.Append(edit_menu, "&Edit")
+
+        insert_menu = wx.Menu()
+        for label, char in (
+                ("Non-breaking &space\tCtrl+Shift+Space", '\u00a0'),
+                ("Non-breaking &hyphen\tCtrl+Shift+-", '\u2011'),
+                ("Soft h&yphen\tCtrl+Alt+-", '\u00ad')):
+            item = insert_menu.Append(wx.ID_ANY, label)
+            self.Bind(wx.EVT_MENU, lambda _, c=char: self.insert_char(c),
+                      item)
+        bar.Append(insert_menu, "&Insert")
         self.Bind(wx.EVT_MENU, lambda _: self.editor.undo(),  id=wx.ID_UNDO)
         self.Bind(wx.EVT_MENU, lambda _: self.editor.redo(),  id=wx.ID_REDO)
         self.Bind(wx.EVT_MENU, lambda _: self.cut(),   id=wx.ID_CUT)
@@ -364,6 +379,9 @@ class MainFrame(wx.Frame, ViewBase):
         view_menu.AppendSeparator()
         self._mi_panel     = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
         self._mi_two_page  = view_menu.AppendCheckItem(wx.ID_ANY, "Two-page view")
+        self._mi_marks = view_menu.AppendCheckItem(wx.ID_ANY,
+                                                   "Formatting marks")
+        self._mi_marks.Check(show_marks())
         bar.Append(view_menu, "&View")
         self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(self.canvas.zoom_factor),       id=wx.ID_ZOOM_IN)
         self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(1 / self.canvas.zoom_factor),   id=wx.ID_ZOOM_OUT)
@@ -372,6 +390,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self._zoom_fit_page(),   id=self._id_zoom_fit_p)
         self.Bind(wx.EVT_MENU, lambda _: self.menu_inspector(), self._mi_panel)
         self.Bind(wx.EVT_MENU, lambda _: self.two_page(), self._mi_two_page)
+        self.Bind(wx.EVT_MENU, lambda _: self.formatting_marks(),
+                  self._mi_marks)
 
         help_menu = wx.Menu()
         help_menu.Append(wx.ID_ABOUT, "&About MiniWord…")
@@ -437,6 +457,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.canvas = TextCanvas(
             self._base, self.document.textmodel, builder, self.editor)
         self.editor.canvas = self.canvas
+        self.canvas.show_marks = show_marks()
         colours.set(self.canvas, 'BackgroundColour', 'CanvasBg')
         self.editor.add_view(self)
         self.document.add_view(self)
@@ -697,6 +718,19 @@ class MainFrame(wx.Frame, ViewBase):
         get_file_history().RemoveMenu(self._recent_menu)
         self._save_geometry()
         event.Skip()
+
+    def formatting_marks(self):
+        """View > Formatting marks: only redrawn, nothing is rebuilt."""
+        show = self._mi_marks.IsChecked()
+        self.canvas.show_marks = show
+        get_config().set('show_formatting_marks', show)
+        self.canvas.refresh()
+
+    def insert_char(self, char):
+        """Type char: it replaces the selection."""
+        with self.editor.atomic():
+            self.editor.remove()
+            self.editor.insert_text(char)
 
     def new(self):
         frame = MainFrame(new_document())
@@ -1303,3 +1337,69 @@ def test_09():
     doc = new_document('fr_FR')
     assert updated(settings_default, doc.settings)['language'] == 'en-us'
     assert doc.settings.get('hyphenation') is None  # stays off
+
+
+def test_10():
+    "Insert menu: protected space and hyphen, soft hyphen, with shortcuts"
+    from ..core.document import Document
+    app = wx.App.Get() or wx.App()
+    frame = MainFrame(Document())
+    try:
+        menu = frame.GetMenuBar().GetMenu(
+            frame.GetMenuBar().FindMenu('Insert'))
+        expected = {'Ctrl+Shift+Space': '\u00a0', 'Ctrl+Shift+-': '\u2011',
+                    'Ctrl+Alt+-': '\u00ad'}
+        items = menu.GetMenuItems()
+        accels = [item.GetItemLabel().split('\t')[1] for item in items]
+        assert sorted(accels) == sorted(expected)
+        for item, accel in zip(items, accels):
+            frame.ProcessWindowEvent(
+                wx.CommandEvent(wx.wxEVT_MENU, item.GetId()))
+        text = frame.document.textmodel.get_text()
+        assert ''.join(expected[a] for a in accels) in text
+    finally:
+        frame.Destroy()
+        app.Yield()
+
+
+def test_11():
+    "View > Formatting marks: drawn on screen only, no relayout, saved"
+    from ..core.document import Document
+    from ..layout import marks
+    global get_config
+
+    class FakeConfig(dict):
+        def set(self, key, value):
+            self[key] = value
+
+    config = FakeConfig()
+    saved_get_config, get_config = get_config, lambda: config
+    saved_draw_marks = marks.draw_marks
+    calls = []
+    marks.draw_marks = lambda dc, boxes: calls.append(1)
+    app = wx.App.Get() or wx.App()
+    frame = MainFrame(Document())
+    try:
+        frame.Show()
+        app.Yield()
+        assert frame.canvas.show_marks          # on by default
+        layout = frame.canvas.builder._layout
+        rows = [list(page.rows) for page in layout.childs]
+        item = frame._mi_marks
+        item.Check(False)
+        frame.ProcessWindowEvent(wx.CommandEvent(wx.wxEVT_MENU,
+                                                 item.GetId()))
+        assert not frame.canvas.show_marks
+        assert config['show_formatting_marks'] is False
+        assert frame.canvas.builder._layout is layout   # nothing rebuilt
+        assert [list(page.rows) for page in layout.childs] == rows
+        calls.clear()
+        frame.canvas.Refresh()
+        frame.canvas.Update()
+        app.Yield()
+        assert calls == []                      # off: not drawn
+    finally:
+        marks.draw_marks = saved_draw_marks
+        get_config = saved_get_config
+        frame.Destroy()
+        app.Yield()

@@ -134,6 +134,57 @@ def test_HY_20():
 
 
 # ---------------------------------------------------------------------
+# Protected hyphen U+2011, soft hyphen U+00AD
+# ---------------------------------------------------------------------
+
+NBH, SHY = '\u2011', '\u00ad'
+
+
+def test_HY_26():
+    "HY-26: no break at a protected hyphen, but in the parts' syllables"
+    rows = wrap('Der Hals%sNasen%sOhren%sArzt kommt' % (NBH, NBH, NBH), 13,
+                hyphenate=german)
+    assert rows[:2] == [['Der Hals%sNa' % NBH, '-'], ['sen%sOh' % NBH, '-']]
+    assert not any(''.join(row).endswith(NBH) for row in rows)
+
+
+def test_HY_27():
+    "HY-27: a soft hyphen has no width"
+    box = TextBox('Sil%sben' % SHY, device=TESTDEVICE)
+    assert box.width == 6
+    assert TESTDEVICE.measure_parts('a%sb' % SHY, {}) == (1, 1, 2)
+
+
+def test_HY_28():
+    "HY-28: a soft hyphen is a break point, even without hyphenation"
+    rows = wrap('Die Silben%strennung ist' % SHY, 12)
+    assert rows == [['Die Silben' + SHY, '-'], ['trennung ist']]
+
+
+def test_HY_29():
+    "HY-29: in a word with soft hyphens only these are break points"
+    rows = wrap('Die Silben%strennung ist' % SHY, 15, hyphenate=german)
+    assert rows == [['Die Silben' + SHY, '-'], ['trennung ist']]
+
+
+def test_HY_30():
+    "HY-30: the real device measures no soft hyphen, also without HarfBuzz"
+    import wx
+    from ..layout.cairodevice import CairoDevice
+    global _app
+    if wx.App.Get() is None:
+        _app = wx.App(False)
+    for harfbuzz in (True, False):
+        device = CairoDevice()
+        if not harfbuzz:
+            device._get_hb_font = lambda style: None
+        plain = device.measure('Silbentrennung', {})[0]
+        assert device.measure('Silben%strennung' % SHY, {})[0] == plain
+        parts = device.measure_parts('ab%sc' % SHY, {})
+        assert parts[2] == parts[1], harfbuzz
+
+
+# ---------------------------------------------------------------------
 # In the factory: document settings and the paragraph's hyphenate
 # ---------------------------------------------------------------------
 

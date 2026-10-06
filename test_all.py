@@ -41,6 +41,7 @@ modules = [
     "miniword.tests.test_tables",
     "miniword.tests.test_headerfooter",
     "miniword.tests.test_hyphenation",
+    "miniword.tests.test_marks",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",
