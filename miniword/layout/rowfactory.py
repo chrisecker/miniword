@@ -231,13 +231,12 @@ class RowFactory(Factory):
 
     def _iter_paragraphs_with_neighbors(self, texel, i):
         # helper: iterate pragraphs, also yield prev and next parstyle
-        p_prev = get_texel(texel, i - 1).parstyle if i > 0 else None
-        if p_prev is not None:
-            p_prev = self.stylesheet.mk_parstyle(p_prev)
+        p_prev = self.paragraph_style(get_texel(texel, i - 1)) \
+            if i > 0 else None
         buffered = None  # (i1, i2, texels, p)
 
         for i1, i2, texels in iter_paragraphs(texel, i):
-            p = self.stylesheet.mk_parstyle(texels[-1].parstyle)
+            p = self.paragraph_style(texels[-1])
             if buffered is not None:
                 b_i1, b_i2, b_texels, b_p = buffered
                 yield b_i1, b_i2, b_texels, p_prev, b_p, p
@@ -248,12 +247,21 @@ class RowFactory(Factory):
             i1, i2, texels, p = buffered
             yield i1, i2, texels, p_prev, p, None
 
+    def paragraph_style(self, newline):
+        """The full parstyle of the paragraph ended by newline, with its
+        level: fixed_indent, or else the newline's (free) indent."""
+        p = self.stylesheet.mk_parstyle(newline.parstyle)
+        fixed = p.get('fixed_indent')
+        p['level'] = fixed if fixed is not None \
+            else getattr(newline, 'indent', 0)
+        return p
+
     def _process_paragraph(self, i1, i2, texels, p_prev, p, p_next):
         boxes = [self.create_box(elem, p) for elem in texels]
         begins_block = not _is_same_block(p, p_prev)
         ends_block = not _is_same_block(p, p_next)
         
-        level = p.get('fixed_indent') or 0
+        level = p['level']
 
         marker = self._update_counters(p)
         left_first, left_rest, width_first, width_rest = \
@@ -320,7 +328,7 @@ class RowFactory(Factory):
             self.state.counters['item'] = [0] * n_levels
         if ptype == 'normal':
             return None
-        level = parstyle.get('fixed_indent') or 0
+        level = parstyle['level']
         if ptype == 'list':
             return parstyle['marker'][level]
         # 'numbered'
@@ -448,7 +456,7 @@ def block_left(parstyle):
     """Left text edge of a paragraph's block: its indent, including a
     hanging first line; list markers lie inside (no list_indent)."""
     levels = parstyle.get('indent_levels')
-    left = levels[parstyle.get('fixed_indent') or 0] if levels else 0
+    left = levels[parstyle.get('level', 0)] if levels else 0
     return left + min(0, parstyle.get('first_line_indent', 0))
 
 

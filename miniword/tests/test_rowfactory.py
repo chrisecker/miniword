@@ -536,6 +536,56 @@ def test_CNT_7():
 
 
 # ---------------------------------------------------------------------
+# LEVEL - the paragraph's level: free (NL indent) or fixed_indent
+# ---------------------------------------------------------------------
+
+def par_at(level, *items, **kw):
+    """A paragraph (see par) on free level level (its NewLine's indent)."""
+    p = par(*items, **kw)
+    p[-1] = p[-1].set_indent(level)
+    return p
+
+
+def test_LEVEL_1():
+    "LEVEL-1: the free level selects indent_levels, for all lines"
+    texel = doc(par_at(2, 'aaa bbb ccc ddd', indent_levels=LEVELS))
+    records = flat(generate(texel, width=16)[0])
+    assert len(records) > 1
+    assert all(r[0].start[0] == 8 for r in records)
+
+
+def test_LEVEL_2():
+    "LEVEL-2: fixed_indent wins over the free level"
+    texel = doc(par_at(2, 'ab', fixed_indent=1, indent_levels=LEVELS))
+    assert flat(generate(texel)[0])[0][0].start[0] == 4
+
+
+def test_LEVEL_3():
+    "LEVEL-3: markers and counters follow the free level"
+    for kind in (dict(paragraph_type='numbered'),
+                 dict(paragraph_type='list')):
+        levels = [0, 1, 1, 0]
+        free = doc(*[par_at(k, 'x', **kind) for k in levels])
+        fixed = doc(*[par('x', fixed_indent=k, **kind) for k in levels])
+        p_free, _ = generate(free)
+        p_fixed, _ = generate(fixed)
+        assert markers(p_free) == markers(p_fixed)
+        assert [p[0][0].offset for p in p_free] == \
+            [p[0][0].offset for p in p_fixed]
+    assert markers(p_free)[0] != markers(p_free)[1]  # list: per level
+
+
+def test_LEVEL_4():
+    "LEVEL-4: blocks and their decoration follow the free level"
+    red = dict(block_color='red', indent_levels=LEVELS)
+    texel = doc(par_at(0, 'a', **red), par_at(1, 'b', **red))
+    records = flat(generate(texel, width=20)[0])
+    assert [r[4] for r in records] == [True, True]  # two blocks
+    data, height, shadings, borders = stack(records, 20)
+    assert [x for x, *_ in shadings] == [0, 4]
+
+
+# ---------------------------------------------------------------------
 # FN - Footnotes
 # ---------------------------------------------------------------------
 
@@ -927,7 +977,7 @@ def test_BLOCK_4():
 
 def test_BLOCK_5():
     "BLOCK-5: the decoration follows the paragraph's indents"
-    style = ps(block_color='red', fixed_indent=1, indent_levels=LEVELS,
+    style = ps(block_color='red', level=1, indent_levels=LEVELS,
                right_indent=2)
     data, height, shadings, borders = stack(mk_records((1, style)), 20)
     assert shadings == [(4, 0, 14, 1, 'red')]
@@ -938,11 +988,11 @@ def test_BLOCK_5():
 
 def test_BLOCK_6():
     "BLOCK-6: a hanging first line and list markers lie inside"
-    style = ps(block_color='red', fixed_indent=1, indent_levels=LEVELS,
+    style = ps(block_color='red', level=1, indent_levels=LEVELS,
                first_line_indent=-2)
     data, height, shadings, borders = stack(mk_records((1, style)), 20)
     assert shadings == [(2, 0, 18, 1, 'red')]
-    style = ps(block_color='red', paragraph_type='list', fixed_indent=1,
+    style = ps(block_color='red', paragraph_type='list', level=1,
                indent_levels=LEVELS, list_indent=3)
     data, height, shadings, borders = stack(mk_records((1, style)), 20)
     assert shadings == [(4, 0, 16, 1, 'red')]  # without list_indent
