@@ -96,7 +96,7 @@ def test_INS_5():
 
 def test_SET_1():
     "SET-1: custom paper width and height are set"
-    with settings_inspector() as (inspector, document):
+    with settings_inspector() as (inspector, document, editor):
         choose(inspector.choice_paper, 'custom')
         inspector.inp_width.text.SetValue("100 mm")
         inspector.inp_width._commit()
@@ -107,7 +107,7 @@ def test_SET_1():
 
 def test_SET_2():
     "SET-2: a header/footer field is chosen from a pulldown"
-    with settings_inspector() as (inspector, document):
+    with settings_inspector() as (inspector, document, editor):
         choice, text = inspector.fields['footer_center']
         assert choice.GetStringSelection() == 'Page number'
         assert not text.IsShown()
@@ -119,7 +119,7 @@ def test_SET_2():
 
 def test_SET_3():
     "SET-3: 'Text' shows a text field; its text stays when the kind changes"
-    with settings_inspector() as (inspector, document):
+    with settings_inspector() as (inspector, document, editor):
         choice, text = inspector.fields['header_right']
         choose(choice, 'Text')
         assert text.IsShown()
@@ -135,7 +135,7 @@ def test_SET_3():
 
 def test_SET_4():
     "SET-4: first page and mirror are check boxes"
-    with settings_inspector() as (inspector, document):
+    with settings_inspector() as (inspector, document, editor):
         assert inspector.chk_first_page.GetValue()
         assert not inspector.chk_mirror.GetValue()
         click(inspector.chk_first_page, False)
@@ -146,7 +146,7 @@ def test_SET_4():
 
 def test_SET_5():
     "SET-5: the panel shows settings changed elsewhere (undo, loading)"
-    with settings_inspector() as (inspector, document):
+    with settings_inspector() as (inspector, document, editor):
         document.set_setting('footer_left', ('text', 'Draft'))
         document.set_setting('header_footer_mirror', True)
         inspector.update()
@@ -158,7 +158,7 @@ def test_SET_5():
 
 def test_SET_6():
     "SET-6: language pulldown and hyphenation check box"
-    with settings_inspector() as (inspector, document):
+    with settings_inspector() as (inspector, document, editor):
         assert inspector.choice_language.GetStringSelection() == \
             'English (US)'
         assert not inspector.chk_hyphenation.GetValue()
@@ -174,7 +174,7 @@ def test_SET_6():
 
 def test_SET_7():
     "SET-7: Hyphenation is greyed out for a language without patterns"
-    with settings_inspector() as (inspector, document):
+    with settings_inspector() as (inspector, document, editor):
         assert inspector.chk_hyphenation.IsEnabled()
         document.set_setting('language', 'fr')  # e.g. from another file
         inspector.update()
@@ -183,3 +183,37 @@ def test_SET_7():
         choose(inspector.choice_language, 'German')
         inspector.update()
         assert inspector.chk_hyphenation.IsEnabled()
+
+
+def test_SET_8():
+    "SET-8: a change in the panel is one undo step"
+    with settings_inspector() as (inspector, document, editor):
+        choose(inspector.fields['header_left'][0], 'Chapter')
+        click(inspector.chk_mirror, True)
+        assert editor.undocount() == 2
+        editor.undo()
+        assert document.settings.get('header_footer_mirror') is None
+        assert document.settings['header_left'] == ('chapter', '')
+        editor.undo()
+        assert 'header_left' not in document.settings
+        editor.redo()
+        assert document.settings['header_left'] == ('chapter', '')
+
+
+def test_SET_9():
+    "SET-9: an unchanged value adds no undo step"
+    with settings_inspector() as (inspector, document, editor):
+        click(inspector.chk_first_page, True)  # already set
+        enter(inspector.txt_title, '')
+        assert editor.undocount() == 0
+
+
+def test_SET_10():
+    "SET-10: the panel follows changed settings (e.g. undo) when shown"
+    with settings_inspector() as (inspector, document, editor):
+        queued = []
+        inspector.queue_update = lambda: queued.append(1)
+        inspector.visible = True
+        click(inspector.chk_mirror, True)
+        editor.undo()
+        assert len(queued) == 2

@@ -30,6 +30,12 @@ settings_default = {
 }
 
 
+def undo_setting(document, name, value):
+    """Set a document setting; undo/redo helper (see Editor.add_undo)."""
+    old = document.set_setting(name, value)
+    return undo_setting, document, name, old
+
+
 class Document(Model):
     def __init__(self):
         self.basestyles = StyleSheet()

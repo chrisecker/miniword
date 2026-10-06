@@ -48,14 +48,17 @@ def style_inspector(text="Eins\nZwei", size=wx.DefaultSize):
 
 @contextmanager
 def settings_inspector():
-    """(inspector, document): a SettingsInspector for a new Document."""
+    """(inspector, document, editor): a SettingsInspector for a new
+    Document."""
     from ..core.document import Document
+    from ..texteditor.editor import Editor
     from ..ui.settingsinspector import SettingsInspector
     app()
     frame = wx.Frame(None, size=(330, 900))
     try:
         document = Document()
-        yield SettingsInspector(frame, document), document
+        editor = Editor(document.textmodel)
+        yield SettingsInspector(frame, document, editor), document, editor
     finally:
         frame.Destroy()
 

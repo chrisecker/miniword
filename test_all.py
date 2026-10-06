@@ -43,6 +43,8 @@ modules = [
     "miniword.tests.test_hyphenation",
     "miniword.tests.test_marks",
     "miniword.tests.test_inspector",
+    "miniword.tests.test_mdstyles",
+    "miniword.tests.test_pluginmenu",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

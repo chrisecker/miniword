@@ -4,7 +4,7 @@ from .sidepanel import SidePanel
 from .design import add_header, add_section, add_row
 
 from .unitentry import LengthInput, EVT_UNIT_CHANGED
-from ..core.document import settings_default
+from ..core.document import settings_default, undo_setting
 from ..core.styles import updated
 
 
@@ -32,8 +32,9 @@ FIELD_KINDS = [
 class SettingsInspector(SidePanel):
     """Inspector panel for document settings (page setup, metadata)."""
 
-    def __init__(self, parent, document):
+    def __init__(self, parent, document, editor):
         SidePanel.__init__(self, parent)
+        self.editor = editor  # for undo
         colours.set(self, 'BackgroundColour', 'BTNFACE')
         self._updating = False
         self.add_model(document)
@@ -169,8 +170,15 @@ class SettingsInspector(SidePanel):
     def _set_prop(self, **kwargs):
         if self._updating:
             return
-        for name, value in kwargs.items():
-            self.model.set_setting(name, value)
+        props = self._get_props()
+        with self.editor.atomic():
+            for name, value in kwargs.items():
+                if value != props[name]:
+                    self.editor.add_undo(
+                        undo_setting(self.model, name, value))
+
+    def setting_changed(self, document, name, old):
+        self.model_changed(document)
 
     def _refresh(self):
         self._updating = True

@@ -573,91 +573,6 @@ def _parse_inline(text, fn_defs=None):
     return [(t, p) for t, p in parts if t or p.get('_footnote') or p.get('_image')]
 
 
-def _github_defs(size, mm):
-    s = size / 12
-    ls = 1.15  # line spacing of running text, as in style 'normal'
-    return {
-        'body':     {'role': 'body',     'name': 'Body',
-                     'font_size': size, 'space_after': round(6 * s),
-                     'line_spacing': ls},
-        'h1':       {'role': 'h1',       'name': 'Heading 1', 'font_size': round(24 * s), 'bold': True,
-                     'space_before': round(12 * s),     'space_after': round(6 * s), 'fixed_indent': 0},
-        'h2':       {'role': 'h2',       'name': 'Heading 2', 'font_size': round(18 * s), 'bold': True,
-                     'space_before': 5 * mm * s, 'space_after': 5 * mm * s, 'fixed_indent':1},
-        'h3':       {'role': 'h3',       'name': 'Heading 3', 'font_size': round(14 * s), 'bold': True,
-                     'space_before': 4 * mm * s, 'space_after': 0.5 * mm * s, 'fixed_indent': 2},
-        'h4':       {'role': 'h4',       'name': 'Heading 4', 'bold': True, 'italic': True, 'fixed_indent': 3},
-        'h5':       {'role': 'h5',       'name': 'Heading 5', 'font_size': max(8, round(11 * s)), 'bold': True, 'fixed_indent': 4},
-        'h6':       {'role': 'h6',       'name': 'Heading 6', 'font_size': max(8, round(10 * s)), 'italic': True, 'fixed_indent': 5},
-        'pre':      {'role': 'pre',      'name': 'Code',      'font_size': max(8, round(10 * s)),
-                     'font_family': 'Courier New',
-                     'block_color': '#F6F8FA', 'block_offset': 2 * mm * s},
-        'list':     {'role': 'list',     'name': 'List',
-                     'font_size': size, 'space_after': 0,
-                     'paragraph_type': 'list', 'line_spacing': ls},
-        'numbered': {'role': 'numbered', 'name': 'Numbered',
-                     'font_size': size, 'space_after': 0,
-                     'paragraph_type': 'numbered', 'line_spacing': ls},
-        'quote':    {'role': 'quote',    'name': 'Quote',
-                     'font_size': size, 'line_spacing': ls,
-                     'block_color': '#F0F0F0', 'block_offset': 2 * mm * s},
-    }
-
-
-def _preset_defs(preset, mm):
-    if preset == 'github_small':
-        return _github_defs(10, mm)
-    if preset == 'report':
-        return {
-            'body':     {'role': 'body',     'name': 'Body',      'font_family': 'Times New Roman', 'font_size': 12,
-                         'alignment': 'justify', 'line_spacing': 1.3, 'first_line_indent': 12},
-            'h1':       {'role': 'h1',       'name': 'Heading 1', 'font_family': 'Times New Roman', 'font_size': 18,
-                         'bold': True, 'alignment': 'center', 'space_before': 24, 'space_after': 12, 'fixed_indent': 0},
-            'h2':       {'role': 'h2',       'name': 'Heading 2', 'font_family': 'Times New Roman', 'font_size': 14,
-                         'bold': True, 'space_before': 18, 'space_after': 6, 'fixed_indent': 1},
-            'h3':       {'role': 'h3',       'name': 'Heading 3', 'font_family': 'Times New Roman', 'font_size': 12,
-                         'bold': True, 'italic': True, 'space_before': 12, 'space_after': 3, 'fixed_indent': 2},
-            'h4':       {'role': 'h4',       'name': 'Heading 4', 'font_family': 'Times New Roman', 'bold': True,
-                         'italic': True, 'fixed_indent': 3},
-            'h5':       {'role': 'h5',       'name': 'Heading 5', 'font_family': 'Times New Roman', 'font_size': 11,
-                         'bold': True, 'fixed_indent': 4},
-            'h6':       {'role': 'h6',       'name': 'Heading 6', 'font_family': 'Times New Roman', 'font_size': 10,
-                         'italic': True, 'fixed_indent': 5},
-            'pre':      {'role': 'pre',      'name': 'Code',      'font_size': 10, 'font_family': 'Courier New',
-                         'block_color': '#F0F0F0', 'block_offset': 2 * mm},
-            'list':     {'role': 'list',     'name': 'List',      'font_family': 'Times New Roman', 'font_size': 12,
-                         'space_after': 0, 'paragraph_type': 'list',
-                         'line_spacing': 1.3},
-            'numbered': {'role': 'numbered', 'name': 'Numbered',  'font_family': 'Times New Roman', 'font_size': 12,
-                         'space_after': 0, 'paragraph_type': 'numbered',
-                         'line_spacing': 1.3},
-            'quote':    {'role': 'quote',    'name': 'Quote',     'font_family': 'Times New Roman', 'italic': True,
-                         'block_offset': 2 * mm, 'line_spacing': 1.3},
-        }
-    if preset == 'compact':
-        return {
-            'body':     {'role': 'body',     'name': 'Body',      'font_size': 10, 'space_after': 2},
-            'h1':       {'role': 'h1',       'name': 'Heading 1', 'font_size': 14, 'bold': True,  'space_before': 6,
-                         'space_after': 2, 'fixed_indent': 0},
-            'h2':       {'role': 'h2',       'name': 'Heading 2', 'font_size': 12, 'bold': True,  'space_before': 4,
-                         'space_after': 1, 'fixed_indent': 1},
-            'h3':       {'role': 'h3',       'name': 'Heading 3', 'font_size': 10, 'bold': True,  'space_before': 3,
-                         'fixed_indent': 2},
-            'h4':       {'role': 'h4',       'name': 'Heading 4', 'bold': True, 'italic': True,
-                         'fixed_indent': 3},
-            'h5':       {'role': 'h5',       'name': 'Heading 5', 'font_size': 9,  'bold': True,
-                         'fixed_indent': 4},
-            'h6':       {'role': 'h6',       'name': 'Heading 6', 'font_size': 9,  'italic': True,
-                         'fixed_indent': 5},
-            'pre':      {'role': 'pre',      'name': 'Code',      'font_size': 9,  'font_family': 'Courier New'},
-            'list':     {'role': 'list',     'name': 'List',      'font_size': 10, 'space_after': 0, 'paragraph_type': 'list'},
-            'numbered': {'role': 'numbered', 'name': 'Numbered',  'font_size': 10, 'space_after': 0, 'paragraph_type': 'numbered'},
-            'quote':    {'role': 'quote',    'name': 'Quote',     'font_size': 10, 'italic': True},
-        }
-    # github (default, 12pt)
-    return _github_defs(12, mm)
-
-
 def _register_styles(doc, preset='github', overwrite=True, skip=()):
     """Register the MD paragraph styles (h1..h6, body, list, numbered,
     quote, pre) on doc.basestyles.
@@ -670,34 +585,19 @@ def _register_styles(doc, preset='github', overwrite=True, skip=()):
     second, disconnected style under the parser's canonical name doesn't
     also get added.
     """
-    from miniword.core.styles import style_default, updated
-    mm = 72 / 25.4
-    n  = len(style_default['indent_levels'])
-    heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
-    for name, props in _preset_defs(preset, mm).items():
+    from miniword.plugins.mdstyles import preset as md_preset
+    styles, _ = md_preset(preset)
+    for name, style in styles.items():
         if name in skip:
             continue
-        if not overwrite and doc.basestyles.contains(name):
-            continue
-        base = heading_base if name.startswith('h') else {}
-        style = updated(style_default, base, props)
+        if not overwrite and (doc.basestyles.contains(name)
+                              or name not in _CANONICAL_ROLES):
+            continue  # pasting: no header/footer styles
         doc.basestyles.set(name, style)
 
 
 _CANONICAL_ROLES = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body',
                      'list', 'numbered', 'quote', 'pre'}
-
-
-def _role_to_key(doc):
-    """Map each role tag already used by doc.basestyles to the style name
-    that carries it (see apply_md_style, which renames an existing
-    role-tagged style in place using this same mapping)."""
-    basestyles = doc.basestyles
-    return {
-        basestyles.get(k).get('role'): k
-        for k in basestyles.keys()
-        if basestyles.get(k) and basestyles.get(k).get('role')
-    }
 
 
 def _adopt_existing_styles(textmodel, doc):
@@ -713,8 +613,9 @@ def _adopt_existing_styles(textmodel, doc):
     """
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine
+    from miniword.plugins.mdstyles import role_keys
 
-    role_to_key = _role_to_key(doc)
+    role_to_key = role_keys(doc)
     remap = {role: key for role, key in role_to_key.items()
              if role in _CANONICAL_ROLES and key != role}
 
@@ -755,39 +656,12 @@ def md_text_to_fragment(text, target_doc):
     return shim.textmodel.texel
 
 
-def apply_md_style(editor, document, preset):
-    """Apply a named MD style preset to an already-loaded document (undo-able)."""
-    from miniword.core.styles import style_default, updated
-    from miniword.core.stylesheet import undo_basestyle_change
-    mm = 72 / 25.4
-    n  = len(style_default['indent_levels'])
-    heading_base = {'fixed_indent': 0, 'indent_levels': (0,) * n, 'counter': 'section'}
-    basestyles = document.basestyles
-    role_to_key = _role_to_key(document)
-
-    with editor.atomic():
-        for _key, props in _preset_defs(preset, mm).items():
-            role = props.get('role')
-            key  = role_to_key.get(role)
-            if key is None:
-                continue
-            base      = heading_base if role.startswith('h') else {}
-            new_style = updated(style_default, base, props)
-            old_style = (basestyles.get(key) or {}).copy() or None
-            editor.add_undo((undo_basestyle_change, basestyles, key, old_style, new_style))
-            basestyles.set(key, new_style)
-
-
 def get_menus(doc):
     """Return plugin menus for doc. Only adds a Markdown menu for MD documents."""
+    from miniword.plugins.mdstyles import menu_items
     if getattr(doc, 'home_format', None) not in ('md', 'markdown'):
         return []
-    return [("&Markdown", [
-        ("GitHub",       lambda frame: apply_md_style(frame.editor, frame.document, 'github')),
-        ("GitHub Small", lambda frame: apply_md_style(frame.editor, frame.document, 'github_small')),
-        ("Report",       lambda frame: apply_md_style(frame.editor, frame.document, 'report')),
-        ("Compact",      lambda frame: apply_md_style(frame.editor, frame.document, 'compact')),
-    ])]
+    return [("&Markdown", menu_items())]
 
 
 # --- mistune-based parser (richer, handles more edge cases) -----------------
@@ -1863,19 +1737,3 @@ Code: `print("hello")` inline.
         os.unlink(out_path)
     finally:
         os.unlink(path)
-
-
-def test_35():
-    "presets: line spacing 1.15 for GitHub, 1.3 throughout Report"
-    mm = 72 / 25.4
-    for preset, size in (('github', 12), ('github_small', 10)):
-        defs = _preset_defs(preset, mm)
-        for name in ('body', 'list', 'numbered', 'quote'):
-            assert defs[name]['line_spacing'] == 1.15, (preset, name)
-        assert defs['body']['space_after'] == round(6 * size / 12)
-        assert 'line_spacing' not in defs['pre']   # code stays dense
-    report = _preset_defs('report', mm)
-    for name in ('body', 'list', 'numbered', 'quote'):
-        assert report[name]['line_spacing'] == 1.3, name
-    compact = _preset_defs('compact', mm)
-    assert all('line_spacing' not in props for props in compact.values())

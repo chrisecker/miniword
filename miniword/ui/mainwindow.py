@@ -83,6 +83,27 @@ def _config_path():
     return os.path.join(d, "config.ini")
 
 
+def plugin_menu(frame, items):
+    """A wx.Menu for a plugin's items: (label, handler), (label, handler,
+    enabled), (label, [items]) for a submenu, None for a separator.
+    handler(frame) runs the entry, enabled(frame) greys it out."""
+    menu = wx.Menu()
+    for item in items:
+        if item is None:
+            menu.AppendSeparator()
+        elif isinstance(item[1], list):
+            menu.AppendSubMenu(plugin_menu(frame, item[1]), item[0])
+        else:
+            item_id = menu.Append(wx.ID_ANY, item[0]).GetId()
+            frame.Bind(wx.EVT_MENU, lambda e, h=item[1]: h(frame),
+                       id=item_id)
+            if len(item) > 2:
+                frame.Bind(wx.EVT_UPDATE_UI,
+                           lambda e, f=item[2]: e.Enable(f(frame)),
+                           id=item_id)
+    return menu
+
+
 def load_plugins():
     """Load plugins from an ordered list of directories; first file wins per name.
 
@@ -282,12 +303,8 @@ class MainFrame(wx.Frame, ViewBase):
             if not hasattr(mod, 'get_menus'):
                 continue
             for menu_name, items in mod.get_menus(self.document):
-                menu = wx.Menu()
-                bar.Insert(bar.GetMenuCount() - 1, menu, menu_name)
-                for label, handler in items:
-                    item_id = wx.NewIdRef()
-                    menu.Append(item_id, label)
-                    self.Bind(wx.EVT_MENU, lambda evt, h=handler: h(self), id=item_id)
+                bar.Insert(bar.GetMenuCount() - 1,
+                           plugin_menu(self, items), menu_name)
 
     def _build_menu(self):
         bar = wx.MenuBar()
@@ -467,7 +484,8 @@ class MainFrame(wx.Frame, ViewBase):
         colours.set(self._inspector_book, 'BackgroundColour', 'BTNFACE')
         self._inspector_pages = {}
         self.inspector = StyleInspector(self._inspector_book, self.editor, self.document.basestyles)
-        self.document_settings = SettingsInspector(self._inspector_book, self.document)
+        self.document_settings = SettingsInspector(
+            self._inspector_book, self.document, self.editor)
         self.table_panel = TablePanel(self._inspector_book, self.editor)
         self.image_inspector = ImageInspector(self._inspector_book, self.editor, self.document)
         self._search_panel = SearchPanel(self._inspector_book, self.editor)
