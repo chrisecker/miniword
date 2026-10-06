@@ -103,7 +103,7 @@ class Tester:
     def test_callable(self, name, obj):
         doc = getattr(obj, '__doc__', '') or ''
         text = '> %s: %s' % (name, doc)
-        text += '.'*(60-len(text))
+        text += '.'*(100-len(text))
         print(text, end=' ')
         if self.redirect:
             self.reset_buffer()
