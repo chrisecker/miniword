@@ -38,6 +38,7 @@ modules = [
     "miniword.tests.test_footnotes",
     "miniword.tests.test_images",
     "miniword.tests.test_tables",
+    "miniword.tests.test_headerfooter",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",
@@ -61,6 +62,7 @@ modules = [
     "miniword.ui.stylemenu",
     "miniword.ui.styleinspector",
     "miniword.ui.unitentry",
+    "miniword.ui.settingsinspector",
     "miniword.ui.searchtool",
     "miniword.ui.markdownpreview",
 

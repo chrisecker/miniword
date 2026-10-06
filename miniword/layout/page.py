@@ -2,6 +2,38 @@ from .boxes import Box, VBox, RowsBox, NewlineBox, Row, select_i_by_y, \
     get_text, draw_border
 from .testdevice import TESTDEVICE
 from ..core.units import mm, cm, pt
+from ..core.document import settings_default
+import datetime
+
+
+def field_text(field, values):
+    """Text of a header/footer field (kind, text). values: page, pages,
+    title, author, date, chapter, section."""
+    kind, text = field
+    if kind == 'text':
+        return text
+    if kind == 'none':
+        return ''
+    if kind == 'page_pages':
+        return '%s / %s' % (values['page'], values['pages'])
+    return str(values[kind])
+
+
+def header_footer(settings, values):
+    """Header and footer texts [left, center, right] of page
+    values['page']: empty on the first page if switched off, left and
+    right swapped on even pages if mirrored."""
+    page = values['page']
+    if page == 1 and not settings['header_footer_first_page']:
+        return ['', '', ''], ['', '', '']
+
+    def texts(line):
+        r = [field_text(settings[line + side], values)
+             for side in ('_left', '_center', '_right')]
+        if settings['header_footer_mirror'] and page % 2 == 0:
+            r.reverse()
+        return r
+    return texts('header'), texts('footer')
 
 
 class ForceBreakBox(NewlineBox):
@@ -44,6 +76,10 @@ class Page(Box):
     shadings      = ()
     borders       = ()
     restartmemo   = None
+    settings      = settings_default
+    chapter       = ''  # running heads, see generate_pages
+    section       = ''
+    layout        = None  # set by Layout.append_page: the page count
 
     def __init__(self, rowdata, geometry, footnotebox=None, device=TESTDEVICE):
         if device is not None:
@@ -85,14 +121,37 @@ class Page(Box):
             fx, fy, box = self.footnotebox
             box.draw(x + fx, y + fy, gc)
 
+    def header_footer_texts(self, date=None):
+        """Header and footer texts of this page, see header_footer."""
+        if date is None:
+            date = datetime.date.today().strftime('%x')
+        settings = self.settings
+        pages = len(self.layout.childs) if self.layout else self.pagenum
+        values = dict(page=self.pagenum, pages=pages, date=date,
+                      title=settings['title'], author=settings['author'],
+                      chapter=self.chapter, section=self.section)
+        return header_footer(settings, values)
+
+    def draw_header_footer(self, x, y, gc):
+        """Draw header and footer, vertically centered in the top and
+        bottom margin; left/right at the margins, center on the page."""
+        top, right, bottom, left = self.margin
+        self.device.set_style({}, gc)
+        header, footer = self.header_footer_texts()
+        for texts, middle in ((header, top / 2),
+                              (footer, self.height - bottom / 2)):
+            for k, text in enumerate(texts):
+                if not text:
+                    continue
+                w, h, d = self.device.measure(text, {})
+                dx = (left, (self.width - w) / 2,
+                      self.width - right - w)[k]
+                self.device.draw_text(text, x + dx, y + middle - h / 2, gc)
+
     def _draw(self, x, y, gc):
         Box.draw(self, x, y, gc)
         self.draw_footnotes(x, y, gc)
-        margin = self.margin
-        self.device.set_style({}, gc)
-        self.device.draw_text(
-            "Page %i" % self.pagenum,
-            x + margin[3], y + self.height - margin[2], gc)
+        self.draw_header_footer(x, y, gc)
 
     def draw(self, x, y, gc):
         self._draw(x, y, gc)

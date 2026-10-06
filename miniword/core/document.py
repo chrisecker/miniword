@@ -15,6 +15,16 @@ settings_default = {
     "margin_right":  2.5 * cm,
     "margin_bottom": 2.5 * cm,
     "margin_left":   2.5 * cm,
+    # Header and footer: three fields each, (kind, text) - see
+    # layout.page.field_text. Kind "text" shows text as written.
+    "header_left":   ("none", ""),
+    "header_center": ("none", ""),
+    "header_right":  ("none", ""),
+    "footer_left":   ("none", ""),
+    "footer_center": ("page", ""),
+    "footer_right":  ("none", ""),
+    "header_footer_first_page": True,   # also on the first page
+    "header_footer_mirror":     False,  # swap left/right on even pages
 }
 
 

@@ -21,6 +21,14 @@ Empty sections may be omitted. Comments start with `#`.
 | `paper`                         | String | `"A4"`  | `"A4"`, `"Letter"`, `"custom"`       |
 | `margin_top/bottom/left/right`  | Number | `70.08` | Page margins in pt                   |
 | `paper_width` / `paper_height`  | Number | *(A4)*  | Only when `paper="custom"`           |
+| `header_left/center/right`      | Tuple  | `("none", "")` | Header field `(kind, text)`   |
+| `footer_left/center/right`      | Tuple  | `("none", "")` | Footer field; `footer_center` defaults to `("page", "")` |
+| `header_footer_first_page`      | Bool   | `True`  | Header and footer also on page 1     |
+| `header_footer_mirror`          | Bool   | `False` | Swap left and right on even pages    |
+
+Header/footer kinds: `none`, `page`, `page_pages` ("3 / 10"), `title`,
+`author`, `date`, `chapter` (running head: role h1), `section` (role h2),
+`text` (the text as written).
 
 ---
 

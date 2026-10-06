@@ -143,6 +143,9 @@ class State:
         self.floats = []
         self.counters = {}
         self.footnote_counter = 0
+        self.chapter = ''  # the running heads in effect (role h1, h2)
+        self.section = ''
+        self.settings = settings_default
 
     def copy(self):
         clone = shallow_copy(self)
@@ -167,6 +170,7 @@ def state_from_settings(settings):
     state = State(w - border[1] - border[3])
     state.geometry = (w, h)
     state.border = border
+    state.settings = props
     return state
 
     
@@ -313,6 +317,9 @@ class RowFactory(Factory):
             if is_first and marker is not None:
                 row.set_marker(marker, p['marker_pos'][level], p)
             r.append((row, p, is_first, is_last, begins_block, ends_block))
+        if p.get('role') in ('h1', 'h2'):  # for the running heads
+            text = ''.join(getattr(t, 'text', '') for t in texels)
+            r[0][0].heading = p['role'], text.strip()
         return r
 
     def _dims(self, parstyle, level):
@@ -698,6 +705,28 @@ def adjust_page_break(placed, buffer):
         del placed[-move:]
 
 
+def running_heads(placed, state):
+    """(chapter, section) of a page with the rows placed: the first
+    heading with role h1/h2 on it, else the one in effect before; a new
+    h1 clears the section. Updates state to the headings in effect at
+    the page's end."""
+    old_chapter, old_section = state.chapter, state.section
+    chapter = section = None
+    for y, record in placed:
+        role, text = getattr(record[0], 'heading', (None, None))
+        if role == 'h1':
+            if chapter is None:
+                chapter = text
+            state.chapter, state.section = text, ''
+        elif role == 'h2':
+            if section is None:
+                section = text
+            state.section = text
+    if section is None:
+        section = old_section if chapter is None else ''
+    return (old_chapter if chapter is None else chapter), section
+
+
 def generate_pages(texel, i1, memo, stylesheet, device):
     """Yield pages for texel, the first one starting at index i1 and
     continuing from memo (the state the previous page ended with).
@@ -761,6 +790,9 @@ def generate_pages(texel, i1, memo, stylesheet, device):
         shadings, borders = body.decorations()
         page.shadings = shift(shadings, left, top)
         page.borders = shift(borders, left, top)
+        page.margin = state.border
+        page.settings = state.settings
+        page.chapter, page.section = running_heads(body.placed, state)
         page.restartmemo = state.copy()
         yield page
 

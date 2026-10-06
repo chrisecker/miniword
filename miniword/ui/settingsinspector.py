@@ -11,6 +11,19 @@ from ..core.styles import updated
 from ..core.papersizes import PAPER_SIZES
 PAPER_CHOICES = list(PAPER_SIZES) + ['custom']
 
+# header/footer fields: pulldown label and kind (see layout.page.field_text)
+FIELD_KINDS = [
+    ('(none)',       'none'),
+    ('Page number',  'page'),
+    ('Page / pages', 'page_pages'),
+    ('Title',        'title'),
+    ('Author',       'author'),
+    ('Date',         'date'),
+    ('Chapter',      'chapter'),
+    ('Section',      'section'),
+    ('Text',         'text'),
+]
+
 
 class SettingsInspector(SidePanel):
     """Inspector panel for document settings (page setup, metadata)."""
@@ -83,12 +96,45 @@ class SettingsInspector(SidePanel):
                      lambda e, k=key: self._on_margin(k, e.value))
             add_row(form, lbl, inp)
 
+        # --- Header and footer: a pulldown per field, 'Text' shows a
+        # text field below it ---
+        self.fields = {}  # {setting: (choice, textctrl)}
+        for line in ('header', 'footer'):
+            add_section(line.title(), scrolled, form)
+            for side in ('left', 'center', 'right'):
+                key = '%s_%s' % (line, side)
+                choice = wx.Choice(scrolled,
+                                   choices=[l for l, _ in FIELD_KINDS])
+                choice.Bind(wx.EVT_CHOICE,
+                            lambda e, k=key: self._on_field_kind(k))
+                add_row(form, wx.StaticText(scrolled, label=side.title()),
+                        choice)
+                text = wx.TextCtrl(scrolled, style=wx.TE_PROCESS_ENTER)
+                for binder in wx.EVT_KILL_FOCUS, wx.EVT_TEXT_ENTER:
+                    text.Bind(binder,
+                              lambda e, k=key: (self._on_field_text(k),
+                                                e.Skip()))
+                form.Add(text, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+                self.fields[key] = choice, text
+
+        self.chk_first_page = wx.CheckBox(scrolled, label="First page")
+        self.chk_first_page.Bind(
+            wx.EVT_CHECKBOX, lambda e: self._set_prop(
+                header_footer_first_page=self.chk_first_page.GetValue()))
+        add_row(form, self.chk_first_page)
+        self.chk_mirror = wx.CheckBox(scrolled, label="Mirror on even pages")
+        self.chk_mirror.Bind(
+            wx.EVT_CHECKBOX, lambda e: self._set_prop(
+                header_footer_mirror=self.chk_mirror.GetValue()))
+        add_row(form, self.chk_mirror)
+
         form.AddStretchSpacer()
         padded = wx.BoxSizer(wx.VERTICAL)
         padded.Add(form, 1, wx.EXPAND | wx.ALL, 8)
         scrolled.SetSizer(padded)
         outer.Add(scrolled, 1, wx.EXPAND)
         self.SetSizer(outer)
+        self._scrolled = scrolled
         self._refresh()
 
     def update(self):
@@ -120,7 +166,20 @@ class SettingsInspector(SidePanel):
         for key, inp in self._margin_inputs.items():
             inp.SetValue(props[key])
         self._show_custom(paper == 'custom')
+        kinds = [kind for _, kind in FIELD_KINDS]
+        for key, (choice, text) in self.fields.items():
+            kind, value = props[key]
+            choice.SetSelection(kinds.index(kind))
+            text.SetValue(value)
+            text.Show(kind == 'text')
+        self.chk_first_page.SetValue(props['header_footer_first_page'])
+        self.chk_mirror.SetValue(props['header_footer_mirror'])
+        self._relayout()
         self._updating = False
+
+    def _relayout(self):
+        self.Layout()
+        self._scrolled.FitInside()  # fields shown/hidden: rescroll
 
     def _show_custom(self, visible):
         for w in (self._lbl_width, self.inp_width,
@@ -146,10 +205,132 @@ class SettingsInspector(SidePanel):
         self._set_prop(paper=paper)
 
     def _on_paper_width(self, event):
-        self._set_prop(paper_width=event.value_pt)
+        self._set_prop(paper_width=event.value)
 
     def _on_paper_height(self, event):
-        self._set_prop(paper_height=event.value_pt)
+        self._set_prop(paper_height=event.value)
+
+    def _on_field_kind(self, key):
+        choice, text = self.fields[key]
+        kind = FIELD_KINDS[choice.GetSelection()][1]
+        text.Show(kind == 'text')
+        self._relayout()
+        self._set_prop(**{key: (kind, text.GetValue())})
+
+    def _on_field_text(self, key):
+        choice, text = self.fields[key]
+        kind = FIELD_KINDS[choice.GetSelection()][1]
+        self._set_prop(**{key: (kind, text.GetValue())})
 
     def _on_margin(self, key, value_pt):
         self._set_prop(**{key: value_pt})
+
+
+def _inspector():
+    """A SettingsInspector for a new Document, in a frame."""
+    from ..core.document import Document
+    global _app
+    if wx.App.Get() is None:
+        _app = wx.App(False)  # keep a reference
+    frame = wx.Frame(None, size=(330, 900))
+    document = Document()
+    return frame, SettingsInspector(frame, document), document
+
+
+def _choose(choice, label):
+    choice.SetSelection(choice.FindString(label))
+    event = wx.CommandEvent(wx.wxEVT_CHOICE, choice.GetId())
+    event.SetEventObject(choice)
+    choice.ProcessWindowEvent(event)
+
+
+def _enter(textctrl, text):
+    textctrl.SetValue(text)
+    event = wx.CommandEvent(wx.wxEVT_TEXT_ENTER, textctrl.GetId())
+    event.SetEventObject(textctrl)
+    textctrl.ProcessWindowEvent(event)
+
+
+def _check(checkbox, value):
+    checkbox.SetValue(value)
+    event = wx.CommandEvent(wx.wxEVT_CHECKBOX, checkbox.GetId())
+    event.SetEventObject(checkbox)
+    event.SetInt(int(value))
+    checkbox.ProcessWindowEvent(event)
+
+
+def test_00():
+    "custom paper width and height are set"
+    frame, inspector, document = _inspector()
+    try:
+        _choose(inspector.choice_paper, 'custom')
+        inspector.inp_width.text.SetValue("100 mm")
+        inspector.inp_width._commit()
+        wx.GetApp().ProcessPendingEvents()
+        assert abs(document.settings['paper_width'] - 100 * 72 / 25.4) \
+            < 1e-9
+    finally:
+        frame.Destroy()
+
+
+def test_01():
+    "a header/footer field is chosen from a pulldown"
+    frame, inspector, document = _inspector()
+    try:
+        choice, text = inspector.fields['footer_center']
+        assert choice.GetStringSelection() == 'Page number'
+        assert not text.IsShown()
+        _choose(inspector.fields['header_left'][0], 'Chapter')
+        assert document.settings['header_left'] == ('chapter', '')
+        _choose(choice, '(none)')
+        assert document.settings['footer_center'] == ('none', '')
+    finally:
+        frame.Destroy()
+
+
+def test_02():
+    "'Text' shows a text field; its text is kept when the kind changes"
+    frame, inspector, document = _inspector()
+    try:
+        choice, text = inspector.fields['header_right']
+        _choose(choice, 'Text')
+        assert text.IsShown()
+        _enter(text, 'Firm {page}')
+        assert document.settings['header_right'] == ('text', 'Firm {page}')
+        _choose(choice, 'Date')
+        assert not text.IsShown()
+        assert document.settings['header_right'] == ('date', 'Firm {page}')
+        _choose(choice, 'Text')
+        assert text.GetValue() == 'Firm {page}'
+        assert document.settings['header_right'] == ('text', 'Firm {page}')
+    finally:
+        frame.Destroy()
+
+
+def test_03():
+    "the first page and mirror options are check boxes"
+    frame, inspector, document = _inspector()
+    try:
+        assert inspector.chk_first_page.GetValue()
+        assert not inspector.chk_mirror.GetValue()
+        _check(inspector.chk_first_page, False)
+        _check(inspector.chk_mirror, True)
+        assert document.settings['header_footer_first_page'] is False
+        assert document.settings['header_footer_mirror'] is True
+    finally:
+        frame.Destroy()
+
+
+def test_04():
+    "the inspector shows settings changed elsewhere (e.g. undo, loading)"
+    frame, inspector, document = _inspector()
+    try:
+        document.set_setting('footer_left', ('text', 'Draft'))
+        document.set_setting('header_footer_mirror', True)
+        inspector.update()
+        choice, text = inspector.fields['footer_left']
+        assert choice.GetStringSelection() == 'Text'
+        assert text.IsShown() and text.GetValue() == 'Draft'
+        assert inspector.chk_mirror.GetValue()
+    finally:
+        frame.Destroy()

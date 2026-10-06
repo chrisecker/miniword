@@ -59,6 +59,7 @@ def same_continuation(old, new):
             and old.border == new.border
             and old.counters == new.counters
             and old.footnote_counter == new.footnote_counter
+            and (old.chapter, old.section) == (new.chapter, new.section)
             and sizes(old.rows) == sizes(new.rows)
             and sizes(old.footnotes) == sizes(new.footnotes)
             and len(old.floats) == len(new.floats))
@@ -75,6 +76,7 @@ class Layout(LayoutBase):
         self.height += self.page_gap  # gap before every page, including the first
         self.childs.append(page)
         page.adjust(len(self.childs))
+        page.layout = self
         self.length[0] += len(page)
         if page.footnotebox is not None:
             self.length[1] += len(page.footnotebox[-1])
@@ -167,6 +169,7 @@ class TwoPageLayout(Layout):
         n = len(self.childs)
         self.childs.append(page)
         page.adjust(n + 1)
+        page.layout = self
         self.length[0] += len(page)
         if page.footnotebox is not None:
             self.length[1] += len(page.footnotebox[-1])

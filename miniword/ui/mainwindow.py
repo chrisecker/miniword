@@ -416,6 +416,7 @@ class MainFrame(wx.Frame, ViewBase):
     def _create_editor_canvas(self):
         factory = Factory(self.document.basestyles, device=CairoDevice())
         builder = PageBuilder(self.document.textmodel, factory)
+        builder.settings = self.document.settings
         builder.rebuild()
         builder.assure_y(1)  # build first row, so initial geometry is known
         builder.build_background()  # build the rest asynchronously
@@ -629,6 +630,15 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetTitle("MiniWord — " + name + suffix)
         if hasattr(self, '_mi_reload'):
             self._mi_reload.Enable(bool(self._current_path))
+
+    def setting_changed(self, document, name, old):
+        """Paper, margins, header/footer...: the pages are built anew
+        (their restart memos hold the settings)."""
+        builder = self.canvas.builder
+        builder.settings = document.settings
+        builder.rebuild()
+        builder.build_background()
+        self.canvas.refresh()
 
     def _restore_geometry(self):
         """Size and position as last time, else most of the screen."""
@@ -1247,3 +1257,26 @@ def test_07():
         app.Yield()
     finally:
         get_config = saved_get_config
+
+
+def test_08():
+    "document settings reach the page layout, also when changed later"
+    from ..core.document import Document
+    from ..core.units import cm
+    app = wx.App.Get() or wx.App()
+    doc = Document()
+    doc.set_setting('margin_left', 4 * cm)
+    frame = MainFrame(doc)
+    try:
+        builder = frame.canvas.builder
+        builder.assure_y(1)
+        assert builder._layout.childs[0].margin[3] == 4 * cm
+        doc.set_setting('margin_left', 5 * cm)
+        doc.set_setting('header_left', ('text', 'Draft'))
+        builder.assure_y(1)
+        page = builder._layout.childs[0]
+        assert page.margin[3] == 5 * cm
+        assert page.header_footer_texts()[0][0] == 'Draft'
+    finally:
+        frame.Destroy()
+        app.Yield()
