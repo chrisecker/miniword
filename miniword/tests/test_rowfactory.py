@@ -393,6 +393,35 @@ def test_WRAP_7():
     assert records[1][0].start[0] == 4
 
 
+class SelectionDevice(type(TESTDEVICE)):
+    """TESTDEVICE recording invert_rect; like real fonts it measures the
+    newline character wider than a space."""
+    def __init__(self):
+        self.rects = []
+
+    def measure(self, text, style):
+        return 5 * text.count('\n') + len(text.replace('\n', '')), 1, 0
+
+    def invert_rect(self, x, y, w, h, dc):
+        self.rects.append((x, x + w))
+
+
+def test_WRAP_13():
+    "WRAP-13: a right aligned paragraph selected as a whole has a straight edge"
+    device = SelectionDevice()
+    texel = doc(par('aaa bbb ccc ddd eee fff ggg', alignment='right',
+                    **INDENTED))
+    factory = RowFactory(State(20), testsheet, device)
+    records = [r for p in factory.generate(texel, 0) for r in p]
+    assert len(records) > 2
+    ends = []
+    for row, *_ in records:
+        device.rects.clear()
+        row.draw_selection(0, len(row), 0, 0, None)
+        ends.append(max(x2 for _, x2 in device.rects))
+    assert ends == [19] * len(records)  # edge 18 plus a space
+
+
 def test_WRAP_8():
     "WRAP-8: an empty paragraph gives exactly one row"
     paragraphs, state = generate(doc(par('a'), par(), par('b')))
@@ -418,6 +447,51 @@ def test_WRAP_9():
     rowstack = RowStack(100)
     rowstack.take(flat(paragraphs))
     assert [y for y, _ in rowstack.placed] == [0, 1.5]
+
+
+INDENTED = dict(fixed_indent=1, indent_levels=LEVELS, first_line_indent=3,
+                right_indent=2)  # width 20: lines 7..18, then 4..18
+
+
+def visible(row):
+    """x range of a row without its trailing spaces (each 1 wide)."""
+    text = row_text(row)
+    trailing = len(text) - len(text.rstrip(' '))
+    return row.start[0], row.start[0] + row.width - trailing
+
+
+def test_WRAP_10():
+    "WRAP-10: right alignment ends every line at the right indent"
+    text = 'aaa bbb ccc ddd eee fff ggg'
+    records = flat(generate(doc(par(text, alignment='right', **INDENTED)),
+                            width=20)[0])
+    assert len(records) > 2
+    assert row_text(records[0][0]).endswith(' ')  # the space hangs over
+    assert [visible(r[0])[1] for r in records] == [18] * len(records)
+    assert visible(records[0][0])[0] >= 7
+    assert all(visible(r[0])[0] >= 4 for r in records[1:])
+
+
+def test_WRAP_11():
+    "WRAP-11: centered lines are centered between their indents"
+    text = 'aaa bbb ccc ddd eee fff ggg'
+    records = flat(generate(doc(par(text, alignment='center', **INDENTED)),
+                            width=20)[0])
+    centers = [sum(visible(r[0])) / 2 for r in records]
+    assert centers == [(7 + 18) / 2] + [(4 + 18) / 2] * (len(records) - 1)
+
+
+def test_WRAP_12():
+    "WRAP-12: caret, selection and clicks follow the aligned row"
+    text = 'aaa bbb ccc ddd eee fff ggg'
+    for alignment in ('left', 'right', 'center'):
+        records = flat(generate(
+            doc(par(text, alignment=alignment, **INDENTED)), width=20)[0])
+        row = records[0][0]
+        x0 = row.start[0]
+        for i in range(len(row)):
+            assert row.get_rect(i, 0, 0).x1 == x0 + i, (alignment, i)
+            assert row.get_index(x0 + i + 0.2, 0) == i, (alignment, i)
 
 
 # ---------------------------------------------------------------------

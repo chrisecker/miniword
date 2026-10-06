@@ -95,6 +95,15 @@ def align_x(alignment, left, width, text_width):
 
 
 
+def trailing_space(line):
+    """Width of the spaces ending a line (in its last box)."""
+    box = line[-1]
+    if not isinstance(box, TextBox):
+        return 0
+    n = len(box.text) - len(box.text.rstrip(' '))
+    return box.measure(box.text[-n:])[0] if n else 0
+
+
 def apply_line_spacing(row, line_spacing):
     """Line spacing as in the previous typesetter: extra leading of
     (height + depth) * (line_spacing - 1), at least -0.5, split evenly
@@ -297,7 +306,9 @@ class RowFactory(Factory):
             if alignment == 'justify' and not is_last:
                 line = justify_line(line, width)
             row = Row(line, device=self.device)
-            row.start = (align_x(alignment, left, width, row.width), 0)
+            # spaces ending the line hang over the right edge
+            text_width = row.width - trailing_space(line)
+            row.start = (align_x(alignment, left, width, text_width), 0)
             apply_line_spacing(row, p['line_spacing'])
             if is_first and marker is not None:
                 row.set_marker(marker, p['marker_pos'][level], p)

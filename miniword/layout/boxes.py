@@ -399,6 +399,12 @@ class NewlineBox(_TextBoxBase):
     def __repr__(self):
         return 'NL'
 
+    def draw_selection(self, i1, i2, x, y, dc):
+        # A selected paragraph end is marked a space wide; the newline
+        # character itself may measure as a wide replacement glyph.
+        w = self.measure(' ')[0]
+        self.device.invert_rect(x, y, w, self.height + self.depth, dc)
+
     def get_index(self, x, y):
         # The _TextBoxBase would return index 1 for x>0 which does not
         # make sense for newlines. The last position of a line is the
