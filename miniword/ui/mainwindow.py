@@ -320,9 +320,11 @@ class MainFrame(wx.Frame, ViewBase):
 
     @_current_path.setter
     def _current_path(self, path):
-        """The document's file; the document gets its folder."""
+        """The document's file; the document gets its folder (the image
+        panel shows paths relative to it)."""
         self._path = path
         self.document.folder = self._doc_dir()
+        self.image_inspector.update()
         self.check_external_images()
 
     def check_external_images(self):

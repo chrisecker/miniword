@@ -345,7 +345,6 @@ def test_LINK_17():
             builder.rebuild()
             builder.assure_finished()
             assert [type(b) for b in boxes_in(builder)] == [ImageBox]
-            panel.update()
             assert panel.txt_path.GetValue() == '../a/bilder/wal.png'
 
 
