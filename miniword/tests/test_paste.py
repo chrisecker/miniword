@@ -436,3 +436,23 @@ def test_PASTE_17():
         assert styles['mehr'].get('href') == 'https://x.org', mistune
         assert styles['klein'].get('italic') is True, mistune
         assert styles['alt'].get('strike') is True, mistune
+
+
+def test_PASTE_18():
+    "PASTE-18: saved as Markdown, table cells keep formatting; '|' escaped"
+    from ..plugins import mdfilter
+    from ..tables.tables import Table
+    from ..textmodel.texeltree import Text, NL, grouped
+    md = ('| Name | Bild |\n|---|---|\n'
+          '| **Wal** und [mehr](https://x.org) | *klein* |\n')
+    with tempfile.TemporaryDirectory() as folder:
+        source = os.path.join(folder, 'in.md')
+        with open(source, 'w') as f:
+            f.write(md)
+        out = os.path.join(folder, 'out.md')
+        mdfilter._save(mdfilter._load(source), out)
+        text = open(out).read()
+    assert '**Wal** und [mehr](https://x.org)' in text
+    assert '*klein*' in text
+    cell = mdfilter._cell_md(grouped([Text('a | b'), NL, Text('c')]))
+    assert cell == 'a \\| b c'  # one line, the pipe escaped

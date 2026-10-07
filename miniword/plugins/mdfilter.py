@@ -125,10 +125,9 @@ def _table_to_md(table):
     MD requires exactly one header row. If nheader==0, an empty header row is
     inserted. If nheader>1, only the first row is treated as header (lossy).
     """
-    from miniword.textmodel.texeltree import get_text
     n_rows, n_cols = table.nrows, table.ncols
     cell_texels = table.childs[1::2]
-    grid = [[get_text(cell_texels[r * n_cols + c])
+    grid = [[_cell_md(cell_texels[r * n_cols + c])
              for c in range(n_cols)]
             for r in range(n_rows)]
     if table.nheader == 0:
@@ -142,6 +141,21 @@ def _table_to_md(table):
     for row in grid[1:]:
         lines.append(fmt(row))
     return lines
+
+
+def _cell_md(cell):
+    """A table cell as Markdown inline (formatting, links, images): its
+    paragraphs on one line, '|' escaped."""
+    from miniword.textmodel.utils import iter_leafes
+    from miniword.textmodel.texeltree import NewLine
+    paragraphs = [[]]
+    for *_, elem in iter_leafes(cell, 0):
+        if isinstance(elem, NewLine):
+            paragraphs.append([])
+        else:
+            paragraphs[-1].append(elem)
+    return ' '.join(_elems_to_inline(p) for p in paragraphs if p) \
+        .replace('|', '\\|')
 
 
 def _elems_to_inline(elems, footnotes=None):
