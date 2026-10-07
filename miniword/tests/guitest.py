@@ -38,7 +38,9 @@ def style_inspector(text="Eins\nZwei", size=wx.DefaultSize):
         editor = Editor(model)
         # mk_style takes the stylesheet from the canvas' builder
         editor.canvas = SimpleNamespace(
-            builder=SimpleNamespace(stylesheet=sheet))
+            builder=SimpleNamespace(stylesheet=sheet),
+            reset_blink=lambda: None, adjust_viewport=lambda: None,
+            refresh=lambda: None)
         inspector = StyleInspector(frame, editor, sheet)
         inspector.update()
         yield inspector, model, editor

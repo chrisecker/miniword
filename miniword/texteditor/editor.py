@@ -1,3 +1,4 @@
+import re
 from ..textmodel import TextModel
 from ..textmodel.viewbase import overridable_property
 from ..textmodel.submodel import SubModel, Footnote
@@ -330,14 +331,32 @@ class Editor(UndoRedo):
 
     def toggle_property(self, key):
         """Switch a character property (e.g. 'italic') on or off: for the
-        selection - on unless its first character has it - else for the
-        next input."""
-        if self.has_selection():
+        selection - on unless its first character has it -, else for the
+        word at the cursor, else for the next input."""
+        selection = self.selection
+        if not self.has_selection():
+            word = self.word_at(self.index)
+            if word is None:
+                style = self.get_current_style()
+                self.current_style = dict(style, **{key: not style.get(key)})
+                return
+            self.selection = word  # silently, as in Word and Pages
+        try:
             on = not self.target.get_style(min(self.selection)).get(key)
             self.set_properties(**{key: on})
-        else:
-            style = self.get_current_style()
-            self.current_style = dict(style, **{key: not style.get(key)})
+        finally:
+            self.selection = selection
+
+    def word_at(self, j):
+        """(j1, j2) of the word that j lies within (not at its start or
+        end), or None."""
+        model = self.target
+        start = model.linestart(j)
+        line = model.get_text(start, model.lineend(j))
+        for m in re.finditer(r'\w+', line):
+            if m.start() < j - start < m.end():
+                return start + m.start(), start + m.end()
+        return None
 
     def clear_properties(self, *keys):
         if not self.has_selection():

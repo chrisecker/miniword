@@ -148,3 +148,39 @@ def test_KEY_5():
             == 'Move Paragraph &Up\tAlt+Up'
     finally:
         frame.Destroy()
+
+
+def test_KEY_6():
+    "KEY-6: without a selection, inside a word: the whole word"
+    with canvas_with('Ein Wal hier') as (canvas, model, editor):
+        editor.index = 5  # W|al
+        press(canvas, 'b')
+        assert [bool(model.get_style(i).get('bold')) for i in range(12)] \
+            == [False] * 4 + [True] * 3 + [False] * 5
+        assert editor.index == 5 and not editor.has_selection()
+        editor.undo()
+        assert not model.get_style(5).get('bold')
+
+
+def test_KEY_7():
+    "KEY-7: at a word's start or end, or between words: the next input"
+    for index in (4, 7, 3):  # |Wal, Wal|, Ein| (before a space)
+        with canvas_with('Ein Wal hier') as (canvas, model, editor):
+            editor.index = index
+            press(canvas, 'i')
+            assert not any(model.get_style(i).get('italic')
+                           for i in range(12)), index
+            assert editor.current_style.get('italic') is True, index
+
+
+def test_KEY_8():
+    "KEY-8: the style inspector also formats the word at the cursor"
+    from .guitest import style_inspector
+    with style_inspector('Ein Wal hier') as (inspector, model, editor):
+        editor.index = 5
+        inspector.set_char_properties(color='#ff0000')
+        assert model.get_style(5).get('color') == '#ff0000'
+        assert model.get_style(4).get('color') == '#ff0000'
+        assert model.get_style(2).get('color') != '#ff0000'
+        inspector.clear_char_properties('color')
+        assert model.get_style(5).get('color') != '#ff0000'

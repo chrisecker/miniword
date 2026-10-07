@@ -638,8 +638,7 @@ class StyleInspector(SidePanel):
             for i1, i2 in ranges:
                 editor.selection = (i1, i2)
                 action()
-        if saved is not None:
-            editor.selection = saved
+        editor.selection = saved
 
     def on_superscript(self, event=None):
         if self.superscript.GetValue():
@@ -819,12 +818,13 @@ class StyleInspector(SidePanel):
     def get_range(self):
         """Return list of (i1, i2) ranges for the current selection.
 
-        Returns [(index, index)] when there is no selection (cursor only).
+        Without a selection the word at the cursor, else [(index, index)]
+        (the cursor only: the next input).
         """
         selected = self.editor.selected_ranges()
         if not selected:
             i = self.editor.index
-            return [(i, i)]
+            return [self.editor.word_at(i) or (i, i)]
         return selected
 
     def get_parrange(self):
