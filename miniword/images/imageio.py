@@ -92,6 +92,12 @@ def external_content(path, base_dir=''):
     return external[key]
 
 
+def pixel_size(content):
+    """(width, height) in pixels of image data, or None."""
+    data = decode_cached(content)
+    return data and (data.width_px, data.height_px)
+
+
 def content_of(image, base_dir=''):
     """The data of an Image texel: its own (embedded), else that of its
     linked file or URL (see external_content), else None."""

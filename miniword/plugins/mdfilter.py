@@ -203,13 +203,32 @@ def _load(path):
         return _load_builtin(text)
 
 
-def image_run(alt, src):
+def image_run(alt, src, size=None, load=False):
     """The run of an image (Markdown, HTML): a data URI embedded, a path
-    or URL linked (loaded later, see imageio)."""
-    from miniword.images.images import fetch_image
+    or URL linked; with load (paste) a URL is loaded now. size: display
+    (width, height) in pixels, either may be None - becomes its scale
+    if the image's pixel size is known."""
+    from miniword.images import imageio
+    from miniword.images.images import fetch_image, is_url
     if src.startswith('data:'):
-        return '', {'_image': (alt, fetch_image(src), None)}
-    return '', {'_image': (alt, None, src)}
+        data, path = fetch_image(src), None
+    else:
+        data, path = None, src
+        if load and is_url(src) and src not in imageio.external:
+            imageio.load_url(src)
+    pixels = size and any(size) and imageio.pixel_size(
+        data or (path and imageio.external_content(path)))
+    return '', {'_image': (alt, data, path, _scale(size, pixels))}
+
+
+def _scale(size, pixels):
+    """(scale_x, scale_y) for display size (width, height) of an image of
+    pixels (width, height); one given keeps the proportions."""
+    w, h = size or (None, None)
+    if not pixels or not (w or h):
+        return 1.0, 1.0
+    sx, sy = w and w / pixels[0], h and h / pixels[1]
+    return sx or sy, sy or sx
 
 
 # --- built-in parser --------------------------------------------------------
@@ -262,10 +281,10 @@ def _build_blocks(doc, blocks):
         if block[0] != 'table':
             for run_text, run_props in block[2]:
                 if run_props.get('_image'):
-                    alt, data, path = run_props['_image']
+                    alt, data, path, scale = run_props['_image']
                     if data:
                         data = interned.setdefault(data, data)
-                    run_props['_image'] = alt, data, path
+                    run_props['_image'] = alt, data, path, scale
 
     def insert_nl():
         pos = len(doc.textmodel.get_text())
@@ -331,9 +350,10 @@ def _insert_text_block_with_specials(doc, ptype, indent, runs):
             fn_model.texel = grouped([fn])
             doc.textmodel.insert(pos, fn_model)
         elif run_props.get('_image'):
-            alt, data, path = run_props['_image']
+            alt, data, path, scale = run_props['_image']
             img_model = doc.textmodel.create_textmodel()
-            img_model.texel = grouped([Image(data, alt=alt, path=path)])
+            img_model.texel = grouped([Image(data, *scale, alt=alt,
+                                             path=path)])
             doc.textmodel.insert(pos, img_model)
         elif run_text:
             doc.textmodel.insert_text(pos, run_text)
@@ -942,10 +962,11 @@ class _DocBuilder:
                 fn = Footnote(grouped([T(payload), ENDMARK]))
                 model.texel = grouped([fn])
             elif kind == 'image':
-                alt, data, path = payload
+                alt, data, path, scale = payload
                 if data:
                     data = interned.setdefault(data, data)
-                model.texel = grouped([Image(data, alt=alt, path=path)])
+                model.texel = grouped([Image(data, *scale, alt=alt,
+                                             path=path)])
             else:  # 'table': already a full texel, no grouped() wrapper
                 model.texel = payload
             doc.textmodel.insert(start, model)

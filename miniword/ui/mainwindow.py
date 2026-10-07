@@ -38,12 +38,18 @@ def with_bitmap(texel, png):
     with the bitmap png, its path kept as origin. Else texel unchanged -
     e.g. office programs add a picture of copied text."""
     from ..images.images import iter_images
+    from ..images.imageio import content_of, pixel_size
     from ..textmodel.texeltree import get_text, grouped
     images = list(iter_images(texel))
     if len(images) != 1 \
             or get_text(texel).replace(images[0].text, '').strip():
         return texel
-    return grouped([images[0].set_content(png)])
+    image = images[0]
+    shown, bitmap = pixel_size(content_of(image)), pixel_size(png)
+    if shown and bitmap:  # as large as the image (a Hi-DPI bitmap: half)
+        image = image.set_scale_x(shown[0] * image.scale_x / bitmap[0])
+        image = image.set_scale_y(shown[1] * image.scale_y / bitmap[1])
+    return grouped([image.set_content(png)])
 
 
 def build_to(builder, y, parent, delay=0.3):

@@ -25,11 +25,11 @@ from ..textmodel.textmodel import TextModel
 from .guitest import app
 
 
-def png(width=2):
+def png(width=2, height=2):
     """PNG data of a small image."""
     app()
     stream = io.BytesIO()
-    wx.Image(width, 2).SaveFile(stream, wx.BITMAP_TYPE_PNG)
+    wx.Image(width, height).SaveFile(stream, wx.BITMAP_TYPE_PNG)
     return stream.getvalue()
 
 
@@ -308,3 +308,57 @@ def test_PASTE_12():
         assert model.get_parstyle(0).get('base') == 'h1'
     finally:
         frame.Destroy()
+
+
+def test_PASTE_13():
+    "PASTE-13: width/height of an <img> become its scale"
+    data = png(10)  # 10 x 2 pixels
+    uri = 'data:image/png;base64,' + base64.b64encode(data).decode()
+    for attrs, scale in (('width="5"', (0.5, 0.5)),
+                         ('height="4px"', (2.0, 2.0)),
+                         ('width="20" height="1"', (2.0, 0.5)),
+                         ('width="50%"', (1.0, 1.0)), ('', (1.0, 1.0))):
+        _, images = pasted('<img src="%s" %s>' % (uri, attrs))
+        assert (images[0].scale_x, images[0].scale_y) == scale, attrs
+
+
+def test_PASTE_14():
+    "PASTE-14: pasting loads web images at once, so their size is known"
+    from ..plugins.htmlfilter import html_clipboard_fragment
+    from ..images import imageio
+    data = png(40)
+    with tempfile.TemporaryDirectory() as folder:
+        with open(os.path.join(folder, 'gross.png'), 'wb') as f:
+            f.write(data)
+        server, url = serve(folder)
+        try:
+            html = '<p>A <img src="%sgross.png" width="10"></p>' % url
+            _, images = pasted(html)  # import: no web access
+            assert imageio.external_content(url + 'gross.png') is None
+            assert images[0].scale_x == 1.0
+            texel = html_clipboard_fragment(html.encode(), Document())
+            image, = iter_images(texel)
+            assert (image.content, image.path) == (None, url + 'gross.png')
+            assert image.scale_x == 0.25
+        finally:
+            server.shutdown()
+
+
+def test_PASTE_15():
+    "PASTE-15: the bitmap of a lone image shows as large as the image"
+    from ..ui.mainwindow import with_bitmap
+    from ..images import imageio
+    from ..images.images import Image
+    from ..textmodel.texeltree import grouped
+    url = 'https://x.org/klein.png'
+    imageio.external[url] = png(250, 100)  # as if loaded
+    try:
+        texel = grouped([Image(path=url, scale_x=0.8, scale_y=0.8)])
+        image, = iter_images(with_bitmap(texel, png(500, 200)))  # Hi-DPI
+        assert image.content is not None and image.path == url
+        assert (image.scale_x, image.scale_y) == (0.4, 0.4)
+    finally:
+        del imageio.external[url]
+    texel = grouped([Image(path='https://x.org/unbekannt.png')])
+    image, = iter_images(with_bitmap(texel, png(500)))
+    assert image.scale_x == 1.0  # size unknown: the bitmap as it is

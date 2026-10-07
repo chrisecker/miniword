@@ -47,6 +47,14 @@ def clipboard_html(data):
     return text.rstrip('\x00')
 
 
+def _length(value):
+    """Pixels of an HTML length ('250', '250px'), else None (e.g. '50%')."""
+    try:
+        return float(value.strip().removesuffix('px'))
+    except (AttributeError, ValueError):
+        return None
+
+
 def _css_props(style):
     """Char props from a CSS style attribute: bold, italic, strike."""
     props = {}
@@ -70,8 +78,9 @@ class _HTMLBlockBuilder(HTMLParser):
     mdfilter._parse_md_paragraphs: a list of (ptype, indent, runs) or
     ('table', grid) tuples, fed into mdfilter._build_blocks()."""
 
-    def __init__(self):
+    def __init__(self, load=False):
         super().__init__(convert_charrefs=True)
+        self.load = load             # load web images now (paste)
         self.blocks = []
         self._runs = []              # current block's accumulated runs
         self._block_stack = [('normal', 0)]   # (ptype, indent), outermost first
@@ -208,8 +217,9 @@ class _HTMLBlockBuilder(HTMLParser):
         elif tag == 'br':
             self._append(' ')
         elif tag == 'img' and attrs.get('src'):
+            size = _length(attrs.get('width')), _length(attrs.get('height'))
             self._runs.append(image_run(attrs.get('alt') or '',
-                                        attrs['src']))
+                                        attrs['src'], size, self.load))
 
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
@@ -269,7 +279,7 @@ class _HTMLBlockBuilder(HTMLParser):
         self._flush_block()
 
 
-def html_text_to_fragment(html, target_doc):
+def html_text_to_fragment(html, target_doc, load=False):
     """Parse an HTML clipboard flavor into a texel fragment for insertion
     into an already-open document (e.g. via Editor.insert_texel()).
 
@@ -285,7 +295,7 @@ def html_text_to_fragment(html, target_doc):
     from types import SimpleNamespace
     from miniword.textmodel.textmodel import TextModel
 
-    builder = _HTMLBlockBuilder()
+    builder = _HTMLBlockBuilder(load)
     builder.feed(html)
     builder.close()
 
@@ -298,8 +308,9 @@ def html_text_to_fragment(html, target_doc):
 
 
 def html_clipboard_fragment(data, document):
-    """Paste of the clipboard's HTML flavor (bytes, see clipboard_html)."""
-    return html_text_to_fragment(clipboard_html(data), document)
+    """Paste of the clipboard's HTML flavor (bytes, see clipboard_html);
+    web images are loaded now (their size gives their scale)."""
+    return html_text_to_fragment(clipboard_html(data), document, load=True)
 
 
 register_paste('html', html_clipboard_fragment)
