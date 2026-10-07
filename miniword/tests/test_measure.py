@@ -21,8 +21,15 @@ STYLE = dict(font_family='Times New Roman', font_size=12)
 
 
 class PrefixByPrefix(CairoDevice):
-    """The old way, as reference: every prefix shaped on its own."""
+    """The old way, as reference: every prefix shaped on its own, and
+    the rest of a split box measured again (see rows)."""
     prefix_widths = TestDevice.prefix_widths
+
+
+def measured_split(box, i):
+    """split_box as before: both parts measured."""
+    return (TextBox(box.text[:i], box.style, box.device),
+            TextBox(box.text[i:], box.style, box.device))
 
 
 def paragraphs(n=60):
@@ -33,9 +40,17 @@ def paragraphs(n=60):
 
 
 def rows(text, device, width, hyphenate=None):
-    return [''.join(box.text for box in row if isinstance(box, TextBox))
-            for row in simple_linewrap([TextBox(text, STYLE, device)],
-                                       width, hyphenate=hyphenate)]
+    """The texts of the rows; PrefixByPrefix wraps the old way."""
+    from ..layout import linewrap
+    split = linewrap.split_box
+    if isinstance(device, PrefixByPrefix):
+        linewrap.split_box = measured_split
+    try:
+        return [''.join(b.text for b in row if isinstance(b, TextBox))
+                for row in simple_linewrap([TextBox(text, STYLE, device)],
+                                           width, hyphenate=hyphenate)]
+    finally:
+        linewrap.split_box = split
 
 
 def test_MEAS_1():
@@ -52,7 +67,7 @@ def test_MEAS_1():
 
 
 def test_MEAS_2():
-    "MEAS-2: moby.txl wraps into the same lines as measuring by prefix"
+    "MEAS-2: moby.txl wraps into the same lines as before (PrefixByPrefix)"
     app()
     fast, reference = CairoDevice(), PrefixByPrefix()
     for text in paragraphs():
@@ -89,3 +104,24 @@ def test_MEAS_4():
     device.shapes = 0
     rows(text, device, 300)
     assert device.shapes <= 4 * lines, (device.shapes, lines)
+
+
+def test_MEAS_5():
+    "MEAS-5: splitting a box measures the left part only, not the rest"
+    from ..layout.linewrap import split_box
+
+    class Counting(TestDevice):
+        measured = []
+
+        def measure(self, text, style):
+            self.measured.append(text)
+            return TestDevice.measure(self, text, style)
+
+    device = Counting()
+    box = TextBox('Ein langer Absatz mit vielen Woertern', STYLE, device)
+    device.measured.clear()
+    a, b = split_box(box, 4)
+    assert device.measured == ['Ein ']
+    assert (a.text, b.text) == ('Ein ', box.text[4:])
+    assert (b.width, b.height, b.depth) == \
+        (box.width - a.width, box.height, box.depth)

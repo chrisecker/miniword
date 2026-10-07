@@ -150,10 +150,11 @@ def split_box(box, i):
         return EmptyTextBox(), box
 
     text, style, device = box.text, box.style, box.device
-    return (
-        box.__class__(text[:i], style, device),
-        box.__class__(text[i:], style, device),
-    )
+    a = box.__class__(text[:i], style, device)
+    # the rest (often the rest of the paragraph) is not measured again
+    b = box.__class__(text[i:], style, device,
+                      (box.width - a.width, box.height, box.depth))
+    return a, b
 
 
 def simple_linewrap(boxes, maxw, maxw2=None, wordwrap=True,

@@ -374,12 +374,16 @@ class _TextBoxBase(Box):
 
 
 class TextBox(_TextBoxBase):
-    def __init__(self, text, style=EMPTYSTYLE, device=None):
+    def __init__(self, text, style=EMPTYSTYLE, device=None, metrics=None):
+        """metrics: (width, height, depth) if already known."""
         self.text = text
         self.style = style
         if device is not None:
             self.device = device
-        self.layout()
+        if metrics is None:
+            self.layout()
+        else:
+            self.width, self.height, self.depth = metrics
 
 
 class HyphenBox(TextBox):
