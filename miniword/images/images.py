@@ -18,6 +18,7 @@ refers to it by blob_key(content):
     IMG("3f9a0c1e27b4d685.png", {scale_x=0.5, scale_y=0.5, alt="Photo"})
 """
 
+import os
 import wx
 from copy import copy
 from ..textmodel.texeltree import Single, EMPTYSTYLE, NL, iter_childs
@@ -111,6 +112,53 @@ def image_extension(content):
         if content.startswith(magic):
             return ext
     return '.bin'
+
+
+MAX_IMAGE = 20 * 1024 * 1024  # bytes loaded at most from the web
+
+
+def fetch_image(src, base_dir=''):
+    """Image data from src: a data URI (taken as it is), a file (path or
+    file:// URL, relative to base_dir) or a http(s) URL (10 s, MAX_IMAGE
+    at most). From files and the web, formats other than PNG, JPEG and
+    GIF become PNG (if wx reads them). None if src can't be loaded or
+    isn't an image."""
+    import base64
+    import binascii
+    import urllib.parse
+    import urllib.request
+    try:
+        if src.startswith('data:'):
+            return base64.b64decode(src.split('base64,', 1)[1])
+        if src.startswith(('http://', 'https://')):
+            request = urllib.request.Request(
+                src, headers={'User-Agent': 'Miniword'})
+            with urllib.request.urlopen(request, timeout=10) as f:
+                data = f.read(MAX_IMAGE + 1)
+            if len(data) > MAX_IMAGE:
+                return None
+        else:
+            if src.startswith('file://'):
+                src = urllib.parse.unquote(urllib.parse.urlparse(src).path)
+            with open(os.path.join(base_dir, src), 'rb') as f:
+                data = f.read()
+    except (OSError, ValueError, IndexError, binascii.Error):
+        return None
+    if image_extension(data) != '.bin':
+        return data
+    return _to_png(data)
+
+
+def _to_png(data):
+    """data in another image format as PNG, or None."""
+    import io
+    image = wx.Image()
+    with wx.LogNull():  # no error dialogs for unknown data
+        if not image.LoadFile(io.BytesIO(data)) or not image.IsOk():
+            return None
+    stream = io.BytesIO()
+    image.SaveFile(stream, wx.BITMAP_TYPE_PNG)
+    return stream.getvalue()
 
 
 def image_mime(content):

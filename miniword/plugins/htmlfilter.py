@@ -6,12 +6,16 @@
 #
 # Not a general-purpose HTML importer: covers the tag subset such sources
 # actually produce -- paragraphs, headings, bold/italic, lists (incl.
-# nesting), blockquote, pre/code, tables, links, data-URI images. Not
-# covered (Markdown-paste-only for now): footnotes, sup/sub/strike.
+# nesting), blockquote, pre/code, tables, links, strike, bold/italic/
+# strike from CSS, images (data URIs, files, web; see fetch_image). Not
+# covered (Markdown-paste-only for now): footnotes, sup/sub.
 
 import re
 from html.parser import HTMLParser
-from base64 import b64decode
+import codecs
+from base64 import b64encode
+
+from miniword.images.images import fetch_image
 
 from miniword.plugins.mdfilter import (
     _register_styles, _build_blocks, _adopt_existing_styles)
@@ -28,6 +32,50 @@ def _positive_int(value, default=1):
 _HEADINGS = {'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'h5': 'h5', 'h6': 'h6'}
 _BOLD_TAGS = {'strong', 'b'}
 _ITALIC_TAGS = {'em', 'i'}
+_STRIKE_TAGS = {'s', 'del', 'strike'}
+
+
+def clipboard_html(data):
+    """The clipboard's HTML flavor (bytes) as text: UTF-16 (Firefox on
+    Linux: with a byte order mark or zero bytes) or UTF-8."""
+    if data.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        text = data.decode('utf-16', errors='replace')
+    elif b'\x00' in data[:200]:
+        text = data.decode('utf-16-le', errors='replace')
+    else:
+        text = data.decode('utf-8', errors='replace')
+    return text.rstrip('\x00')
+
+
+def paste_html(html, png):
+    """The HTML to paste: an image alone on the clipboard (e.g. 'Copy
+    image' in a browser, a screenshot) as its bitmap png, else html."""
+    if png and (not html or _only_image(html)):
+        return '<img src="data:image/png;base64,%s">' \
+            % b64encode(png).decode()
+    return html
+
+
+def _only_image(html):
+    """Whether html is one image and no text."""
+    text = re.sub(r'<[^>]*>', '', html)
+    return html.lower().count('<img') == 1 and not text.strip()
+
+
+def _css_props(style):
+    """Char props from a CSS style attribute: bold, italic, strike."""
+    props = {}
+    for item in style.split(';'):
+        key, _, value = (s.strip().lower() for s in item.partition(':'))
+        if key == 'font-weight':
+            props['bold'] = value in ('bold', 'bolder') or \
+                (value.isdigit() and int(value) >= 600)
+        elif key == 'font-style':
+            props['italic'] = value in ('italic', 'oblique')
+        elif key in ('text-decoration', 'text-decoration-line') \
+                and 'line-through' in value:
+            props['strike'] = True
+    return props
 _BLOCK_TAGS = ({'p', 'blockquote', 'pre', 'li', 'table',
                 'tr', 'th', 'td'} | set(_HEADINGS))
 
@@ -60,7 +108,8 @@ class _HTMLBlockBuilder(HTMLParser):
         return self._props_stack[-1]
 
     def _flush_block(self):
-        if self._runs:
+        # whitespace only (e.g. around a browser's fragment): no block
+        if any(t.strip() or p.get('_image') for t, p in self._runs):
             ptype, indent = self._block_stack[-1]
             self.blocks.append((ptype, indent, self._runs))
         self._runs = []
@@ -164,16 +213,22 @@ class _HTMLBlockBuilder(HTMLParser):
             self._props_stack.append(dict(self._props, italic=True))
         elif tag == 'code':
             self._props_stack.append(dict(self._props, font_family='Courier New'))
+        elif tag == 'span' or tag in _STRIKE_TAGS:
+            props = dict(self._props, **_css_props(attrs.get('style', '')))
+            if tag in _STRIKE_TAGS:
+                props['strike'] = True
+            self._props_stack.append(props)
         elif tag == 'a' and attrs.get('href'):
             self._props_stack.append(dict(self._props, href=attrs['href']))
         elif tag == 'br':
             self._append(' ')
         elif tag == 'img':
-            src = attrs.get('src', '')
-            if 'base64,' in src:
-                alt = attrs.get('alt') or ''
-                data = b64decode(src.split('base64,', 1)[1])
+            src, alt = attrs.get('src', ''), attrs.get('alt') or ''
+            data = src and fetch_image(src)
+            if data:
                 self._runs.append(('', {'_image': (alt, data)}))
+            elif src:  # not loaded: the alt text, linked to the image
+                self._append(alt or src, dict(self._props, href=src))
 
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
@@ -202,7 +257,8 @@ class _HTMLBlockBuilder(HTMLParser):
             self._end_row()
         elif tag == 'table':
             self._flush_table()
-        elif tag in _BOLD_TAGS or tag in _ITALIC_TAGS or tag == 'code' or tag == 'a':
+        elif tag in _BOLD_TAGS or tag in _ITALIC_TAGS or tag == 'code' \
+                or tag == 'a' or tag == 'span' or tag in _STRIKE_TAGS:
             if len(self._props_stack) > 1:
                 self._props_stack.pop()
 

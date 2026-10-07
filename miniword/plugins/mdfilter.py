@@ -190,14 +190,31 @@ def _elems_to_inline(elems, footnotes=None):
 # Import: Markdown → Document
 # ---------------------------------------------------------------------------
 
+_base_dir = ''  # folder of the file being imported (relative images)
+
+
 def _load(path):
+    global _base_dir
     with open(path, encoding='utf-8') as f:
         text = f.read()
+    _base_dir = os.path.dirname(os.path.abspath(path))
     try:
-        import mistune
+        import mistune  # noqa: F401 -- availability check only
         return _load_mistune(text)
     except ImportError:
         return _load_builtin(text)
+    finally:
+        _base_dir = ''
+
+
+def _image_run(alt, src):
+    """The run of a Markdown image: its data (see fetch_image), or the
+    alt text linked to src if it can't be loaded."""
+    from miniword.images.images import fetch_image
+    data = fetch_image(src, _base_dir)
+    if data:
+        return '', {'_image': (alt, data)}
+    return alt or src, {'href': src}
 
 
 # --- built-in parser --------------------------------------------------------
@@ -206,7 +223,7 @@ import re
 import os
 import base64
 
-_IMG_RE    = re.compile(r'!\[([^\]]*)\]\(data:[^;]+;base64,([^)]+)\)')
+_IMG_RE    = re.compile(r'!\[([^\]]*)\]\(([^)\s]+)\)')
 
 _ATX_RE    = re.compile(r'^ {0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
 _UL_RE     = re.compile(r'^(\s*)[-*+]\s+(.*)')
@@ -517,7 +534,7 @@ def _parse_inline(text, fn_defs=None):
     parts = []
     pos   = 0
     pattern = re.compile(
-        r'(!\[[^\]]*\]\(data:[^;]+;base64,[^)]+\))'    # inline image (data URI)
+        r'(!\[[^\]]*\]\([^)\s]+\))'                    # inline image
         r'|(`[^`]+`)'                                     # code
         r'|(\*{3}[^\s*](?:[^*]*[^\s*])?\*{3})'         # bold+italic ***
         r'|(\*{2}[^\s*](?:[^*]*[^\s*])?\*{2})'         # bold **
@@ -537,8 +554,7 @@ def _parse_inline(text, fn_defs=None):
         raw = m.group(0)
         if raw.startswith('!['):
             img = _IMG_RE.match(raw)
-            alt, data = img.group(1), base64.b64decode(img.group(2))
-            parts.append(('', {'_image': (alt, data)}))
+            parts.append(_image_run(img.group(1), img.group(2)))
         elif raw.startswith('[^'):
             ref = raw[2:-1]
             content = (fn_defs or {}).get(ref, ref)
@@ -846,12 +862,13 @@ class _DocBuilder:
             self._append(' ', self._cur_props)
         elif t == 'image':
             url = node.get('attrs', {}).get('url', '')
-            if 'base64,' in url:
-                alt = self._flatten_text(node.get('children', []))
-                data = base64.b64decode(url.split('base64,', 1)[1])
-                self._marks.append((len(self.text), 'image', (alt, data)))
-            # non-data-URI images aren't supported on import (matches the
-            # built-in parser, which only recognizes data-URI images)
+            alt = self._flatten_text(node.get('children', []))
+            text, props = _image_run(alt, url)
+            if props.get('_image'):
+                self._marks.append((len(self.text), 'image',
+                                    props['_image']))
+            else:
+                self._append(text, dict(self._cur_props, **props))
         elif t == 'block_text':
             # a list item's inline content; the surrounding paragraph
             # boundaries are already set up by _visit_list_item

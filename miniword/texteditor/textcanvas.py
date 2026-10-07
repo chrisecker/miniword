@@ -9,6 +9,7 @@ from ..layout.rect import Rect
 from ..layout import annotation
 from ..layout import marks
 
+import io
 import wx
 import string
 import pickle
@@ -103,7 +104,6 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             (wx.WXK_BACK,   False, False): 'del_left',
             (wx.WXK_DELETE, False, False): 'delete',
             (3,  True, False): 'copy',
-            (22, True, False): 'paste',
             (24, True, False): 'cut',
             (26, True, False): 'undo',
             (11, True, False): 'del_line_end',
@@ -251,8 +251,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         return textmodel
 
     def read_clipboard_html(self):
-        """Return the clipboard's HTML flavor as a string, or None if the
-        clipboard doesn't currently hold one (e.g. plain-text-only copy)."""
+        """The clipboard's HTML flavor as bytes (see
+        htmlfilter.clipboard_html), or None if it has none (e.g. plain
+        text only)."""
         if wx.TheClipboard.IsOpened():
             return None
         if not wx.TheClipboard.Open():
@@ -261,7 +262,25 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             data = wx.CustomDataObject(wx.DataFormat(wx.DF_HTML))
             if not wx.TheClipboard.GetData(data):
                 return None
-            return bytes(data.GetData()).decode('utf-8', errors='replace')
+            return bytes(data.GetData())
+        finally:
+            wx.TheClipboard.Close()
+
+    def read_clipboard_image(self):
+        """The clipboard's image (e.g. 'Copy image', a screenshot) as
+        PNG data, or None."""
+        if wx.TheClipboard.IsOpened() or not wx.TheClipboard.Open():
+            return None
+        try:
+            if not wx.TheClipboard.IsSupported(wx.DataFormat(wx.DF_BITMAP)):
+                return None
+            data = wx.BitmapDataObject()
+            if not wx.TheClipboard.GetData(data):
+                return None
+            stream = io.BytesIO()
+            data.GetBitmap().ConvertToImage().SaveFile(
+                stream, wx.BITMAP_TYPE_PNG)
+            return stream.getvalue()
         finally:
             wx.TheClipboard.Close()
 

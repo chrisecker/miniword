@@ -885,14 +885,19 @@ class MainFrame(wx.Frame, ViewBase):
 
     def paste(self):
         """Normal Cmd/Ctrl+V: paste real structure when the clipboard holds
-        an HTML flavor (e.g. copied from a browser), otherwise fall back to
-        the editor's plain-text/internal-format paste."""
-        html = self.editor.canvas.read_clipboard_html()
+        an HTML flavor (e.g. copied from a browser) or an image, otherwise
+        fall back to the editor's plain-text/internal-format paste."""
+        from ..plugins.htmlfilter import clipboard_html, paste_html, \
+            html_text_to_fragment
+        canvas = self.editor.canvas
+        data = canvas.read_clipboard_html()
+        html = paste_html(data and clipboard_html(data),
+                          canvas.read_clipboard_image())
         if not html:
             self.editor.controller.handle_action('paste', False)
             return
-        from ..plugins.htmlfilter import html_text_to_fragment
-        texel = html_text_to_fragment(html, self.document)
+        with wx.BusyCursor():  # images may be loaded from the web
+            texel = html_text_to_fragment(html, self.document)
         with self.editor.atomic():
             self.editor.remove()
             self.editor.insert_texel(texel)
@@ -905,7 +910,8 @@ class MainFrame(wx.Frame, ViewBase):
         if not text:
             return
         from ..plugins.mdfilter import md_text_to_fragment
-        texel = md_text_to_fragment(text, self.document)
+        with wx.BusyCursor():  # images may be loaded from the web
+            texel = md_text_to_fragment(text, self.document)
         with self.editor.atomic():
             self.editor.remove()
             self.editor.insert_texel(texel)
