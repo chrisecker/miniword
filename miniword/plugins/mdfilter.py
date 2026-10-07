@@ -8,8 +8,13 @@
 #
 # Without mistune a built-in parser handles the common MD subset.
 
+import html
+import re
+
 from miniword.io.importexport import register_import, register_export, \
     register_paste_as
+
+_BR = re.compile(r'<br\s*/?>', re.I)
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +76,9 @@ def _doc_to_md(doc):
         ptype  = ps.get('paragraph_type', 'normal')
         indent = nl.indent
 
-        inline = _elems_to_inline(content, footnotes)
+        inline = _elems_to_inline(content, footnotes, plain=base == 'pre')
+        if base != 'pre':
+            inline = '\n'.join(map(_escape_start, inline.split('\n')))
         if not inline.strip():
             continue  # empty paragraph — skip
 
@@ -100,6 +107,8 @@ def _doc_to_md(doc):
             parts.append('> ' + inline)
         elif ptype == 'list':
             prefix = '  ' * indent + '- '
+            # task list "[ ] "/"[x] " (kept as text) stays unescaped
+            inline = re.sub(r'^\\\[([ xX])\\\] ', r'[\1] ', inline)
             parts.append(prefix + inline)
         elif ptype == 'numbered':
             prefix = '  ' * indent + '1. '
@@ -115,7 +124,8 @@ def _doc_to_md(doc):
         parts.append('')
         for n, fn in enumerate(footnotes, 1):
             # content ends with an ENDMARK ('\n'); strip it for the inline definition
-            parts.append('[^%d]: %s' % (n, get_text(fn.content)[:-1]))
+            parts.append('[^%d]: %s'
+                         % (n, _escape(get_text(fn.content)[:-1])))
     return '\n'.join(parts) + '\n'
 
 
@@ -155,17 +165,45 @@ def _cell_md(cell):
         else:
             paragraphs[-1].append(elem)
     return ' '.join(_elems_to_inline(p) for p in paragraphs if p) \
-        .replace('|', '\\|')
+        .replace('|', '\\|').replace('\\\n', '<br>')
 
 
-def _elems_to_inline(elems, footnotes=None):
-    """Convert a list of leaf texels (excluding the NL) to Markdown inline.
-    Images are embedded as data URIs - a document stays one file."""
+_SPECIAL = re.compile(r'([\\`*_\[\]<>~^])')
+_ENTITY  = re.compile(r'&(?=#?\w+;)')
+
+
+def _escape(text):
+    """text with the Markdown characters escaped."""
+    return _ENTITY.sub(r'\\&', _SPECIAL.sub(r'\\\1', text))
+
+
+def _escape_start(line):
+    """line with a leading block marker (# > - + = 1.) escaped."""
+    if line[:1] and line[0] in '#>+-=':
+        return '\\' + line
+    return re.sub(r'^(\d+)([.)])', r'\1\\\2', line)
+
+
+def _code_span(text):
+    """text as inline code, fenced by more backticks than it contains."""
+    n = max(map(len, re.findall('`+', text)), default=0) + 1
+    pad = ' ' if text[:1] == '`' or text[-1:] == '`' else ''
+    return '`' * n + pad + text + pad + '`' * n
+
+
+def _elems_to_inline(elems, footnotes=None, plain=False):
+    """Convert a list of leaf texels (excluding the NL) to Markdown inline;
+    plain: text only, unescaped (code blocks). Images are embedded as data
+    URIs - a document stays one file."""
     from miniword.textmodel.texeltree import get_text
     from miniword.images.images import Image as ImageTexel, image_mime
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
+    from miniword.core.texels import BR
     segments = []
     for elem in elems:
+        if isinstance(elem, BR):
+            segments.append('\n' if plain else '\\\n')
+            continue
         if isinstance(elem, FootnoteTexel):
             if footnotes is not None:
                 footnotes.append(elem)
@@ -176,14 +214,17 @@ def _elems_to_inline(elems, footnotes=None):
             if data:
                 b64  = base64.b64encode(data).decode('ascii')
                 segments.append('![%s](data:%s;base64,%s)'
-                                % (elem.alt, image_mime(data), b64))
+                                % (_escape(elem.alt), image_mime(data), b64))
             elif elem.path:  # linked
                 from miniword.images.images import file_path
                 segments.append('![%s](%s)'
-                                % (elem.alt, file_path(elem, _folder)))
+                                % (_escape(elem.alt), file_path(elem, _folder)))
             continue
         text = get_text(elem)
         if not text:
+            continue
+        if plain:
+            segments.append(text)
             continue
         props  = getattr(elem, 'style', {})
         bold   = props.get('bold',   False)
@@ -194,13 +235,12 @@ def _elems_to_inline(elems, footnotes=None):
         code   = props.get('font_family', '').lower() in ('courier', 'courier new',
                                                            'monospace', 'consolas')
         if code:
-            text = '`' + text + '`'
-        elif bold and italic:
-            text = '***' + text + '***'
-        elif bold:
-            text = '**' + text + '**'
-        elif italic:
-            text = '*' + text + '*'
+            text = _code_span(text)
+        else:
+            text = _escape(text)
+            mark = '***' if bold and italic else '**' if bold else \
+                '*' if italic else ''
+            text = mark + text + mark
         if strike:
             text = '~~' + text + '~~'
         if vpos == 'superscript':
@@ -268,7 +308,6 @@ def _scale(size, pixels):
 
 # --- built-in parser --------------------------------------------------------
 
-import re
 import os
 import base64
 
@@ -439,7 +478,7 @@ def _inline_runs(nodes, props={}):
     for node in nodes:
         t, children = node.get('type'), node.get('children', [])
         if t in ('text', 'raw_text'):
-            runs.append((node.get('raw', ''), props))
+            runs.append((html.unescape(node.get('raw', '')), props))
         elif t in ('softbreak', 'linebreak'):
             runs.append((' ', props))
         elif t == 'codespan':
@@ -855,7 +894,9 @@ class _DocBuilder:
             if not isinstance(node, dict):
                 continue
             t = node.get('type')
-            if t in ('text', 'raw_text', 'codespan'):
+            if t in ('text', 'raw_text'):
+                parts.append(html.unescape(node.get('raw', '')))
+            elif t == 'codespan':
                 parts.append(node.get('raw', ''))
             elif t in ('softbreak', 'linebreak'):
                 parts.append(' ')
@@ -917,7 +958,15 @@ class _DocBuilder:
                 self._start_par('normal', 0)
                 self._end_par()
         elif t == 'text' or t == 'raw_text':
-            self._append(node.get('raw', ''), self._cur_props)
+            self._append(html.unescape(node.get('raw', '')), self._cur_props)
+        elif t == 'block_html':  # its text, without the tags
+            text = html.unescape(re.sub(r'<[^>]*>', '', node.get('raw', '')))
+            for line in filter(None, map(str.strip, text.splitlines())):
+                self._start_par('normal', 0)
+                self._append(line, {})
+                self._end_par()
+        elif t == 'inline_html' and _BR.fullmatch(node.get('raw', '')):
+            self._marks.append((len(self.text), 'br', None))
         elif t == 'link':
             old = self._cur_props
             url = node.get('attrs', {}).get('url')
@@ -964,8 +1013,10 @@ class _DocBuilder:
             self._cur_props = old
         elif t == 'codespan':
             self._append(node.get('raw', ''), {'font_family': 'Courier New'})
-        elif t == 'softbreak' or t == 'linebreak':
+        elif t == 'softbreak':
             self._append(' ', self._cur_props)
+        elif t == 'linebreak':
+            self._marks.append((len(self.text), 'br', None))
         elif t == 'image':
             url = node.get('attrs', {}).get('url', '')
             alt = self._flatten_text(node.get('children', []))
@@ -1039,6 +1090,7 @@ class _DocBuilder:
         from miniword.footnotes.footnotes import Footnote
         from miniword.images.images import Image
         from miniword.textmodel.texeltree import T, ENDMARK, grouped
+        from miniword.core.texels import BR
         # Footnotes and images are zero-width marks in self.text, recorded
         # in document order. Insert back to front: each insertion only
         # shifts positions after it, so not-yet-inserted (earlier) marks
@@ -1050,6 +1102,8 @@ class _DocBuilder:
             if kind == 'footnote':
                 fn = Footnote(grouped([T(payload), ENDMARK]))
                 model.texel = grouped([fn])
+            elif kind == 'br':
+                model.texel = grouped([BR()])
             elif kind == 'image':
                 alt, data, *rest = payload
                 if data:
@@ -1858,3 +1912,95 @@ Code: `print("hello")` inline.
         os.unlink(out_path)
     finally:
         os.unlink(path)
+
+
+def _md_doc(text, **props):
+    """A document with text (in props) for export tests."""
+    from miniword.core.document import Document
+    doc = Document()
+    _register_styles(doc)
+    doc.textmodel.insert_text(0, text)
+    if props:
+        doc.textmodel.set_properties(0, len(text), **props)
+    return doc
+
+
+def _mistune_roundtrip(doc):
+    """doc saved as Markdown and loaded again (mistune), or None."""
+    try:
+        import mistune  # noqa: F401 -- availability check only
+    except ImportError:
+        return None
+    return _load_mistune(_doc_to_md(doc))
+
+
+def test_35():
+    "export escapes Markdown characters: text comes back unchanged"
+    text = 'a *b* _c_ [d](e) `f` <g> ~h~ ^i^ \\ &amp; j\n' \
+           '# not a heading\n- not a list\n1. not numbered\n> no quote\n'
+    doc = _mistune_roundtrip(_md_doc(text))
+    if doc is None:
+        return
+    assert doc.textmodel.get_text() == text
+    pars = _extract_pars(doc)
+    assert {(base, ptype) for base, ptype, _, _ in pars} == \
+        {('body', 'normal')}
+    assert not [style for *_, runs in pars for _, style in runs if style]
+
+
+def test_36():
+    "hard line breaks are imported as BR and exported as backslash"
+    try:
+        import mistune  # noqa: F401 -- availability check only
+    except ImportError:
+        return
+    from miniword.core.texels import BR
+    for md in ('one  \ntwo\n', 'one\\\ntwo\n', 'one<br>two\n'):
+        doc = _load_mistune(md)
+        assert doc.textmodel.get_text() == 'one\x0btwo\n', md
+        assert _doc_to_md(doc) == 'one\\\ntwo\n', md
+    doc = _mistune_roundtrip(_load_mistune('one  \ntwo\n'))
+    assert doc.textmodel.get_text() == 'one\x0btwo\n'
+    from miniword.textmodel.utils import iter_leafes
+    assert any(isinstance(t, BR)
+               for *_, t in iter_leafes(doc.textmodel.texel, 0))
+
+
+def test_37():
+    "entities are decoded on import"
+    try:
+        import mistune  # noqa: F401 -- availability check only
+    except ImportError:
+        return
+    doc = _load_mistune('a &amp; b &copy; &#65;\n')
+    assert doc.textmodel.get_text() == 'a & b © A\n'
+
+
+def test_38():
+    "an HTML block keeps its text (without the tags)"
+    try:
+        import mistune  # noqa: F401 -- availability check only
+    except ImportError:
+        return
+    doc = _load_mistune('<div>x <b>y</b> &amp; z</div>\n\nb\n')
+    assert [runs[0][0] for *_, runs in _extract_pars(doc)] == \
+        ['x y & z', 'b']
+
+
+def test_39():
+    "inline code with backticks comes back unchanged"
+    for code in ('x ` y', '`a`', 'a``b'):
+        doc = _mistune_roundtrip(_md_doc(code, font_family='Courier New'))
+        if doc is None:
+            return
+        assert doc.textmodel.get_text() == code + '\n', code
+
+
+def test_40():
+    "task list items (kept as text) come back as task list items"
+    md = '- [ ] todo\n- [x] done\n'
+    for load in (_load_builtin, _load_mistune):
+        try:
+            assert _doc_to_md(load(md)) == md
+        except ImportError:  # mistune is optional
+            pass
