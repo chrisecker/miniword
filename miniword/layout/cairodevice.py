@@ -79,6 +79,10 @@ class CairoDevice:
         self._temp_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)
         self._temp_ctx = cairo.Context(self._temp_surface)
         self._temp_ctx.set_font_options(self._make_font_options())
+        # measuring has its own context: it keeps the drawing font
+        self._measure_ctx = cairo.Context(self._temp_surface)
+        self._measure_ctx.set_font_options(self._make_font_options())
+        self._font_metrics = {}  # font -> (height, depth)
         self._hb_fonts = {}
         self._fallback_fonts = {}  # (path, size) -> hb.Font
         self._current_style = defaultstyle
@@ -93,6 +97,7 @@ class CairoDevice:
 
     def clear_caches(self):
         self._cache.clear()
+        self._font_metrics.clear()
         self._hb_fonts.clear()
         self._fallback_fonts.clear()
 
@@ -296,17 +301,21 @@ class CairoDevice:
         except KeyError:
             pass
 
-        ctx = self._temp_ctx
+        ctx = self._measure_ctx
         _style = filled(style)
-        set_font(ctx, _style)
-
-        height, depth = self._vmetrics(ctx.font_extents())
+        font = (_style['font_family'], _style['bold'], _style['italic'],
+                _style['font_size'])
+        if font not in self._font_metrics:  # depend on the font only
+            set_font(ctx, _style)
+            self._font_metrics[font] = self._vmetrics(ctx.font_extents())
+        height, depth = self._font_metrics[font]
 
         hb_font = self._get_hb_font(_style)
         if hb_font is not None:
             runs = self._shape_with_fallback(text, hb_font, _style['font_size'])
             xa = sum(sum(p.x_advance for p in pos) for _, _, pos in runs) / 64.0
         else:
+            set_font(ctx, _style)
             xa = ctx.text_extents(_visible(text))[4]
 
         result = (xa, height, depth)
@@ -649,6 +658,23 @@ def test_00b():
     assert h >= ascent
     # no glyph-dependent metrics: 'oo' measures just as high
     assert device.measure('oo', defaultstyle)[1:] == (h, d)
+
+
+def test_00c():
+    "measure: metrics cached per font, results unchanged; drawing font kept"
+    app = wx.App(False)
+    styles = [dict(defaultstyle, font_size=size, bold=bold)
+              for size in (10, 12) for bold in (False, True)]
+    texts = ['Ag', 'Hello world', 'x']
+    device = CairoDevice()
+    mixed = [device.measure(t, s) for s in styles for t in texts]
+    alone = [CairoDevice().measure(t, s) for s in styles for t in texts]
+    assert mixed == alone
+    # measuring doesn't change the font set for drawing
+    device.set_style(styles[3], device._temp_ctx)
+    before = device._temp_ctx.font_extents()
+    device.measure('new text', styles[0])
+    assert device._temp_ctx.font_extents() == before
 
 
 def test_01():
