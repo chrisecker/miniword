@@ -367,3 +367,72 @@ def test_PASTE_15():
     texel = grouped([Image(path='https://x.org/unbekannt.png')])
     image, = iter_images(with_bitmap(texel, png(500)))
     assert image.scale_x == 1.0  # size unknown: the bitmap as it is
+
+
+def texels_in(texel):
+    """All leaf texels of texel, also inside tables (containers)."""
+    from ..textmodel.texeltree import iter_childs
+    if texel.is_group or texel.is_container:
+        for *_, child in iter_childs(texel):
+            yield from texels_in(child)
+    else:
+        yield texel
+
+
+def test_PASTE_16():
+    "PASTE-16: table cells keep their formatting and images"
+    from ..tables.tables import Table
+    data = png(6)
+    uri = 'data:image/png;base64,' + base64.b64encode(data).decode()
+    model, images = pasted(
+        '<table><tr><th>Name</th><th>Bild</th></tr>'
+        '<tr><td><b>Wal</b> und <a href="https://x.org">mehr</a></td>'
+        '<td><img src="%s" alt="Wal"></td></tr></table><p>Danach</p>' % uri)
+    assert [i.content for i in images] == [data]
+    table, = [t for t in texels_in_tables(model.texel)]
+    leaves = list(texels_in(table))
+    assert any(isinstance(t, type(images[0])) for t in leaves)
+    styles = {t.text: t.style for t in leaves if getattr(t, 'text', '')
+              in ('Wal', 'mehr')}
+    assert styles['Wal'].get('bold') is True
+    assert styles['mehr'].get('href') == 'https://x.org'
+    assert model.get_text().endswith('Danach\n')  # the image stays inside
+    assert '\x0c' not in model.get_text()[-8:]
+
+
+def texels_in_tables(texel):
+    """The Table texels in texel."""
+    from ..tables.tables import Table
+    from ..textmodel.texeltree import iter_childs
+    if isinstance(texel, Table):
+        yield texel
+    elif texel.is_group or texel.is_container:
+        for *_, child in iter_childs(texel):
+            yield from texels_in_tables(child)
+
+
+def test_PASTE_17():
+    "PASTE-17: Markdown table cells keep formatting and images (both parsers)"
+    import sys
+    data = png(6)
+    uri = 'data:image/png;base64,' + base64.b64encode(data).decode()
+    md = ('| Name | Bild |\n|---|---|\n'
+          '| **Wal** und [mehr](https://x.org) | ![Wal](%s) |\n'
+          '| *klein* | ~~alt~~ |\n' % uri)
+    for mistune in (sys.modules.get('mistune'), None):
+        saved = sys.modules.get('mistune')
+        sys.modules['mistune'] = mistune  # None: built-in parser
+        try:
+            model = TextModel('')
+            model.texel = md_text_to_fragment(md, Document())
+        finally:
+            sys.modules['mistune'] = saved
+        table, = texels_in_tables(model.texel)
+        leaves = list(texels_in(table))
+        assert [i.content for i in iter_images(table)] == [data], mistune
+        styles = {t.text: t.style for t in leaves
+                  if getattr(t, 'text', '') in ('Wal', 'mehr', 'klein', 'alt')}
+        assert styles['Wal'].get('bold') is True, mistune
+        assert styles['mehr'].get('href') == 'https://x.org', mistune
+        assert styles['klein'].get('italic') is True, mistune
+        assert styles['alt'].get('strike') is True, mistune

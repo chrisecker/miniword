@@ -92,7 +92,7 @@ class _HTMLBlockBuilder(HTMLParser):
         self._col = 0                # next column index to fill in the current row
         self._pending_rowspans = {}  # {col: rows still to skip}, from earlier rows
         self._rowspans_before_row = set()
-        self._cell_text = None       # current cell's accumulated text, or None
+        self._cell_text = None       # current cell's runs, or None
         self._cell_span = (1, 1)     # (colspan, rowspan) of the cell being read
 
     # --- helpers ---
@@ -167,10 +167,11 @@ class _HTMLBlockBuilder(HTMLParser):
     def _append(self, text, props=None):
         if not text:
             return
-        if self._cell_text is not None:
-            self._cell_text.append(text)
-            return
-        self._runs.append((text, dict(props or self._props)))
+        self._runs_here().append((text, dict(props or self._props)))
+
+    def _runs_here(self):
+        """Where runs go: the current table cell, else the block."""
+        return self._runs if self._cell_text is None else self._cell_text
 
     # --- HTMLParser callbacks ---
 
@@ -218,8 +219,8 @@ class _HTMLBlockBuilder(HTMLParser):
             self._append(' ')
         elif tag == 'img' and attrs.get('src'):
             size = _length(attrs.get('width')), _length(attrs.get('height'))
-            self._runs.append(image_run(attrs.get('alt') or '',
-                                        attrs['src'], size, self.load))
+            self._runs_here().append(image_run(
+                attrs.get('alt') or '', attrs['src'], size, self.load))
 
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
@@ -235,7 +236,7 @@ class _HTMLBlockBuilder(HTMLParser):
             if self._list_stack:
                 self._list_stack.pop()
         elif tag in ('td', 'th'):
-            text = ''.join(self._cell_text)
+            text = self._cell_text  # its runs
             self._cell_text = None
             colspan, rowspan = self._cell_span
             for i in range(colspan):
@@ -270,7 +271,7 @@ class _HTMLBlockBuilder(HTMLParser):
         # source markup (e.g. an incomplete clipboard selection), instead
         # of silently dropping it
         if self._cell_text is not None:
-            self._row[self._col] = ''.join(self._cell_text)
+            self._row[self._col] = self._cell_text
             self._cell_text = None
         if self._row is not None:
             self._end_row()

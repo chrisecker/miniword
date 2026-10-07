@@ -396,16 +396,72 @@ def _apply_parstyle(doc, nl_pos, ptype, indent):
         doc.textmodel.set_indent(nl_pos, indent)
 
 
+def _table(grid, nheader=1):
+    """A Table texel from a 2-D list of cells (see _cell_texel)."""
+    from miniword.tables.tables import Table
+    table = Table(*[(_cell_texel(cell), {}) for row in grid for cell in row],
+                  ncols=len(grid[0]))
+    return table.set_nheader(nheader) if nheader else table
+
+
 def _insert_table_block(doc, grid):
-    from miniword.tables.tables import from_strings as mk_table
     tbl_model = doc.textmodel.create_textmodel()
-    table = mk_table(grid)
-    table = table.set_nheader(1)
-    tbl_model.texel = table
+    tbl_model.texel = _table(grid)
     pos = len(doc.textmodel.get_text())
     doc.textmodel.insert(pos, tbl_model)
     pos2 = len(doc.textmodel.get_text())
     doc.textmodel.insert(pos2, doc.textmodel.create_textmodel('\n'))
+
+
+_INLINE_PROPS = {'strong': {'bold': True}, 'emphasis': {'italic': True},
+                 'strikethrough': {'strike': True},
+                 'superscript': {'vertical_position': 'superscript'},
+                 'subscript': {'vertical_position': 'subscript'}}
+
+
+def _inline_runs(nodes, props={}):
+    """Runs (text, props) of mistune inline nodes, e.g. a table cell."""
+    runs = []
+    for node in nodes:
+        t, children = node.get('type'), node.get('children', [])
+        if t in ('text', 'raw_text'):
+            runs.append((node.get('raw', ''), props))
+        elif t in ('softbreak', 'linebreak'):
+            runs.append((' ', props))
+        elif t == 'codespan':
+            runs.append((node.get('raw', ''),
+                         dict(props, font_family='Courier New')))
+        elif t == 'image':
+            alt = ''.join(text for text, _ in _inline_runs(children))
+            runs.append(image_run(alt, node['attrs'].get('url', '')))
+        elif t == 'link':
+            runs += _inline_runs(children,
+                                 dict(props, href=node['attrs'].get('url')))
+        else:
+            runs += _inline_runs(children,
+                                 dict(props, **_INLINE_PROPS.get(t, {})))
+    return runs
+
+
+def _cell_texel(cell):
+    """The content of a table cell: a string, or runs (text with props,
+    images; see image_run)."""
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.textmodel.texeltree import Text, grouped
+    if isinstance(cell, str):
+        return Text(cell)
+    model = TextModel('')
+    for text, props in cell:
+        pos = len(model)
+        if props.get('_image'):
+            image = model.create_textmodel()
+            image.texel = grouped([_image(*props['_image'])])
+            model.insert(pos, image)
+        elif text:
+            model.insert_text(pos, text)
+            if props:
+                model.set_properties(pos, pos + len(text), **props)
+    return model.texel
 
 
 _SEP_ROW_RE = re.compile(r'^:?-+:?$')
@@ -473,8 +529,10 @@ def _parse_md_paragraphs(text):
     def flush_table():
         if table_buf:
             grid = _parse_table_lines(table_buf)
-            if grid:
-                paragraphs.append(('table', grid))
+            if grid:  # cells as runs: formatting, links, images
+                paragraphs.append(('table', [[_parse_inline(cell)
+                                              for cell in row]
+                                             for row in grid]))
             table_buf.clear()
 
     def list_indent(col):
@@ -792,17 +850,18 @@ class _DocBuilder:
         return ''.join(parts)
 
     def _build_table_grid(self, node):
-        """2-D list of plain-text cells, plus the header row count."""
+        """2-D list of cells (runs, see _inline_runs), plus the header row
+        count."""
         grid = []
         nheader = 0
         for child in node.get('children', []):
             if child.get('type') == 'table_head':
-                grid.append([self._flatten_text(c.get('children', []))
+                grid.append([_inline_runs(c.get('children', []))
                              for c in child.get('children', [])])
                 nheader = 1
             elif child.get('type') == 'table_body':
                 for tr in child.get('children', []):
-                    grid.append([self._flatten_text(c.get('children', []))
+                    grid.append([_inline_runs(c.get('children', []))
                                  for c in tr.get('children', [])])
         return grid, nheader
 
@@ -836,10 +895,7 @@ class _DocBuilder:
         elif t == 'table':
             grid, nheader = self._build_table_grid(node)
             if grid:
-                from miniword.tables.tables import from_strings as mk_table
-                table = mk_table(grid)
-                if nheader:
-                    table = table.set_nheader(nheader)
+                table = _table(grid, nheader)
                 self._start_par('normal', 0)
                 self._end_par()
                 self._marks.append((len(self.text), 'table', table))
