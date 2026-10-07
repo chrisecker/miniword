@@ -24,6 +24,9 @@ def main_frame(text=''):
     try:
         yield frame
     finally:
+        # without an event loop Destroy() only schedules a frame's
+        # deletion: free its many windows now (Windows has a handle limit)
+        frame.DestroyChildren()
         frame.Destroy()
 
 
