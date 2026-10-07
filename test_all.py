@@ -52,6 +52,7 @@ modules = [
     "miniword.tests.test_linked_images",
     "miniword.tests.test_cli",
     "miniword.tests.test_shortcuts",
+    "miniword.tests.test_parstyle_editing",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

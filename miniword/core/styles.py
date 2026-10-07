@@ -95,7 +95,6 @@ layout_default = {
 }
 
 other_default = {
-    "next_style": "standard",
     "role":        None,    # semantic role for export (e.g. markdown)
 }
 

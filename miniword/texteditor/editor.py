@@ -18,6 +18,10 @@ Note:
 
 _editor_canvas = WeakKeyDictionary() # {editor: canvas}
 
+
+HEADINGS = ('h1', 'h2', 'h3', 'h4', 'h5', 'h6')  # roles
+
+
 class Editor(UndoRedo):
     index = overridable_property('index', 'Position of text cursor')
     _index = 0
@@ -192,9 +196,19 @@ class Editor(UndoRedo):
     def insert_texel(self, texel):
         new = self.target.create_textmodel()
         new.texel = texel
-        i = self.abs_idx(self.index)
-        info = self._insert(self.flow, i, new)
-        self.add_undo(info)
+        self.insert_model(new)
+
+    def insert_model(self, new):
+        """Insert new (e.g. pasted) at the cursor. Into the middle of a
+        paragraph the paragraph keeps its style: the first inserted
+        newline gets it."""
+        model, j = self.target, self.index
+        kept = model.get_parstyle(j), model.get_indent(j)
+        k = new.next_newline(0)  # the first inserted newline
+        with self.atomic():
+            self.add_undo(self._insert(self.flow, self.abs_idx(j), new))
+            if j > model.linestart(j) and k < len(new):
+                self.keep_par(j + k, kept)
 
     def _insert(self, flow, i, new):
         self.switch_target(flow, i)
@@ -213,10 +227,33 @@ class Editor(UndoRedo):
             self.end_undo_group()
 
     def remove_range(self, j1, j2):
+        """Remove [j1, j2). Joining paragraphs, the first one keeps its
+        style - unless it is removed from its start."""
+        model = self.target
+        join = j1 > model.linestart(j1) and model.next_newline(j1) < j2
+        kept = model.get_parstyle(j1), model.get_indent(j1)
         i1, i2 = self.abs_idxs(j1, j2)
-        info = self._remove(self.flow, i1, i2)
-        self.add_undo(info)
+        with self.atomic():
+            self.add_undo(self._remove(self.flow, i1, i2))
+            if join:
+                self.keep_par(j1, kept)
         self.index = j1
+
+    def keep_par(self, j, kept):
+        """Give the paragraph at j the (parstyle, indent) kept, if it has
+        other ones (one undo step)."""
+        model = self.target
+        if (model.get_parstyle(j), model.get_indent(j)) != kept:
+            self.add_undo(self._set_par(self.flow, self.abs_idx(j), *kept))
+
+    def _set_par(self, flow, i, parstyle, indent):
+        """Set parstyle and indent of the paragraph at i; undo helper."""
+        self.switch_target(flow, i)
+        model, j = self.target, self.local_idx(i)
+        old = model.get_parstyle(j), model.get_indent(j)
+        model.set_parstyle(j, parstyle)
+        model.set_indent(j, indent)
+        return self._set_par, flow, i, *old
             
     def _remove(self, flow, i1, i2):
         self.switch_target(flow, i1)
@@ -270,6 +307,8 @@ class Editor(UndoRedo):
         self.index = j
 
     def insert_newline(self):
+        """Enter: split the paragraph, both parts keep its style - at the
+        end of a heading the new paragraph is a body one."""
         model = self.target
         index = self.index
         style = self.current_style
@@ -279,8 +318,28 @@ class Editor(UndoRedo):
         tmp.set_parstyle(0, parstyle)
         tmp.set_indent(0, indent)
         i = self.abs_idx(index)
-        info = self._insert(self.flow, i, tmp)
-        self.add_undo(info)
+        at_end = index == model.lineend(index)
+        with self.atomic():
+            self.add_undo(self._insert(self.flow, i, tmp))
+            if at_end and self.role(parstyle) in HEADINGS:
+                body = self.role_key('body') or 'normal'
+                self.keep_par(index + 1, (dict(base=body), 0))
+
+    def role(self, parstyle):
+        """The role of a paragraph style's base style, or None."""
+        sheet = self.stylesheet()
+        style = sheet and sheet.get(parstyle.get('base', 'normal'))
+        return style.get('role') if style else None
+
+    def role_key(self, role):
+        """The key of the first base style with role, or None."""
+        sheet = self.stylesheet()
+        return next((key for key, style in sheet.items()
+                     if style.get('role') == role), None) if sheet else None
+
+    def stylesheet(self):
+        """The document's base styles (from the canvas), or None."""
+        return self.canvas.builder.stylesheet if self.canvas else None
 
     ### Copy & Paste
     def _to_clipboard(self, model):
@@ -298,11 +357,8 @@ class Editor(UndoRedo):
         if self.canvas is None:
             return
         new = self.canvas.read_clipboard()
-        if new is None:
-            return
-        i = self.abs_idx(self.index)
-        info = self._insert(self.flow, i, new)
-        self.add_undo(info)
+        if new is not None:
+            self.insert_model(new)
 
     def cut(self):
         if self.has_selection():
@@ -461,11 +517,7 @@ class Editor(UndoRedo):
     def is_code(self, j):
         """Whether the paragraph at j is code: its base style has the
         role 'pre'."""
-        if self.canvas is None:
-            return False
-        base = self.target.get_parstyle(j).get('base')
-        style = base and self.canvas.builder.stylesheet.get(base)
-        return bool(style) and style.get('role') == 'pre'
+        return self.role(self.target.get_parstyle(j)) == 'pre'
 
     def _line_starts(self, i1, i2):
         """Line starts of all lines overlapping [i1, i2]."""
