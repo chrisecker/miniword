@@ -13,6 +13,7 @@ from ..layout.cairodevice import CairoDevice
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
 from .colours import colours
+from .messagebar import MessageBar
 from .icons import ICONS_DIR, app_icon_bundle
 from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
@@ -313,9 +314,39 @@ class MainFrame(wx.Frame, ViewBase):
 
     @_current_path.setter
     def _current_path(self, path):
-        """The document's file; its folder resolves linked images."""
+        """The document's file; its folder resolves linked images: a new
+        folder lays the pages out anew."""
         self._path = path
-        self.canvas.builder.factory.base_dir = self._doc_dir()
+        factory = self.canvas.builder.factory
+        if factory.base_dir != self._doc_dir():
+            factory.base_dir = self._doc_dir()
+            self._rebuild()
+        self.check_external_images()
+
+    def check_external_images(self):
+        """Web images aren't loaded on opening (privacy, as in Word): a
+        bar offers to load them."""
+        from ..images.imageio import unloaded_urls
+        if unloaded_urls(self.document.textmodel.texel):
+            self.image_bar.show(
+                "This document contains images from the web, not loaded "
+                "to protect your privacy.",
+                "Load external images", self.load_external_images)
+        elif self.image_bar.IsShown():
+            self.image_bar.close()
+
+    def load_external_images(self):
+        """Load the web images (bar button); failures stay in the bar."""
+        from ..images.imageio import unloaded_urls, load_url, errors
+        urls = unloaded_urls(self.document.textmodel.texel)
+        with wx.BusyCursor():
+            failed = [url for url in sorted(urls) if not load_url(url)]
+        self._rebuild()
+        if failed:
+            self.image_bar.show("%d of %d images not loaded: %s" % (
+                len(failed), len(urls), errors[failed[0]]))
+        else:
+            self.image_bar.close()
     _secret_armed = False
     _secret_buffer = ''
     _markdown_preview = None
@@ -569,6 +600,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetSizer(outer)
 
         self._create_editor_canvas()
+        self.image_bar = MessageBar(self._base, self._layout)
         self._build_inspector_panels()
         self._panel_key = None
 
@@ -692,8 +724,13 @@ class MainFrame(wx.Frame, ViewBase):
         panel_w = self.FromDIP(PANEL_W) if self._panel_key is not None else 0
         text_w  = w - strip_w - panel_w
 
-        self.canvas.SetPosition((0, 0))
-        self.canvas.SetSize((text_w, h))
+        bar = getattr(self, 'image_bar', None)  # not yet while building
+        top = bar.GetBestSize()[1] if bar and bar.IsShown() else 0
+        if top:  # above the page
+            bar.SetPosition((0, 0))
+            bar.SetSize((text_w, top))
+        self.canvas.SetPosition((0, top))
+        self.canvas.SetSize((text_w, h - top))
 
         self._strip.SetPosition((w - strip_w, 0))
         self._strip.SetSize((strip_w, h))

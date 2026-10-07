@@ -221,11 +221,8 @@ class Factory:
         # of a linked image.
         from ..images.images import ImageBox, ErrorPlaceholderBox
         from ..images.imageio import decode_cached, crop_surface, \
-            external_content
-        content = texel.content
-        if content is None and texel.path:
-            content = external_content(texel.path, self.base_dir)
-        data = decode_cached(content)
+            content_of
+        data = decode_cached(content_of(texel, self.base_dir))
         if data is None and texel.path:
             name = os.path.basename(texel.path.rstrip('/'))
             return ErrorPlaceholderBox(200, 150, self.device, name)
@@ -775,7 +772,7 @@ def running_heads(placed, state):
     return (old_chapter if chapter is None else chapter), section
 
 
-def generate_pages(texel, i1, memo, stylesheet, device):
+def generate_pages(texel, i1, memo, stylesheet, device, base_dir=''):
     """Yield pages for texel, the first one starting at index i1 and
     continuing from memo (the state the previous page ended with).
     Works on memo.copy(), never on memo itself. Each page carries its
@@ -787,9 +784,10 @@ def generate_pages(texel, i1, memo, stylesheet, device):
     rows. A footnote may thus end up before its text, but never with
     another paragraph's text in between. A paragraph with
     page_break_before starts a new page, unless the page has no body
-    rows yet."""
+    rows yet. base_dir: the document's folder (linked images)."""
     state = memo.copy()
     factory = RowFactory(state, stylesheet, device)
+    factory.base_dir = base_dir
     # memo holds no absolute positions: the factory continues right
     # after the rows still buffered from the previous page.
     source = factory.generate(texel, i1 + sum(len(r[0]) for r in state.rows))

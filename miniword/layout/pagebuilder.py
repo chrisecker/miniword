@@ -261,7 +261,7 @@ class PageBuilder(BuilderBase):
     def create_generator(self, texel, p, state, factory):
         # Override this method to use a different generator.
         return generate_pages(texel, p, state, factory.stylesheet,
-                              factory.device)
+                              factory.device, factory.base_dir)
 
     generator = None
 

@@ -73,13 +73,14 @@ def decode_cached(content):
 # {(absolute path, mtime) or URL: bytes}. Local files are read on demand
 # (a changed file anew), URLs only by load_url - never while laying out.
 external = {}
+errors = {}  # {URL: why it couldn't be loaded}
 
 
 def external_content(path, base_dir=''):
     """The data of a linked image: a local file (relative to base_dir),
     read on demand, or a URL loaded before (load_url); else None."""
-    from .images import fetch_image
-    if path.startswith(('http://', 'https://')):
+    from .images import fetch_image, is_url
+    if is_url(path):
         return external.get(path)
     path = os.path.join(base_dir, path)
     try:
@@ -91,24 +92,40 @@ def external_content(path, base_dir=''):
     return external[key]
 
 
+def content_of(image, base_dir=''):
+    """The data of an Image texel: its own (embedded), else that of its
+    linked file or URL (see external_content), else None."""
+    if image.content is not None:
+        return image.content
+    return image.path and external_content(image.path, base_dir) or None
+
+
 def load_url(url):
-    """Load an image from the web into the cache; whether it worked."""
-    from .images import fetch_image
-    data = fetch_image(url)
+    """Load an image from the web into the cache; whether it worked. Why
+    not goes to errors and stdout."""
+    from .images import fetch
+    data, error = fetch(url)
     if data:
         external[url] = data
-    return bool(data)
+        errors.pop(url, None)
+        return True
+    errors[url] = error
+    print('Miniword: image not loaded: %s: %s' % (url, error))
+    return False
+
+
+def unloaded_urls(texel):
+    """The URLs of the web images in texel not loaded yet."""
+    from .images import iter_images, is_url
+    return {image.path for image in iter_images(texel)
+            if image.content is None and is_url(image.path)
+            and image.path not in external}
 
 
 def load_urls(texel):
     """Load the web images linked in texel (e.g. just pasted) that aren't
     loaded yet; returns how many failed."""
-    from .images import iter_images
-    urls = {image.path for image in iter_images(texel)
-            if image.content is None and image.path
-            and image.path.startswith(('http://', 'https://'))
-            and image.path not in external}
-    return sum(not load_url(url) for url in urls)
+    return sum(not load_url(url) for url in unloaded_urls(texel))
 
 
 def crop_surface(surface, cx, cy, cw, ch):

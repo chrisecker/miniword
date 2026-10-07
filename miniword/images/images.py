@@ -128,36 +128,61 @@ def image_extension(content):
 MAX_IMAGE = 20 * 1024 * 1024  # bytes loaded at most from the web
 
 
+def is_url(path):
+    return bool(path) and path.startswith(('http://', 'https://'))
+
+
 def fetch_image(src, base_dir=''):
-    """Image data from src: a data URI (taken as it is), a file (path or
-    file:// URL, relative to base_dir) or a http(s) URL (10 s, MAX_IMAGE
-    at most). From files and the web, formats other than PNG, JPEG and
-    GIF become PNG (if wx reads them). None if src can't be loaded or
-    isn't an image."""
+    """Image data from src (see fetch), or None."""
+    return fetch(src, base_dir)[0]
+
+
+def fetch(src, base_dir=''):
+    """(data, None) for image src - a data URI (taken as it is), a file
+    (path or file:// URL, relative to base_dir) or a http(s) URL (10 s,
+    MAX_IMAGE at most) - or (None, why not). From files and the web,
+    formats other than PNG, JPEG and GIF become PNG (if wx reads them)."""
     import base64
     import binascii
+    import urllib.error
     import urllib.parse
     import urllib.request
+    kind = None  # the content type a web server tells
     try:
         if src.startswith('data:'):
-            return base64.b64decode(src.split('base64,', 1)[1])
-        if src.startswith(('http://', 'https://')):
+            return base64.b64decode(src.split('base64,', 1)[1]), None
+        if is_url(src):
             request = urllib.request.Request(
                 src, headers={'User-Agent': 'Miniword'})
             with urllib.request.urlopen(request, timeout=10) as f:
+                kind = f.headers.get_content_type()
                 data = f.read(MAX_IMAGE + 1)
             if len(data) > MAX_IMAGE:
-                return None
+                return None, 'larger than %d MB' % (MAX_IMAGE >> 20)
         else:
             if src.startswith('file://'):
                 src = urllib.parse.unquote(urllib.parse.urlparse(src).path)
             with open(os.path.join(base_dir, src), 'rb') as f:
                 data = f.read()
-    except (OSError, ValueError, IndexError, binascii.Error):
-        return None
+    except urllib.error.HTTPError as e:
+        return None, 'HTTP %d %s' % (e.code, e.reason)
+    except TimeoutError:
+        return None, 'no answer within 10 s'
+    except urllib.error.URLError as e:
+        return None, 'cannot connect: %s' % e.reason
+    except FileNotFoundError:
+        return None, 'file not found'
+    except (OSError, ValueError, IndexError, binascii.Error) as e:
+        return None, str(e) or type(e).__name__
     if image_extension(data) != '.bin':
-        return data
-    return _to_png(data)
+        return data, None
+    png = _to_png(data)
+    if png:
+        return png, None
+    if kind == 'text/html':
+        return None, ('a web page (text/html), not an image - use the '
+                      'address of the image itself')
+    return None, 'not an image (or an unknown format)'
 
 
 def _to_png(data):

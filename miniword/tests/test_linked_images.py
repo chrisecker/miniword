@@ -134,3 +134,225 @@ def test_LINK_6():
         assert factory.base_dir == '/home/x/texte'
     finally:
         frame.Destroy()
+
+
+# ---------------------------------------------------------------------
+# The image panel (step 4c)
+# ---------------------------------------------------------------------
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def panel_with(image, folder=''):
+    """(panel, frame): the image panel of a window whose document holds
+    image, the cursor on it; the document lies in folder."""
+    from ..core.document import Document
+    from ..textmodel.texeltree import grouped
+    from ..ui.mainwindow import MainFrame
+    app()
+    frame = MainFrame(Document())
+    try:
+        frame._current_path = os.path.join(folder, 'doc.txl')
+        model = frame.document.textmodel.create_textmodel()
+        model.texel = grouped([image])
+        frame.document.textmodel.insert(0, model)
+        frame.editor.index = 0
+        panel = frame.image_inspector
+        panel.update()
+        yield panel, frame
+    finally:
+        frame.Destroy()
+
+
+def image_at(frame):
+    from ..images.images import iter_images
+    return next(iter(iter_images(frame.document.textmodel.texel)))
+
+
+def test_LINK_7():
+    "LINK-7: only external images show their source; embedded as before"
+    with panel_with(Image(png())) as (panel, frame):
+        assert not panel.txt_path.IsShown()
+        assert not panel.btn_embed.IsShown()
+    with panel_with(Image(png(), path='https://x.org/a.png')) as (panel,
+                                                                   frame):
+        assert not panel.txt_path.IsShown()  # embedded, path just origin
+    with panel_with(Image(path='wal.png')) as (panel, frame):
+        assert panel.txt_path.IsShown() and panel.btn_embed.IsShown()
+        assert panel.txt_path.GetValue() == 'wal.png'
+        assert panel.lbl_status.GetLabel() == 'file not found'
+
+
+def test_LINK_8():
+    "LINK-8: Embed: the data goes into the document, the path stays origin"
+    from .guitest import click_button
+    data = png(10)
+    with tempfile.TemporaryDirectory() as folder:
+        write(folder, 'wal.png', data)
+        with panel_with(Image(path='wal.png'), folder) as (panel, frame):
+            click_button(panel.btn_embed)
+            image = image_at(frame)
+            assert (image.content, image.path) == (data, 'wal.png')
+            assert not panel.txt_path.IsShown()  # now an embedded image
+            frame.editor.undo()
+            assert image_at(frame).content is None
+
+
+def test_LINK_9():
+    "LINK-9: entering a path links it; a URL is loaded, its status shown"
+    from .guitest import enter
+    data = png(12)
+    with tempfile.TemporaryDirectory() as folder:
+        write(folder, 'wal.png', data)
+        server, url = serve(folder)
+        try:
+            with panel_with(Image(path='alt.png')) as (panel, frame):
+                enter(panel.txt_path, url + 'wal.png')
+                assert image_at(frame).path == url + 'wal.png'
+                assert imageio.external_content(url + 'wal.png') == data
+                assert panel.lbl_status.GetLabel() == 'Loaded'
+                frame.editor.index = 0
+                enter(panel.txt_path, url + 'missing.png')
+                assert image_at(frame).path == url + 'missing.png'
+                assert 'HTTP 404' in panel.lbl_status.GetLabel()
+        finally:
+            server.shutdown()
+
+
+def test_LINK_10():
+    "LINK-10: a link: URL as it is, a file relative to the document"
+    from ..images.image_panel import link_source
+    assert link_source(' https://x.org/a.png ', '/home/x') == \
+        'https://x.org/a.png'
+    assert link_source('/home/x/texte/bilder/wal.png', '/home/x/texte') \
+        == 'bilder/wal.png'
+    assert link_source('/home/x/bilder/wal.png', '/home/x/texte') == \
+        '../bilder/wal.png'
+    assert link_source('/home/x/wal.png', '') == '/home/x/wal.png'
+    assert link_source('bilder/wal.png', '/home/x') == 'bilder/wal.png'
+    assert link_source('  ', '/home/x') is None
+
+
+def boxes_in(builder):
+    """All image and placeholder boxes of the builder's pages."""
+    found = []
+
+    def walk(box):
+        if isinstance(box, (ImageBox, ErrorPlaceholderBox)):
+            found.append(box)
+        elif hasattr(box, 'iter_boxes'):
+            for *_, child in box.iter_boxes(0, 0, 0):
+                walk(child)
+    for *_, page in builder.layout.iter_boxes(0):
+        walk(page)
+    return found
+
+
+def test_LINK_11():
+    "LINK-11: pages show a linked image with a path relative to the document"
+    from ..core.document import Document
+    from ..layout.pagebuilder import PageBuilder
+    from ..textmodel.texeltree import grouped
+    from ..layout.cairodevice import CairoDevice
+    app()
+    with tempfile.TemporaryDirectory() as folder:
+        write(folder, 'wal.png', png(30, 20))
+        document = Document()
+        model = document.textmodel.create_textmodel()
+        model.texel = grouped([Image(path='wal.png')])
+        document.textmodel.insert(0, model)
+        factory = Factory(document.basestyles, device=CairoDevice())
+        factory.base_dir = folder
+        builder = PageBuilder(document.textmodel, factory)
+        builder.settings = document.settings
+        builder.rebuild()
+        builder.assure_finished()
+        assert [type(box) for box in boxes_in(builder)] == [ImageBox]
+
+
+def test_LINK_12():
+    "LINK-12: opening: the pages are built anew once the folder is known"
+    with tempfile.TemporaryDirectory() as folder:
+        write(folder, 'wal.png', png(30, 20))
+        with panel_with(Image(path='wal.png')) as (panel, frame):
+            builder = frame.canvas.builder
+            builder.assure_finished()
+            assert [type(b) for b in boxes_in(builder)] == \
+                [ErrorPlaceholderBox]  # no folder yet
+            frame._current_path = os.path.join(folder, 'text.md')
+            builder.assure_finished()
+            assert [type(b) for b in boxes_in(builder)] == [ImageBox]
+
+
+
+def test_LINK_13():
+    "LINK-13: loading errors say why, also on stdout"
+    import contextlib
+    with tempfile.TemporaryDirectory() as folder:
+        write(folder, 'seite.html', b'<!DOCTYPE html><html>Bild</html>')
+        write(folder, 'notes.txt', b'no image')
+        server, url = serve(folder)
+        try:
+            from ..images.images import fetch
+            data, error = fetch(url + 'seite.html')
+            assert data is None and 'web page' in error
+            assert 'HTTP 404' in fetch(url + 'missing.png')[1]
+            assert 'not found' in fetch('missing.png', folder)[1]
+            assert 'not an image' in fetch('notes.txt', folder)[1]
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                assert not imageio.load_url(url + 'seite.html')
+            assert 'web page' in output.getvalue()
+            assert 'web page' in imageio.errors[url + 'seite.html']
+        finally:
+            server.shutdown()
+
+
+def test_LINK_14():
+    "LINK-14: opening: a bar offers to load the web images, then they show"
+    from .guitest import click_button
+    with tempfile.TemporaryDirectory() as folder:
+        write(folder, 'wal.png', png(30, 20))
+        server, url = serve(folder)
+        try:
+            with panel_with(Image(path=url + 'wal.png')) as (panel, frame):
+                frame._current_path = os.path.join(folder, 'text.md')
+                assert frame.image_bar.IsShown()
+                click_button(frame.image_bar.button)
+                assert not frame.image_bar.IsShown()
+                builder = frame.canvas.builder
+                builder.assure_finished()
+                assert [type(b) for b in boxes_in(builder)] == [ImageBox]
+        finally:
+            server.shutdown()
+
+
+def test_LINK_15():
+    "LINK-15: no bar without web images; a failed load shows its reason"
+    from .guitest import click_button
+    with tempfile.TemporaryDirectory() as folder:
+        write(folder, 'wal.png', png())
+        with panel_with(Image(path='wal.png')) as (panel, frame):
+            frame._current_path = os.path.join(folder, 'text.md')
+            assert not frame.image_bar.IsShown()
+        server, url = serve(folder)
+        try:
+            with panel_with(Image(path=url + 'gone.png')) as (panel, frame):
+                frame._current_path = os.path.join(folder, 'text.md')
+                click_button(frame.image_bar.button)
+                assert frame.image_bar.IsShown()
+                assert 'HTTP 404' in frame.image_bar.text.GetLabel()
+        finally:
+            server.shutdown()
+
+
+def test_LINK_16():
+    "LINK-16: one 'Insert Image' button with a menu; no Replace"
+    with panel_with(Image(png())) as (panel, frame):
+        menu = panel.insert_menu()  # kept: a temporary would be freed
+        labels = [item.GetItemLabelText() for item in menu.GetMenuItems()]
+        assert labels == ['Embed Image from File…',
+                          'Link to Image (File or URL)…']
+        assert not hasattr(panel, 'btn_replace')
+        assert panel.btn_export.IsEnabled()

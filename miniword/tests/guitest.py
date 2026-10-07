@@ -72,6 +72,11 @@ def click(control, value=None):
     _send(control, kind, int(control.GetValue()))
 
 
+def click_button(button):
+    """Press a button (also a flat button) and send its event."""
+    _send(button, wx.wxEVT_BUTTON)
+
+
 def choose(choice, label):
     """Select label in a wx.Choice and send its event."""
     choice.SetSelection(choice.FindString(label))
