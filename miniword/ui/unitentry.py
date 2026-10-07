@@ -67,7 +67,8 @@ class UnitInput(wx.Panel):
     units = {}
     display_unit = ""
 
-    def __init__(self, parent, display_unit=None):
+    def __init__(self, parent, display_unit=None, buttons=True):
+        """buttons=False: a narrow field without up/down buttons."""
         super().__init__(parent)
         if display_unit is not None:
             self.display_unit = display_unit
@@ -77,25 +78,21 @@ class UnitInput(wx.Panel):
         dip = self.FromDIP
         self.text = wx.TextCtrl(self, value=f"10 {self.display_unit}",
                                 style=wx.TE_PROCESS_ENTER | wx.TE_RIGHT)
-        self.text.SetMinSize((dip(80), -1))
-        h = self.text.GetBestSize().height
-        btn_w = dip(14)
-        btn_up = muted_button(self, "▲", size=(btn_w, h))
-        btn_dn = muted_button(self, "▼", size=(btn_w, h))
-        btn_up.SetMinSize((btn_w, h))
-        btn_dn.SetMinSize((btn_w, h))
-
-        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        btn_sizer.Add(btn_up, 0, wx.EXPAND|wx.LEFT, dip(10))
-        btn_sizer.Add(btn_dn, 0, wx.EXPAND)
-
+        self.text.SetMinSize((dip(80 if buttons else 56), -1))
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.text, 1, wx.EXPAND)
-        sizer.Add(btn_sizer, 0, wx.EXPAND)
+        if buttons:
+            h = self.text.GetBestSize().height
+            btn_w = dip(14)
+            btn_up = muted_button(self, "▲", size=(btn_w, h))
+            btn_dn = muted_button(self, "▼", size=(btn_w, h))
+            btn_up.SetMinSize((btn_w, h))
+            btn_dn.SetMinSize((btn_w, h))
+            sizer.Add(btn_up, 0, wx.EXPAND|wx.LEFT, dip(10))
+            sizer.Add(btn_dn, 0, wx.EXPAND)
+            btn_up.Bind(wx.EVT_BUTTON, self._on_up)
+            btn_dn.Bind(wx.EVT_BUTTON, self._on_down)
         self.SetSizer(sizer)
-
-        btn_up.Bind(wx.EVT_BUTTON, self._on_up)
-        btn_dn.Bind(wx.EVT_BUTTON, self._on_down)
         self.text.Bind(wx.EVT_TEXT_ENTER, self._on_commit)
         self.text.Bind(wx.EVT_KILL_FOCUS,  self._on_commit)
 

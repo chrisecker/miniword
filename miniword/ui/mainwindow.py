@@ -772,13 +772,13 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _build_strip(self):
         self._strip = RightStrip(self._base, [
-            ("outline",  "Outline"),
-            ("style",    "Styles"),
-            ("search",   "Search"),
+            ("style",    "Styles"),    # format text and objects
             ("table",    "Table"),
             ("image",    "Image"),
             ("links",    "Links"),
-            ("settings", "Settings"),
+            ("outline",  "Outline"),   # navigate
+            ("search",   "Search"),
+            ("settings", "Settings"),  # the document
         ], self._on_panel_toggle)
 
     def on_dpi_changed(self, event):

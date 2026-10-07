@@ -1,5 +1,7 @@
 import wx
 from .sidepanel import SidePanel
+from .colours import colours
+from .design import make_panel
 from ..textmodel.utils import get_newlines
 from ..layout.counters import format_number, set_counter, inc_counter
 from ..core.styles import n_levels
@@ -80,9 +82,14 @@ class OutlinePanel(SidePanel):
                   wx.TR_FULL_ROW_HIGHLIGHT | wx.TR_HIDE_ROOT)
         self._hover_item = wx.TreeItemId()
 
-        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer = make_panel(self, "CONTENTS")
+        self.hint = wx.StaticText(  # shown when there are no headings
+            self, label="No headings yet. Paragraphs with a heading "
+                        "style (Heading 1-6) appear here.")
+        colours.set(self.hint, 'ForegroundColour', 'GRAYTEXT')
+        sizer.Add(self.hint, 0, wx.EXPAND | wx.BOTTOM, self.FromDIP(8))
         sizer.Add(self._tree, 1, wx.EXPAND)
-        self.SetSizer(sizer)
+        self.Bind(wx.EVT_SIZE, self._on_size)
 
         self._tree.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self._on_activate)
         self._tree.Bind(wx.EVT_LEAVE_WINDOW, self._on_leave)
@@ -110,7 +117,13 @@ class OutlinePanel(SidePanel):
             stack.append((level, item))
 
         tree.ExpandAll()
+        self.hint.Show(not self._entries)
+        self.Layout()
         self._sync_cursor()
+
+    def _on_size(self, event):
+        self.hint.Wrap(max(event.GetSize()[0] - self.FromDIP(16), 50))
+        event.Skip()
 
     # --- Navigation & cursor sync ---------------------------------------
 

@@ -1,15 +1,21 @@
 import wx
 from .colours import colours
+from .icons import themed_icon
 
 
 class FlatButton(wx.Control):
-    def __init__(self, parent, label, size=None, bordered=False):
+    pressed = False  # drawn pressed (see FlatToggle)
+    event_type = wx.wxEVT_BUTTON
+
+    def __init__(self, parent, label, size=None, bordered=False, icon=None):
+        """icon: an SVG in icons/, drawn in the text colour."""
         if size is None:
             size = (-1, parent.FromDIP(24))
         super().__init__(parent, size=size, style=wx.BORDER_NONE)
         self.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.label    = label
         self.bordered = bordered
+        self.icon     = icon
         self.state    = 'normal'
         self.init_colors()
         self.Bind(wx.EVT_PAINT,        self.on_paint)
@@ -43,7 +49,9 @@ class FlatButton(wx.Control):
 
     def on_release(self, event):
         self.set_state('hover')
-        evt = wx.CommandEvent(wx.wxEVT_BUTTON, self.GetId())
+        evt = wx.CommandEvent(self.event_type, self.GetId())
+        evt.SetEventObject(self)
+        evt.SetInt(self.pressed)
         self.GetEventHandler().ProcessEvent(evt)
         self.set_state('normal')
 
@@ -61,8 +69,9 @@ class FlatButton(wx.Control):
             fg     = self.colour_disabled_fg
             border = self.colour_border_disabled
         else:
-            bg     = getattr(self, f'colour_{self.state}_bg')
-            fg     = getattr(self, f'colour_{self.state}_fg')
+            state  = 'press' if self.pressed else self.state
+            bg     = getattr(self, f'colour_{state}_bg')
+            fg     = getattr(self, f'colour_{state}_fg')
             border = self.colour_border
         dc.SetBackground(wx.Brush(bg))
         dc.Clear()
@@ -71,10 +80,31 @@ class FlatButton(wx.Control):
             dc.SetPen(wx.Pen(border))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
             dc.DrawRectangle(0, 0, w, h)
+        if self.icon:
+            bitmap = themed_icon(self.icon, fg).GetBitmapFor(self)
+            bw, bh = bitmap.GetLogicalSize()
+            dc.DrawBitmap(bitmap, int(w - bw) // 2, int(h - bh) // 2, True)
+            return
         dc.SetFont(self.GetFont())
         dc.SetTextForeground(fg)
         tw, th = dc.GetTextExtent(self.label)
         dc.DrawText(self.label, (w - tw) // 2, (h - th) // 2)
+
+
+class FlatToggle(FlatButton):
+    """A flat button that stays pressed; sends EVT_TOGGLEBUTTON."""
+    event_type = wx.wxEVT_TOGGLEBUTTON
+
+    def GetValue(self):
+        return self.pressed
+
+    def SetValue(self, value):
+        self.pressed = bool(value)
+        self.Refresh()
+
+    def on_release(self, event):
+        self.SetValue(not self.pressed)
+        super().on_release(event)
 
 
 class ResetButton(FlatButton):

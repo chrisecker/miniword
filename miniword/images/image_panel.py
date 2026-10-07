@@ -9,8 +9,9 @@ from ..textmodel.texeltree import grouped
 from ..texteditor.controller import NullController
 from ..ui.sidepanel import SidePanel
 from ..ui.unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
-from ..ui.design import flat_button, make_panel, add_section, add_row
-from ..ui.flatbutton import ResetButton
+from ..ui.design import flat_button, make_panel, add_section, add_row, \
+    add_section_row
+from ..ui.flatbutton import ResetButton, FlatButton, FlatToggle
 
 
 def link_source(text, folder, browsed=False):
@@ -106,7 +107,7 @@ class ImageInspector(SidePanel):
 
         # --- Insert (always active): embedded or linked, from a menu ---
         add_section("Insert", self, sizer)
-        self.btn_insert = wx.Button(self, label="Insert Image \u25be")
+        self.btn_insert = wx.Button(self, label="Image \u25be")
         self.btn_insert.Bind(wx.EVT_BUTTON, self._on_insert_menu)
         sizer.Add(self.btn_insert, 0,
                   wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
@@ -131,58 +132,49 @@ class ImageInspector(SidePanel):
         self._source.Add(self.btn_embed, 0,
                          wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
-        # --- Size ---
+        # --- Size: per axis size and scale in one row ---
         add_section("Size", self, sizer)
-
         self.txt_size_x = LengthInput(self, category="layout")
         self.txt_size_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('x'))
+        self.txt_scale_x = FractionInput(self, buttons=False)
+        self.txt_scale_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('x'))
         self.btn_reset_w = ResetButton(self)
         self.btn_reset_w.callback = self._reset_size_x
-        add_row(sizer, wx.StaticText(self, label="Width"), self.txt_size_x, self.btn_reset_w)
-
         self.txt_size_y = LengthInput(self, category="layout")
         self.txt_size_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_size('y'))
+        self.txt_scale_y = FractionInput(self, buttons=False)
+        self.txt_scale_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('y'))
         self.btn_reset_h = ResetButton(self)
         self.btn_reset_h.callback = self._reset_size_y
-        add_row(sizer, wx.StaticText(self, label="Height"), self.txt_size_y, self.btn_reset_h)
-
-        self.chk_proportional = wx.CheckBox(self, label="Proportional")
+        grid = wx.FlexGridSizer(4, dip(4), dip(4))
+        for widget in (wx.StaticText(self, label="Width"), self.txt_size_x,
+                       self.txt_scale_x, self.btn_reset_w,
+                       wx.StaticText(self, label="Height"), self.txt_size_y,
+                       self.txt_scale_y, self.btn_reset_h):
+            grid.Add(widget, 0, wx.ALIGN_CENTER_VERTICAL)
+        grid.AddGrowableCol(0)
+        sizer.Add(grid, 0, wx.EXPAND | wx.ALL, dip(5))
+        self.chk_proportional = wx.CheckBox(self)
         self.chk_proportional.Bind(wx.EVT_CHECKBOX, self._on_proportional)
-        sizer.Add(self.chk_proportional, 0, wx.LEFT | wx.TOP, dip(28))
+        add_row(sizer, wx.StaticText(self, label="Keep aspect ratio"),
+                self.chk_proportional)
 
-        # --- Scale ---
-        add_section("Scale", self, sizer)
-
-        self.txt_scale_x = FractionInput(self)
-        self.txt_scale_x.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('x'))
-        self.btn_reset_sx = ResetButton(self)
-        self.btn_reset_sx.callback = self._reset_scale_x
-        add_row(sizer, wx.StaticText(self, label="X"), self.txt_scale_x, self.btn_reset_sx)
-
-        self.txt_scale_y = FractionInput(self)
-        self.txt_scale_y.Bind(EVT_UNIT_CHANGED, lambda e: self._on_scale('y'))
-        self.btn_reset_sy = ResetButton(self)
-        self.btn_reset_sy.callback = self._reset_scale_y
-        add_row(sizer, wx.StaticText(self, label="Y"), self.txt_scale_y, self.btn_reset_sy)
-
-        # --- Crop ---
-        add_section("Crop", self, sizer)
-
-        self.btn_crop = flat_button(self, "Edit Crop", size=(-1, dip(28)))
-        self.btn_crop.Bind(wx.EVT_BUTTON, self._on_crop_toggle)
-        sizer.Add(self.btn_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
-
-        self.btn_unset_crop = flat_button(self, "Unset Crop", size=(-1, dip(28)))
-        self.btn_unset_crop.Bind(wx.EVT_BUTTON, self._on_unset_crop)
-        sizer.Add(self.btn_unset_crop, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
-
-        # --- File ---
-        add_section("File", self, sizer)
-        self.btn_export = flat_button(self, "Export Image\u2026",
-                                      size=(-1, dip(28)))
+        # --- Crop and Export ---
+        icon_size = (dip(28), dip(28))
+        self.btn_crop = FlatToggle(self, '', size=icon_size, bordered=True,
+                                   icon='crop_24dp_1F1F1F.svg')
+        self.btn_crop.SetToolTip("Crop (drag the handles in the text)")
+        self.btn_crop.Bind(wx.EVT_TOGGLEBUTTON, self._on_crop_toggle)
+        self.btn_unset_crop = ResetButton(self)
+        self.btn_unset_crop.callback = self._on_unset_crop
+        add_section_row("Crop", self, sizer, self.btn_crop,
+                        self.btn_unset_crop)
+        self.btn_export = FlatButton(self, '', size=icon_size, bordered=True,
+                                     icon='download_24dp_1F1F1F.svg')
+        self.btn_export.SetToolTip("Export image\u2026")
         self.btn_export.Bind(wx.EVT_BUTTON, self._on_export)
-        sizer.Add(self.btn_export, 0,
-                  wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
+        add_section_row("Export", self, sizer, self.btn_export,
+                        tuple(self.btn_unset_crop.GetSize()))  # under crop
 
         self._set_inspector_enabled(False)
 
@@ -200,7 +192,7 @@ class ImageInspector(SidePanel):
                   self.txt_scale_x, self.txt_scale_y,
                   self.chk_proportional, self.btn_crop, self.btn_unset_crop):
             w.Enable(enabled)
-        self.btn_unset_crop.Enable(enabled and has_crop)
+        self.btn_unset_crop.set_x(enabled and has_crop)
         linked = enabled and self._image is not None \
             and self._image.content is None and bool(self._image.path)
         self._source.ShowItems(linked)  # external images only
@@ -230,8 +222,6 @@ class ImageInspector(SidePanel):
         modified_y = abs(image.scale_y - 1.0) > 1e-6
         self.btn_reset_w.set_x(modified_x)
         self.btn_reset_h.set_x(modified_y)
-        self.btn_reset_sx.set_x(modified_x)
-        self.btn_reset_sy.set_x(modified_y)
         self._updating = False
 
     def clear(self):
@@ -242,8 +232,8 @@ class ImageInspector(SidePanel):
         self._set_inspector_enabled(False)
         self.txt_path.SetValue('')
         self.lbl_status.SetLabel('')
-        for btn in (self.btn_reset_w, self.btn_reset_h,
-                    self.btn_reset_sx, self.btn_reset_sy):
+        self.btn_crop.SetValue(False)
+        for btn in (self.btn_reset_w, self.btn_reset_h):
             btn.set_x(False)
 
     # ------------------------------------------------------------------
@@ -303,8 +293,6 @@ class ImageInspector(SidePanel):
         modified_y = abs(scale_y - 1.0) > 1e-6
         self.btn_reset_w.set_x(modified_x)
         self.btn_reset_h.set_x(modified_y)
-        self.btn_reset_sx.set_x(modified_x)
-        self.btn_reset_sy.set_x(modified_y)
         self._updating = False
         self._notify()
 
@@ -317,14 +305,6 @@ class ImageInspector(SidePanel):
         if self._natural_h:
             self.txt_size_y.SetValue(self._natural_h)
             self._on_size('y')
-
-    def _reset_scale_x(self):
-        self.txt_scale_x.SetValue(1.0)
-        self._on_scale('x')
-
-    def _reset_scale_y(self):
-        self.txt_scale_y.SetValue(1.0)
-        self._on_scale('y')
 
     def _on_proportional(self, event):
         self._notify()
@@ -396,13 +376,14 @@ class ImageInspector(SidePanel):
             path = get_path(editor.target.get_xtexel(), editor.index)
             editor.set_controller(NullController.match(editor, path))
             self._crop_active = False
+        self.btn_crop.SetValue(self._crop_active)
 
-    def _on_unset_crop(self, event):
+    def _on_unset_crop(self):
         if self._image is None:
             return
         self._current_crop = None
         self._notify()
-        self.btn_unset_crop.Enable(False)
+        self.btn_unset_crop.set_x(False)
 
     def _load_image_file(self):
         """Open file dialog; return the file's bytes or None."""

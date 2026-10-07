@@ -69,7 +69,9 @@ def click(control, value=None):
     """Set a check box or toggle button (to value) and send its event."""
     if value is not None:
         control.SetValue(value)
-    kind = wx.wxEVT_TOGGLEBUTTON if isinstance(control, wx.ToggleButton) \
+    from ..ui.flatbutton import FlatToggle
+    kind = wx.wxEVT_TOGGLEBUTTON \
+        if isinstance(control, (wx.ToggleButton, FlatToggle)) \
         else wx.wxEVT_CHECKBOX
     _send(control, kind, int(control.GetValue()))
 

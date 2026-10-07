@@ -40,7 +40,8 @@ def add_header(label, parent, sizer):
     """Add a panel header to vertical sizer *sizer*."""
     dip = parent.FromDIP
     sizer.AddSpacer(dip(6))
-    hdr = wx.StaticText(parent, label=label)
+    hdr = wx.StaticText(parent)
+    hdr.SetLabelText(label)  # literally: '&' is no mnemonic
     hdr.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT,
                         wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL))
     colours.set(hdr, 'ForegroundColour', 'GRAYTEXT')
@@ -48,12 +49,24 @@ def add_header(label, parent, sizer):
     sizer.AddSpacer(dip(3))
 
 
-def add_section(label, panel, sizer):
+def section_label(label, panel):
+    """A bold section label."""
     text = wx.StaticText(panel, label=label)
     font = text.GetFont()
     font.SetWeight(wx.FONTWEIGHT_BOLD)
     text.SetFont(font)
+    return text
+
+
+def add_section(label, panel, sizer):
+    text = section_label(label, panel)
     sizer.Add(text, 0, wx.EXPAND|wx.TOP, panel.FromDIP(10))
+
+
+def add_section_row(label, panel, sizer, *widgets):
+    """A section with its label and widgets in one row."""
+    sizer.AddSpacer(panel.FromDIP(10))
+    add_row(sizer, section_label(label, panel), *widgets)
 
 
 def add_label(label, panel, sizer):

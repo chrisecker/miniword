@@ -4,9 +4,9 @@ from wx.lib.newevent import NewEvent
 from ..textmodel.texeltree import length
 from ..ui.sidepanel import SidePanel
 from ..ui.threestate import ColourButton
-from ..ui.icons import icon
-from ..ui.design import muted_button, make_panel, add_section
+from ..ui.design import muted_button, make_panel, add_section, add_row
 from ..ui.colours import colours
+from ..ui.flatbutton import FlatButton, ResetButton
 from ..core.utils import get_path
 from .tables import Table, empty_table
 
@@ -328,11 +328,11 @@ class TablePanel(SidePanel):
         self._line_style.SetSelection(0)
         sizer.Add(self._line_style, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
-        grid_sizer = wx.GridSizer(rows=2, cols=5, hgap=dip(2), vgap=dip(2))
+        grid_sizer = wx.GridSizer(rows=2, cols=5, hgap=dip(6), vgap=dip(6))
         self._border_btns = []
-        for icon_name, key in _BORDER_PRESETS:
-            btn = wx.BitmapButton(self, bitmap=icon(icon_name + '.svg', (24, 24)),
-                                  size=(dip(32), dip(32)))
+        for icon_name, key in _BORDER_PRESETS:  # flat, with a border line
+            btn = FlatButton(self, '', size=(dip(30), dip(30)),
+                             bordered=True, icon=icon_name + '.svg')
             btn.preset_key = key
             btn.Bind(wx.EVT_BUTTON, self._on_border_preset)
             grid_sizer.Add(btn, 0, wx.EXPAND)
@@ -350,27 +350,29 @@ class TablePanel(SidePanel):
         row_sizer.Add(self._btn_col, 1)
         sizer.Add(row_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
 
-        self._chk_header = wx.CheckBox(self, label="Header row")
+        self._chk_header = wx.CheckBox(self)
         self._chk_header.Bind(wx.EVT_CHECKBOX, self._on_header)
-        sizer.Add(self._chk_header, 0, wx.LEFT | wx.TOP, dip(5))
+        add_row(sizer, wx.StaticText(self, label="Header row"),
+                self._chk_header)
 
         # --- Section: Cell ---
         add_section("Cell", self, sizer)
-        cell_sizer = wx.FlexGridSizer(rows=3, cols=2, hgap=dip(4), vgap=dip(4))
-        cell_sizer.AddGrowableCol(1)
-
-        cell_sizer.Add(wx.StaticText(self, label="Background"), 0, wx.ALIGN_CENTER_VERTICAL)
         self._bgcolor_btn = ColourButton(self)
         self._bgcolor_btn.callback = self._on_bgcolor
-        cell_sizer.Add(self._bgcolor_btn, 0, wx.EXPAND)
+        self._reset_bgcolor = ResetButton(self)
+        self._reset_bgcolor.callback = \
+            lambda: self._set_cell_attr('cell_bgcolor', None)
+        add_row(sizer, wx.StaticText(self, label="Background"),
+                self._bgcolor_btn, self._reset_bgcolor)
 
-        cell_sizer.Add(wx.StaticText(self, label="V-Align"), 0, wx.ALIGN_CENTER_VERTICAL)
         self._valign = wx.Choice(self, choices=['top', 'middle', 'bottom'])
         self._valign.SetSelection(0)
         self._valign.Bind(wx.EVT_CHOICE, self._on_valign)
-        cell_sizer.Add(self._valign, 0, wx.EXPAND)
-
-        sizer.Add(cell_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, dip(5))
+        self._reset_valign = ResetButton(self)
+        self._reset_valign.callback = \
+            lambda: self._set_cell_attr('valign', 'top')
+        add_row(sizer, wx.StaticText(self, label="V-Align"), self._valign,
+                self._reset_valign)
 
         self._table_controls = (
             [self._btn_row, self._btn_col, self._chk_header, self._line_style,
@@ -397,6 +399,8 @@ class TablePanel(SidePanel):
         table, ci1 = self._find_table_texel()
         self._set_table_controls(table is not None)
         if table is None:
+            self._reset_bgcolor.set_x(False)
+            self._reset_valign.set_x(False)
             return
         self._chk_header.SetValue(table.nheader > 0)
         r1, c1, r2, c2 = self._selected_cell_range(table, ci1)
@@ -410,12 +414,16 @@ class TablePanel(SidePanel):
 
         bg = unique('cell_bgcolor')
         self._bgcolor_btn.set_colour(wx.Colour(bg) if bg is not None else None)
+        self._reset_bgcolor.set_x(any(
+            cells[r][c].get_attr('cell_bgcolor') is not None
+            for r in range(r1, r2 + 1) for c in range(c1, c2 + 1)))
 
         valign_choices = ['top', 'middle', 'bottom']
         va = unique('valign')
         self._valign.Unbind(wx.EVT_CHOICE)
         self._valign.SetSelection(valign_choices.index(va) if va in valign_choices else 0)
         self._valign.Bind(wx.EVT_CHOICE, self._on_valign)
+        self._reset_valign.set_x(va != 'top')
 
     # --- helpers to find current table ---
 

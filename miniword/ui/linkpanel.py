@@ -1,11 +1,30 @@
 # -*- coding: utf-8 -*-
 import wx
 from .sidepanel import SidePanel
-from .design import make_panel, make_tab, add_section, flat_button
+from .design import make_panel, add_section, add_row, flat_button, \
+    ALL_CENTER
 from .flatbutton import ResetButton
+from ..textmodel.styles import get_styles
 
 NUMBERING_CHOICES = ["Numbers", "Letters", "Roman", "Custom Label"]
 NUMBERING_KEYS    = ["numbers", "letters", "roman", "custom"]
+
+
+def link_at(model, j):
+    """(j1, j2) of the link at j (the character before j, else after),
+    or None."""
+    def href(k):
+        return 0 <= k < len(model) and model.get_style(k).get('href')
+    k = j - 1 if href(j - 1) else j
+    url = href(k)
+    if not url:
+        return None
+    j1, j2 = k, k + 1
+    while href(j1 - 1) == url:
+        j1 -= 1
+    while href(j2) == url:
+        j2 += 1
+    return j1, j2
 
 
 class LinksPanel(SidePanel):
@@ -18,57 +37,36 @@ class LinksPanel(SidePanel):
         self.create()
 
     def create(self):
-        dip      = self.FromDIP
-        content  = make_panel(self, "LINKS")
-        notebook = wx.Notebook(self)
-        notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED,
-            lambda e: (e.Skip(), wx.CallAfter(self.editor.canvas.SetFocus)))
-        content.Add(notebook, 1, wx.EXPAND)
-
-        self._build_footnotes_tab(notebook)
-        self._build_hyperlink_tab(notebook)
+        sizer = make_panel(self, "LINKS")
+        self._build_footnotes(sizer)
+        self._build_hyperlink(sizer)
         self.update()
 
-    def _build_footnotes_tab(self, notebook):
-        panel, content = make_tab(notebook, 'Footnotes')
-        dip = panel.FromDIP
-
-        btn_insert = flat_button(panel, "Insert", size=(-1, dip(24)))
-        content.Add(btn_insert, 0, wx.EXPAND | wx.BOTTOM, dip(8))
-
-        row = wx.BoxSizer(wx.HORIZONTAL)
-        row.Add(wx.StaticText(panel, label="Numbering"), 0,
-                wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, dip(6))
-        self.numbering = wx.Choice(panel, choices=NUMBERING_CHOICES)
-        row.Add(self.numbering, 1, wx.ALIGN_CENTER_VERTICAL)
-        content.Add(row, 0, wx.EXPAND | wx.BOTTOM, dip(4))
-
-        lbl_row = wx.BoxSizer(wx.HORIZONTAL)
-        lbl_row.Add(wx.StaticText(panel, label="Label"), 0,
-                    wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, dip(6))
-        self.label_ctrl = wx.TextCtrl(panel)
+    def _build_footnotes(self, sizer):
+        add_section("Footnotes", self, sizer)
+        btn_insert = flat_button(self, "Insert", size=(-1, self.FromDIP(24)))
+        add_row(sizer, btn_insert)
+        self.numbering = wx.Choice(self, choices=NUMBERING_CHOICES)
+        add_row(sizer, wx.StaticText(self, label="Numbering"), self.numbering)
+        self.label_ctrl = wx.TextCtrl(self)
         self.label_ctrl.SetHint("e.g. *")
-        lbl_row.Add(self.label_ctrl, 1, wx.ALIGN_CENTER_VERTICAL)
-        content.Add(lbl_row, 0, wx.EXPAND | wx.BOTTOM, dip(4))
+        add_row(sizer, wx.StaticText(self, label="Label"), self.label_ctrl)
 
         btn_insert.Bind(wx.EVT_BUTTON,     self.on_insert)
         self.numbering.Bind(wx.EVT_CHOICE, self.on_numbering_changed)
         self.label_ctrl.Bind(wx.EVT_TEXT,  self.on_label_changed)
 
-    def _build_hyperlink_tab(self, notebook):
-        panel, content = make_tab(notebook, 'Hyperlink')
-        dip = panel.FromDIP
-
-        url_row = wx.BoxSizer(wx.HORIZONTAL)
-        url_row.Add(wx.StaticText(panel, label="URL"), 0,
-                    wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, dip(6))
-        self.url_ctrl = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER)
-        self.reset_url = ResetButton(panel, ['href'])
+    def _build_hyperlink(self, sizer):
+        add_section("Hyperlink", self, sizer)
+        dip = self.FromDIP
+        self.url_ctrl = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.reset_url = ResetButton(self)
         self.reset_url.callback = self.clear_href
-        url_row.Add(self.url_ctrl, 1, wx.ALIGN_CENTER_VERTICAL)
-        url_row.Add(self.reset_url, 0, wx.ALIGN_CENTER_VERTICAL)
-        content.Add(url_row, 0, wx.EXPAND | wx.BOTTOM, dip(4))
-
+        row = wx.BoxSizer(wx.HORIZONTAL)  # the field fills the row
+        row.Add(wx.StaticText(self, label="URL"), 0, ALL_CENTER, dip(5))
+        row.Add(self.url_ctrl, 1, ALL_CENTER, dip(5))
+        row.Add(self.reset_url, 0, ALL_CENTER, dip(5))
+        sizer.Add(row, 0, wx.EXPAND)
         for evt in (wx.EVT_TEXT_ENTER, wx.EVT_KILL_FOCUS):
             self.url_ctrl.Bind(evt, self.on_url_changed)
 
@@ -106,21 +104,37 @@ class LinksPanel(SidePanel):
                     self.label_ctrl.Enable(False)
                     self.label_ctrl.ChangeValue('')
 
-        has_selection = bool(self.editor.selected_ranges())
-        self.url_ctrl.Enable(has_selection)
-        self.reset_url.Enable(has_selection)
-        if not has_selection:
+        ranges = self.link_ranges()
+        self.url_ctrl.Enable(bool(ranges))
+        self.reset_url.Enable(bool(ranges))
+        if not ranges:
             self.url_ctrl.SetHint("Select text to add a link")
             if self.url_ctrl.GetValue():
                 self.url_ctrl.ChangeValue('')
             self.reset_url.set_x(False)
             return
 
-        self.url_ctrl.SetHint("https://…")
-        href = self.editor.get_current_style().get('href', '')
+        model = self.editor.target
+        urls = {style.get('href') or ''
+                for j1, j2 in ranges
+                for n, style in get_styles(model.get_xtexel(), j1, j2)}
+        href = min(urls) if len(urls) == 1 else ''
+        self.url_ctrl.SetHint("https://…" if len(urls) == 1 else
+                              "Partly linked" if '' in urls else
+                              "Several links")
         if self.url_ctrl.GetValue() != href:
             self.url_ctrl.ChangeValue(href)
-        self.reset_url.set_x(bool(href))
+        self.reset_url.set_x(urls != {''})  # any link
+
+    def link_ranges(self):
+        """Where the URL applies: the selection, else the link at the
+        cursor."""
+        editor = self.editor
+        ranges = editor.selected_ranges()
+        if ranges:
+            return ranges
+        link = link_at(editor.target, editor.index)
+        return [link] if link else []
 
     def on_insert(self, event=None):
         from ..textmodel.submodel import Footnote
@@ -155,7 +169,7 @@ class LinksPanel(SidePanel):
     def on_url_changed(self, event=None):
         url    = self.url_ctrl.GetValue().strip()
         editor = self.editor
-        ranges = editor.selected_ranges()
+        ranges = self.link_ranges()
         if not ranges:
             return
         with editor.atomic():
@@ -165,23 +179,13 @@ class LinksPanel(SidePanel):
                 if url:
                     editor.set_properties(href=url, underline=True)
                 else:
-                    editor.clear_properties('href')
+                    editor.clear_properties('href', 'underline')
             editor.selection = saved
         self.reset_url.set_x(bool(url))
 
-    def clear_href(self, *keys):
-        editor = self.editor
-        ranges = editor.selected_ranges()
-        if not ranges:
-            return
-        with editor.atomic():
-            saved = editor.selection
-            for i1, i2 in ranges:
-                editor.selection = (i1, i2)
-                editor.clear_properties(*keys)
-            editor.selection = saved
+    def clear_href(self):
         self.url_ctrl.ChangeValue('')
-        self.reset_url.set_x(False)
+        self.on_url_changed()
 
     def on_label_changed(self, event=None):
         fn = self.active_footnote()
