@@ -109,8 +109,6 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             (11, True, False): 'del_line_end',
             (wx.WXK_BACK, True, False): 'del_word_left',
             (1,  True, False): 'select_all',
-            (9,  True, False): 'indent',
-            (21, True, False): 'dedent',
             (25, True, False): 'redo',             # Ctrl+Y (Ctrl+R is "Reload" in the File menu)
             (wx.WXK_LEFT,  False, True): 'dedent',          # Alt+Left
             (wx.WXK_RIGHT, False, True): 'indent',          # Alt+Right

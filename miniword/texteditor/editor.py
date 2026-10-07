@@ -402,109 +402,84 @@ class Editor(UndoRedo):
         return self._set_indents, flow, i1, i2, indents
 
     def indent(self):
-        if not self.has_selection():
-            j1 = j2 = self.index
-        else:
-            j1, j2 = sorted(self.selection)
+        """One level more; in code 4 spaces at the line starts."""
+        j1, j2 = self.selected_range()
+        if self.is_code(j1):
+            return self.shift_lines(j1, j2, 4)
         j2 = self.target.lineend(j2)+1
         i1, i2 = self.abs_idxs(j1, j2)
         old = self.target.increase_indent(j1, j2)
         self.add_undo((self._set_indents, self.flow, i1, i2, old))
 
     def dedent(self):
-        if not self.has_selection():
-            j1 = j2 = self.index
-        else:
-            j1, j2 = sorted(self.selection)
+        """One level less; in code up to 4 spaces less at the line
+        starts."""
+        j1, j2 = self.selected_range()
+        if self.is_code(j1):
+            return self.shift_lines(j1, j2, -4)
         j2 = self.target.lineend(j2)+1
         i1, i2 = self.abs_idxs(j1, j2)
         old = self.target.decrease_indent(j1, j2)
         self.add_undo((self._set_indents, self.flow, i1, i2, old))
-        
+
+    def selected_range(self):
+        """(j1, j2): the selection, or the cursor."""
+        if self.has_selection():
+            return tuple(sorted(self.selection))
+        return self.index, self.index
+
+    def is_code(self, j):
+        """Whether the paragraph at j is code: its base style has the
+        role 'pre'."""
+        if self.canvas is None:
+            return False
+        base = self.target.get_parstyle(j).get('base')
+        style = base and self.canvas.builder.stylesheet.get(base)
+        return bool(style) and style.get('role') == 'pre'
+
     def _line_starts(self, i1, i2):
-        """
-        Helper: Return list of line-start indices for all lines
-        overlapping [i1, i2].
-        """
+        """Line starts of all lines overlapping [i1, i2]."""
         model = self.target
-        n = len(model)
-        starts = []
-        ls = model.linestart(i1)
-        while ls <= i2:
-            starts.append(ls)
-            end = model.lineend(ls)
-            if end + 1 >= n:
-                break
-            ls = end + 1
+        starts = [model.linestart(i1)]
+        while model.lineend(starts[-1]) < i2 \
+                and model.lineend(starts[-1]) + 1 < len(model):
+            starts.append(model.lineend(starts[-1]) + 1)
         return starts
 
-    def shift(self, n=4):
-        """Insert n spaces at each line start in index range [i1, i2]."""
-        # XXX noch nicht angepasst
-        if not self.has_selection():
-            j1 = j2 = self.index
-        else:
-            j1, j2 = sorted(self.selection)
-        s1, s2 = self.selection if has_sel else (0, 0)
-        index = self.index
-        starts = _line_starts(model, i1, i2)
-        spaces = ' ' * n
-        for ls in reversed(starts):
-            model.insert_text(ls, spaces)
-            if index >= ls: index += n
-            if s1 >= ls: s1 += n
-            if s2 >= ls: s2 += n
-        self.index = index
-        if has_sel: self.selection = (s1, s2)
-        shifted = [ls + j * n for j, ls in enumerate(starts)]
-        self.add_undo((self._unshift, model, shifted, n))
-
-    def _unshift(self, model, starts, n):
-        # XXX noch nicht angepasst
-        self.target = model
-        has_sel = self.has_selection()
-        s1, s2 = self.selection if has_sel else (0, 0)
-        index = self.index
-        memo = []
-        for ls in reversed(starts):
-            j = ls
-            while j < ls + n and j < len(model) and model.get_text(j, j + 1) == ' ':
-                j += 1
-            memo.append(model.remove(ls, j))
-            rn = j - ls
-            if index > ls: index = ls + max(0, index - ls - rn)
-            if s1 > ls: s1 = ls + max(0, s1 - ls - rn)
-            if s2 > ls: s2 = ls + max(0, s2 - ls - rn)
-        self.index = index
-        if has_sel: self.selection = (s1, s2)
-        return self._undo_unshift, model, starts, memo, n
-
-    def unshift(self, i1, i2, n=4):
-        """Remove up to n leading spaces from each line start in index range
-        [i1, i2]."""
-        # XXX noch nicht angepasst
-        
+    def shift_lines(self, j1, j2, n):
+        """Insert n spaces at the start of each line in [j1, j2], or
+        remove up to -n leading spaces; one undo step. Cursor and
+        selection stay with the text."""
         model = self.target
-        info = self._unshift(model, _line_starts(model, i1, i2), n)
-        self.add_undo(info)
+        changes = []  # (line start, spaces inserted (+) or removed (-))
+        for ls in self._line_starts(j1, j2):
+            if n > 0:
+                changes.append((ls, n))
+            else:
+                head = model.get_text(ls, min(ls - n, len(model)))
+                k = len(head) - len(head.lstrip(' '))
+                if k:
+                    changes.append((ls, -k))
 
-    def _undo_unshift(self, model, starts, memo, n):
-        # XXX noch nicht angepasst
-        
-        self.target = model
-        has_sel = self.has_selection()
-        s1, s2 = self.selection if has_sel else (0, 0)
-        index = self.index
-        for ls, removed in zip(starts, reversed(memo)):
-            rn = len(removed)
-            model.insert(ls, removed)
-            if index >= ls: index += rn
-            if s1 >= ls: s1 += rn
-            if s2 >= ls: s2 += rn
+        def moved(j):  # a position at a line start stays there
+            return j + sum(d if d > 0 else -min(-d, j - ls)
+                           for ls, d in changes if ls < j)
+        index = moved(self.index)
+        selection = self.selection and tuple(map(moved, self.selection))
+        self.begin_undo_group()
+        try:
+            for ls, d in reversed(changes):
+                i = self.abs_idx(ls)
+                if d > 0:
+                    new = TextModel(' ' * d, **model.get_style(ls))
+                    self.add_undo(self._insert(self.flow, i, new))
+                else:
+                    self.add_undo(self._remove(self.flow, i, i - d))
+        finally:
+            self.end_undo_group()
         self.index = index
-        if has_sel: self.selection = (s1, s2)
-        return self._unshift, model, starts, n
-
+        if selection:
+            self.selection = selection
 
     ### Controller
     def try_install_click_controller(self):

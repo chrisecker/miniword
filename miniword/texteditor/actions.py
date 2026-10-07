@@ -268,40 +268,6 @@ def default_handler(action, shift, ctx):
 
 
 
-def code_handler(action, shift, ctx):
-    """Row/column-based movement and space-indentation for code views.
-
-    Overrides move_up/move_down (character-column based) and indent/dedent
-    (leading-space insertion). All other actions fall through.
-    """
-    if action == 'move_up':
-        row, col, i0 = model.index2position(index)        
-        if row>0:
-            i = model.position2index(row-1, col, i0)
-            editor.set_index(i, shift)            
-        return True    
-    elif action == 'move_down':
-        row, col, i0 = model.index2position(index)
-        try:
-            i = model.position2index(row+1, col, i0)
-        except IndexError:
-            i = model.lineend(index)
-        editor.set_index(i, shift)
-        return True
-    elif action == 'indent':
-        s1, s2 = ctx.s1, ctx.s2
-        editor.shift(s1, s2)
-        return True
-    elif action == 'dedent':
-        s1, s2 = ctx.s1, ctx.s2
-        editor.unshift(s1, s2)
-        return True
-    return False
-
-
-
-
-    
 def _build_layout(model):
     import wx
     if wx.App.Get() is None:
