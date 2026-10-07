@@ -87,3 +87,64 @@ def test_KEY_3():
         assert model.get_style(1).get('bold') is True
         press(canvas, 'b')
         assert not model.get_style(1).get('bold')
+
+
+def test_KEY_4():
+    "KEY-4: a Format menu with Bold, Italic, Underline and their shortcuts"
+    from ..core.document import Document
+    from ..ui.mainwindow import MainFrame
+    app()
+    frame = MainFrame(Document())
+    try:
+        bar = frame.GetMenuBar()
+        menu = bar.GetMenu(bar.FindMenu('Format'))
+        labels = [item.GetItemLabel() for item in menu.GetMenuItems()]
+        assert labels == ['&Bold\tCtrl+B', '&Italic\tCtrl+I',
+                          '&Underline\tCtrl+U', '',
+                          'Increase &Indent\tAlt+Right',
+                          '&Decrease Indent\tAlt+Left',
+                          'Next &List Type\tCtrl+T',
+                          'Next &Paragraph Style\tAlt+T']
+        model = frame.document.textmodel
+        model.insert_text(0, 'Wal')
+        frame.editor.selection = (0, 3)
+        frame.canvas.builder.assure_finished()
+        bold = menu.GetMenuItems()[0]
+        frame.ProcessEvent(wx.CommandEvent(wx.wxEVT_MENU, bold.GetId()))
+        assert model.get_style(1).get('bold') is True
+    finally:
+        frame.Destroy()
+
+
+def menu_item(frame, menu_name, label):
+    bar = frame.GetMenuBar()
+    menu = bar.GetMenu(bar.FindMenu(menu_name))
+    return next(i for i in menu.GetMenuItems()
+                if i.GetItemLabel().split('\t')[0] == label)
+
+
+def test_KEY_5():
+    "KEY-5: indent, list type and moving paragraphs from the menus"
+    from ..core.document import Document
+    from ..ui.mainwindow import MainFrame
+    app()
+    frame = MainFrame(Document())
+    try:
+        model = frame.document.textmodel
+        model.insert_text(0, 'eins\nzwei\n')
+
+        def choose(menu, label):
+            frame.canvas.builder.assure_finished()
+            item = menu_item(frame, menu, label)
+            frame.ProcessEvent(wx.CommandEvent(wx.wxEVT_MENU, item.GetId()))
+        frame.editor.index = 0
+        choose('Format', 'Increase &Indent')
+        assert model.get_indent(0) == 1
+        choose('Format', 'Next &List Type')
+        assert model.get_parstyle(0).get('paragraph_type') == 'list'
+        choose('Edit', 'Move Paragraph &Down')
+        assert model.get_text() == 'zwei\neins\n'
+        assert menu_item(frame, 'Edit', 'Move Paragraph &Up').GetItemLabel() \
+            == 'Move Paragraph &Up\tAlt+Up'
+    finally:
+        frame.Destroy()

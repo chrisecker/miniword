@@ -399,6 +399,17 @@ class MainFrame(wx.Frame, ViewBase):
                 bar.Insert(bar.GetMenuCount() - 1,
                            plugin_menu(self, items), menu_name)
 
+    def _add_actions(self, menu, items):
+        """Menu entries (label, action) for the editor's actions; None: a
+        separator."""
+        for entry in items:
+            if entry is None:
+                menu.AppendSeparator()
+                continue
+            item = menu.Append(wx.ID_ANY, entry[0])
+            self.Bind(wx.EVT_MENU, lambda _, a=entry[1]:
+                      self.editor.controller.handle_action(a, False), item)
+
     def _build_menu(self):
         bar = wx.MenuBar()
 
@@ -453,6 +464,10 @@ class MainFrame(wx.Frame, ViewBase):
         edit_menu.Append(wx.ID_COPY,  "&Copy\tCtrl+C")
         edit_menu.Append(wx.ID_PASTE, "&Paste\tCtrl+V")
         edit_menu.AppendSeparator()
+        self._add_actions(edit_menu, (
+            ("Move Paragraph &Up\tAlt+Up", 'move_par_up'),
+            ("Move Paragraph &Down\tAlt+Down", 'move_par_down')))
+        edit_menu.AppendSeparator()
         edit_menu.Append(wx.ID_FIND,    "&Find && Replace…\tCtrl+F")
         edit_menu.AppendSeparator()
         edit_menu.Append(wx.ID_PREFERENCES, "&Preferences…")
@@ -467,6 +482,16 @@ class MainFrame(wx.Frame, ViewBase):
             self.Bind(wx.EVT_MENU, lambda _, c=char: self.insert_char(c),
                       item)
         bar.Append(insert_menu, "&Insert")
+
+        format_menu = wx.Menu()
+        self._add_actions(format_menu, (
+            ("&Bold\tCtrl+B", 'bold'), ("&Italic\tCtrl+I", 'italic'),
+            ("&Underline\tCtrl+U", 'underline'), None,
+            ("Increase &Indent\tAlt+Right", 'indent'),
+            ("&Decrease Indent\tAlt+Left", 'dedent'),
+            ("Next &List Type\tCtrl+T", 'cycle_list_type'),
+            ("Next &Paragraph Style\tAlt+T", 'cycle_basestyle')))
+        bar.Append(format_menu, "F&ormat")
         self.Bind(wx.EVT_MENU, lambda _: self.editor.undo(),  id=wx.ID_UNDO)
         self.Bind(wx.EVT_MENU, lambda _: self.editor.redo(),  id=wx.ID_REDO)
         self.Bind(wx.EVT_MENU, lambda _: self.cut(),   id=wx.ID_CUT)
