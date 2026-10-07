@@ -49,6 +49,21 @@ python miniword.py
 
 Alternatively, double-click `miniword.py` in your file explorer.
 
+### Command line
+
+```
+miniword [-h] [--debug] [--version] [file]
+```
+
+(without installation: `python miniword.py [options] [file]`)
+
+| Option | Meaning |
+|---|---|
+| `file` | Document to open: `.txl`, or a format a plugin imports, e.g. Markdown (`.md`). Without it, MiniWord starts with a new document. |
+| `-h`, `--help` | Show the options and exit. |
+| `--version` | Show the version and exit. |
+| `--debug` | Print debug output of the page layout. |
+
 ### Linux
 
 Install system dependencies:

@@ -85,12 +85,28 @@ def _run_font_preload_dialog():
     dlg.Destroy()
 
 
+def parse_args(argv):
+    """The command line options (argv without the program name)."""
+    import argparse
+    from . import __version__
+    parser = argparse.ArgumentParser(
+        prog='miniword', description="MiniWord, a small word processor.")
+    parser.add_argument(
+        'file', nargs='?',
+        help="document to open (.txl, or a format a plugin imports, "
+             "e.g. .md); without it a new document")
+    parser.add_argument(
+        '--debug', action='store_true',
+        help="debug output of the page layout")
+    parser.add_argument(
+        '--version', action='version', version='%(prog)s ' + __version__)
+    return parser.parse_args(argv)
+
+
 def main():
-    args = sys.argv[1:]
-    if '--debug' in args:
-        pagebuilder.DEBUG = True
-        args = [a for a in args if a != '--debug']
-    path = args[0] if args else None
+    args = parse_args(sys.argv[1:])  # before wx: --help needs no window
+    pagebuilder.DEBUG = args.debug
+    path = args.file
 
     _enable_dpi_awareness()
     config = get_config()
