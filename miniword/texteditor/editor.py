@@ -328,6 +328,17 @@ class Editor(UndoRedo):
         info = self._set_styles, self.flow, i1, styles
         self.add_undo(info)
 
+    def toggle_property(self, key):
+        """Switch a character property (e.g. 'italic') on or off: for the
+        selection - on unless its first character has it - else for the
+        next input."""
+        if self.has_selection():
+            on = not self.target.get_style(min(self.selection)).get(key)
+            self.set_properties(**{key: on})
+        else:
+            style = self.get_current_style()
+            self.current_style = dict(style, **{key: not style.get(key)})
+
     def clear_properties(self, *keys):
         if not self.has_selection():
             return

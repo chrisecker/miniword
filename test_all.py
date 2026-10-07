@@ -51,6 +51,7 @@ modules = [
     "miniword.tests.test_paste",
     "miniword.tests.test_linked_images",
     "miniword.tests.test_cli",
+    "miniword.tests.test_shortcuts",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

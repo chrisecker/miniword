@@ -228,6 +228,8 @@ def default_handler(action, shift, ctx):
         editor.cut()
     elif action == 'delete':
         editor.remove()
+    elif action in ('bold', 'italic', 'underline'):
+        editor.toggle_property(action)
     elif action == 'indent':
         editor.indent()
     elif action == 'dedent':
