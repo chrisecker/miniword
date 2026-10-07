@@ -161,12 +161,17 @@ def test_PASTE_7():
             finally:
                 sys.modules['mistune'] = saved
             images = list(iter_images(document.textmodel.texel))
-            assert [(i.content, i.path) for i in images] == \
-                [(None, 'wal.png')], mistune
-            assert imageio.external_content('wal.png', folder) == data
+            path = os.path.join(folder, 'wal.png')
+            assert [(i.content, i.path, i.relative) for i in images] == \
+                [(None, path, True)], mistune
+            assert imageio.external_content(path) == data
             out = os.path.join(folder, 'out.md')
             mdfilter._save(document, out)
             assert open(out).read() == text  # the README stays as it was
+            os.makedirs(os.path.join(folder, 'sub'), exist_ok=True)
+            out = os.path.join(folder, 'sub', 'out.md')
+            mdfilter._save(document, out)
+            assert '![Wal](../wal.png)' in open(out).read()
 
 
 def test_PASTE_10():

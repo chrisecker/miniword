@@ -37,6 +37,8 @@ def undo_setting(document, name, value):
 
 
 class Document(Model):
+    folder = ''  # of its file, set by the window
+
     def __init__(self):
         self.basestyles = StyleSheet()
         self.basestyles.set_owner(self, 'basestyles')

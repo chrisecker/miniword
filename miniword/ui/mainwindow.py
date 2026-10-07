@@ -320,13 +320,9 @@ class MainFrame(wx.Frame, ViewBase):
 
     @_current_path.setter
     def _current_path(self, path):
-        """The document's file; its folder resolves linked images: a new
-        folder lays the pages out anew."""
+        """The document's file; the document gets its folder."""
         self._path = path
-        factory = self.canvas.builder.factory
-        if factory.base_dir != self._doc_dir():
-            factory.base_dir = self._doc_dir()
-            self._rebuild()
+        self.document.folder = self._doc_dir()
         self.check_external_images()
 
     def check_external_images(self):

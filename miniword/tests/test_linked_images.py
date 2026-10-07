@@ -48,26 +48,33 @@ def test_LINK_1():
 
 
 def test_LINK_2():
-    "LINK-2: TXL keeps the path; a linked image has no blob"
+    "LINK-2: TXL: relative paths relative to the file, absolute ones kept"
     from ..core.document import Document
     from ..io import txlio
     from ..images.images import iter_images
     from ..textmodel.texeltree import grouped
     data = png()
-    doc = Document()
-    doc.textmodel.insert_text(0, 'x\n')
-    model = doc.textmodel.create_textmodel()
-    model.texel = grouped([Image(path='wal.png', alt='Wal'),
-                           Image(data, path='https://x.org/a.png')])
-    doc.textmodel.insert(0, model)
     with tempfile.TemporaryDirectory() as folder:
+        doc = Document()
+        doc.textmodel.insert_text(0, 'x\n')
+        model = doc.textmodel.create_textmodel()
+        model.texel = grouped([
+            Image(path=os.path.join(folder, 'bilder', 'wal.png'), alt='Wal',
+                  relative=True),
+            Image(path='/srv/logo.png'),
+            Image(data, path='https://x.org/a.png')])
+        doc.textmodel.insert(0, model)
         path = os.path.join(folder, 'doc.txl')
         txlio.save(doc, path)
         text = open(path, encoding='utf-8').read()
-        assert text.count('[blobs]') == 1 and text.count('.png"') >= 1
+        assert 'path="bilder/wal.png"' in text
+        assert 'path="/srv/logo.png"' in text
+        assert text.count('[blobs]') == 1
         images = list(iter_images(txlio.load(path).textmodel.texel))
-    assert [(i.content, i.path, i.alt) for i in images] == \
-        [(None, 'wal.png', 'Wal'), (data, 'https://x.org/a.png', '')]
+        assert [(i.content, i.path, i.relative, i.alt) for i in images] == [
+            (None, os.path.join(folder, 'bilder', 'wal.png'), True, 'Wal'),
+            (None, '/srv/logo.png', False, ''),
+            (data, 'https://x.org/a.png', False, '')]
 
 
 def test_LINK_3():
@@ -106,10 +113,9 @@ def test_LINK_5():
     "LINK-5: linked images are drawn; missing ones as a labelled placeholder"
     data = png(40, 20)
     with tempfile.TemporaryDirectory() as folder:
-        write(folder, 'wal.png', data)
+        path = write(folder, 'wal.png', data)
         factory = Factory(testsheet)
-        factory.base_dir = folder
-        box = factory.Image_handler(Image(path='wal.png', scale_x=0.5,
+        box = factory.Image_handler(Image(path=path, scale_x=0.5,
                                           scale_y=0.5), {})
         assert isinstance(box, ImageBox)
         assert (box.width, box.height) == (20, 10)
@@ -122,16 +128,15 @@ def test_LINK_5():
 
 
 def test_LINK_6():
-    "LINK-6: the window tells the layout the document's folder"
+    "LINK-6: the window tells the document its folder"
     from ..core.document import Document
     from ..ui.mainwindow import MainFrame
     app()
     frame = MainFrame(Document())
     try:
-        factory = frame.canvas.builder.factory
-        assert factory.base_dir == ''
+        assert frame.document.folder == ''
         frame._current_path = '/home/x/texte/brief.txl'
-        assert factory.base_dir == '/home/x/texte'
+        assert frame.document.folder == '/home/x/texte'
     finally:
         frame.Destroy()
 
@@ -189,11 +194,11 @@ def test_LINK_8():
     from .guitest import click_button
     data = png(10)
     with tempfile.TemporaryDirectory() as folder:
-        write(folder, 'wal.png', data)
-        with panel_with(Image(path='wal.png'), folder) as (panel, frame):
+        path = write(folder, 'wal.png', data)
+        with panel_with(Image(path=path), folder) as (panel, frame):
             click_button(panel.btn_embed)
             image = image_at(frame)
-            assert (image.content, image.path) == (data, 'wal.png')
+            assert (image.content, image.path) == (data, path)
             assert not panel.txt_path.IsShown()  # now an embedded image
             frame.editor.undo()
             assert image_at(frame).content is None
@@ -221,69 +226,17 @@ def test_LINK_9():
 
 
 def test_LINK_10():
-    "LINK-10: a link: URL as it is, a file relative to the document"
+    "LINK-10: a link: URL as it is; a file absolute, remembered as relative"
     from ..images.image_panel import link_source
     assert link_source(' https://x.org/a.png ', '/home/x') == \
-        'https://x.org/a.png'
-    assert link_source('/home/x/texte/bilder/wal.png', '/home/x/texte') \
-        == 'bilder/wal.png'
-    assert link_source('/home/x/bilder/wal.png', '/home/x/texte') == \
-        '../bilder/wal.png'
-    assert link_source('/home/x/wal.png', '') == '/home/x/wal.png'
-    assert link_source('bilder/wal.png', '/home/x') == 'bilder/wal.png'
+        ('https://x.org/a.png', False)
+    assert link_source('bilder/wal.png', '/home/x') == \
+        ('/home/x/bilder/wal.png', True)
+    assert link_source('/srv/wal.png', '/home/x') == ('/srv/wal.png', False)
+    assert link_source('/srv/wal.png', '/home/x', browsed=True) == \
+        ('/srv/wal.png', True)
+    assert link_source('bilder/wal.png', '') == ('bilder/wal.png', False)
     assert link_source('  ', '/home/x') is None
-
-
-def boxes_in(builder):
-    """All image and placeholder boxes of the builder's pages."""
-    found = []
-
-    def walk(box):
-        if isinstance(box, (ImageBox, ErrorPlaceholderBox)):
-            found.append(box)
-        elif hasattr(box, 'iter_boxes'):
-            for *_, child in box.iter_boxes(0, 0, 0):
-                walk(child)
-    for *_, page in builder.layout.iter_boxes(0):
-        walk(page)
-    return found
-
-
-def test_LINK_11():
-    "LINK-11: pages show a linked image with a path relative to the document"
-    from ..core.document import Document
-    from ..layout.pagebuilder import PageBuilder
-    from ..textmodel.texeltree import grouped
-    from ..layout.cairodevice import CairoDevice
-    app()
-    with tempfile.TemporaryDirectory() as folder:
-        write(folder, 'wal.png', png(30, 20))
-        document = Document()
-        model = document.textmodel.create_textmodel()
-        model.texel = grouped([Image(path='wal.png')])
-        document.textmodel.insert(0, model)
-        factory = Factory(document.basestyles, device=CairoDevice())
-        factory.base_dir = folder
-        builder = PageBuilder(document.textmodel, factory)
-        builder.settings = document.settings
-        builder.rebuild()
-        builder.assure_finished()
-        assert [type(box) for box in boxes_in(builder)] == [ImageBox]
-
-
-def test_LINK_12():
-    "LINK-12: opening: the pages are built anew once the folder is known"
-    with tempfile.TemporaryDirectory() as folder:
-        write(folder, 'wal.png', png(30, 20))
-        with panel_with(Image(path='wal.png')) as (panel, frame):
-            builder = frame.canvas.builder
-            builder.assure_finished()
-            assert [type(b) for b in boxes_in(builder)] == \
-                [ErrorPlaceholderBox]  # no folder yet
-            frame._current_path = os.path.join(folder, 'text.md')
-            builder.assure_finished()
-            assert [type(b) for b in boxes_in(builder)] == [ImageBox]
-
 
 
 def test_LINK_13():
@@ -356,3 +309,74 @@ def test_LINK_16():
                           'Link to Image (File or URL)…']
         assert not hasattr(panel, 'btn_replace')
         assert panel.btn_export.IsEnabled()
+
+
+def boxes_in(builder):
+    """All image and placeholder boxes of the builder's pages."""
+    found = []
+
+    def walk(box):
+        if isinstance(box, (ImageBox, ErrorPlaceholderBox)):
+            found.append(box)
+        elif hasattr(box, 'iter_boxes'):
+            for *_, child in box.iter_boxes(0, 0, 0):
+                walk(child)
+    for *_, page in builder.layout.iter_boxes(0):
+        walk(page)
+    return found
+
+
+
+def test_LINK_17():
+    "LINK-17: Save As elsewhere: the image still shows, the file is right"
+    from ..io import txlio
+    data = png(30, 20)
+    with tempfile.TemporaryDirectory() as root:
+        os.makedirs(os.path.join(root, 'a', 'bilder'))
+        os.makedirs(os.path.join(root, 'b'))
+        image = write(os.path.join(root, 'a', 'bilder'), 'wal.png', data)
+        with panel_with(Image(path=image, relative=True),
+                        os.path.join(root, 'a')) as (panel, frame):
+            new = os.path.join(root, 'b', 'doc.txl')
+            txlio.save(frame.document, new)
+            frame._current_path = new
+            assert 'path="../a/bilder/wal.png"' in open(new).read()
+            builder = frame.canvas.builder
+            builder.rebuild()
+            builder.assure_finished()
+            assert [type(b) for b in boxes_in(builder)] == [ImageBox]
+            panel.update()
+            assert panel.txt_path.GetValue() == '../a/bilder/wal.png'
+
+
+def test_LINK_18():
+    "LINK-18: a linked image copied into a document elsewhere still shows"
+    from ..core.document import Document
+    from ..io import txlio
+    from ..images.images import iter_images
+    with tempfile.TemporaryDirectory() as root:
+        os.makedirs(os.path.join(root, 'a'))
+        image = write(os.path.join(root, 'a'), 'wal.png', png())
+        with panel_with(Image(path=image, relative=True),
+                        os.path.join(root, 'a')) as (panel, frame):
+            txlio.save(frame.document, os.path.join(root, 'a', 'doc.txl'))
+            copied = txlio.load(os.path.join(root, 'a', 'doc.txl'))
+        moved, = iter_images(copied.textmodel.texel)
+        assert moved.path == image  # absolute in memory: valid anywhere
+
+
+def test_LINK_19():
+    "LINK-19: the panel's 'Relative to document' switches the kind"
+    from .guitest import click
+    with tempfile.TemporaryDirectory() as folder:
+        image = write(folder, 'wal.png', png())
+        with panel_with(Image(path=image, relative=True), folder) as (
+                panel, frame):
+            assert panel.chk_relative.GetValue()
+            assert panel.txt_path.GetValue() == 'wal.png'
+            click(panel.chk_relative, False)
+            assert image_at(frame).relative is False
+            assert panel.txt_path.GetValue() == image
+        with panel_with(Image(path='https://x.org/a.png'), folder) as (
+                panel, frame):
+            assert not panel.chk_relative.IsEnabled()  # no file

@@ -98,12 +98,12 @@ def pixel_size(content):
     return data and (data.width_px, data.height_px)
 
 
-def content_of(image, base_dir=''):
+def content_of(image):
     """The data of an Image texel: its own (embedded), else that of its
     linked file or URL (see external_content), else None."""
     if image.content is not None:
         return image.content
-    return image.path and external_content(image.path, base_dir) or None
+    return image.path and external_content(image.path) or None
 
 
 def load_url(url):

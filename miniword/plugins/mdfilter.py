@@ -16,8 +16,16 @@ from miniword.io.importexport import register_import, register_export, \
 # Export: Document → Markdown
 # ---------------------------------------------------------------------------
 
+_folder = ''  # folder of the file read or written (relative image paths)
+
+
 def _save(doc, path):
-    md = _doc_to_md(doc)
+    global _folder
+    _folder = os.path.dirname(os.path.abspath(path))
+    try:
+        md = _doc_to_md(doc)
+    finally:
+        _folder = ''
     with open(path, 'w', encoding='utf-8') as f:
         f.write(md)
 
@@ -156,7 +164,9 @@ def _elems_to_inline(elems, footnotes=None):
                 segments.append('![%s](data:%s;base64,%s)'
                                 % (elem.alt, image_mime(data), b64))
             elif elem.path:  # linked
-                segments.append('![%s](%s)' % (elem.alt, elem.path))
+                from miniword.images.images import file_path
+                segments.append('![%s](%s)'
+                                % (elem.alt, file_path(elem, _folder)))
             continue
         text = get_text(elem)
         if not text:
@@ -194,13 +204,17 @@ def _elems_to_inline(elems, footnotes=None):
 # ---------------------------------------------------------------------------
 
 def _load(path):
+    global _folder
     with open(path, encoding='utf-8') as f:
         text = f.read()
+    _folder = os.path.dirname(os.path.abspath(path))
     try:
         import mistune  # noqa: F401 -- availability check only
         return _load_mistune(text)
     except ImportError:
         return _load_builtin(text)
+    finally:
+        _folder = ''
 
 
 def image_run(alt, src, size=None, load=False):
@@ -209,16 +223,23 @@ def image_run(alt, src, size=None, load=False):
     (width, height) in pixels, either may be None - becomes its scale
     if the image's pixel size is known."""
     from miniword.images import imageio
-    from miniword.images.images import fetch_image, is_url
+    from miniword.images.images import fetch_image, is_url, memory_path
     if src.startswith('data:'):
-        data, path = fetch_image(src), None
+        data, path, relative = fetch_image(src), None, False
     else:
-        data, path = None, src
+        data, (path, relative) = None, memory_path(src, _folder)
         if load and is_url(src) and src not in imageio.external:
             imageio.load_url(src)
     pixels = size and any(size) and imageio.pixel_size(
         data or (path and imageio.external_content(path)))
-    return '', {'_image': (alt, data, path, _scale(size, pixels))}
+    return '', {'_image': (alt, data, path, _scale(size, pixels),
+                           relative)}
+
+
+def _image(alt, data, path, scale, relative):
+    """The Image texel of an image run (see image_run)."""
+    from miniword.images.images import Image
+    return Image(data, *scale, alt=alt, path=path, relative=relative)
 
 
 def _scale(size, pixels):
@@ -281,10 +302,10 @@ def _build_blocks(doc, blocks):
         if block[0] != 'table':
             for run_text, run_props in block[2]:
                 if run_props.get('_image'):
-                    alt, data, path, scale = run_props['_image']
+                    alt, data, *rest = run_props['_image']
                     if data:
                         data = interned.setdefault(data, data)
-                    run_props['_image'] = alt, data, path, scale
+                    run_props['_image'] = alt, data, *rest
 
     def insert_nl():
         pos = len(doc.textmodel.get_text())
@@ -350,10 +371,8 @@ def _insert_text_block_with_specials(doc, ptype, indent, runs):
             fn_model.texel = grouped([fn])
             doc.textmodel.insert(pos, fn_model)
         elif run_props.get('_image'):
-            alt, data, path, scale = run_props['_image']
             img_model = doc.textmodel.create_textmodel()
-            img_model.texel = grouped([Image(data, *scale, alt=alt,
-                                             path=path)])
+            img_model.texel = grouped([_image(*run_props['_image'])])
             doc.textmodel.insert(pos, img_model)
         elif run_text:
             doc.textmodel.insert_text(pos, run_text)
@@ -962,11 +981,10 @@ class _DocBuilder:
                 fn = Footnote(grouped([T(payload), ENDMARK]))
                 model.texel = grouped([fn])
             elif kind == 'image':
-                alt, data, path, scale = payload
+                alt, data, *rest = payload
                 if data:
                     data = interned.setdefault(data, data)
-                model.texel = grouped([Image(data, *scale, alt=alt,
-                                             path=path)])
+                model.texel = grouped([_image(alt, data, *rest)])
             else:  # 'table': already a full texel, no grouped() wrapper
                 model.texel = payload
             doc.textmodel.insert(start, model)

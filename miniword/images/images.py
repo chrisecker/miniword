@@ -3,8 +3,9 @@ Inline image support: Image texel, boxes, inspector, tests.
 
 Image texel parameters (see develnotes/images_concept.md):
     content  -- the image data (bytes), or None (linked or placeholder)
-    path     -- linked: file path (relative to the document) or URL;
-                with content it is just where the image came from
+    path     -- linked: absolute file path or URL; with content it is
+                just where the image came from
+    relative -- the path is kept relative to the document in files
     alt      -- alternative text (Markdown, HTML), default ''
     scale_x  -- horizontal scale factor, default 1.0
     scale_y  -- vertical scale factor, default 1.0
@@ -38,6 +39,7 @@ class Image(Single):
     text    = '\x0C'   # form feed — unique placeholder
     content      = None   # image data (bytes) or None
     path         = None   # file path or URL (linked), or None
+    relative     = False  # path relative to the document in files
     alt          = ''
     scale_x      = 1.0
     scale_y      = 1.0
@@ -45,7 +47,8 @@ class Image(Single):
     crop         = None   # None or (left, right, top, bottom) in source pixels
 
     def __init__(self, content=None, scale_x=1.0, scale_y=1.0,
-                 proportional=True, crop=None, alt='', path=None):
+                 proportional=True, crop=None, alt='', path=None,
+                 relative=False):
         assert content is None or type(content) is bytes, \
             "image content must be immutable bytes"
         if content is not None:
@@ -62,6 +65,13 @@ class Image(Single):
             self.alt = alt
         if path:
             self.path = path
+        if relative:
+            self.relative = True
+
+    def set_relative(self, relative):
+        clone = copy(self)
+        clone.relative = relative
+        return clone
 
     def set_path(self, path):
         clone = copy(self)
@@ -130,6 +140,25 @@ MAX_IMAGE = 20 * 1024 * 1024  # bytes loaded at most from the web
 
 def is_url(path):
     return bool(path) and path.startswith(('http://', 'https://'))
+
+
+def file_path(image, folder):
+    """The path of image to write into a file in folder: a relative one
+    relative to folder (if possible), else as it is."""
+    if not (image.relative and image.path and folder):
+        return image.path
+    try:
+        return os.path.relpath(image.path, folder)
+    except ValueError:  # Windows: another drive
+        return image.path
+
+
+def memory_path(path, folder):
+    """(path, relative) of a path read from a file in folder: a relative
+    file path becomes absolute (relative=True)."""
+    if not path or not folder or is_url(path) or os.path.isabs(path):
+        return path, False
+    return os.path.normpath(os.path.join(folder, path)), True
 
 
 def fetch_image(src, base_dir=''):

@@ -2,7 +2,7 @@ import os
 import wx
 from .images import Image, image_extension
 from .imageio import decode_cached, content_of, load_url, errors
-from .images import fetch, is_url
+from .images import fetch, is_url, file_path
 from ..core.utils import get_path
 from .image_controllers import ImageCropController
 from ..textmodel.texeltree import grouped
@@ -13,26 +13,29 @@ from ..ui.design import flat_button, make_panel, add_section, add_row
 from ..ui.flatbutton import ResetButton
 
 
-def link_source(text, base_dir):
-    """The path to link for text entered, or None: a URL or relative path
-    as it is, an absolute path relative to the document's folder
-    base_dir if possible."""
+def link_source(text, folder, browsed=False):
+    """(path, relative) for the text entered, or None. A file is linked
+    absolute; relative if entered so or chosen by Browse."""
     text = text.strip()
-    if not text or is_url(text) or not os.path.isabs(text) \
-            or not base_dir:
-        return text or None
-    try:
-        return os.path.relpath(text, base_dir)
-    except ValueError:  # Windows: another drive
-        return text
+    if not text:
+        return None
+    if is_url(text):
+        return text, False
+    if os.path.isabs(text):
+        return text, browsed
+    if not folder:  # an unsaved document: as entered
+        return text, False
+    return os.path.normpath(os.path.join(folder, text)), True
 
 
 def ask_link(parent, folder):
-    """Dialog: a URL or file (Browse...) to link to; the text, or None."""
+    """Dialog: a URL or file (Browse...) to link to; (the text, whether
+    Browse was used), or None."""
     dlg = wx.Dialog(parent, title="Link to Image")
     sizer = wx.BoxSizer(wx.VERTICAL)
     sizer.Add(wx.StaticText(dlg, label="URL or file:"), 0, wx.ALL, 8)
     text = wx.TextCtrl(dlg, size=(dlg.FromDIP(360), -1))
+    browsed = []
     browse = wx.Button(dlg, label="Browse\u2026")
     row = wx.BoxSizer(wx.HORIZONTAL)
     row.Add(text, 1, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
@@ -50,9 +53,12 @@ def ask_link(parent, folder):
                 style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as files:
             if files.ShowModal() == wx.ID_OK:
                 text.SetValue(files.GetPath())
+                browsed.append(True)
     browse.Bind(wx.EVT_BUTTON, on_browse)
     try:
-        return text.GetValue() if dlg.ShowModal() == wx.ID_OK else None
+        if dlg.ShowModal() == wx.ID_OK:
+            return text.GetValue(), bool(browsed)
+        return None
     finally:
         dlg.Destroy()
 
@@ -114,6 +120,10 @@ class ImageInspector(SidePanel):
         self.txt_path.Bind(wx.EVT_TEXT_ENTER, self._on_path)
         add_row(self._source, wx.StaticText(self, label="Path"),
                 self.txt_path)
+        self.chk_relative = wx.CheckBox(self, label="Relative to document")
+        self.chk_relative.Bind(wx.EVT_CHECKBOX, lambda e: self._set(
+            relative=self.chk_relative.GetValue()))
+        add_row(self._source, self.chk_relative)
         self.lbl_status = wx.StaticText(self, label='')
         add_row(self._source, self.lbl_status)
         self.btn_embed = flat_button(self, "Embed", size=(-1, dip(28)))
@@ -202,7 +212,7 @@ class ImageInspector(SidePanel):
         self._image        = image
         self._content      = image.content
         self._current_crop = image.crop
-        image_data = decode_cached(content_of(image, self._base_dir()))
+        image_data = decode_cached(content_of(image))
         if image_data:
             self._natural_w = image_data.width_px
             self._natural_h = image_data.height_px
@@ -211,7 +221,9 @@ class ImageInspector(SidePanel):
         self.txt_scale_x.SetValue(image.scale_x)
         self.txt_scale_y.SetValue(image.scale_y)
         self.chk_proportional.SetValue(image.proportional)
-        self.txt_path.SetValue(image.path or '')
+        self.txt_path.SetValue(file_path(image, self.document.folder) or '')
+        self.chk_relative.SetValue(image.relative)
+        self.chk_relative.Enable(os.path.isabs(image.path or ''))
         self.lbl_status.SetLabel(self._status(image))
         self._set_inspector_enabled(True, has_crop=image.crop is not None)
         modified_x = abs(image.scale_x - 1.0) > 1e-6
@@ -317,20 +329,15 @@ class ImageInspector(SidePanel):
     def _on_proportional(self, event):
         self._notify()
 
-    def _base_dir(self):
-        """The document's folder (linked images)."""
-        canvas = self.editor.canvas
-        return canvas.builder.factory.base_dir if canvas else ''
-
     def _status(self, image):
         """Of a linked image: 'Loaded', else why not; '' for embedded."""
         if image.content is not None or not image.path:
             return ''
-        if content_of(image, self._base_dir()) is not None:
+        if content_of(image) is not None:
             return 'Loaded'
         if is_url(image.path):
             return errors.get(image.path, 'Not loaded')
-        return fetch(image.path, self._base_dir())[1] or 'Not loaded'
+        return fetch(image.path)[1] or 'Not loaded'
 
     def _set(self, **attributes):
         """Change the image at the cursor (one undo step), show it."""
@@ -345,7 +352,7 @@ class ImageInspector(SidePanel):
         image = self._get_image_texel()
         if image is None:
             return
-        data = content_of(image, self._base_dir())
+        data = content_of(image)
         if data is None and is_url(image.path) and load_url(image.path):
             data = content_of(image)
         if data is None:  # the status tells why
@@ -354,13 +361,14 @@ class ImageInspector(SidePanel):
 
     def _on_path(self, event):
         """Link the image to the path entered; a URL is loaded now."""
-        path = self.txt_path.GetValue().strip()
-        if self._get_image_texel() is None or not path:
+        source = link_source(self.txt_path.GetValue(), self.document.folder)
+        if self._get_image_texel() is None or source is None:
             return
+        path, relative = source
         if is_url(path):
             with wx.BusyCursor():
                 load_url(path)
-        self._set(path=path)
+        self._set(path=path, relative=relative)
 
     def _get_image_texel(self):
         """Return the Image texel at the current cursor position, or None."""
@@ -435,22 +443,24 @@ class ImageInspector(SidePanel):
 
     def _on_link(self, event):
         """Insert an external image: linked to a URL or file."""
-        path = link_source(ask_link(self, self._last_image_dir) or '',
-                           self._base_dir())
-        if path is None:
+        answer = ask_link(self, self._last_image_dir)  # (text, browsed)
+        source = answer and link_source(answer[0], self.document.folder,
+                                        answer[1])
+        if not source:
             return
+        path, relative = source
         if is_url(path):
             with wx.BusyCursor():
                 load_url(path)
         else:
-            self._last_image_dir = os.path.dirname(
-                os.path.join(self._base_dir(), path))
-        self.editor.insert_texel(grouped([Image(path=path)]))
+            self._last_image_dir = os.path.dirname(path)
+        self.editor.insert_texel(
+            grouped([Image(path=path, relative=relative)]))
 
     def _on_export(self, event):
         if self._image is None:
             return
-        data = content_of(self._image, self._base_dir())
+        data = content_of(self._image)
         if data is None:
             return
         ext = image_extension(data)

@@ -20,6 +20,7 @@ File structure (all sections except [document] are optional):
 
 import re
 import base64
+import os
 from ..core.document import Document
 from ..textmodel.textmodel import TextModel
 from .texeltreeformat import serialize, parse, serialize_style, _Parser
@@ -96,7 +97,8 @@ def save(doc, path):
     parts.append('[document]')
     endmark = _extract_nl(doc.textmodel.ENDMARK)
     settings = doc.settings if doc.settings else None
-    parts.append(serialize(doc.textmodel.texel, endmark, settings))
+    parts.append(serialize(doc.textmodel.texel, endmark, settings,
+                           os.path.dirname(os.path.abspath(path))))
 
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(parts) + '\n')
@@ -125,7 +127,8 @@ def load(path):
         blobs = _parse_blobs(sections['blobs'])
 
     # Document content
-    root, endmark, settings = parse(sections['document'], blobs)
+    root, endmark, settings = parse(
+        sections['document'], blobs, os.path.dirname(os.path.abspath(path)))
     doc.settings = settings
     doc.textmodel.texel = root
     if endmark is not None:

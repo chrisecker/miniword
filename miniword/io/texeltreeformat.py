@@ -140,7 +140,8 @@ def serialize_texel(texel, indent=0):
                 if texel.alt:
                     parts['alt'] = texel.alt
                 if texel.path:
-                    parts['path'] = texel.path
+                    from ..images.images import file_path
+                    parts['path'] = file_path(texel, _folder)
                 s = serialize_style(parts) if parts else ''
                 # The data itself goes to the [blobs] section (txlio),
                 # the texel refers to it by its key ('' for no data).
@@ -298,17 +299,30 @@ def serialize_container(texel, indent=0):
     return '\n'.join(lines)
 
 
-def serialize(root, endmark=None, properties=None):
+_folder = ''  # folder of the file written (relative image paths)
+
+
+def serialize(root, endmark=None, properties=None, folder=''):
     """Serialize a TexelTree root to canonical string.
 
     Args:
         root:       the root Texel
         endmark:    optional NewLine endmark (carries parStyle of last paragraph)
         properties: optional document-properties dict (only non-default values)
+        folder:     of the file written: relative image paths
 
     Returns:
         str in canonical format
     """
+    global _folder
+    _folder = folder
+    try:
+        return _serialize(root, endmark, properties)
+    finally:
+        _folder = ''
+
+
+def _serialize(root, endmark, properties):
     lines = []
 
     if properties:
@@ -398,9 +412,10 @@ class _Tokenizer:
 
 class _Parser:
 
-    def __init__(self, text, blobs=None):
+    def __init__(self, text, blobs=None, folder=''):
         self.tok = _Tokenizer(text)
         self.blobs = blobs or {}  # {key: bytes} for IMG texels
+        self.folder = folder  # of the file read (relative image paths)
 
     def parse_document(self):
         """Parse full document: optional PROPS + texels + optional ENDMARK."""
@@ -543,8 +558,10 @@ class _Parser:
         from ..images import Image
         # Hydrate from the [blobs] section: all IMGs with the same key
         # share one bytes object. A missing blob gives no content.
+        from ..images.images import memory_path
+        path, relative = memory_path(path, self.folder)
         return Image(self.blobs.get(key), scale_x, scale_y, proportional,
-                     crop, alt, path)
+                     crop, alt, path, relative)
 
     def parse_container(self):
         self.tok.consume('IDENT')  # C
@@ -747,7 +764,7 @@ def _make_container(ctype, childs):
     return c
 
 
-def parse(text, blobs=None):
+def parse(text, blobs=None, folder=''):
     """Parse canonical TexelTree format. blobs ({key: bytes}, from a
     file's [blobs] section) provides the data of IMG texels.
 
@@ -755,7 +772,7 @@ def parse(text, blobs=None):
         (root, endmark, properties)
         where endmark may be None and properties may be {}
     """
-    p = _Parser(text, blobs)
+    p = _Parser(text, blobs, folder)
     return p.parse_document()
 
 
