@@ -19,8 +19,7 @@ import wx
 
 from ..core.document import Document
 from ..images.images import fetch_image, iter_images
-from ..plugins.htmlfilter import clipboard_html, html_text_to_fragment, \
-    paste_html
+from ..plugins.htmlfilter import clipboard_html, html_text_to_fragment
 from ..plugins.mdfilter import md_text_to_fragment
 from ..textmodel.textmodel import TextModel
 from .guitest import app
@@ -124,64 +123,84 @@ def test_PASTE_5():
 
 
 def test_PASTE_6():
-    "PASTE-6: pasted HTML loads its images; else the alt text as a link"
+    "PASTE-6: pasted HTML: data URIs embedded, paths and URLs linked"
     data = png()
-    with tempfile.TemporaryDirectory() as folder:
-        path = os.path.join(folder, 'wal.png')
-        with open(path, 'wb') as f:
-            f.write(data)
-        model, images = pasted('<p>Ein <img src="%s" alt="Wal"> !</p>'
-                               % path)
-        assert [image.content for image in images] == [data]
-        model, images = pasted('<p><img src="%s" alt="Wal"></p>'
-                               % os.path.join(folder, 'missing.png'))
-        assert images == [] and 'Wal' in model.get_text()
-        assert style_of(model, 'Wal').get('href', '').endswith('missing.png')
+    uri = 'data:image/png;base64,' + base64.b64encode(data).decode()
+    model, images = pasted('<p>A <img src="%s" alt="Eins"> B '
+                           '<img src="/x/wal.png" alt="Wal"> C '
+                           '<img src="https://x.org/b.png"></p>' % uri)
+    assert [(i.content, i.path, i.alt) for i in images] == [
+        (data, None, 'Eins'), (None, '/x/wal.png', 'Wal'),
+        (None, 'https://x.org/b.png', '')]
+    assert model.get_text().startswith('A \x0c B \x0c C')
 
 
 def test_PASTE_7():
-    "PASTE-7: Markdown images from files and the web, pasted and imported"
+    "PASTE-7: Markdown images: linked, pasted and imported; saved as paths"
     from ..plugins import mdfilter
+    from ..images import imageio
     data = png()
+    with tempfile.TemporaryDirectory() as folder:
+        with open(os.path.join(folder, 'wal.png'), 'wb') as f:
+            f.write(data)
+        model = TextModel('')
+        model.texel = md_text_to_fragment(
+            'Ein ![Wal](https://x.org/wal.png) !\n', Document())
+        assert [(i.content, i.path) for i in iter_images(model.texel)] \
+            == [(None, 'https://x.org/wal.png')]
+        md = os.path.join(folder, 'text.md')
+        text = '# Titel\n\n![Wal](wal.png)\n'  # relative
+        with open(md, 'w') as f:
+            f.write(text)
+        import sys
+        for mistune in (sys.modules.get('mistune'), None):
+            saved = sys.modules.get('mistune')
+            sys.modules['mistune'] = mistune  # None: built-in parser
+            try:
+                document = mdfilter._load(md)
+            finally:
+                sys.modules['mistune'] = saved
+            images = list(iter_images(document.textmodel.texel))
+            assert [(i.content, i.path) for i in images] == \
+                [(None, 'wal.png')], mistune
+            assert imageio.external_content('wal.png', folder) == data
+            out = os.path.join(folder, 'out.md')
+            mdfilter._save(document, out)
+            assert open(out).read() == text  # the README stays as it was
+
+
+def test_PASTE_10():
+    "PASTE-10: load_urls loads the web images of a pasted fragment"
+    from ..images import imageio
+    data = png(6)
     with tempfile.TemporaryDirectory() as folder:
         with open(os.path.join(folder, 'wal.png'), 'wb') as f:
             f.write(data)
         server, url = serve(folder)
         try:
-            for src in (os.path.join(folder, 'wal.png'), url + 'wal.png'):
-                model = TextModel('')
-                model.texel = md_text_to_fragment(
-                    'Ein ![Wal](%s) !\n' % src, Document())
-                assert [i.content for i in iter_images(model.texel)] \
-                    == [data], src
-            md = os.path.join(folder, 'text.md')
-            with open(md, 'w') as f:
-                f.write('# Titel\n\n![Wal](wal.png)\n')  # relative
-            import sys
-            for mistune in (sys.modules.get('mistune'), None):
-                saved = sys.modules.get('mistune')
-                sys.modules['mistune'] = mistune  # None: built-in parser
-                try:
-                    document = mdfilter._load(md)
-                finally:
-                    sys.modules['mistune'] = saved
-                assert [i.content for i in iter_images(
-                    document.textmodel.texel)] == [data], mistune
+            model, images = pasted('<img src="%swal.png"> <img src="x.png">'
+                                   % url)
+            assert imageio.external_content(url + 'wal.png') is None
+            assert imageio.load_urls(model.texel) == 0  # none failed
+            assert imageio.external_content(url + 'wal.png') == data
+            model, images = pasted('<img src="%smissing.png">' % url)
+            assert imageio.load_urls(model.texel) == 1
         finally:
             server.shutdown()
 
 
 def test_PASTE_8():
-    "PASTE-8: an image alone on the clipboard is pasted as its bitmap"
-    data = png()
-    uri = 'data:image/png;base64,' + base64.b64encode(data).decode()
-    browser = '<meta charset="utf-8"><img src="https://x.org/wal.webp">'
-    assert paste_html(browser, data) == '<img src="%s">' % uri
-    assert paste_html(None, data) == '<img src="%s">' % uri  # screenshot
-    text = '<p>Text <img src="https://x.org/wal.webp"></p>'
-    assert paste_html(text, data) == text  # more than the image
-    assert paste_html(text, None) == text
-    assert paste_html(None, None) is None
+    "PASTE-8: with_bitmap embeds the bitmap only into a lone image"
+    from ..ui.mainwindow import with_bitmap
+    bitmap = png(8)
+    model, _ = pasted('<img src="https://x.org/wal.webp" alt="Wal">')
+    images = list(iter_images(with_bitmap(model.texel, bitmap)))
+    assert [(i.content, i.path, i.alt) for i in images] == \
+        [(bitmap, 'https://x.org/wal.webp', 'Wal')]
+    for html in ('<p>Text <img src="a.png"></p>',     # Office: a preview
+                 '<img src="a.png"><img src="b.png">', '<p>nur Text</p>'):
+        model, _ = pasted(html)
+        assert with_bitmap(model.texel, bitmap) is model.texel, html
 
 
 def test_PASTE_9():
@@ -209,5 +228,83 @@ def test_PASTE_9():
         event.Skip(False)
         canvas.on_char(event)
         assert event.GetSkipped()
+    finally:
+        frame.Destroy()
+
+
+class FakeClipboard:
+    """Stands in for the canvas' clipboard access: {flavor: bytes}, an
+    image (PNG data) and plain text."""
+    def __init__(self, data=None, image=None, text=None):
+        self.data, self.image, self.text = data or {}, image, text
+
+    def install(self, canvas):
+        canvas.read_clipboard_data = self.data.get
+        canvas.read_clipboard_image = lambda: self.image
+        canvas.read_clipboard_text = lambda: self.text
+        canvas.read_clipboard = lambda: self.text and TextModel(self.text)
+
+
+def clear(frame):
+    """Remove the whole text, through the editor (moves the cursor)."""
+    frame.editor.selection = (0, len(frame.document.textmodel))
+    frame.editor.remove()
+
+
+def main_frame():
+    from ..ui.mainwindow import MainFrame
+    app()
+    return MainFrame(Document())
+
+
+def test_PASTE_11():
+    "PASTE-11: paste: a registered flavor (a lone image with the bitmap), "
+    "else the bitmap, else text"
+    frame = main_frame()
+    try:
+        model = frame.document.textmodel
+        FakeClipboard({'html': b'<h2>Titel</h2>'}, png()).install(
+            frame.editor.canvas)
+        frame.paste()
+        assert model.get_text() == 'Titel\n'
+        clear(frame)
+        image = png(8)
+        FakeClipboard({'html': b'<img src="x.png">'}, image).install(
+            frame.editor.canvas)
+        frame.paste()  # just an image: the bitmap, with its origin
+        assert [(i.content, i.path) for i in iter_images(model.texel)] \
+            == [(image, 'x.png')]
+        clear(frame)
+        FakeClipboard({}, image).install(frame.editor.canvas)
+        frame.paste()  # a screenshot
+        assert [(i.content, i.path) for i in iter_images(model.texel)] \
+            == [(image, None)]
+        clear(frame)
+        FakeClipboard(text='plain').install(frame.editor.canvas)
+        frame.paste()
+        assert model.get_text() == 'plain'
+    finally:
+        frame.Destroy()
+
+
+def test_PASTE_12():
+    "PASTE-12: plugins register 'Paste from ...'; the Edit menu lists it"
+    from ..io.importexport import paste_as_handlers
+    frame = main_frame()
+    try:
+        labels = [label for label, _ in paste_as_handlers()]
+        assert 'Paste from &Markdown' in labels
+        bar = frame.GetMenuBar()
+        edit = bar.GetMenu(bar.FindMenu('Edit'))
+        texts = [item.GetItemLabel() for item in edit.GetMenuItems()]
+        assert 'Paste from &Markdown' in texts
+        assert texts.index('Paste from &Markdown') == \
+            texts.index('&Paste\tCtrl+V') + 1
+        FakeClipboard(text='# Titel\n').install(frame.editor.canvas)
+        item = edit.FindItemByPosition(texts.index('Paste from &Markdown'))
+        frame.ProcessEvent(wx.CommandEvent(wx.wxEVT_MENU, item.GetId()))
+        model = frame.document.textmodel
+        assert model.get_text() == 'Titel\n'
+        assert model.get_parstyle(0).get('base') == 'h1'
     finally:
         frame.Destroy()

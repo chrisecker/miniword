@@ -100,6 +100,17 @@ def load_url(url):
     return bool(data)
 
 
+def load_urls(texel):
+    """Load the web images linked in texel (e.g. just pasted) that aren't
+    loaded yet; returns how many failed."""
+    from .images import iter_images
+    urls = {image.path for image in iter_images(texel)
+            if image.content is None and image.path
+            and image.path.startswith(('http://', 'https://'))
+            and image.path not in external}
+    return sum(not load_url(url) for url in urls)
+
+
 def crop_surface(surface, cx, cy, cw, ch):
     """Return a new ImageSurface containing only the (cx, cy, cw, ch) region."""
     import cairocffi as cairo

@@ -7,18 +7,18 @@
 # Not a general-purpose HTML importer: covers the tag subset such sources
 # actually produce -- paragraphs, headings, bold/italic, lists (incl.
 # nesting), blockquote, pre/code, tables, links, strike, bold/italic/
-# strike from CSS, images (data URIs, files, web; see fetch_image). Not
+# strike from CSS, images (data URIs embedded, else linked). Not
 # covered (Markdown-paste-only for now): footnotes, sup/sub.
 
 import re
 from html.parser import HTMLParser
 import codecs
-from base64 import b64encode
 
-from miniword.images.images import fetch_image
+from miniword.io.importexport import register_paste
+
 
 from miniword.plugins.mdfilter import (
-    _register_styles, _build_blocks, _adopt_existing_styles)
+    _register_styles, _build_blocks, _adopt_existing_styles, image_run)
 
 _WHITESPACE_RE = re.compile(r'\s+')
 
@@ -45,21 +45,6 @@ def clipboard_html(data):
     else:
         text = data.decode('utf-8', errors='replace')
     return text.rstrip('\x00')
-
-
-def paste_html(html, png):
-    """The HTML to paste: an image alone on the clipboard (e.g. 'Copy
-    image' in a browser, a screenshot) as its bitmap png, else html."""
-    if png and (not html or _only_image(html)):
-        return '<img src="data:image/png;base64,%s">' \
-            % b64encode(png).decode()
-    return html
-
-
-def _only_image(html):
-    """Whether html is one image and no text."""
-    text = re.sub(r'<[^>]*>', '', html)
-    return html.lower().count('<img') == 1 and not text.strip()
 
 
 def _css_props(style):
@@ -222,13 +207,9 @@ class _HTMLBlockBuilder(HTMLParser):
             self._props_stack.append(dict(self._props, href=attrs['href']))
         elif tag == 'br':
             self._append(' ')
-        elif tag == 'img':
-            src, alt = attrs.get('src', ''), attrs.get('alt') or ''
-            data = src and fetch_image(src)
-            if data:
-                self._runs.append(('', {'_image': (alt, data)}))
-            elif src:  # not loaded: the alt text, linked to the image
-                self._append(alt or src, dict(self._props, href=src))
+        elif tag == 'img' and attrs.get('src'):
+            self._runs.append(image_run(attrs.get('alt') or '',
+                                        attrs['src']))
 
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
@@ -314,6 +295,14 @@ def html_text_to_fragment(html, target_doc):
     covered = _adopt_existing_styles(shim.textmodel, target_doc)
     _register_styles(target_doc, overwrite=False, skip=covered)
     return shim.textmodel.texel
+
+
+def html_clipboard_fragment(data, document):
+    """Paste of the clipboard's HTML flavor (bytes, see clipboard_html)."""
+    return html_text_to_fragment(clipboard_html(data), document)
+
+
+register_paste('html', html_clipboard_fragment)
 
 
 # ---------------------------------------------------------------------------

@@ -250,16 +250,15 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             wx.TheClipboard.Close()
         return textmodel
 
-    def read_clipboard_html(self):
-        """The clipboard's HTML flavor as bytes (see
-        htmlfilter.clipboard_html), or None if it has none (e.g. plain
-        text only)."""
-        if wx.TheClipboard.IsOpened():
-            return None
-        if not wx.TheClipboard.Open():
+    def read_clipboard_data(self, flavor):
+        """The clipboard's data in flavor ('html', or a format name such
+        as 'pytextmodel') as bytes, or None."""
+        fmt = wx.DataFormat(wx.DF_HTML) if flavor == 'html' \
+            else wx.DataFormat(flavor)
+        if wx.TheClipboard.IsOpened() or not wx.TheClipboard.Open():
             return None
         try:
-            data = wx.CustomDataObject(wx.DataFormat(wx.DF_HTML))
+            data = wx.CustomDataObject(fmt)
             if not wx.TheClipboard.GetData(data):
                 return None
             return bytes(data.GetData())

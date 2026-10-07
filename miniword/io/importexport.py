@@ -21,6 +21,30 @@ def register_export(name, extensions, fn, lossless=False, check_fn=None):
     _export_filters.append((name, extensions, fn, lossless, check_fn))
 
 
+_paste_handlers = []    # (flavor, handler)
+_paste_as_handlers = []  # (menu label, handler)
+
+
+def register_paste(flavor, handler):
+    """Paste (Ctrl+V) of a clipboard flavor, e.g. 'html': handler(data:
+    bytes, document) gives a texel to insert, or None (not for us)."""
+    _paste_handlers.append((flavor, handler))
+
+
+def register_paste_as(label, handler):
+    """An explicit 'Paste from ...' (Edit menu) of the clipboard's plain
+    text: handler(text, document) gives a texel to insert."""
+    _paste_as_handlers.append((label, handler))
+
+
+def paste_handlers():
+    return list(_paste_handlers)
+
+
+def paste_as_handlers():
+    return list(_paste_as_handlers)
+
+
 def find_import_filter(path):
     entry = _find_entry(path, _import_filters)
     return entry[2] if entry else None

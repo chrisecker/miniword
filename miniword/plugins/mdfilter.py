@@ -8,7 +8,8 @@
 #
 # Without mistune a built-in parser handles the common MD subset.
 
-from miniword.io.importexport import register_import, register_export
+from miniword.io.importexport import register_import, register_export, \
+    register_paste_as
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +155,8 @@ def _elems_to_inline(elems, footnotes=None):
                 b64  = base64.b64encode(data).decode('ascii')
                 segments.append('![%s](data:%s;base64,%s)'
                                 % (elem.alt, image_mime(data), b64))
+            elif elem.path:  # linked
+                segments.append('![%s](%s)' % (elem.alt, elem.path))
             continue
         text = get_text(elem)
         if not text:
@@ -190,31 +193,23 @@ def _elems_to_inline(elems, footnotes=None):
 # Import: Markdown → Document
 # ---------------------------------------------------------------------------
 
-_base_dir = ''  # folder of the file being imported (relative images)
-
-
 def _load(path):
-    global _base_dir
     with open(path, encoding='utf-8') as f:
         text = f.read()
-    _base_dir = os.path.dirname(os.path.abspath(path))
     try:
         import mistune  # noqa: F401 -- availability check only
         return _load_mistune(text)
     except ImportError:
         return _load_builtin(text)
-    finally:
-        _base_dir = ''
 
 
-def _image_run(alt, src):
-    """The run of a Markdown image: its data (see fetch_image), or the
-    alt text linked to src if it can't be loaded."""
+def image_run(alt, src):
+    """The run of an image (Markdown, HTML): a data URI embedded, a path
+    or URL linked (loaded later, see imageio)."""
     from miniword.images.images import fetch_image
-    data = fetch_image(src, _base_dir)
-    if data:
-        return '', {'_image': (alt, data)}
-    return alt or src, {'href': src}
+    if src.startswith('data:'):
+        return '', {'_image': (alt, fetch_image(src), None)}
+    return '', {'_image': (alt, None, src)}
 
 
 # --- built-in parser --------------------------------------------------------
@@ -267,8 +262,10 @@ def _build_blocks(doc, blocks):
         if block[0] != 'table':
             for run_text, run_props in block[2]:
                 if run_props.get('_image'):
-                    alt, data = run_props['_image']
-                    run_props['_image'] = alt, interned.setdefault(data, data)
+                    alt, data, path = run_props['_image']
+                    if data:
+                        data = interned.setdefault(data, data)
+                    run_props['_image'] = alt, data, path
 
     def insert_nl():
         pos = len(doc.textmodel.get_text())
@@ -334,9 +331,9 @@ def _insert_text_block_with_specials(doc, ptype, indent, runs):
             fn_model.texel = grouped([fn])
             doc.textmodel.insert(pos, fn_model)
         elif run_props.get('_image'):
-            alt, data = run_props['_image']
+            alt, data, path = run_props['_image']
             img_model = doc.textmodel.create_textmodel()
-            img_model.texel = grouped([Image(data, alt=alt)])
+            img_model.texel = grouped([Image(data, alt=alt, path=path)])
             doc.textmodel.insert(pos, img_model)
         elif run_text:
             doc.textmodel.insert_text(pos, run_text)
@@ -554,7 +551,7 @@ def _parse_inline(text, fn_defs=None):
         raw = m.group(0)
         if raw.startswith('!['):
             img = _IMG_RE.match(raw)
-            parts.append(_image_run(img.group(1), img.group(2)))
+            parts.append(image_run(img.group(1), img.group(2)))
         elif raw.startswith('[^'):
             ref = raw[2:-1]
             content = (fn_defs or {}).get(ref, ref)
@@ -863,12 +860,8 @@ class _DocBuilder:
         elif t == 'image':
             url = node.get('attrs', {}).get('url', '')
             alt = self._flatten_text(node.get('children', []))
-            text, props = _image_run(alt, url)
-            if props.get('_image'):
-                self._marks.append((len(self.text), 'image',
-                                    props['_image']))
-            else:
-                self._append(text, dict(self._cur_props, **props))
+            self._marks.append((len(self.text), 'image',
+                                image_run(alt, url)[1]['_image']))
         elif t == 'block_text':
             # a list item's inline content; the surrounding paragraph
             # boundaries are already set up by _visit_list_item
@@ -949,9 +942,10 @@ class _DocBuilder:
                 fn = Footnote(grouped([T(payload), ENDMARK]))
                 model.texel = grouped([fn])
             elif kind == 'image':
-                alt, data = payload
-                data = interned.setdefault(data, data)
-                model.texel = grouped([Image(data, alt=alt)])
+                alt, data, path = payload
+                if data:
+                    data = interned.setdefault(data, data)
+                model.texel = grouped([Image(data, alt=alt, path=path)])
             else:  # 'table': already a full texel, no grouped() wrapper
                 model.texel = payload
             doc.textmodel.insert(start, model)
@@ -1019,6 +1013,7 @@ def _check_md(doc):
 
 
 register_import("Markdown", ["md", "markdown"], _load, lossless=False)
+register_paste_as("Paste from &Markdown", md_text_to_fragment)
 register_export("Markdown", ["md", "markdown"], _save,
                 lossless=False, check_fn=_check_md)
 

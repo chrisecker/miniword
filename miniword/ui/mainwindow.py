@@ -31,6 +31,20 @@ from ..tables import table_controllers  # registers controllers
 # Progress dialog
 # ---------------------------------------------------------------------------
 
+def with_bitmap(texel, png):
+    """A pasted texel that is just one image, no text (e.g. 'Copy image'
+    in a browser: HTML and a bitmap of the image): that image embedded
+    with the bitmap png, its path kept as origin. Else texel unchanged -
+    e.g. office programs add a picture of copied text."""
+    from ..images.images import iter_images
+    from ..textmodel.texeltree import get_text, grouped
+    images = list(iter_images(texel))
+    if len(images) != 1 \
+            or get_text(texel).replace(images[0].text, '').strip():
+        return texel
+    return grouped([images[0].set_content(png)])
+
+
 def build_to(builder, y, parent, delay=0.3):
     """Build the pages down to y (e.g. the visible area after a rebuild);
     a progress window if that takes longer than delay seconds. Meanwhile
@@ -327,7 +341,15 @@ class MainFrame(wx.Frame, ViewBase):
         self._register_plugin_menus()
 
     def _register_plugin_menus(self):
+        from ..io.importexport import paste_as_handlers
         bar = self.GetMenuBar()
+        edit = bar.GetMenu(bar.FindMenu('Edit'))
+        k = [i.GetId() for i in edit.GetMenuItems()].index(wx.ID_PASTE) + 1
+        for label, handler in paste_as_handlers():  # 'Paste from ...'
+            item = edit.Insert(k, wx.ID_ANY, label)
+            self.Bind(wx.EVT_MENU, lambda e, h=handler: self.paste_as(h),
+                      item)
+            k += 1
         if self._plugin_tools:
             tools_menu = wx.Menu()
             bar.Insert(bar.GetMenuCount() - 1, tools_menu, "&Tools")
@@ -395,8 +417,6 @@ class MainFrame(wx.Frame, ViewBase):
         edit_menu.Append(wx.ID_CUT,   "Cu&t\tCtrl+X")
         edit_menu.Append(wx.ID_COPY,  "&Copy\tCtrl+C")
         edit_menu.Append(wx.ID_PASTE, "&Paste\tCtrl+V")
-        self._id_paste_markdown = wx.NewIdRef()
-        edit_menu.Append(self._id_paste_markdown, "Paste as &Markdown")
         edit_menu.AppendSeparator()
         edit_menu.Append(wx.ID_FIND,    "&Find && Replace…\tCtrl+F")
         edit_menu.AppendSeparator()
@@ -417,7 +437,6 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self.cut(),   id=wx.ID_CUT)
         self.Bind(wx.EVT_MENU, lambda _: self.copy(),  id=wx.ID_COPY)
         self.Bind(wx.EVT_MENU, lambda _: self.paste(), id=wx.ID_PASTE)
-        self.Bind(wx.EVT_MENU, lambda _: self.paste_markdown(), id=self._id_paste_markdown)
         self.Bind(wx.EVT_MENU, lambda _: self.find(),        id=wx.ID_FIND)
         self.Bind(wx.EVT_MENU, lambda _: self.preferences(), id=wx.ID_PREFERENCES)
 
@@ -894,34 +913,46 @@ class MainFrame(wx.Frame, ViewBase):
         self.editor.controller.handle_action('copy', False)
 
     def paste(self):
-        """Normal Cmd/Ctrl+V: paste real structure when the clipboard holds
-        an HTML flavor (e.g. copied from a browser) or an image, otherwise
-        fall back to the editor's plain-text/internal-format paste."""
-        from ..plugins.htmlfilter import clipboard_html, paste_html, \
-            html_text_to_fragment
+        """Ctrl+V: Miniword's own format; else the first clipboard flavor
+        a plugin pastes (e.g. HTML from a browser, see register_paste);
+        else an image (e.g. a screenshot); else plain text."""
+        from ..io.importexport import paste_handlers
+        from ..images.images import Image
+        from ..textmodel.texeltree import grouped
         canvas = self.editor.canvas
-        data = canvas.read_clipboard_html()
-        html = paste_html(data and clipboard_html(data),
-                          canvas.read_clipboard_image())
-        if not html:
-            self.editor.controller.handle_action('paste', False)
-            return
-        with wx.BusyCursor():  # images may be loaded from the web
-            texel = html_text_to_fragment(html, self.document)
-        with self.editor.atomic():
-            self.editor.remove()
-            self.editor.insert_texel(texel)
+        if canvas.read_clipboard_data('pytextmodel') is None:
+            image = canvas.read_clipboard_image()
+            for flavor, handler in paste_handlers():
+                data = canvas.read_clipboard_data(flavor)
+                if data and self._paste_fragment(handler, data, image):
+                    return
+            if image:
+                return self._insert_fragment(grouped([Image(image)]))
+        self.editor.controller.handle_action('paste', False)
 
-    def paste_markdown(self):
-        """Explicit action: interpret the clipboard's plain text as
-        Markdown syntax, unlike normal Paste which never guesses at
-        plain-text content."""
+    def paste_as(self, handler):
+        """'Paste from ...': the clipboard's plain text, e.g. as Markdown
+        (see register_paste_as)."""
         text = self.editor.canvas.read_clipboard_text()
-        if not text:
-            return
-        from ..plugins.mdfilter import md_text_to_fragment
-        with wx.BusyCursor():  # images may be loaded from the web
-            texel = md_text_to_fragment(text, self.document)
+        if text:
+            self._paste_fragment(handler, text)
+
+    def _paste_fragment(self, handler, data, image=None):
+        """Insert what handler makes of data; a lone image gets the
+        clipboard's bitmap image (see with_bitmap), web images are loaded
+        now. Whether there was something."""
+        from ..images.imageio import load_urls
+        with wx.BusyCursor():
+            texel = handler(data, self.document)
+            if texel is not None and image:
+                texel = with_bitmap(texel, image)
+            if texel is not None:
+                load_urls(texel)
+        if texel is not None:
+            self._insert_fragment(texel)
+        return texel is not None
+
+    def _insert_fragment(self, texel):
         with self.editor.atomic():
             self.editor.remove()
             self.editor.insert_texel(texel)
