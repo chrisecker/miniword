@@ -125,3 +125,16 @@ def test_MEAS_5():
     assert (a.text, b.text) == ('Ein ', box.text[4:])
     assert (b.width, b.height, b.depth) == \
         (box.width - a.width, box.height, box.depth)
+
+
+def test_MEAS_6():
+    "MEAS-6: measure_parts with a fallback font for some characters"
+    app()
+    device = CairoDevice()
+    text = 'abc日本語def'  # Japanese in a Latin font
+    parts = device.measure_parts(text, STYLE)
+    alone = [device.measure(text[:i], STYLE)[0]
+             for i in range(1, len(text) + 1)]
+    assert len(parts) == len(text)
+    for i, (part, width) in enumerate(zip(parts, alone)):
+        assert abs(part - width) < 0.5, (i, text[:i + 1], part, width)
