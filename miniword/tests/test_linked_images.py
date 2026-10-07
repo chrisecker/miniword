@@ -231,7 +231,7 @@ def test_LINK_10():
     assert link_source(' https://x.org/a.png ', '/home/x') == \
         ('https://x.org/a.png', False)
     assert link_source('bilder/wal.png', '/home/x') == \
-        ('/home/x/bilder/wal.png', True)
+        (os.path.normpath('/home/x/bilder/wal.png'), True)
     assert link_source('/srv/wal.png', '/home/x') == ('/srv/wal.png', False)
     assert link_source('/srv/wal.png', '/home/x', browsed=True) == \
         ('/srv/wal.png', True)

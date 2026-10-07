@@ -176,19 +176,16 @@ def test_PROG_7():
     "PROG-7: the background build runs from the main loop, not in a Yield"
     app()
     builder = long_builder()
-    yields = []
+    yields, scheduled = [], []
     original = wx.Yield
     wx.Yield = lambda: yields.append(1)
+    builder.schedule = lambda: scheduled.append(1)  # the timer, by hand
     try:
-        builder.build_background()
-        start = time.time()
-        while not builder.layout.is_finished and time.time() - start < 20:
-            original()  # the test's main loop
-            time.sleep(0.001)
+        while not builder.layout.is_finished:
+            builder.build_background()
     finally:
         wx.Yield = original
-    assert builder.layout.is_finished
-    assert yields == []
+    assert yields == [] and len(scheduled) > 1
 
 
 def test_PROG_8():

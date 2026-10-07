@@ -89,7 +89,8 @@ def test_PASTE_4():
         with open(text, 'wb') as f:
             f.write(b'no image')
         assert fetch_image(path) == data
-        assert fetch_image('file://' + path.replace(' ', '%20')) == data
+        from pathlib import Path
+        assert fetch_image(Path(path).as_uri()) == data  # file:// URL
         assert fetch_image('bild 1.png', folder) == data
         assert fetch_image(text) is None  # not an image
         assert fetch_image(os.path.join(folder, 'missing.png')) is None

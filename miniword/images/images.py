@@ -147,8 +147,8 @@ def file_path(image, folder):
     relative to folder (if possible), else as it is."""
     if not (image.relative and image.path and folder):
         return image.path
-    try:
-        return os.path.relpath(image.path, folder)
+    try:  # with '/' in files, also on Windows
+        return os.path.relpath(image.path, folder).replace(os.sep, '/')
     except ValueError:  # Windows: another drive
         return image.path
 
@@ -189,8 +189,9 @@ def fetch(src, base_dir=''):
             if len(data) > MAX_IMAGE:
                 return None, 'larger than %d MB' % (MAX_IMAGE >> 20)
         else:
-            if src.startswith('file://'):
-                src = urllib.parse.unquote(urllib.parse.urlparse(src).path)
+            if src.startswith('file://'):  # also file:///C:/... (Windows)
+                src = urllib.request.url2pathname(
+                    urllib.parse.urlparse(src).path)
             with open(os.path.join(base_dir, src), 'rb') as f:
                 data = f.read()
     except urllib.error.HTTPError as e:
