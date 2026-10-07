@@ -189,3 +189,25 @@ def test_PROG_7():
         wx.Yield = original
     assert builder.layout.is_finished
     assert yields == []
+
+
+def test_PROG_8():
+    "PROG-8: while building, the scroll area is as wide as the pages"
+    from ..texteditor.editor import Editor
+    from ..texteditor.textcanvas import TextCanvas
+    app()
+    frame = wx.Frame(None, size=(800, 400))
+    try:
+        builder = long_builder()
+        editor = Editor(builder.model)
+        canvas = TextCanvas(frame, builder.model, builder, editor)
+        editor.canvas = canvas
+        canvas.SetVirtualSize((3000, 5000))  # e.g. the window's size
+        builder.assure_y(2000)
+        assert not builder.layout.is_finished
+        canvas._update_scroll()
+        w, h = canvas.GetVirtualSize()
+        assert w == int(builder.layout.width * canvas.scale)
+        assert h == 5000  # the height doesn't shrink while building
+    finally:
+        frame.Destroy()

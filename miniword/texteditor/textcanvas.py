@@ -459,9 +459,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         vw, vh = self.GetVirtualSize()
         if vw == w and vh == h:
             return
-        # While rebuilding, never shrink the virtual size.
+        # While building, the height doesn't shrink (keeps the scroll
+        # position); the width is the pages' width.
         if not getattr(self.layout, 'is_finished', True):
-            w = max(w, vw)
             h = max(h, vh)
         if vw == w and vh == h:
             return
