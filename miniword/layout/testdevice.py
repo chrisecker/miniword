@@ -25,6 +25,12 @@ class TestDevice:
         # every char 1 wide, a soft hyphen 0
         return len(text.replace('\u00ad', '')), 1, 0
 
+    def prefix_widths(self, text, style):
+        """Widths of text[:i] for i = 0..len(text), each prefix measured
+        alone (the reference for faster devices)."""
+        return [self.measure(text[:i], style)[0]
+                for i in range(len(text) + 1)]
+
     def measure_parts(self, text, style):
         parts, n = [], 0
         for c in text:

@@ -31,6 +31,20 @@ _BREAK_RE = re.compile(
 )
 
 
+def line_widths(box, maxw):
+    """Widths of the box text's prefixes (see prefix_widths), at least
+    up to the first character beyond maxw: shaped once per line, not
+    once per word. The part shaped is estimated from the box's average
+    character width and doubled if too short."""
+    text = box.text
+    n = int(maxw / max(box.width / len(text), 0.1) * 1.2) + 20
+    while True:
+        widths = box.device.prefix_widths(text[:n], box.style)
+        if widths[-1] > maxw or n >= len(text):
+            return widths
+        n *= 2
+
+
 def find_goodbreak(box, maxw):
     """Search good break position at or before maxw, returns None if no good
     split position is possible. If box.width <= maxw, len(box) is returned.
@@ -46,13 +60,13 @@ def find_goodbreak(box, maxw):
     if not text:
         return None
 
-    measure = box.measure
+    widths = line_widths(box, maxw)
     last_fit = None
     for m in _BREAK_RE.finditer(text):
         pos = m.start()
         # a space before the break hangs over the edge: not measured
         check_pos = pos - 1 if pos > 0 and text[pos - 1] == ' ' else pos
-        if measure(text[:check_pos])[0] <= maxw:
+        if check_pos < len(widths) and widths[check_pos] <= maxw:
             last_fit = pos
         else:
             break   # widths are monotonically non-decreasing
@@ -72,10 +86,14 @@ def find_hyphen_break(box, maxw, hyphenate, continues=False):
     if not isinstance(box, TextBox) or maxw <= 0:
         return None
     text, measure = box.text, box.measure
+    widths = line_widths(box, maxw)
+
+    def width(i):  # beyond the widths: too wide anyway
+        return widths[i] if i < len(widths) else maxw + 1
     start = 0
     for word in text.split(' '):
         end = start + len(word)
-        if measure(text[:end])[0] > maxw:
+        if width(end) > maxw:
             break
         start = end + 1
     else:
@@ -93,7 +111,7 @@ def find_hyphen_break(box, maxw, hyphenate, continues=False):
     for k, token in enumerate(tokens):
         if token == '-':
             pos += 1
-            if tokens[k + 1] and measure(text[:pos])[0] <= maxw:
+            if tokens[k + 1] and width(pos) <= maxw:
                 best = pos  # after the word's own hyphen
             continue
         if token == NBHYPHEN:
@@ -107,7 +125,7 @@ def find_hyphen_break(box, maxw, hyphenate, continues=False):
                 n += len(piece)
                 breaks.append(n)
         for n in breaks:
-            if measure(text[:pos + n])[0] + hyphen <= maxw:
+            if width(pos + n) + hyphen <= maxw:
                 best = pos + n
         pos += len(token)
     return best

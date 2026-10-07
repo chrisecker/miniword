@@ -323,6 +323,30 @@ class CairoDevice:
         self._cache.set(key, result)
         return result
 
+    def prefix_widths(self, text, style):
+        """Widths of text[:i] for i = 0..len(text) from one shaping; a
+        cluster's advance (e.g. a ligature) is shared by its characters.
+        Characters missing in the font: each prefix measured alone."""
+        _style = filled(style)
+        hb_font = self._get_hb_font(_style)
+        if hb_font is not None:
+            infos, positions = self._shape(text, hb_font)
+        if hb_font is None or any(info.codepoint == 0 for info in infos):
+            return [self.measure(text[:i], style)[0]
+                    for i in range(len(text) + 1)]
+        advance = {}  # cluster start -> advance
+        for info, pos in zip(infos, positions):
+            advance[info.cluster] = advance.get(info.cluster, 0) \
+                + pos.x_advance / 64
+        starts = sorted(advance) + [len(text)]
+        widths, w = [0.0], 0.0
+        for k, start in enumerate(starts[:-1]):
+            share = advance[start] / (starts[k + 1] - start)
+            for _ in range(start, starts[k + 1]):
+                w += share
+                widths.append(w)
+        return widths
+
     def measure_parts(self, text, style):
         """Returns list of cumulative advance widths for each character prefix."""
         _style = filled(style)
