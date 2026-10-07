@@ -49,6 +49,7 @@ modules = [
     "miniword.tests.test_codeindent",
     "miniword.tests.test_measure",
     "miniword.tests.test_paste",
+    "miniword.tests.test_linked_images",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

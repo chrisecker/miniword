@@ -2,7 +2,9 @@
 Inline image support: Image texel, boxes, inspector, tests.
 
 Image texel parameters (see develnotes/images_concept.md):
-    content  -- the image data (bytes), or None (placeholder)
+    content  -- the image data (bytes), or None (linked or placeholder)
+    path     -- linked: file path (relative to the document) or URL;
+                with content it is just where the image came from
     alt      -- alternative text (Markdown, HTML), default ''
     scale_x  -- horizontal scale factor, default 1.0
     scale_y  -- vertical scale factor, default 1.0
@@ -16,6 +18,7 @@ TXL format: the data lives in the file's [blobs] section, the texel only
 refers to it by blob_key(content):
     IMG("3f9a0c1e27b4d685.png")
     IMG("3f9a0c1e27b4d685.png", {scale_x=0.5, scale_y=0.5, alt="Photo"})
+    IMG("", {path="bilder/wal.png"})                (linked: no blob)
 """
 
 import os
@@ -34,6 +37,7 @@ class Image(Single):
     """Inline image texel. Length=1, no parstyle, no indent."""
     text    = '\x0C'   # form feed — unique placeholder
     content      = None   # image data (bytes) or None
+    path         = None   # file path or URL (linked), or None
     alt          = ''
     scale_x      = 1.0
     scale_y      = 1.0
@@ -41,7 +45,7 @@ class Image(Single):
     crop         = None   # None or (left, right, top, bottom) in source pixels
 
     def __init__(self, content=None, scale_x=1.0, scale_y=1.0,
-                 proportional=True, crop=None, alt=''):
+                 proportional=True, crop=None, alt='', path=None):
         assert content is None or type(content) is bytes, \
             "image content must be immutable bytes"
         if content is not None:
@@ -56,6 +60,13 @@ class Image(Single):
             self.crop = crop
         if alt:
             self.alt = alt
+        if path:
+            self.path = path
+
+    def set_path(self, path):
+        clone = copy(self)
+        clone.path = path
+        return clone
 
     def set_content(self, content):
         assert content is None or type(content) is bytes
@@ -230,12 +241,14 @@ class ImageBox(Box):
 
 
 class ErrorPlaceholderBox(Box):
-    """Shown when an image could not be loaded."""
+    """Shown when an image could not be loaded; label: e.g. the file name
+    of a linked image."""
     depth = 0
 
-    def __init__(self, width=50, height=50, device=TESTDEVICE):
+    def __init__(self, width=50, height=50, device=TESTDEVICE, label=''):
         self.width  = width
         self.height = height
+        self.label = label
         if device is not TESTDEVICE:
             self.device = device
 
@@ -246,6 +259,9 @@ class ErrorPlaceholderBox(Box):
         self.device.draw_rect(x, y, self.width, self.height, gc)
         self.device.draw_line(x, y, x + self.width, y + self.height, 1, gc)
         self.device.draw_line(x + self.width, y, x, y + self.height, 1, gc)
+        if self.label:
+            self.device.set_style(dict(font_size=8, color='#606060'), gc)
+            self.device.draw_text(self.label, x + 4, y + 4, gc)
 
     def draw_selection(self, i1, i2, x, y, gc):
         if i1 < 1 and i2 > 0:

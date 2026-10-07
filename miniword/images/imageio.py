@@ -1,6 +1,7 @@
 """Blob → ImageData decoding, independent of the rendering device."""
 import io
 import logging
+import os
 from collections import OrderedDict
 
 log = logging.getLogger(__name__)
@@ -66,6 +67,37 @@ def decode_cached(content):
     while size > DECODED_LIMIT and len(decoded) > 1:
         size -= _entry_size(*decoded.popitem(last=False))
     return data
+
+
+# Application-wide cache of external images (linked by path or URL):
+# {(absolute path, mtime) or URL: bytes}. Local files are read on demand
+# (a changed file anew), URLs only by load_url - never while laying out.
+external = {}
+
+
+def external_content(path, base_dir=''):
+    """The data of a linked image: a local file (relative to base_dir),
+    read on demand, or a URL loaded before (load_url); else None."""
+    from .images import fetch_image
+    if path.startswith(('http://', 'https://')):
+        return external.get(path)
+    path = os.path.join(base_dir, path)
+    try:
+        key = os.path.abspath(path), os.path.getmtime(path)
+    except OSError:
+        return None
+    if key not in external:
+        external[key] = fetch_image(path)
+    return external[key]
+
+
+def load_url(url):
+    """Load an image from the web into the cache; whether it worked."""
+    from .images import fetch_image
+    data = fetch_image(url)
+    if data:
+        external[url] = data
+    return bool(data)
 
 
 def crop_surface(surface, cx, cy, cw, ch):

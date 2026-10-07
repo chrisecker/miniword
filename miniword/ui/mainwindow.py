@@ -290,8 +290,18 @@ def window_rect(saved, areas, max_w):
 
 class MainFrame(wx.Frame, ViewBase):
 
-    _current_path = None
+    _path = None
     _debug_menu = None
+
+    @property
+    def _current_path(self):
+        return self._path
+
+    @_current_path.setter
+    def _current_path(self, path):
+        """The document's file; its folder resolves linked images."""
+        self._path = path
+        self.canvas.builder.factory.base_dir = self._doc_dir()
     _secret_armed = False
     _secret_buffer = ''
     _markdown_preview = None

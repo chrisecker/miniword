@@ -41,6 +41,7 @@ develnotes/rowfactory_tests.md), test_tables.py, test_images.py,
 test_footnotes.py.
 """
 
+import os
 from copy import copy as shallow_copy
 
 from ..textmodel.texeltree import length, NL, grouped
@@ -178,6 +179,8 @@ def state_from_settings(settings):
 class Factory:
     # A simple factory which creates the basic boxes from their texels
     
+    base_dir = ''  # folder of the document: relative image paths
+
     def __init__(self, stylesheet, device=TESTDEVICE):
         self.stylesheet = stylesheet
         self.device = device
@@ -213,11 +216,19 @@ class Factory:
 
     def Image_handler(self, texel, parstyle):
         # Decoded images come from the application-wide LRU
-        # (imageio.decode_cached); no content, or content that can't be
-        # decoded, gives a placeholder.
+        # (imageio.decode_cached), linked ones from the cache for
+        # external images; else a placeholder, with the file name or URL
+        # of a linked image.
         from ..images.images import ImageBox, ErrorPlaceholderBox
-        from ..images.imageio import decode_cached, crop_surface
-        data = decode_cached(texel.content)
+        from ..images.imageio import decode_cached, crop_surface, \
+            external_content
+        content = texel.content
+        if content is None and texel.path:
+            content = external_content(texel.path, self.base_dir)
+        data = decode_cached(content)
+        if data is None and texel.path:
+            name = os.path.basename(texel.path.rstrip('/'))
+            return ErrorPlaceholderBox(200, 150, self.device, name)
         if data is None:
             return ErrorPlaceholderBox(50, 50, self.device)
         bitmap = data.bitmap

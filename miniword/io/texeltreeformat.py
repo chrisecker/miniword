@@ -139,6 +139,8 @@ def serialize_texel(texel, indent=0):
                     parts['crop_h'] = texel.crop[3]
                 if texel.alt:
                     parts['alt'] = texel.alt
+                if texel.path:
+                    parts['path'] = texel.path
                 s = serialize_style(parts) if parts else ''
                 # The data itself goes to the [blobs] section (txlio),
                 # the texel refers to it by its key ('' for no data).
@@ -525,6 +527,7 @@ class _Parser:
         proportional = True
         crop = None
         alt = ''
+        path = None
         if self.tok.peek()[0] == 'COMMA':
             self.tok.consume('COMMA')
             d = self.parse_style()
@@ -535,12 +538,13 @@ class _Parser:
             if 'crop_w' in d:
                 crop = (d.get('crop_x', 0), d.get('crop_y', 0), d['crop_w'], d['crop_h'])
             alt = d.get('alt', '')
+            path = d.get('path')
         self.tok.consume('RPAREN')
         from ..images import Image
         # Hydrate from the [blobs] section: all IMGs with the same key
         # share one bytes object. A missing blob gives no content.
         return Image(self.blobs.get(key), scale_x, scale_y, proportional,
-                     crop, alt)
+                     crop, alt, path)
 
     def parse_container(self):
         self.tok.consume('IDENT')  # C
