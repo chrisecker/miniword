@@ -75,7 +75,7 @@ A task list:
 
 ## Code
 
-```
+```python
 def hello():
     print('Hello')
 ```

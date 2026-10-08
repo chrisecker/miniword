@@ -334,8 +334,10 @@ class Editor(UndoRedo):
     def role_key(self, role):
         """The key of the first base style with role, or None."""
         sheet = self.stylesheet()
+        if not sheet:
+            return None
         return next((key for key, style in sheet.items()
-                     if style.get('role') == role), None) if sheet else None
+                     if style.get('role') == role), None)
 
     def stylesheet(self):
         """The document's base styles (from the canvas), or None."""

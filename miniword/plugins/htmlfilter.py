@@ -86,6 +86,7 @@ class _HTMLBlockBuilder(HTMLParser):
         self._list_stack = []        # 'list' | 'numbered', outermost first
         self._props_stack = [{}]     # current inline char-props
         self._in_pre = False
+        self.lang = ''               # of <pre><code class="language-x">
         self._table = None           # grid being accumulated, or None
         self._row = None             # {col: text} for the current row, or None
         self._col = 0                # next column index to fill in the current row
@@ -182,7 +183,10 @@ class _HTMLBlockBuilder(HTMLParser):
             self._start_block('quote', 0)
         elif tag == 'pre':
             self._start_block('pre', 0)
-            self._in_pre = True
+            self._in_pre, self.lang = True, ''
+        elif tag == 'code' and self._in_pre:
+            m = re.search(r'language-(\S+)', attrs.get('class') or '')
+            self.lang = m.group(1) if m else ''
         elif tag in ('ul', 'ol'):
             self._list_stack.append('numbered' if tag == 'ol' else 'list')
         elif tag == 'li':
@@ -229,9 +233,9 @@ class _HTMLBlockBuilder(HTMLParser):
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
             self._end_block()
-        elif tag == 'pre':
-            for line in ''.join(t for t, _ in self._runs).splitlines() or ['']:
-                self.blocks.append(('pre', 0, [(line or ' ', {})]))
+        elif tag == 'pre':  # a code block
+            text = ''.join(t for t, _ in self._runs).rstrip('\n')
+            self.blocks.append(('code', text.split('\n'), self.lang))
             self._runs = []
             if len(self._block_stack) > 1:
                 self._block_stack.pop()
@@ -422,13 +426,12 @@ def test_07():
 
 
 def test_08():
-    "pre block, one paragraph per line"
-    pars = _parse("<pre>line one\nline two</pre>")
-    assert len(pars) == 2
-    for base, ptype, indent, runs in pars:
-        assert base == 'pre'
-    assert ''.join(t for t, _ in pars[0][3]) == 'line one'
-    assert ''.join(t for t, _ in pars[1][3]) == 'line two'
+    "a pre block becomes a code block (Code) of its lines"
+    from miniword.core.document import Document
+    from miniword.plugins.mdfilter import code_texts
+    texel = html_text_to_fragment("<pre>line one\nline two</pre>",
+                                  Document())
+    assert code_texts(texel) == [('', 'line one\nline two')]
 
 
 def test_09():

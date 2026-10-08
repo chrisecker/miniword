@@ -30,8 +30,9 @@ def ask_html(parent, source=''):
             parent, "HTML source (shown as it is, never rendered):",
             "HTML", source,
             style=wx.TE_MULTILINE | wx.OK | wx.CANCEL) as dialog:
-        return dialog.GetValue() if dialog.ShowModal() == wx.ID_OK \
-            else None
+        if dialog.ShowModal() != wx.ID_OK:
+            return None
+        return dialog.GetValue()
 
 
 class TextCanvas(wx.ScrolledWindow, ViewBase):

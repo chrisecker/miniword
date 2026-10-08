@@ -119,9 +119,13 @@ class LinksPanel(SidePanel):
                 for j1, j2 in ranges
                 for n, style in get_styles(model.get_xtexel(), j1, j2)}
         href = min(urls) if len(urls) == 1 else ''
-        self.url_ctrl.SetHint("https://…" if len(urls) == 1 else
-                              "Partly linked" if '' in urls else
-                              "Several links")
+        if len(urls) == 1:
+            hint = "https://…"
+        elif '' in urls:
+            hint = "Partly linked"
+        else:
+            hint = "Several links"
+        self.url_ctrl.SetHint(hint)
         if self.url_ctrl.GetValue() != href:
             self.url_ctrl.ChangeValue(href)
         self.reset_url.set_x(urls != {''})  # any link

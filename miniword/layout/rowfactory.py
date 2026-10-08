@@ -61,8 +61,8 @@ from .counters import set_counter, inc_counter, format_number, copy_counters
 from .linewrap import simple_linewrap
 from ..hyphenation import get_hyphenator
 from .stretchable import justify_line
-from ..tables.table_boxes import TableBox, create_cell, split_at_height, \
-    CELL_HPAD, CELL_VPAD
+from ..tables.table_boxes import TableBox, CodeBox, create_cell, \
+    split_at_height, CELL_HPAD, CELL_VPAD
 
 
 # Needed for testing
@@ -464,6 +464,20 @@ class RowFactory(Factory):
         self.update_from_child(child)
         style = self.stylesheet.mk_style(parstyle, texel.style)
         return FootnoteAnchorBox(texel, label, style, self.device)
+
+    def Code_handler(self, texel, parstyle):
+        """A CodeBox: the code set by a child factory as wide as the
+        paragraph, its lines in the style of their newlines ('pre')."""
+        width = self._dims(parstyle, parstyle['level'])[2]
+        content, sep = texel.childs[1:]
+        lines = grouped([content, NL.set_parstyle(sep.parstyle)])
+        child = self.create_child(width)
+        records = [record for par in child.generate(lines, 0)
+                   for record in par]
+        self.update_from_child(child)
+        cell = create_cell(records, width, self.device)
+        cell.length = length(content) + 1  # with the closing SEP
+        return CodeBox(cell, texel.kind, self.device)
 
     def Table_handler(self, texel, parstyle):
         """A TableBox for a Table texel: childs are [SEP, content, SEP,

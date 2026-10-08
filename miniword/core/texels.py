@@ -1,6 +1,7 @@
 from copy import copy as shallow_copy
 
-from ..textmodel.texeltree import Single, EMPTYSTYLE
+from ..textmodel.texeltree import Single, Container, EMPTYSTYLE, NL, \
+    NULL_TEXEL
 
 
 class BR(Single):
@@ -27,6 +28,20 @@ class Checkbox(Single):
 
     def __repr__(self):
         return 'CB(checked)' if self.checked else 'CB'
+
+
+class Code(Container):
+    """A code block (kind 'code', in a language lang) or HTML block (kind
+    'html'): a container like a table with one cell, followed by a
+    newline of its own (develnotes/code_block_concept.md)."""
+    kind = 'code'
+    lang = ''
+
+    def __init__(self, content=NULL_TEXEL, kind='code', lang=''):
+        self.kind, self.lang = kind, lang
+        # childs as a table cell's: SEP, content, SEP ending its last line
+        self.childs = [NL, content, NL.set_parstyle({'base': 'pre'})]
+        self.compute_weights()
 
 
 class RawHTML(Single):

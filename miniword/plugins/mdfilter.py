@@ -39,7 +39,7 @@ def _doc_to_md(doc):
     from miniword.textmodel.texeltree import get_text, NewLine
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
-    from miniword.core.texels import Rule, RawHTML
+    from miniword.core.texels import Rule, RawHTML, Code
 
     texel          = doc.textmodel.get_xtexel()
     parts          = []
@@ -63,13 +63,11 @@ def _doc_to_md(doc):
 
         content = elems[:-1]
         block = content[0] if len(content) == 1 else None
-        if isinstance(block, (TableTexel, Rule, RawHTML)):
+        if isinstance(block, (TableTexel, Rule, RawHTML, Code)):
             close_pre()
             if parts:  # a blank line before (--- under text: a heading)
                 parts.append('')
-            parts.extend(['---'] if isinstance(block, Rule) else
-                         [block.source] if isinstance(block, RawHTML) else
-                         _table_to_md(block))
+            parts.extend(block_md(block))
             prev_block_key = None
             continue
 
@@ -99,8 +97,12 @@ def _doc_to_md(doc):
 
         # Blank line between block elements, but not between consecutive same-type blocks
         quote = base in ('quote',) + _ALERTS
-        block_key = base if quote else \
-            ('list' if ptype in ('list', 'numbered') else None)  # one list
+        if quote:
+            block_key = base
+        elif ptype in ('list', 'numbered'):
+            block_key = 'list'  # one list, also with both kinds of items
+        else:
+            block_key = None
         same_block = block_key is not None and prev_block_key == block_key
         if parts and not same_block:
             parts.append('')
@@ -377,6 +379,7 @@ def _scale(size, pixels):
 #                               'list', 'numbered', 'quote', 'pre' or an
 #                               alert ('note', 'warning' ...); ps:
 #                               more paragraph properties (start_number)
+#   ('code', lines, lang)        a code block (container Code)
 #   ('table', grid[, nheader[, aligns]])
 #                               grid: rows of cells (runs or strings);
 #                               aligns: per column 'left', 'center',
@@ -405,8 +408,9 @@ def _build_blocks(doc, blocks):
         size += len(s)
 
     def kind(block):
-        return block[0] if block[0] in ('table', 'pre', 'quote') + _ALERTS \
-            else 'text'
+        if block[0] in ('table', 'pre', 'quote') + _ALERTS:
+            return block[0]
+        return 'text'
 
     for k, block in enumerate(blocks):
         prev = kind(blocks[k - 1]) if k else None
@@ -416,6 +420,11 @@ def _build_blocks(doc, blocks):
         if block[0] == 'table':
             marks.append((size, _table(*block[1:])))
             add('\n')  # the table's own NL
+            continue
+        if block[0] == 'code':
+            marks.append((size, code_block(*block[1:])))
+            pars.append((size, 'normal', 0))
+            add('\n')  # the code block's own NL
             continue
         ptype, indent, block_runs, *ps = block
         for run_text, props in block_runs:
@@ -473,6 +482,41 @@ def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
     model.set_parstyle(nl_pos, ps)
     if indent:
         model.set_indent(nl_pos, indent)
+
+
+def block_md(block):
+    """The Markdown lines of a paragraph that is one block: a rule, raw
+    HTML, a code block or a table."""
+    from miniword.core.texels import Rule, RawHTML, Code
+    if isinstance(block, Rule):
+        return ['---']
+    if isinstance(block, RawHTML):
+        return [block.source]
+    if isinstance(block, Code):
+        return code_md(block)
+    return _table_to_md(block)
+
+
+def code_block(lines, lang=''):
+    """A Code texel of lines (strings)."""
+    from miniword.core.texels import Code
+    from miniword.textmodel.texeltree import Text, NL, grouped
+    texels = []
+    for line in lines:
+        texels += [Text(line), NL.set_parstyle({'base': 'pre'})]
+    return Code(grouped(texels[:-1]), lang=lang)  # the last NL: Code's
+
+
+def code_md(code):
+    """The Markdown lines of a Code texel: fenced (longer than any
+    backticks in it), an HTML block as it is."""
+    from miniword.textmodel.texeltree import get_text
+    lines = get_text(code.childs[1]).split('\n')
+    if code.kind == 'html':
+        return lines
+    ticks = max(map(len, re.findall('`+', '\n'.join(lines))), default=0)
+    fence = '`' * max(3, ticks + 1)
+    return [fence + code.lang] + lines + [fence]
 
 
 def _table(grid, nheader=1, aligns=()):
@@ -682,8 +726,10 @@ def _md_blocks(nodes):
         elif t == 'list':
             visit_list(node, 0)
         elif t == 'block_code':
-            for line in node.get('raw', '').splitlines():
-                blocks.append(('pre', 0, [(line or ' ', {})]))
+            info = (node.get('attrs', {}).get('info') or '').split()
+            lang = info[0] if info else ''  # ```python ...
+            lines = node.get('raw', '').rstrip('\n').split('\n')
+            blocks.append(('code', lines, lang))
         elif t == 'table':
             grid, nheader, aligns = _table_grid(node)
             if grid:
@@ -1057,14 +1103,21 @@ def test_09():
     assert pars[1][2] == 0
 
 
+def code_texts(texel):
+    """(lang, text) of each code block (Code) in texel."""
+    from miniword.core.texels import Code
+    from miniword.textmodel.texeltree import get_text
+    if isinstance(texel, Code):
+        return [(texel.lang, get_text(texel.childs[1]))]
+    return [c for child in getattr(texel, 'childs', ())
+            for c in code_texts(child)]
+
+
 def test_10():
-    "fenced code block uses pre basestyle"
-    pars = _parse("```\nfirst line\nsecond line\n```\n")
-    assert len(pars) == 2
-    for base, ptype, indent, runs in pars:
-        assert base == 'pre'
-    assert ''.join(t for t, _ in pars[0][3]) == 'first line'
-    assert ''.join(t for t, _ in pars[1][3]) == 'second line'
+    "a fenced code block becomes a code block (Code) of its lines"
+    doc = _load_mistune("```\nfirst line\nsecond line\n```\n")
+    assert code_texts(doc.textmodel.texel) == \
+        [('', 'first line\nsecond line')]
 
 
 def test_11():
@@ -1120,10 +1173,11 @@ def test_13(load=_load_mistune):
 
 
 def test_14(load=_load_mistune):
-    "blank NL paragraphs around table & pre"
+    "blank NL paragraphs around a table, not around a code block"
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
+    from miniword.core.texels import Code
 
     def bases(md):
         doc = load(md)
@@ -1135,6 +1189,8 @@ def test_14(load=_load_mistune):
             content = elems[:-1]
             if content and isinstance(content[0], TableTexel):
                 result.append('table')
+            elif content and isinstance(content[0], Code):
+                result.append('code')
             else:
                 text = ''.join(get_text(e) for e in content)
                 result.append('blank' if not text.strip() else \
@@ -1148,11 +1204,10 @@ def test_14(load=_load_mistune):
     assert bs[ti - 1] == 'blank'
     assert bs[ti + 1] == 'blank'
 
-    # pre block surrounded by text → blank before and after
+    # a code block: its paragraph's style gives the space around it
     bs = bases("Before.\n\n```\ncode\n```\n\nAfter.\n")
-    pi = bs.index('pre')
-    assert bs[pi - 1] == 'blank'
-    assert bs[pi + 1] == 'blank'
+    ci = bs.index('code')
+    assert bs[ci - 1:ci + 2] == ['body', 'code', 'body']
 
 
 def test_15():
@@ -1619,14 +1674,15 @@ def test_41():
 
 
 def test_42():
-    "an empty body paragraph separates code, quotes and tables from text"
+    "an empty body paragraph separates quotes and tables from text"
     from miniword.textmodel.utils import iter_paragraphs
     doc = _load_mistune("Text\n\n```\nx\n```\n\n> quote\n")
     pars = [(elems[-1].parstyle.get('base'), i2 - i1)  # style, length
             for i1, i2, elems in iter_paragraphs(doc.textmodel.texel, 0)
             if elems[-1].text == '\n']
-    assert pars == [('body', 5), ('body', 1), ('pre', 2), ('body', 1),
-                    ('quote', 6)]  # no empty paragraph at start or end
+    # text, code block (its own paragraph), empty, quote; none at the
+    # start or end
+    assert pars == [('body', 5), ('body', 4), ('body', 1), ('quote', 6)]
 
 
 def test_43():

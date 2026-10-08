@@ -189,6 +189,23 @@ DOUBLE_GAP  = 2.0   # gap between the two lines in pt
 DOUBLE_WIDTH = 0.5
 
 
+class CodeBox(TableBox):
+    """A code block: a table box of one cell, without cell lines (the
+    'pre' style draws ground and frame); an HTML block gets a thin frame
+    to tell it apart."""
+
+    def __init__(self, cell, kind, device=None):
+        TableBox.__init__(self, [[cell]], [cell.width],
+                          [cell.height + cell.depth], break_level=1,
+                          device=device)
+        self.kind = kind
+
+    def draw(self, x, y, dc):
+        Box.draw(self, x, y, dc)
+        if self.kind == 'html':
+            self.device.draw_rect(x, y, self.width, self.height, dc)
+
+
 def draw_cell_borders(tbox, r, c, cx, cy, cw, rh, dc):
     for side, x1, y1, x2, y2 in [
         ('top',    cx,      cy,      cx + cw, cy),

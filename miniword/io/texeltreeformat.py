@@ -46,7 +46,7 @@ from ..textmodel.texeltree import (
     as_style, grouped, join, length, depth,
     iter_childs, takeout
 )
-from ..core.texels import BR, Rule, Checkbox, RawHTML
+from ..core.texels import BR, Rule, Checkbox, RawHTML, Code
 from ..textmodel.submodel import Footnote
 
 
@@ -246,6 +246,19 @@ def serialize_container(texel, indent=0):
     inner = '  ' * (indent + 1)
 
     ctype = texel.__class__.__name__
+
+    # Code: C("Code", {kind=..., lang=...}, [line, NL, line ...])
+    if isinstance(texel, Code):
+        props = {}  # without the defaults
+        if texel.kind != Code.kind:
+            props['kind'] = texel.kind
+        if texel.lang:
+            props['lang'] = texel.lang
+        head = '%sC("Code",' % pad
+        if props:
+            head += ' %s,' % serialize_style(props)
+        slot = _serialize_slot(texel.childs[1], None, indent + 1)
+        return '\n'.join([head, slot, pad + ')'])
 
     # Table: each slot carries its own trailing separator's cell-style attrs.
     # This avoids the "last sep lost" problem of the generic preceding-sep convention.
@@ -615,6 +628,12 @@ class _Parser:
                 self.tok.consume('COMMA')
 
         self.tok.consume('RPAREN')
+
+        if ctype == 'Code':
+            d = dict(sep0_style or {})
+            content = slots[0][1] if slots else Group([])
+            return Code(content, d.get('kind', Code.kind),
+                        d.get('lang', Code.lang))
 
         if ctype == 'Table' and has_ncols:
             from ..tables import Table
