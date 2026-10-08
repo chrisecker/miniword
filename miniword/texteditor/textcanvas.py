@@ -335,11 +335,10 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         self.Scroll(max(0, int(new_scroll_x / rx)), max(0, int(new_scroll_y / ry)))
         self.refresh()
 
-    def toggle_checkbox(self, x, y):
-        """Check or uncheck the checkbox whose box is at (x, y) (content
-        coordinates), one undo step; whether there was one."""
+    def checkbox_at(self, x, y):
+        """(flow, index) of the checkbox whose box is at (x, y) (content
+        coordinates), or None."""
         from ..layout.boxes import CheckboxBox, find_box_at
-        from ..core.utils import get_path
         flow = self.layout.get_flow(x, y)
         i = self.layout.get_index(x, y, flow)
         # the box's index, or the one after it (right half of the box)
@@ -347,14 +346,24 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             find_box_at(self.layout, i, CheckboxBox, flow)
             or find_box_at(self.layout, i - 1, CheckboxBox, flow))
         if not found:
-            return False
+            return None
         ci1, (bx, by), box = found
-        if not (bx <= x < bx + box.size and by <= y < by + box.size):
-            return False  # beside the box: the cursor goes there
+        if bx <= x < bx + box.size and by <= y < by + box.size:
+            return flow, ci1
+        return None  # beside the box: the cursor goes there
+
+    def toggle_checkbox(self, x, y):
+        """Check or uncheck the checkbox at (x, y) (see checkbox_at), one
+        undo step; whether there was one."""
+        from ..core.utils import get_path
+        found = self.checkbox_at(x, y)
+        if found is None:
+            return False
+        flow, i = found
         editor = self.editor
-        editor.switch_target(flow, ci1)
-        texel = get_path(editor.target.texel, editor.local_idx(ci1))[-1][2]
-        editor.set_texel_attributes(ci1, texel, checked=not texel.checked)
+        editor.switch_target(flow, i)
+        texel = get_path(editor.target.texel, editor.local_idx(i))[-1][2]
+        editor.set_texel_attributes(i, texel, checked=not texel.checked)
         return True
 
     def on_leftdown(self, event):
@@ -408,6 +417,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
                 elif flow == 0:
                     style = editor.root.get_style(max(0, i - 1))
                     is_link = bool(style.get('href', ''))
+            if self.checkbox_at(x, y) is not None:
+                is_link = True  # a click toggles it
             self.SetCursor(wx.Cursor(wx.CURSOR_HAND if is_link else wx.CURSOR_IBEAM))
             return event.Skip()
         x, y = self.window_to_content(event.Position)

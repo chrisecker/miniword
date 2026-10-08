@@ -68,7 +68,8 @@ def test_CB_5():
 
 
 def test_CB_6():
-    "CB-6: a click into the box toggles it (one undo step), next to it not"
+    "CB-6: a click into the box toggles it (one undo step), next to it "
+    "not; the hand cursor shows where"
     from ..core.document import Document
     from ..layout.boxes import CheckboxBox, find_box_at
     from ..ui.mainwindow import MainFrame
@@ -82,6 +83,9 @@ def test_CB_6():
         builder.assure_index(len(document.textmodel), 0)
         _, (x, y), box = find_box_at(frame.canvas.layout, 0, CheckboxBox)
         model = document.textmodel
+        canvas = frame.canvas
+        assert canvas.checkbox_at(x + 2, y + 2) is not None  # hand cursor
+        assert canvas.checkbox_at(x + box.width + 5, y + 2) is None
         assert not frame.canvas.toggle_checkbox(x + box.width + 5, y + 2)
         assert frame.canvas.toggle_checkbox(x + 2, y + 2)
         assert checkboxes(model.texel) == [True]
