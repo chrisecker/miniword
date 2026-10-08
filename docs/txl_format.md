@@ -255,6 +255,11 @@ Forced line break (Shift+Enter): ends the line, not the paragraph.
 Checkbox, e.g. at the start of a task list item (Markdown `- [ ]`,
 `- [x]`); `checked` is left out when false.
 
+**`RAW("source")`** / **`RAW("source", {prop=val, ...})`**
+
+Raw HTML from Markdown, kept as its source: shown, never rendered,
+written back unchanged.
+
 **`HR`** / **`HR({prop=val, ...})`**
 
 Horizontal rule, alone in its paragraph (Markdown `---`). The paragraph's

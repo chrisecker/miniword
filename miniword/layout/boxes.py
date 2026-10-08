@@ -744,6 +744,30 @@ class CheckboxBox(SingleBox):
                              s - 2 * line, 'white', gc)
 
 
+class RawHTMLBox(SingleBox):
+    """The source of raw HTML: its lines on a grey ground; the baseline
+    is the last line's (inline HTML sits on the text's)."""
+    color = '#f6f8fa'
+    pad = 2
+
+    def __init__(self, source, style, device=None):
+        if device is not None:
+            self.device = device
+        self.lines = [TextBox(line or ' ', style, self.device)
+                      for line in source.split('\n')]
+        self.width = max(box.width for box in self.lines) + 2 * self.pad
+        self.depth = self.lines[-1].depth
+        self.height = sum(box.height + box.depth for box in self.lines) \
+            - self.depth
+
+    def draw(self, x, y, gc):
+        self.device.fill_rect(x, y, self.width, self.height + self.depth,
+                              self.color, gc)
+        for box in self.lines:
+            box.draw(x + self.pad, y, gc)
+            y += box.height + box.depth
+
+
 def find_box_at(layout, index, cls, flow=0):
     """(index, (x, y), box) of the box of class cls at a (flow-relative)
     index of layout, or None."""

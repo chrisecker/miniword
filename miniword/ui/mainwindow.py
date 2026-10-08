@@ -538,6 +538,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self.insert_rule(), item)
         item = insert_menu.Append(wx.ID_ANY, "&Checkbox")
         self.Bind(wx.EVT_MENU, lambda _: self.insert_checkbox(), item)
+        item = insert_menu.Append(wx.ID_ANY, "&HTML\u2026")
+        self.Bind(wx.EVT_MENU, lambda _: self.insert_html(), item)
         bar.Append(insert_menu, "&Insert")
 
         format_menu = wx.Menu()
@@ -928,15 +930,34 @@ class MainFrame(wx.Frame, ViewBase):
         """Insert a horizontal rule, in a paragraph of its own (style
         with the role 'rule', if there is one)."""
         from ..core.texels import Rule
+        key = self.editor.role_key('rule')
+        self._insert_par(Rule(), {'base': key} if key else {})
+
+    def insert_html(self, ask=None):
+        """Insert raw HTML asked for (ask: '' -> source or None, default
+        the dialog ask_html): more lines (a block) in a paragraph of
+        their own, else at the cursor."""
+        from ..core.texels import RawHTML
+        from ..texteditor.textcanvas import ask_html
+        source = (ask or (lambda s: ask_html(self, s)))('')
+        if not source:
+            return
+        if '\n' in source:
+            self._insert_par(RawHTML(source))
+        else:
+            with self.editor.atomic():
+                self.editor.remove()
+                self.editor.insert_texel(RawHTML(source))
+
+    def _insert_par(self, texel, parstyle={}):
+        """Insert texel in a paragraph of its own (with parstyle)."""
         from ..textmodel.texeltree import NL, grouped
         editor = self.editor
         with editor.atomic():
             editor.remove()
             if editor.index != editor.target.linestart(editor.index):
                 editor.insert_newline()
-            key = editor.role_key('rule')
-            nl = NL.set_parstyle({'base': key}) if key else NL
-            editor.insert_texel(grouped([Rule(), nl]))
+            editor.insert_texel(grouped([texel, NL.set_parstyle(parstyle)]))
 
     def insert_checkbox(self):
         """Insert a checkbox at the cursor (it replaces the selection)."""

@@ -46,7 +46,7 @@ from ..textmodel.texeltree import (
     as_style, grouped, join, length, depth,
     iter_childs, takeout
 )
-from ..core.texels import BR, Rule, Checkbox
+from ..core.texels import BR, Rule, Checkbox, RawHTML
 from ..textmodel.submodel import Footnote
 
 
@@ -112,6 +112,10 @@ def serialize_texel(texel, indent=0):
             if s:
                 return '%sTAB(%s)' % (pad, s)
             return '%sTAB' % pad
+
+        elif isinstance(texel, RawHTML):
+            s = serialize_style(texel.style) if texel.style else ''
+            return '%sRAW(%r%s)' % (pad, texel.source, s and ', ' + s)
 
         elif isinstance(texel, (BR, Rule, Checkbox)):
             name = {BR: 'BR', Rule: 'HR', Checkbox: 'CB'}[type(texel)]
@@ -453,6 +457,9 @@ class _Parser:
 
         if value == 'T':
             return self.parse_text()
+        elif value == 'RAW':
+            text = self.parse_text()  # the same form: RAW("...", {style})
+            return RawHTML(text.text, text.style or None)
         elif value == 'NL':
             return self.parse_newline()
         elif value == 'TAB':

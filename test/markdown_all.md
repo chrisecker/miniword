@@ -87,6 +87,14 @@ def hello():
 | a     | b      | c     | d       |
 | **1** | `2`    | 3     | 4       |
 
+## HTML
+
+Inline HTML is kept: press <kbd>Ctrl</kbd> and <kbd>C</kbd>.
+
+<div align="center">
+  <b>An HTML block</b>, shown as its source.
+</div>
+
 ## Rule
 
 ---

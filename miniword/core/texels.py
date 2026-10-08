@@ -29,6 +29,24 @@ class Checkbox(Single):
         return 'CB(checked)' if self.checked else 'CB'
 
 
+class RawHTML(Single):
+    """HTML from Markdown, kept as its source: shown, never rendered (a
+    passive document), written back unchanged."""
+    text = '\ufffc'
+
+    def __init__(self, source='', style=None):
+        Single.__init__(self, style)
+        self.source = source
+
+    def set_source(self, source):
+        clone = shallow_copy(self)
+        clone.source = source
+        return clone
+
+    def __repr__(self):
+        return 'RAW(%r)' % self.source
+
+
 class Rule(Single):
     """Horizontal rule, alone in its paragraph (Markdown ---)."""
     text = '\u2015'

@@ -39,7 +39,7 @@ def _doc_to_md(doc):
     from miniword.textmodel.texeltree import get_text, NewLine
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
-    from miniword.core.texels import Rule
+    from miniword.core.texels import Rule, RawHTML
 
     texel          = doc.textmodel.get_xtexel()
     parts          = []
@@ -62,12 +62,14 @@ def _doc_to_md(doc):
             continue  # ENDMARK — skip
 
         content = elems[:-1]
-        if len(content) == 1 and isinstance(content[0], (TableTexel, Rule)):
+        block = content[0] if len(content) == 1 else None
+        if isinstance(block, (TableTexel, Rule, RawHTML)):
             close_pre()
             if parts:  # a blank line before (--- under text: a heading)
                 parts.append('')
-            parts.extend(['---'] if isinstance(content[0], Rule)
-                         else _table_to_md(content[0]))
+            parts.extend(['---'] if isinstance(block, Rule) else
+                         [block.source] if isinstance(block, RawHTML) else
+                         _table_to_md(block))
             prev_block_key = None
             continue
 
@@ -235,12 +237,14 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
     from miniword.textmodel.texeltree import get_text
     from miniword.images.images import Image as ImageTexel, image_mime
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
-    from miniword.core.texels import BR, Checkbox
+    from miniword.core.texels import BR, Checkbox, RawHTML
     pieces = []  # (Markdown, its marks; None: keep the open ones)
     for elem in elems:
         marks = None if plain else _marks(getattr(elem, 'style', {}))
         if isinstance(elem, Checkbox):  # a task list item's
             pieces.append(('[x] ' if elem.checked else '[ ] ', None))
+        elif isinstance(elem, RawHTML):  # as it is
+            pieces.append((elem.source, None))
         elif isinstance(elem, BR):
             pieces.append(('\n' if plain else '\\\n', None))
         elif isinstance(elem, FootnoteTexel):
@@ -380,17 +384,15 @@ def _scale(size, pixels):
 #
 # runs: (text, props); special runs carry '_image' (see image_run),
 # '_footnote' (its text), '_br' (forced line break), '_rule' (in a
-# paragraph of ptype 'rule') or '_checkbox' (checked or not) instead of
-# text.
+# paragraph of ptype 'rule'), '_checkbox' (checked or not) or '_html'
+# (its source) instead of text - see _special.
 
 def _build_blocks(doc, blocks):
     """Build blocks into a new doc.textmodel. Empty paragraphs separate
     tables, code (pre) and quotes from the text around them. Equal image
     data (e.g. the same data URI twice) ends up as one bytes object."""
     from miniword.textmodel.textmodel import TextModel
-    from miniword.textmodel.texeltree import T, ENDMARK, grouped
-    from miniword.footnotes.footnotes import Footnote
-    from miniword.core.texels import BR, Rule, Checkbox
+    from miniword.textmodel.texeltree import grouped
     text, runs, pars, marks = [], [], [], []
     size = 0
     interned = {}
@@ -417,20 +419,13 @@ def _build_blocks(doc, blocks):
             continue
         ptype, indent, block_runs, *ps = block
         for run_text, props in block_runs:
-            if props.get('_image'):
+            if props.get('_image'):  # equal data: one object
                 alt, data, *rest = props['_image']
                 data = interned.setdefault(data, data) if data else data
-                marks.append((size, _image(alt, data, *rest)))
-            elif props.get('_footnote'):
-                marks.append((size, Footnote(grouped(
-                    [T(props['_footnote']), ENDMARK]))))
-            elif props.get('_br'):
-                marks.append((size, BR()))
-            elif props.get('_rule'):
-                marks.append((size, Rule()))
-            elif '_checkbox' in props:
-                marks.append((size, Checkbox().set_checked(
-                    props['_checkbox'])))
+                props = dict(props, _image=(alt, data, *rest))
+            special = _special(props)
+            if special is not None:
+                marks.append((size, special))
             else:
                 add(run_text, props)
         pars.append((size, ptype, indent, *ps))
@@ -448,6 +443,26 @@ def _build_blocks(doc, blocks):
         piece.texel = texel if texel.is_container else grouped([texel])
         model.insert(i, piece)
     doc.textmodel = model
+
+
+def _special(props):
+    """The texel of a special run (see _build_blocks), or None."""
+    from miniword.textmodel.texeltree import T, ENDMARK, grouped
+    from miniword.footnotes.footnotes import Footnote
+    from miniword.core.texels import BR, Rule, Checkbox, RawHTML
+    if props.get('_image'):
+        return _image(*props['_image'])
+    if props.get('_footnote'):
+        return Footnote(grouped([T(props['_footnote']), ENDMARK]))
+    if props.get('_br'):
+        return BR()
+    if props.get('_rule'):
+        return Rule()
+    if '_checkbox' in props:
+        return Checkbox().set_checked(props['_checkbox'])
+    if '_html' in props:
+        return RawHTML(props['_html'])
+    return None
 
 
 def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
@@ -491,6 +506,8 @@ def _inline_runs(nodes, props={}, notes={}):
         elif t == 'linebreak' or t == 'inline_html' \
                 and _BR.fullmatch(node.get('raw', '')):
             runs.append(('', {'_br': True}))
+        elif t == 'inline_html':
+            runs.append(('', {'_html': node.get('raw', '')}))
         elif t == 'footnote_ref':
             key = node.get('raw')
             runs.append(('', {'_footnote': notes.get(key, key)}))
@@ -513,7 +530,7 @@ def _inline_runs(nodes, props={}, notes={}):
 
 def _cell_texel(cell):
     """The content of a table cell: a string, or runs (text with props,
-    images; see image_run)."""
+    special runs; see _build_blocks)."""
     from miniword.textmodel.textmodel import TextModel
     from miniword.textmodel.texeltree import Text, grouped
     if isinstance(cell, str):
@@ -521,11 +538,10 @@ def _cell_texel(cell):
     model = TextModel('')
     for text, props in cell:
         pos = len(model)
-        if props.get('_image') or props.get('_br'):
-            from miniword.core.texels import BR
+        special = _special(props)
+        if special is not None:
             piece = model.create_textmodel()
-            piece.texel = grouped([_image(*props['_image'])
-                                   if props.get('_image') else BR()])
+            piece.texel = grouped([special])
             model.insert(pos, piece)
         elif text:
             model.insert_text(pos, text)
@@ -678,10 +694,9 @@ def _md_blocks(nodes):
                 visit(child, quote=kind)
         elif t == 'thematic_break':
             blocks.append(_RULE)
-        elif t == 'block_html':  # its text, without the tags
-            text = html.unescape(re.sub(r'<[^>]*>', '', node.get('raw', '')))
-            for line in filter(None, map(str.strip, text.splitlines())):
-                blocks.append(('normal', 0, [(line, {})]))
+        elif t == 'block_html':
+            source = node.get('raw', '').rstrip('\n')
+            blocks.append(('normal', 0, [('', {'_html': source})]))
 
     def visit_list(node, depth):
         attrs = node.get('attrs', {})
@@ -1577,10 +1592,9 @@ def test_37():
 
 
 def test_38():
-    "an HTML block keeps its text (without the tags)"
-    doc = _load_mistune('<div>x <b>y</b> &amp; z</div>\n\nb\n')
-    assert [runs[0][0] for *_, runs in _extract_pars(doc)] == \
-        ['x y & z', 'b']
+    "an HTML block is kept as it is (RawHTML), also its entities"
+    md = '<div>x <b>y</b> &amp; z</div>\n\nb\n'
+    assert _doc_to_md(_load_mistune(md)) == md
 
 
 def test_39():

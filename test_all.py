@@ -58,6 +58,7 @@ modules = [
     "miniword.tests.test_clip",
     "miniword.tests.test_rule",
     "miniword.tests.test_checkbox",
+    "miniword.tests.test_rawhtml",
     "miniword.tests.test_parstyle_editing",
     "miniword.layout.rect",
     "miniword.layout.cache",

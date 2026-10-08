@@ -24,6 +24,16 @@ TODO:
   for this is still missing
 - same for images: pasting images must create the corresponding blobs
 """
+def ask_html(parent, source=''):
+    """The HTML source edited in a dialog, or None (cancelled)."""
+    with wx.TextEntryDialog(
+            parent, "HTML source (shown as it is, never rendered):",
+            "HTML", source,
+            style=wx.TE_MULTILINE | wx.OK | wx.CANCEL) as dialog:
+        return dialog.GetValue() if dialog.ShowModal() == wx.ID_OK \
+            else None
+
+
 class TextCanvas(wx.ScrolledWindow, ViewBase):
     """
     - Renders on model changes
@@ -335,22 +345,50 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         self.Scroll(max(0, int(new_scroll_x / rx)), max(0, int(new_scroll_y / ry)))
         self.refresh()
 
-    def checkbox_at(self, x, y):
-        """(flow, index) of the checkbox whose box is at (x, y) (content
-        coordinates), or None."""
-        from ..layout.boxes import CheckboxBox, find_box_at
+    def box_at(self, x, y, cls):
+        """(flow, index, (x, y), box) of the box of class cls at (x, y)
+        (content coordinates) - near it, see checkbox_at -, or None."""
+        from ..layout.boxes import find_box_at
         flow = self.layout.get_flow(x, y)
         i = self.layout.get_index(x, y, flow)
         # the box's index, or the one after it (right half of the box)
         found = i is not None and (
-            find_box_at(self.layout, i, CheckboxBox, flow)
-            or find_box_at(self.layout, i - 1, CheckboxBox, flow))
+            find_box_at(self.layout, i, cls, flow)
+            or find_box_at(self.layout, i - 1, cls, flow))
+        return (flow, *found) if found else None
+
+    def checkbox_at(self, x, y):
+        """(flow, index) of the checkbox whose box is at (x, y), or
+        None (beside the box: the cursor goes there)."""
+        from ..layout.boxes import CheckboxBox
+        found = self.box_at(x, y, CheckboxBox)
+        if found:
+            flow, i, (bx, by), box = found
+            if bx <= x < bx + box.size and by <= y < by + box.size:
+                return flow, i
+        return None
+
+    def edit_rawhtml(self, x, y, ask=None):
+        """Edit the source of the raw HTML at (x, y) (ask: source -> new
+        one or None, default the dialog ask_html); one undo step.
+        Whether it changed."""
+        from ..layout.boxes import RawHTMLBox
+        from ..core.utils import get_path
+        found = self.box_at(x, y, RawHTMLBox)
         if not found:
-            return None
-        ci1, (bx, by), box = found
-        if bx <= x < bx + box.size and by <= y < by + box.size:
-            return flow, ci1
-        return None  # beside the box: the cursor goes there
+            return False
+        flow, i, (bx, by), box = found
+        if not (bx <= x < bx + box.width
+                and by <= y < by + box.height + box.depth):
+            return False
+        editor = self.editor
+        editor.switch_target(flow, i)
+        texel = get_path(editor.target.texel, editor.local_idx(i))[-1][2]
+        source = (ask or (lambda s: ask_html(self, s)))(texel.source)
+        if source is None or source == texel.source:
+            return False
+        editor.set_texel_attributes(i, texel, source=source)
+        return True
 
     def toggle_checkbox(self, x, y):
         """Check or uncheck the checkbox at (x, y) (see checkbox_at), one
@@ -435,6 +473,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         if editor.try_install_click_controller():
             return
         x, y = self.window_to_content(event.Position)
+        if self.edit_rawhtml(x, y):
+            return
         flow = self.layout.get_flow(x, y)
         i = self.layout.get_index(x, y, flow)
         if i is not None:
