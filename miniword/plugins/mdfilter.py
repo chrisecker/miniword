@@ -197,7 +197,7 @@ def _cell_md(cell):
         .replace('|', '\\|').replace('\\\n', '<br>')
 
 
-_SPECIAL = re.compile(r'([\\`*_\[\]<>~^])')
+_SPECIAL = re.compile(r'([\\`*\[\]<>~^]|(?<!\w)_|_(?!\w))')  # not a_b
 _ENTITY  = re.compile(r'&(?=#?\w+;)')
 
 
@@ -223,63 +223,89 @@ def _code_span(text):
 def _elems_to_inline(elems, footnotes=None, plain=False):
     """Convert a list of leaf texels (excluding the NL) to Markdown inline;
     plain: text only, unescaped (code blocks). Images are embedded as data
-    URIs - a document stays one file."""
+    URIs - a document stays one file.
+
+    Formatting is nested over pieces, as Markdown does: a mark stays open
+    while the next pieces have it too (bold over code and text, a forced
+    line break); spaces at its edges go outside it."""
     from miniword.textmodel.texeltree import get_text
     from miniword.images.images import Image as ImageTexel, image_mime
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
     from miniword.core.texels import BR
-    segments = []
+    pieces = []  # (Markdown, its marks; None: keep the open ones)
     for elem in elems:
+        marks = None if plain else _marks(getattr(elem, 'style', {}))
         if isinstance(elem, BR):
-            segments.append('\n' if plain else '\\\n')
-            continue
-        if isinstance(elem, FootnoteTexel):
-            if footnotes is not None:
+            pieces.append(('\n' if plain else '\\\n', None))
+        elif isinstance(elem, FootnoteTexel):
+            if footnotes is not None:  # (it is drawn superscript)
                 footnotes.append(elem)
-                segments.append('[^%d]' % len(footnotes))
-            continue
-        if isinstance(elem, ImageTexel):
+                pieces.append(('[^%d]' % len(footnotes), marks and [
+                    m for m in marks
+                    if m[0] not in ('superscript', 'subscript')]))
+        elif isinstance(elem, ImageTexel):
             data = elem.content
             if data:
                 b64  = base64.b64encode(data).decode('ascii')
-                segments.append('![%s](data:%s;base64,%s)'
-                                % (_escape(elem.alt), image_mime(data), b64))
+                pieces.append(('![%s](data:%s;base64,%s)' % (
+                    _escape(elem.alt), image_mime(data), b64), marks))
             elif elem.path:  # linked
                 from miniword.images.images import file_path
-                segments.append('![%s](%s)'
-                                % (_escape(elem.alt), file_path(elem, _folder)))
-            continue
-        text = get_text(elem)
-        if not text:
-            continue
-        if plain:
-            segments.append(text)
-            continue
-        props  = getattr(elem, 'style', {})
-        bold   = props.get('bold',   False)
-        italic = props.get('italic', False)
-        strike = props.get('strike', False)
-        href   = props.get('href',   '')
-        vpos   = props.get('vertical_position', 'normal')
-        code   = props.get('font_family', '').lower() in ('courier', 'courier new',
-                                                           'monospace', 'consolas')
-        if code:
-            text = _code_span(text)
+                pieces.append(('![%s](%s)' % (
+                    _escape(elem.alt), file_path(elem, _folder)), marks))
+        elif plain:
+            pieces.append((get_text(elem), None))
         else:
-            text = _escape(text)
-            mark = '***' if bold and italic else '**' if bold else \
-                '*' if italic else ''
-            text = mark + text + mark
-        if strike:
-            text = '~~' + text + '~~'
-        if vpos == 'superscript':
-            text = '^' + text + '^'
-        elif vpos == 'subscript':
-            text = '~' + text + '~'
-        if href:
-            text = '[%s](%s)' % (text, href)
-        segments.append(text)
-    return ''.join(segments)
+            style = getattr(elem, 'style', {})
+            code = style.get('font_family', '').lower() in (
+                'courier', 'courier new', 'monospace', 'consolas')
+            text = get_text(elem)
+            pieces.append((_code_span(text) if code else _escape(text),
+                           _marks(style)))
+
+    md, open_marks = '', []
+
+    def close(n):  # all marks from the n-th on; spaces stay outside
+        nonlocal md
+        body = md.rstrip()
+        md = body + ''.join(
+            _DELIMS[key][1] + (value + ')' if key == 'href' else '')
+            for key, value in reversed(open_marks[n:])) + md[len(body):]
+        del open_marks[n:]
+
+    for text, marks in pieces:
+        if marks is None or not text.strip():
+            md += text
+            continue
+        n = 0  # the open marks the piece keeps
+        while n < len(open_marks) and open_marks[n] in marks:
+            n += 1
+        close(n)
+        core = text.lstrip()
+        md += text[:len(text) - len(core)]
+        for key, value in marks:
+            if (key, value) not in open_marks:
+                md += _DELIMS[key][0]
+                open_marks.append((key, value))
+        md += core
+    close(0)
+    return md
+
+
+# Markdown marks of a text style, outermost first: (opening, closing)
+_DELIMS = {'href': ('[', ']('), 'strike': ('~~', '~~'),  # (url)
+           'bold': ('**', '**'), 'italic': ('*', '*'),
+           'superscript': ('^', '^'), 'subscript': ('~', '~')}
+
+
+def _marks(style):
+    """[(mark, value)] of a text style, in the order of _DELIMS."""
+    marks = [(key, style.get(key)) for key in ('href', 'strike', 'bold',
+                                               'italic') if style.get(key)]
+    position = style.get('vertical_position')
+    if position in ('superscript', 'subscript'):
+        marks.append((position, True))
+    return marks
 
 
 # ---------------------------------------------------------------------------
@@ -1656,3 +1682,34 @@ def test_47():
     assert _check_md(doc) == []
     md = '> [!NOTE] not alone on its line\n'  # no alert on GitHub
     assert _extract_pars(_load_mistune(md))[0][0] == 'quote'
+
+
+def _chars(doc):
+    """Each character with its Markdown-relevant style: [(char, style)]."""
+    keys = ('bold', 'italic', 'strike', 'href', 'vertical_position',
+            'font_family')
+    return [(char, tuple((k, style.get(k)) for k in keys if style.get(k)))
+            for *_, runs in _extract_pars(doc)
+            for text, style in runs for char in text]
+
+
+def test_48():
+    "formatting over several pieces (bold over code and text) is nested"
+    for md in ('**`line_spacing` bei Formeln:** rest\n',
+               '~~Fehler unter `1. `~~ – erledigt\n',
+               '[**a** b](https://x.org) c\n',
+               '*a **b c*** d\n',
+               'test_35 und \\_x\\_\n'):
+        doc = _load_mistune(md)
+        out = _doc_to_md(doc)
+        assert out == md, out
+        assert _chars(_load_mistune(out)) == _chars(doc), md
+
+
+def test_49():
+    "spaces at a formatting's edge go outside its marks"
+    from miniword.textmodel.texeltree import T, NL, grouped
+    doc = _md_doc('')
+    doc.textmodel.texel = grouped([
+        T('a ', dict(bold=True)), T('b '), T(' c', dict(italic=True)), NL])
+    assert _doc_to_md(doc) == '**a** b  *c*\n'
