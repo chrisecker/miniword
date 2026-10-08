@@ -226,10 +226,11 @@ _CELL_DEFAULTS = {'border_left': 'thin', 'border_right': 'thin',
 
 def _sep_slot_style(sep):
     """Build slot_style dict from separator, including cell-style attrs."""
-    # New API: cell attrs live in sep.parstyle
+    # New API: cell attrs live in sep.parstyle - with the style of the
+    # cell's last paragraph (base, alignment ...): all of it is kept
     if hasattr(sep, 'parstyle') and sep.parstyle:
         return {k: v for k, v in sep.parstyle.items()
-                if k in _CELL_ATTRS and v != _CELL_DEFAULTS.get(k)}
+                if k not in _CELL_DEFAULTS or v != _CELL_DEFAULTS[k]}
     # Old API fallback: attrs as properties on the separator
     base = dict(sep.style) if hasattr(sep, 'style') and sep.style else {}
     for attr in _CELL_ATTRS:
@@ -625,8 +626,7 @@ class _Parser:
 
             entries = []
             for slot_s, content in slots:
-                cell_attrs = {k: v for k, v in slot_s.items() if k in _CELL_ATTRS} if slot_s else {}
-                entries.append((content, as_style(cell_attrs)))
+                entries.append((content, as_style(dict(slot_s or {}))))
             table = Table(*entries, ncols=ncols,
                           nheader=nheader, breaklevel=breaklevel,
                           col_widths=list(col_widths) if col_widths is not None else None)
@@ -977,3 +977,16 @@ def test_12():
                                         NewLine().set_parstyle(ps)])))
     nl = list(_flatten(root))[-1]
     assert dict(nl.parstyle) == ps
+
+
+def test_13():
+    "Roundtrip: a table cell's attributes and paragraph style all stay"
+    from ..tables.tables import from_strings, Table
+    table = from_strings([['a', 'b', 'c']])
+    table = table.set_cellattr(0, 0, 0, 0, valign='middle',
+                               cell_bgcolor='#ff0000')
+    table = table.set_cellattr(0, 1, 0, 1, base='h1', alignment='center')
+    root, _, _ = parse(serialize(Group([table, NL])))
+    loaded, = [t for t in root.childs if isinstance(t, Table)]
+    assert [dict(sep.parstyle) for sep in loaded.childs[2::2]] == \
+        [dict(sep.parstyle) for sep in table.childs[2::2]]
