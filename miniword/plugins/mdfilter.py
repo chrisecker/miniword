@@ -3,12 +3,11 @@
 # Install: copy to ~/.miniword/plugins/ or import at app startup:
 #   from examples.mdfilter import *  (registers the filters)
 #
-# External dependency for richer import (optional):
-#   pip install mistune
-#
-# Without mistune a built-in parser handles the common MD subset.
+# Parses with mistune (a dependency of Miniword).
 
+import base64
 import html
+import os
 import re
 
 from miniword.io.importexport import register_import, register_export, \
@@ -99,6 +98,8 @@ def _doc_to_md(doc):
         same_block = block_key is not None and prev_block_key == block_key
         if parts and not same_block:
             parts.append('')
+        elif same_block and base == 'quote':
+            parts.append('>')  # else they'd join into one paragraph
 
         if base in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
             level = int(base[1])
@@ -263,10 +264,7 @@ def _load(path):
         text = f.read()
     _folder = os.path.dirname(os.path.abspath(path))
     try:
-        import mistune  # noqa: F401 -- availability check only
         return _load_mistune(text)
-    except ImportError:
-        return _load_builtin(text)
     finally:
         _folder = ''
 
@@ -306,137 +304,81 @@ def _scale(size, pixels):
     return sx or sy, sy or sx
 
 
-# --- built-in parser --------------------------------------------------------
-
-import os
-import base64
-
-_IMG_RE    = re.compile(r'!\[([^\]]*)\]\(([^)\s]+)\)')
-
-_ATX_RE    = re.compile(r'^ {0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$')
-_UL_RE     = re.compile(r'^(\s*)[-*+]\s+(.*)')
-_OL_RE     = re.compile(r'^(\s*)\d+\.\s+(.*)')
-_QUOTE_RE  = re.compile(r'^>\s?(.*)')
-_RULE_RE   = re.compile(r'^[-*_]{3,}\s*$')
-_FENCE_RE  = re.compile(r'^```')
-_FN_DEF_RE = re.compile(r'^\[\^([^\]]+)\]:\s+(.*)')
-
-
-
-def _load_builtin(text):
-    from miniword.core.document import Document
-    from miniword.textmodel.textmodel import TextModel
-
-    doc = Document()
-    _register_styles(doc)
-    doc.textmodel = TextModel('')
-    _build_builtin(doc, text)
-    return doc
-
-
-def _build_builtin(doc, text):
-    """Parse text as Markdown and build it into doc.textmodel. doc only
-    needs that attribute -- used both
-    for whole-file import (doc is a real Document) and for paste (doc is a
-    lightweight stand-in, see md_text_to_fragment)."""
-    _build_blocks(doc, _parse_md_paragraphs(text))
-
+# --- builder: blocks -> document -------------------------------------------
+#
+# Markdown (mistune, see _md_blocks) and HTML (htmlfilter.py) are both
+# turned into a flat list of blocks, like Miniword's paragraphs:
+#
+#   (ptype, indent, runs)       a paragraph; ptype 'normal', 'h1'..'h6',
+#                               'list', 'numbered', 'quote' or 'pre'
+#   ('table', grid[, nheader])  grid: rows of cells (runs or strings)
+#
+# runs: (text, props); special runs carry '_image' (see image_run),
+# '_footnote' (its text) or '_br' (forced line break) instead of text.
 
 def _build_blocks(doc, blocks):
-    """Build pre-parsed blocks (see _parse_md_paragraphs's return shape:
-    (ptype, indent, runs) or ('table', grid)) into doc.textmodel. Shared
-    by the built-in MD parser and the HTML-paste converter (htmlfilter.py)
-    so both produce identically-styled output.
-
-    Image data is interned for this run: equal data (e.g. the same
-    data URI twice) ends up as one bytes object."""
-    interned = {}
-    for block in blocks:
-        if block[0] != 'table':
-            for run_text, run_props in block[2]:
-                if run_props.get('_image'):
-                    alt, data, *rest = run_props['_image']
-                    if data:
-                        data = interned.setdefault(data, data)
-                    run_props['_image'] = alt, data, *rest
-
-    def insert_nl():
-        pos = len(doc.textmodel.get_text())
-        doc.textmodel.insert(pos, doc.textmodel.create_textmodel('\n'))
-
-    prev_btype = None
-
-    for i, block in enumerate(blocks):
-        btype = block[0]
-        next_btype = blocks[i + 1][0] if i + 1 < len(blocks) else None
-
-        # Blank line before table, pre run, and quote run
-        if btype == 'table' and prev_btype is not None:
-            insert_nl()
-        elif btype == 'pre' and prev_btype != 'pre' and prev_btype is not None:
-            insert_nl()
-        elif btype == 'quote' and prev_btype != 'quote' and prev_btype is not None:
-            insert_nl()
-
-        if btype == 'table':
-            _, grid = block
-            _insert_table_block(doc, grid)
-        else:
-            ptype, indent, runs = block
-            _insert_text_block(doc, ptype, indent, runs)
-
-        # Blank line after table, pre run, and quote run
-        if btype == 'table' and next_btype is not None:
-            insert_nl()
-        elif btype == 'pre' and next_btype != 'pre' and next_btype is not None:
-            insert_nl()
-        elif btype == 'quote' and next_btype != 'quote' and next_btype is not None:
-            insert_nl()
-
-        prev_btype = btype
-
-
-def _insert_text_block(doc, ptype, indent, runs):
-    if any(r[1].get('_footnote') or r[1].get('_image') for r in runs):
-        _insert_text_block_with_specials(doc, ptype, indent, runs)
-        return
-    par_text = ''.join(t for t, _ in runs) + '\n'
-    pos = len(doc.textmodel.get_text())
-    doc.textmodel.insert(pos, doc.textmodel.create_textmodel(par_text))
-    nl_pos = pos + len(par_text) - 1
-    _apply_parstyle(doc, nl_pos, ptype, indent)
-    run_pos = pos
-    for run_text, run_props in runs:
-        if run_props:
-            doc.textmodel.set_properties(run_pos, run_pos + len(run_text), **run_props)
-        run_pos += len(run_text)
-
-
-def _insert_text_block_with_specials(doc, ptype, indent, runs):
-    from miniword.footnotes.footnotes import Footnote
-    from miniword.images.images import Image
+    """Build blocks into a new doc.textmodel. Empty paragraphs separate
+    tables, code (pre) and quotes from the text around them. Equal image
+    data (e.g. the same data URI twice) ends up as one bytes object."""
+    from miniword.textmodel.textmodel import TextModel
     from miniword.textmodel.texeltree import T, ENDMARK, grouped
-    for run_text, run_props in runs:
-        pos = len(doc.textmodel.get_text())
-        if run_props.get('_footnote'):
-            fn = Footnote(grouped([T(run_props['_footnote']), ENDMARK]))
-            fn_model = doc.textmodel.create_textmodel()
-            fn_model.texel = grouped([fn])
-            doc.textmodel.insert(pos, fn_model)
-        elif run_props.get('_image'):
-            img_model = doc.textmodel.create_textmodel()
-            img_model.texel = grouped([_image(*run_props['_image'])])
-            doc.textmodel.insert(pos, img_model)
-        elif run_text:
-            doc.textmodel.insert_text(pos, run_text)
-            if run_props:
-                doc.textmodel.set_properties(pos, pos + len(run_text), **run_props)
-    nl_pos = len(doc.textmodel.get_text())
-    doc.textmodel.insert_text(nl_pos, '\n')
-    _apply_parstyle(doc, nl_pos, ptype, indent)
+    from miniword.footnotes.footnotes import Footnote
+    from miniword.core.texels import BR
+    text, runs, pars, marks = [], [], [], []
+    size = 0
+    interned = {}
+
+    def add(s, props=None):
+        nonlocal size
+        if props:
+            runs.append((size, size + len(s), props))
+        text.append(s)
+        size += len(s)
+
+    def kind(block):
+        return block and (block[0] if block[0] in ('table', 'pre', 'quote')
+                          else 'text')
+
+    for k, block in enumerate(blocks):
+        prev = kind(blocks[k - 1]) if k else None
+        if prev and (kind(block) != prev or prev == 'table'):
+            pars.append((size, 'normal', 0))  # an empty paragraph between
+            add('\n')
+        if block[0] == 'table':
+            marks.append((size, _table(*block[1:])))
+            add('\n')  # the table's own NL
+            continue
+        ptype, indent, block_runs = block
+        for run_text, props in block_runs:
+            if props.get('_image'):
+                alt, data, *rest = props['_image']
+                data = interned.setdefault(data, data) if data else data
+                marks.append((size, _image(alt, data, *rest)))
+            elif props.get('_footnote'):
+                marks.append((size, Footnote(grouped(
+                    [T(props['_footnote']), ENDMARK]))))
+            elif props.get('_br'):
+                marks.append((size, BR()))
+            else:
+                add(run_text, props)
+        pars.append((size, ptype, indent))
+        add('\n')
+
+    model = TextModel(''.join(text))
+    for i, ptype, indent in pars:
+        _apply_parstyle(model, i, ptype, indent)
+    for i1, i2, props in runs:
+        model.set_properties(i1, i2, **props)
+    # zero-width marks, back to front: an insertion only shifts what
+    # follows, and marks at the same place keep their order
+    for i, texel in reversed(marks):
+        piece = model.create_textmodel()
+        piece.texel = texel if texel.is_container else grouped([texel])
+        model.insert(i, piece)
+    doc.textmodel = model
 
 
-def _apply_parstyle(doc, nl_pos, ptype, indent):
+def _apply_parstyle(model, nl_pos, ptype, indent):
     if ptype.startswith('h') or ptype in ('pre', 'list', 'numbered', 'quote'):
         base = ptype
     else:
@@ -444,9 +386,9 @@ def _apply_parstyle(doc, nl_pos, ptype, indent):
     ps = {'base': base}
     if ptype in ('list', 'numbered'):
         ps['paragraph_type'] = ptype
-    doc.textmodel.set_parstyle(nl_pos, ps)
+    model.set_parstyle(nl_pos, ps)
     if indent:
-        doc.textmodel.set_indent(nl_pos, indent)
+        model.set_indent(nl_pos, indent)
 
 
 def _table(grid, nheader=1):
@@ -457,30 +399,28 @@ def _table(grid, nheader=1):
     return table.set_nheader(nheader) if nheader else table
 
 
-def _insert_table_block(doc, grid):
-    tbl_model = doc.textmodel.create_textmodel()
-    tbl_model.texel = _table(grid)
-    pos = len(doc.textmodel.get_text())
-    doc.textmodel.insert(pos, tbl_model)
-    pos2 = len(doc.textmodel.get_text())
-    doc.textmodel.insert(pos2, doc.textmodel.create_textmodel('\n'))
-
-
 _INLINE_PROPS = {'strong': {'bold': True}, 'emphasis': {'italic': True},
                  'strikethrough': {'strike': True},
                  'superscript': {'vertical_position': 'superscript'},
                  'subscript': {'vertical_position': 'subscript'}}
 
 
-def _inline_runs(nodes, props={}):
-    """Runs (text, props) of mistune inline nodes, e.g. a table cell."""
+def _inline_runs(nodes, props={}, notes={}):
+    """Runs (text, props) of mistune inline nodes; notes: the footnotes'
+    texts by key."""
     runs = []
     for node in nodes:
         t, children = node.get('type'), node.get('children', [])
         if t in ('text', 'raw_text'):
             runs.append((html.unescape(node.get('raw', '')), props))
-        elif t in ('softbreak', 'linebreak'):
+        elif t == 'softbreak':
             runs.append((' ', props))
+        elif t == 'linebreak' or t == 'inline_html' \
+                and _BR.fullmatch(node.get('raw', '')):
+            runs.append(('', {'_br': True}))
+        elif t == 'footnote_ref':
+            key = node.get('raw')
+            runs.append(('', {'_footnote': notes.get(key, key)}))
         elif t == 'codespan':
             runs.append((node.get('raw', ''),
                          dict(props, font_family='Courier New')))
@@ -489,10 +429,12 @@ def _inline_runs(nodes, props={}):
             runs.append(image_run(alt, node['attrs'].get('url', '')))
         elif t == 'link':
             runs += _inline_runs(children,
-                                 dict(props, href=node['attrs'].get('url')))
+                                 dict(props, href=node['attrs'].get('url')),
+                                 notes)
         else:
             runs += _inline_runs(children,
-                                 dict(props, **_INLINE_PROPS.get(t, {})))
+                                 dict(props, **_INLINE_PROPS.get(t, {})),
+                                 notes)
     return runs
 
 
@@ -506,234 +448,17 @@ def _cell_texel(cell):
     model = TextModel('')
     for text, props in cell:
         pos = len(model)
-        if props.get('_image'):
-            image = model.create_textmodel()
-            image.texel = grouped([_image(*props['_image'])])
-            model.insert(pos, image)
+        if props.get('_image') or props.get('_br'):
+            from miniword.core.texels import BR
+            piece = model.create_textmodel()
+            piece.texel = grouped([_image(*props['_image'])
+                                   if props.get('_image') else BR()])
+            model.insert(pos, piece)
         elif text:
             model.insert_text(pos, text)
             if props:
                 model.set_properties(pos, pos + len(text), **props)
     return model.texel
-
-
-_SEP_ROW_RE = re.compile(r'^:?-+:?$')
-
-
-def _parse_table_row(line):
-    # Replace escaped pipes before splitting, restore afterwards
-    line = line.strip().strip('|').replace('\\|', '\x00')
-    return [c.strip().replace('\x00', '|') for c in line.split('|')]
-
-
-def _parse_table_lines(lines):
-    grid = []
-    for line in lines:
-        cells = _parse_table_row(line)
-        if all(_SEP_ROW_RE.match(c) for c in cells if c):
-            continue  # skip separator row
-        grid.append(cells)
-    if not grid:
-        return grid
-    # Normalize: all rows must have the same number of columns
-    n_cols = max(len(row) for row in grid)
-    for row in grid:
-        while len(row) < n_cols:
-            row.append('')
-    return grid
-
-
-def _parse_md_paragraphs(text):
-    """Parse MD text into list of blocks.
-
-    Each block is either:
-      (ptype, indent, runs)  — text paragraph
-      ('table', grid)        — table (2-D list of strings)
-
-    ptype: 'normal' | 'h1'..'h6' | 'list' | 'numbered' | 'pre'
-    runs:  list of (text, charprops_dict)
-    """
-    # Collect footnote definitions first; remove their lines from the stream
-    fn_defs = {}
-    clean   = []
-    for line in text.splitlines():
-        m = _FN_DEF_RE.match(line)
-        if m:
-            fn_defs[m.group(1)] = m.group(2)
-        else:
-            clean.append(line)
-    lines = clean
-
-    def pi(t):
-        return _parse_inline(t, fn_defs)
-
-    paragraphs = []
-    buf = []         # accumulated normal-paragraph lines
-    table_buf = []   # accumulated table lines
-    in_fence = False
-    list_stack = []  # marker columns of the currently open list, outermost first
-
-    def flush_buf():
-        if buf:
-            combined = ' '.join(buf)
-            paragraphs.append(('normal', 0, pi(combined)))
-            buf.clear()
-
-    def flush_table():
-        if table_buf:
-            grid = _parse_table_lines(table_buf)
-            if grid:  # cells as runs: formatting, links, images
-                paragraphs.append(('table', [[_parse_inline(cell)
-                                              for cell in row]
-                                             for row in grid]))
-            table_buf.clear()
-
-    def list_indent(col):
-        """Map a marker's leading-whitespace column to a nesting level,
-        relative to the columns already seen in the current list — like a
-        real list-aware parser (e.g. mistune), so a list that's uniformly
-        indented throughout (e.g. every line starts with "  - ") still
-        comes out as a single top-level (indent 0) list, not nested.
-        """
-        while list_stack and col < list_stack[-1]:
-            list_stack.pop()
-        if not list_stack or col > list_stack[-1]:
-            list_stack.append(col)
-        return len(list_stack) - 1
-
-    for line in lines:
-        if _FENCE_RE.match(line):
-            flush_buf()
-            flush_table()
-            list_stack.clear()
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            flush_table()
-            paragraphs.append(('pre', 0, [(line or ' ', {})]))
-            continue
-        if _RULE_RE.match(line):
-            flush_buf()
-            flush_table()
-            list_stack.clear()
-            continue
-
-        if line.startswith('|'):
-            flush_buf()
-            list_stack.clear()
-            table_buf.append(line)
-            continue
-        else:
-            flush_table()
-
-        m = _ATX_RE.match(line)
-        if m:
-            flush_buf()
-            list_stack.clear()
-            level = len(m.group(1))
-            paragraphs.append(('h%d' % level, 0, pi(m.group(2))))
-            continue
-
-        m = _UL_RE.match(line)
-        if m:
-            flush_buf()
-            indent = list_indent(len(m.group(1)))
-            paragraphs.append(('list', indent, pi(m.group(2))))
-            continue
-
-        m = _OL_RE.match(line)
-        if m:
-            flush_buf()
-            indent = list_indent(len(m.group(1)))
-            paragraphs.append(('numbered', indent, pi(m.group(2))))
-            continue
-
-        m = _QUOTE_RE.match(line)
-        if m:
-            flush_buf()
-            flush_table()
-            list_stack.clear()
-            paragraphs.append(('quote', 0, pi(m.group(1))))
-            continue
-
-        if line.strip() == '':
-            # A blank line alone doesn't end a list (loose lists are
-            # common), so list_stack is intentionally left untouched.
-            flush_buf()
-        elif (line.startswith(' ') and not _UL_RE.match(line)
-              and not _OL_RE.match(line)
-              and paragraphs and paragraphs[-1][0] in ('list', 'numbered')):
-            # continuation line of a list item — append to previous
-            prev = paragraphs[-1]
-            extra = pi(line.strip())
-            paragraphs[-1] = (prev[0], prev[1], prev[2] + [(' ', {})] + extra)
-        else:
-            buf.append(line)
-            list_stack.clear()
-
-    flush_buf()
-    flush_table()
-    return paragraphs
-
-
-def _parse_inline(text, fn_defs=None):
-    """Parse inline MD markup into list of (text, charprops)."""
-    parts = []
-    pos   = 0
-    pattern = re.compile(
-        r'(!\[[^\]]*\]\([^)\s]+\))'                    # inline image
-        r'|(`[^`]+`)'                                     # code
-        r'|(\*{3}[^\s*](?:[^*]*[^\s*])?\*{3})'         # bold+italic ***
-        r'|(\*{2}[^\s*](?:[^*]*[^\s*])?\*{2})'         # bold **
-        r'|(\*[^\s*](?:[^*]*[^\s*])?\*)'               # italic *  (single char: *a*)
-        r'|(__[^\s_](?:[^_]*[^\s_])?__)'               # bold __
-        r'|(_[^\s_](?:[^_]*[^\s_])?_)'                 # italic _  (single char: _a_)
-        r'|(\[\^[^\]]+\])'                              # footnote reference [^ref]
-        r'|(\[([^\]]+)\]\(([^)]+)\))'                   # link [text](url)
-        r'|(~~[^\s~](?:[^~]*[^\s~])?~~)'               # strikethrough ~~text~~
-        r'|(\^[^\s^](?:[^^]*[^\s^])?\^)'               # superscript ^text^
-        r'|(~[^\s~](?:[^~]*[^\s~])?~)',                 # subscript ~text~
-        re.DOTALL
-    )
-    for m in pattern.finditer(text):
-        if m.start() > pos:
-            parts.append((text[pos:m.start()], {}))
-        raw = m.group(0)
-        if raw.startswith('!['):
-            img = _IMG_RE.match(raw)
-            parts.append(image_run(img.group(1), img.group(2)))
-        elif raw.startswith('[^'):
-            ref = raw[2:-1]
-            content = (fn_defs or {}).get(ref, ref)
-            parts.append(('', {'_footnote': content}))
-        elif raw.startswith('`'):
-            parts.append((raw[1:-1], {'font_family': 'Courier New'}))
-        elif raw.startswith('***') or raw.startswith('___'):
-            for t, p in _parse_inline(raw[3:-3], fn_defs):
-                parts.append((t, dict(p, bold=True, italic=True)))
-        elif raw.startswith('**') or raw.startswith('__'):
-            for t, p in _parse_inline(raw[2:-2], fn_defs):
-                parts.append((t, dict(p, bold=True)))
-        elif raw.startswith('['):
-            url = m.group(11)
-            for t, p in _parse_inline(m.group(10), fn_defs):
-                parts.append((t, dict(p, href=url)))
-        elif raw.startswith('~~'):
-            for t, p in _parse_inline(raw[2:-2], fn_defs):
-                parts.append((t, dict(p, strike=True)))
-        elif raw.startswith('^'):
-            for t, p in _parse_inline(raw[1:-1], fn_defs):
-                parts.append((t, dict(p, vertical_position='superscript')))
-        elif raw.startswith('~'):
-            for t, p in _parse_inline(raw[1:-1], fn_defs):
-                parts.append((t, dict(p, vertical_position='subscript')))
-        else:
-            for t, p in _parse_inline(raw[1:-1], fn_defs):
-                parts.append((t, dict(p, italic=True)))
-        pos = m.end()
-    if pos < len(text):
-        parts.append((text[pos:], {}))
-    return [(t, p) for t, p in parts if t or p.get('_footnote') or p.get('_image')]
 
 
 def _register_styles(doc, preset='github', overwrite=True, skip=()):
@@ -808,11 +533,7 @@ def md_text_to_fragment(text, target_doc):
     from miniword.textmodel.textmodel import TextModel
 
     shim = SimpleNamespace(textmodel=TextModel(''))
-    try:
-        import mistune  # noqa: F401 -- availability check only
-        _build_mistune(shim, text)
-    except ImportError:
-        _build_builtin(shim, text)
+    _build_mistune(shim, text)
 
     covered = _adopt_existing_styles(shim.textmodel, target_doc)
     _register_styles(target_doc, overwrite=False, skip=covered)
@@ -827,7 +548,7 @@ def get_menus(doc):
     return [("&Markdown", menu_items())]
 
 
-# --- mistune-based parser (richer, handles more edge cases) -----------------
+# --- parser (mistune) ---------------------------------------------------------
 
 def _load_mistune(text):
     """Import using mistune for more accurate MD parsing."""
@@ -840,278 +561,97 @@ def _load_mistune(text):
 
 
 def _build_mistune(doc, text):
-    """Like _build_builtin, but via the (optional) mistune parser. doc only
-    needs .textmodel."""
+    """Parse text as Markdown and build it into doc.textmodel; doc only
+    needs that attribute (paste: a stand-in, see md_text_to_fragment)."""
     import mistune
-    tokens = mistune.create_markdown(
+    nodes = mistune.create_markdown(
         renderer='ast',
         plugins=['footnotes', 'strikethrough', 'table',
                  'superscript', 'subscript'])(text)
-    builder = _DocBuilder(doc)
-    builder.process(tokens)
+    _build_blocks(doc, _md_blocks(nodes))
 
 
-class _DocBuilder:
-    """Converts a mistune AST into a miniword Document."""
+def _md_blocks(nodes):
+    """The blocks (see _build_blocks) of a mistune AST."""
+    notes = {item['attrs']['key']: _plain_text(item.get('children', []))
+             for node in nodes if node.get('type') == 'footnotes'
+             for item in node.get('children', [])}
+    blocks = []
 
-    def __init__(self, doc):
-        self.doc  = doc
-        self.text = ''   # accumulated raw text
-        self.runs = []   # (start, end, charprops)
-        self.pars = []   # (start, end, parstyle, indent)
-        self._cur_props  = {}
-        self._cur_ptype  = 'normal'
-        self._cur_indent = 0
-        self._fn_lookup = {}   # footnote key -> note text
-        # zero-width marks for non-text texels (footnotes, images), in
-        # document order: (position in self.text, kind, payload)
-        self._marks = []
+    def runs(node):
+        return _inline_runs(node.get('children', []), notes=notes)
 
-    def process(self, nodes):
-        self._collect_footnotes(nodes)
-        for node in nodes:
-            self._visit(node)
-        self._finalize()
-
-    def _collect_footnotes(self, nodes):
-        """Pre-scan the top-level 'footnotes' block the plugin collects
-        all [^ref]: definitions into, keyed by reference (matches
-        footnote_ref's own 'raw' field)."""
-        for node in nodes:
-            if not isinstance(node, dict) or node.get('type') != 'footnotes':
-                continue
-            for item in node.get('children', []):
-                key = item.get('attrs', {}).get('key')
-                if key is not None:
-                    self._fn_lookup[key] = self._flatten_text(
-                        item.get('children', []))
-
-    def _flatten_text(self, nodes):
-        """Plain-text content of a footnote definition (no rich formatting,
-        matching the built-in parser's treatment of footnote text)."""
-        parts = []
-        for node in nodes:
-            if not isinstance(node, dict):
-                continue
-            t = node.get('type')
-            if t in ('text', 'raw_text'):
-                parts.append(html.unescape(node.get('raw', '')))
-            elif t == 'codespan':
-                parts.append(node.get('raw', ''))
-            elif t in ('softbreak', 'linebreak'):
-                parts.append(' ')
-            else:
-                parts.append(self._flatten_text(node.get('children', [])))
-        return ''.join(parts)
-
-    def _build_table_grid(self, node):
-        """2-D list of cells (runs, see _inline_runs), plus the header row
-        count."""
-        grid = []
-        nheader = 0
-        for child in node.get('children', []):
-            if child.get('type') == 'table_head':
-                grid.append([_inline_runs(c.get('children', []))
-                             for c in child.get('children', [])])
-                nheader = 1
-            elif child.get('type') == 'table_body':
-                for tr in child.get('children', []):
-                    grid.append([_inline_runs(c.get('children', []))
-                                 for c in tr.get('children', [])])
-        return grid, nheader
-
-    def _visit(self, node):
-        t = node.get('type') if isinstance(node, dict) else None
-        if t in ('heading',):
+    def visit(node, quote=False):
+        t = node.get('type')
+        if t == 'heading':
             level = node.get('attrs', {}).get('level', 1)
-            self._start_par('h%d' % level, 0)
-            for child in node.get('children', []):
-                self._visit(child)
-            self._end_par()
+            blocks.append(('h%d' % level, 0, runs(node)))
         elif t == 'paragraph':
-            self._start_par('normal', 0)
-            for child in node.get('children', []):
-                self._visit(child)
-            self._end_par()
+            blocks.append(('quote' if quote else 'normal', 0, runs(node)))
         elif t == 'list':
-            ordered = node.get('attrs', {}).get('ordered', False)
-            ptype   = 'numbered' if ordered else 'list'
-            for item in node.get('children', []):
-                self._visit_list_item(item, ptype, 0)
+            visit_list(node, 0)
         elif t == 'block_code':
-            self._start_par('normal', 0)
-            self._end_par()
             for line in node.get('raw', '').splitlines():
-                self._start_par('pre', 0)
-                self._append(line or ' ', {})
-                self._end_par()
-            self._start_par('normal', 0)
-            self._end_par()
+                blocks.append(('pre', 0, [(line or ' ', {})]))
         elif t == 'table':
-            grid, nheader = self._build_table_grid(node)
+            grid, nheader = _table_grid(node)
             if grid:
-                table = _table(grid, nheader)
-                self._start_par('normal', 0)
-                self._end_par()
-                self._marks.append((len(self.text), 'table', table))
-                self._append('\n', {})  # table's own mandatory trailing NL
-                self._start_par('normal', 0)
-                self._end_par()
-        elif t == 'text' or t == 'raw_text':
-            self._append(html.unescape(node.get('raw', '')), self._cur_props)
+                blocks.append(('table', grid, nheader))
+        elif t == 'block_quote':
+            for child in node.get('children', []):
+                visit(child, quote=True)
         elif t == 'block_html':  # its text, without the tags
             text = html.unescape(re.sub(r'<[^>]*>', '', node.get('raw', '')))
             for line in filter(None, map(str.strip, text.splitlines())):
-                self._start_par('normal', 0)
-                self._append(line, {})
-                self._end_par()
-        elif t == 'inline_html' and _BR.fullmatch(node.get('raw', '')):
-            self._marks.append((len(self.text), 'br', None))
-        elif t == 'link':
-            old = self._cur_props
-            url = node.get('attrs', {}).get('url')
-            self._cur_props = dict(old, href=url) if url else old
-            for child in node.get('children', []):
-                self._visit(child)
-            self._cur_props = old
-        elif t == 'block_quote':
-            self._start_par('normal', 0)
-            self._end_par()
-            for child in node.get('children', []):
-                if child.get('type') == 'paragraph':
-                    self._start_par('quote', 0)
-                    for c in child.get('children', []):
-                        self._visit(c)
-                    self._end_par()
+                blocks.append(('normal', 0, [(line, {})]))
+
+    def visit_list(node, depth):
+        ordered = node.get('attrs', {}).get('ordered', False)
+        ptype = 'numbered' if ordered else 'list'
+        for item in node.get('children', []):
+            for child in item.get('children', []):
+                if child.get('type') == 'list':
+                    visit_list(child, depth + 1)
+                elif child.get('type') in ('paragraph', 'block_text'):
+                    blocks.append((ptype, depth, runs(child)))
                 else:
-                    self._visit(child)
-            self._start_par('normal', 0)
-            self._end_par()
-        elif t == 'strong':
-            old = self._cur_props
-            self._cur_props = dict(old, bold=True)
-            for child in node.get('children', []):
-                self._visit(child)
-            self._cur_props = old
-        elif t == 'emphasis':
-            old = self._cur_props
-            self._cur_props = dict(old, italic=True)
-            for child in node.get('children', []):
-                self._visit(child)
-            self._cur_props = old
-        elif t == 'strikethrough':
-            old = self._cur_props
-            self._cur_props = dict(old, strike=True)
-            for child in node.get('children', []):
-                self._visit(child)
-            self._cur_props = old
-        elif t == 'superscript' or t == 'subscript':
-            old = self._cur_props
-            self._cur_props = dict(old, vertical_position=t)
-            for child in node.get('children', []):
-                self._visit(child)
-            self._cur_props = old
+                    visit(child)
+
+    for node in nodes:
+        visit(node)
+    return blocks
+
+
+def _plain_text(nodes):
+    """The text of mistune nodes, without formatting (a footnote's)."""
+    parts = []
+    for node in nodes:
+        t = node.get('type')
+        if t in ('text', 'raw_text'):
+            parts.append(html.unescape(node.get('raw', '')))
         elif t == 'codespan':
-            self._append(node.get('raw', ''), {'font_family': 'Courier New'})
-        elif t == 'softbreak':
-            self._append(' ', self._cur_props)
-        elif t == 'linebreak':
-            self._marks.append((len(self.text), 'br', None))
-        elif t == 'image':
-            url = node.get('attrs', {}).get('url', '')
-            alt = self._flatten_text(node.get('children', []))
-            self._marks.append((len(self.text), 'image',
-                                image_run(alt, url)[1]['_image']))
-        elif t == 'block_text':
-            # a list item's inline content; the surrounding paragraph
-            # boundaries are already set up by _visit_list_item
-            for child in node.get('children', []):
-                self._visit(child)
-        elif t == 'footnote_ref':
-            key = node.get('raw')
-            content = self._fn_lookup.get(key, key)
-            self._marks.append((len(self.text), 'footnote', content))
-        elif t == 'footnotes':
-            pass  # already consumed by _collect_footnotes
-        elif isinstance(node, list):
-            for child in node:
-                self._visit(child)
+            parts.append(node.get('raw', ''))
+        elif t in ('softbreak', 'linebreak'):
+            parts.append(' ')
+        else:
+            parts.append(_plain_text(node.get('children', [])))
+    return ''.join(parts)
 
-    def _visit_list_item(self, item, ptype, depth):
-        for child in item.get('children', []):
-            if child.get('type') == 'list':
-                ordered  = child.get('attrs', {}).get('ordered', False)
-                subptype = 'numbered' if ordered else 'list'
-                for sub in child.get('children', []):
-                    self._visit_list_item(sub, subptype, depth + 1)
-            elif child.get('type') == 'paragraph':
-                self._start_par(ptype, depth)
-                for c in child.get('children', []):
-                    self._visit(c)
-                self._end_par()
-            else:
-                self._start_par(ptype, depth)
-                self._visit(child)
-                self._end_par()
 
-    def _start_par(self, ptype, indent):
-        self._cur_ptype  = ptype
-        self._cur_indent = indent
-        self._par_start  = len(self.text)
-
-    def _end_par(self):
-        start = self._par_start
-        self.text += '\n'
-        end = len(self.text)
-        self.pars.append((start, end, self._cur_ptype, self._cur_indent))
-        self._cur_ptype  = 'normal'
-        self._cur_indent = 0
-
-    def _append(self, text, props):
-        if not text:
-            return
-        start = len(self.text)
-        self.text += text
-        if props:
-            self.runs.append((start, len(self.text), props))
-
-    def _finalize(self):
-        from miniword.textmodel.textmodel import TextModel
-        doc = self.doc
-        doc.textmodel = TextModel(self.text)
-
-        for start, end, ptype, indent in self.pars:
-            # NL is at end-1 (the \n we appended)
-            _apply_parstyle(doc, end - 1, ptype, indent)
-
-        for start, end, props in self.runs:
-            doc.textmodel.set_properties(start, end, **props)
-
-        from miniword.footnotes.footnotes import Footnote
-        from miniword.images.images import Image
-        from miniword.textmodel.texeltree import T, ENDMARK, grouped
-        from miniword.core.texels import BR
-        # Footnotes and images are zero-width marks in self.text, recorded
-        # in document order. Insert back to front: each insertion only
-        # shifts positions after it, so not-yet-inserted (earlier) marks
-        # stay valid, and marks at the same position (e.g. adjacent
-        # footnote refs "x[^1][^2]") still end up in left-to-right order.
-        interned = {}  # equal image data -> one bytes object
-        for start, kind, payload in reversed(self._marks):
-            model = doc.textmodel.create_textmodel()
-            if kind == 'footnote':
-                fn = Footnote(grouped([T(payload), ENDMARK]))
-                model.texel = grouped([fn])
-            elif kind == 'br':
-                model.texel = grouped([BR()])
-            elif kind == 'image':
-                alt, data, *rest = payload
-                if data:
-                    data = interned.setdefault(data, data)
-                model.texel = grouped([_image(alt, data, *rest)])
-            else:  # 'table': already a full texel, no grouped() wrapper
-                model.texel = payload
-            doc.textmodel.insert(start, model)
+def _table_grid(node):
+    """2-D list of cells (runs, see _inline_runs) of a mistune table, and
+    the number of header rows."""
+    grid, nheader = [], 0
+    for child in node.get('children', []):
+        if child.get('type') == 'table_head':
+            grid.append([_inline_runs(c.get('children', []))
+                         for c in child.get('children', [])])
+            nheader = 1
+        elif child.get('type') == 'table_body':
+            for tr in child.get('children', []):
+                grid.append([_inline_runs(c.get('children', []))
+                             for c in tr.get('children', [])])
+    return grid, nheader
 
 
 # ---------------------------------------------------------------------------
@@ -1189,38 +729,6 @@ register_export("Markdown", ["md", "markdown"], _save,
 # Tests
 # ---------------------------------------------------------------------------
 
-def for_each_parser(fn):
-    """Register fn once per Markdown backend (decorator), as fn_builtin and
-    fn_mistune module-level test functions.
-
-    fn(load) calls load(md) and asserts on the result; load is either
-    _load_builtin or _load_mistune. The two generated tests are reported
-    separately by the runner -- a failure in one doesn't hide whether the
-    other backend would have passed or failed -- without writing (or
-    looping through, which has the same problem) the test body twice.
-    Skips the mistune variant gracefully where mistune isn't installed,
-    since it's an optional dependency.
-    """
-    import sys
-    module = sys.modules[fn.__module__]
-
-    def run_builtin():
-        fn(_load_builtin)
-    run_builtin.__doc__ = fn.__doc__
-    setattr(module, fn.__name__ + '_builtin', run_builtin)
-
-    def run_mistune():
-        try:
-            import mistune  # noqa: F401 -- availability check only
-        except ImportError:
-            return
-        fn(_load_mistune)
-    run_mistune.__doc__ = fn.__doc__
-    setattr(module, fn.__name__ + '_mistune', run_mistune)
-
-    return None  # the bare name shouldn't be picked up as its own test
-
-
 def _extract_pars(doc):
     """Extract list of (base, ptype, indent, runs) from a loaded Document.
 
@@ -1248,8 +756,8 @@ def _extract_pars(doc):
 
 
 def _parse(md):
-    """Parse a MD string with the built-in parser; see _extract_pars."""
-    return _extract_pars(_load_builtin(md))
+    """Parse a MD string; see _extract_pars."""
+    return _extract_pars(_load_mistune(md))
 
 
 def test_00():
@@ -1262,8 +770,7 @@ def test_00():
     assert ''.join(t for t, _ in runs) == 'Hello world'
 
 
-@for_each_parser
-def test_01(load):
+def test_01(load=_load_mistune):
     "headings h1–h3"
     pars = _extract_pars(load("# Heading 1\n## Heading 2\n### Heading 3\n"))
     assert pars[0][0] == 'h1'
@@ -1274,8 +781,7 @@ def test_01(load):
     assert ''.join(t for t, _ in pars[2][3]) == 'Heading 3'
 
 
-@for_each_parser
-def test_01b(load):
+def test_01b(load=_load_mistune):
     "indented ATX headings (up to 3 leading spaces) are still recognized"
     pars = _extract_pars(load("## Section\n   ### Sub A\n   ### Sub B\n"))
     assert pars[0][0] == 'h2'
@@ -1381,8 +887,7 @@ def test_08c():
     assert [indent for base, ptype, indent, runs in pars] == [0, 1, 0]
 
 
-@for_each_parser
-def test_08d(load):
+def test_08d(load=_load_mistune):
     "three-level nested list (with continuation line) ends up in NewLine.indent"
     md = ("- Top\n  continued.\n"
           "  - Level 1\n"
@@ -1434,8 +939,7 @@ def test_11():
         os.unlink(path)
 
 
-@for_each_parser
-def test_12(load):
+def test_12(load=_load_mistune):
     "table import"
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
@@ -1455,8 +959,7 @@ def test_12(load):
     assert [get_text(c) for c in cells] == ['A', 'B', 'C', 'D']
 
 
-@for_each_parser
-def test_13(load):
+def test_13(load=_load_mistune):
     "table export"
     md = "| Name | City |\n| --- | --- |\n| Einstein | Ulm |\n| Darwin | Shrewsbury |\n"
     doc = load(md)
@@ -1467,8 +970,7 @@ def test_13(load):
     assert '| Darwin' in out
 
 
-@for_each_parser
-def test_14(load):
+def test_14(load=_load_mistune):
     "blank NL paragraphs around table & pre"
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
@@ -1506,24 +1008,18 @@ def test_14(load):
 
 def test_15():
     "blockquote import and export roundtrip"
-    pars = _parse("> First line\n> Second line\n")
-    assert len(pars) == 2
-    for base, ptype, indent, runs in pars:
-        assert base == 'quote'
-    assert ''.join(t for t, _ in pars[0][3]) == 'First line'
-    assert ''.join(t for t, _ in pars[1][3]) == 'Second line'
+    pars = _parse("> First line\n> Second line\n")  # one paragraph
+    assert [(base, runs[0][0]) for base, _, _, runs in pars] == \
+        [('quote', 'First line Second line')]
 
-    doc = _load_builtin("> Hello\n> World\n")
+    doc = _load_mistune("> Hello\n>\n> World\n")  # two paragraphs
     out = _doc_to_md(doc)
-    assert '> Hello' in out
-    assert '> World' in out
-    # consecutive quotes — no blank line between them
-    lines = [l for l in out.splitlines() if l.startswith('>')]
-    assert len(lines) == 2
+    assert out == "> Hello\n>\n> World\n"  # one quote, kept apart
+    pars = _extract_pars(_load_mistune(out))
+    assert [runs[0][0] for *_, runs in pars] == ['Hello', 'World']
 
 
-@for_each_parser
-def test_16(load):
+def test_16(load=_load_mistune):
     "blank NL paragraphs inserted around quote blocks"
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
@@ -1625,8 +1121,7 @@ def test_20():
     assert 'Alice' in lines[2]
 
 
-@for_each_parser
-def test_21(load):
+def test_21(load=_load_mistune):
     "footnote import"
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
@@ -1658,8 +1153,7 @@ def test_22():
     assert '[^1]: Note text.' in md
 
 
-@for_each_parser
-def test_23(load):
+def test_23(load=_load_mistune):
     "footnote roundtrip"
     md = "Text with footnote[^a].\n\n[^a]: The note.\n"
     doc = load(md)
@@ -1668,8 +1162,7 @@ def test_23(load):
     assert '[^1]: The note.' in out
 
 
-@for_each_parser
-def test_24(load):
+def test_24(load=_load_mistune):
     "image import: data from URI"
     from miniword.images.images import iter_images
 
@@ -1686,8 +1179,7 @@ def test_24(load):
     assert '![photo.png](data:image/png;base64,%s)' % b64 in out
 
 
-@for_each_parser
-def test_25(load):
+def test_25(load=_load_mistune):
     "load test/tesla.md"
     import os
     from miniword.images.images import iter_images
@@ -1704,8 +1196,7 @@ def test_25(load):
     assert len(doc.textmodel) < 2000
 
 
-@for_each_parser
-def test_26(load):
+def test_26(load=_load_mistune):
     "load test/footnotes.md: roundtrip"
     import os
 
@@ -1720,8 +1211,7 @@ def test_26(load):
         assert '[^%d]:' % n in out
 
 
-@for_each_parser
-def test_27(load):
+def test_27(load=_load_mistune):
     "strikethrough import and export roundtrip"
     md_in = "Normal ~~struck~~ text.\n"
     doc   = load(md_in)
@@ -1729,8 +1219,7 @@ def test_27(load):
     assert '~~struck~~' in md_out
 
 
-@for_each_parser
-def test_28(load):
+def test_28(load=_load_mistune):
     "superscript and subscript import and export roundtrip"
     md_in = "H^2^O and CO~2~.\n"
     doc   = load(md_in)
@@ -1739,8 +1228,7 @@ def test_28(load):
     assert '~2~' in md_out
 
 
-@for_each_parser
-def test_29(load):
+def test_29(load=_load_mistune):
     "hyperlink import and export roundtrip"
     md_in = "Visit [Python](https://python.org) today.\n"
     doc   = load(md_in)
@@ -1748,8 +1236,7 @@ def test_29(load):
     assert '[Python](https://python.org)' in md_out
 
 
-@for_each_parser
-def test_30(load):
+def test_30(load=_load_mistune):
     "load test/hyperlinks.md: roundtrip preserves key markup"
     here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(here, 'test', 'hyperlinks.md')
@@ -1763,14 +1250,8 @@ def test_30(load):
 
 
 def test_31():
-    "_DocBuilder (mistune AST path): top-level list items have indent 0"
-    # Builds a minimal fake mistune-style AST by hand, so this exercises
-    # _DocBuilder without requiring the optional 'mistune' dependency.
-    from .mdfilter import _DocBuilder
-    from ..core.document import Document
-
-    doc = Document()
-    builder = _DocBuilder(doc)
+    "_md_blocks (mistune AST): top-level list items have indent 0"
+    # A minimal mistune-style AST by hand: exercises the adapter alone.
     nodes = [
         {'type': 'list', 'attrs': {'ordered': False}, 'children': [
             {'children': [
@@ -1783,9 +1264,8 @@ def test_31():
             {'children': [{'type': 'paragraph', 'children': [{'type': 'text', 'raw': 'Beta'}]}]},
         ]},
     ]
-    builder.process(nodes)
-    indents = [(ptype, indent, builder.text[start:end].strip())
-               for start, end, ptype, indent in builder.pars]
+    indents = [(ptype, indent, runs[0][0])
+               for ptype, indent, runs in _md_blocks(nodes)]
     assert indents == [('list', 0, 'Alpha'), ('list', 1, 'Nested'), ('list', 0, 'Beta')]
 
 
@@ -1926,11 +1406,7 @@ def _md_doc(text, **props):
 
 
 def _mistune_roundtrip(doc):
-    """doc saved as Markdown and loaded again (mistune), or None."""
-    try:
-        import mistune  # noqa: F401 -- availability check only
-    except ImportError:
-        return None
+    """doc saved as Markdown and loaded again."""
     return _load_mistune(_doc_to_md(doc))
 
 
@@ -1939,8 +1415,6 @@ def test_35():
     text = 'a *b* _c_ [d](e) `f` <g> ~h~ ^i^ \\ &amp; j\n' \
            '# not a heading\n- not a list\n1. not numbered\n> no quote\n'
     doc = _mistune_roundtrip(_md_doc(text))
-    if doc is None:
-        return
     assert doc.textmodel.get_text() == text
     pars = _extract_pars(doc)
     assert {(base, ptype) for base, ptype, _, _ in pars} == \
@@ -1950,10 +1424,6 @@ def test_35():
 
 def test_36():
     "hard line breaks are imported as BR and exported as backslash"
-    try:
-        import mistune  # noqa: F401 -- availability check only
-    except ImportError:
-        return
     from miniword.core.texels import BR
     for md in ('one  \ntwo\n', 'one\\\ntwo\n', 'one<br>two\n'):
         doc = _load_mistune(md)
@@ -1968,20 +1438,12 @@ def test_36():
 
 def test_37():
     "entities are decoded on import"
-    try:
-        import mistune  # noqa: F401 -- availability check only
-    except ImportError:
-        return
     doc = _load_mistune('a &amp; b &copy; &#65;\n')
     assert doc.textmodel.get_text() == 'a & b © A\n'
 
 
 def test_38():
     "an HTML block keeps its text (without the tags)"
-    try:
-        import mistune  # noqa: F401 -- availability check only
-    except ImportError:
-        return
     doc = _load_mistune('<div>x <b>y</b> &amp; z</div>\n\nb\n')
     assert [runs[0][0] for *_, runs in _extract_pars(doc)] == \
         ['x y & z', 'b']
@@ -1991,16 +1453,29 @@ def test_39():
     "inline code with backticks comes back unchanged"
     for code in ('x ` y', '`a`', 'a``b'):
         doc = _mistune_roundtrip(_md_doc(code, font_family='Courier New'))
-        if doc is None:
-            return
         assert doc.textmodel.get_text() == code + '\n', code
 
 
 def test_40():
     "task list items (kept as text) come back as task list items"
     md = '- [ ] todo\n- [x] done\n'
-    for load in (_load_builtin, _load_mistune):
-        try:
-            assert _doc_to_md(load(md)) == md
-        except ImportError:  # mistune is optional
-            pass
+    assert _doc_to_md(_load_mistune(md)) == md
+
+
+def test_41():
+    "inline code in bold stays bold"
+    pars = _parse("a **`code`** b\n")
+    styles = {text: style for text, style in pars[0][3]}
+    assert styles['code'].get('bold') is True
+    assert styles['code'].get('font_family') == 'Courier New'
+
+
+def test_42():
+    "an empty body paragraph separates code, quotes and tables from text"
+    from miniword.textmodel.utils import iter_paragraphs
+    doc = _load_mistune("Text\n\n```\nx\n```\n\n> quote\n")
+    pars = [(elems[-1].parstyle.get('base'), i2 - i1)  # style, length
+            for i1, i2, elems in iter_paragraphs(doc.textmodel.texel, 0)
+            if elems[-1].text == '\n']
+    assert pars == [('body', 5), ('body', 1), ('pre', 2), ('body', 1),
+                    ('quote', 6)]  # no empty paragraph at start or end

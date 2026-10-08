@@ -39,7 +39,7 @@ Miniword is developed under Linux. In principle it should run under Windows and 
 
 You always need Python >= 3.9 and wxPython >= 4.0. Further required dependencies vary between platforms — see the per-platform instructions below.
 
-Three optional packages add extra features and are all installed together via the `full` extra (`pip install ".[full]"`): `uharfbuzz` adds ligatures and non-Latin script support, `fonttools` is needed for non-Latin scripts specifically on Windows, and `mistune` enables richer Markdown import (without it, a built-in parser handles the common subset).
+Two optional packages add extra features and are installed together via the `full` extra (`pip install ".[full]"`): `uharfbuzz` adds ligatures and non-Latin script support, `fonttools` is needed for non-Latin scripts specifically on Windows. `mistune`, the Markdown parser, is always installed.
 
 ### Running without installation
 
@@ -83,7 +83,7 @@ cd miniword
 pip install .
 ```
 
-For ligature support, non-Latin scripts, and richer Markdown import, install with the `full` extra instead:
+For ligature support and non-Latin scripts, install with the `full` extra instead:
 
 ```
 pip install ".[full]"
@@ -106,7 +106,7 @@ again.
 
 ```
 cd miniword
-pip install ".[full]"   # full installs uharfbuzz, fonttools, mistune: ligatures, non-Latin scripts, richer Markdown import
+pip install ".[full]"   # full installs uharfbuzz, fonttools: ligatures, non-Latin scripts
 ```
 
 wxPython bundled `libcairo-2.dll` up through 4.2.1, so `pip install .` alone was enough for `cairocffi` to bind to it. wxPython >=4.2.2 dropped the bundled DLL (an upstream regression, reported at wxWidgets/Phoenix), so on those versions install a Cairo runtime yourself first, e.g. the [GTK3 runtime for Windows](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer).
@@ -132,7 +132,7 @@ Then install miniword (this also pulls in `cairocffi`):
 
 ```
 cd miniword
-pip install ".[full]"   # full installs uharfbuzz, mistune: ligatures, non-Latin scripts, richer Markdown import
+pip install ".[full]"   # full installs uharfbuzz: ligatures, non-Latin scripts
 ```
 
 MiniWord stores its configuration and plugins in `~/Library/Application Support/miniword/`.

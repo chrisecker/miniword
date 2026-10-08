@@ -74,8 +74,7 @@ _BLOCK_TAGS = ({'p', 'blockquote', 'pre', 'li', 'table',
 
 
 class _HTMLBlockBuilder(HTMLParser):
-    """Walks HTML and produces the same block list shape as
-    mdfilter._parse_md_paragraphs: a list of (ptype, indent, runs) or
+    """Walks HTML and produces a block list: (ptype, indent, runs) or
     ('table', grid) tuples, fed into mdfilter._build_blocks()."""
 
     def __init__(self, load=False):

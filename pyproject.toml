@@ -12,12 +12,12 @@ license = "LGPL-3.0-or-later"
 dependencies = [
     "wxPython>=4.0",
     "cairocffi",
+    "mistune",
 ]
 
 [project.optional-dependencies]
 full = [
     "uharfbuzz",
-    "mistune",
     "fonttools",
 ]
 

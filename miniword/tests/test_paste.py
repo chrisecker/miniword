@@ -153,26 +153,19 @@ def test_PASTE_7():
         text = '# Titel\n\n![Wal](wal.png)\n'  # relative
         with open(md, 'w') as f:
             f.write(text)
-        import sys
-        for mistune in (sys.modules.get('mistune'), None):
-            saved = sys.modules.get('mistune')
-            sys.modules['mistune'] = mistune  # None: built-in parser
-            try:
-                document = mdfilter._load(md)
-            finally:
-                sys.modules['mistune'] = saved
-            images = list(iter_images(document.textmodel.texel))
-            path = os.path.join(folder, 'wal.png')
-            assert [(i.content, i.path, i.relative) for i in images] == \
-                [(None, path, True)], mistune
-            assert imageio.external_content(path) == data
-            out = os.path.join(folder, 'out.md')
-            mdfilter._save(document, out)
-            assert open(out).read() == text  # the README stays as it was
-            os.makedirs(os.path.join(folder, 'sub'), exist_ok=True)
-            out = os.path.join(folder, 'sub', 'out.md')
-            mdfilter._save(document, out)
-            assert '![Wal](../wal.png)' in open(out).read()
+        document = mdfilter._load(md)
+        images = list(iter_images(document.textmodel.texel))
+        path = os.path.join(folder, 'wal.png')
+        assert [(i.content, i.path, i.relative) for i in images] == \
+            [(None, path, True)]
+        assert imageio.external_content(path) == data
+        out = os.path.join(folder, 'out.md')
+        mdfilter._save(document, out)
+        assert open(out).read() == text  # the README stays as it was
+        os.makedirs(os.path.join(folder, 'sub'), exist_ok=True)
+        out = os.path.join(folder, 'sub', 'out.md')
+        mdfilter._save(document, out)
+        assert '![Wal](../wal.png)' in open(out).read()
 
 
 def test_PASTE_10():
@@ -413,30 +406,23 @@ def texels_in_tables(texel):
 
 
 def test_PASTE_17():
-    "PASTE-17: Markdown table cells keep formatting and images (both parsers)"
-    import sys
+    "PASTE-17: Markdown table cells keep formatting and images"
     data = png(6)
     uri = 'data:image/png;base64,' + base64.b64encode(data).decode()
     md = ('| Name | Bild |\n|---|---|\n'
           '| **Wal** und [mehr](https://x.org) | ![Wal](%s) |\n'
           '| *klein* | ~~alt~~ |\n' % uri)
-    for mistune in (sys.modules.get('mistune'), None):
-        saved = sys.modules.get('mistune')
-        sys.modules['mistune'] = mistune  # None: built-in parser
-        try:
-            model = TextModel('')
-            model.texel = md_text_to_fragment(md, Document())
-        finally:
-            sys.modules['mistune'] = saved
-        table, = texels_in_tables(model.texel)
-        leaves = list(texels_in(table))
-        assert [i.content for i in iter_images(table)] == [data], mistune
-        styles = {t.text: t.style for t in leaves
-                  if getattr(t, 'text', '') in ('Wal', 'mehr', 'klein', 'alt')}
-        assert styles['Wal'].get('bold') is True, mistune
-        assert styles['mehr'].get('href') == 'https://x.org', mistune
-        assert styles['klein'].get('italic') is True, mistune
-        assert styles['alt'].get('strike') is True, mistune
+    model = TextModel('')
+    model.texel = md_text_to_fragment(md, Document())
+    table, = texels_in_tables(model.texel)
+    leaves = list(texels_in(table))
+    assert [i.content for i in iter_images(table)] == [data]
+    styles = {t.text: t.style for t in leaves
+              if getattr(t, 'text', '') in ('Wal', 'mehr', 'klein', 'alt')}
+    assert styles['Wal'].get('bold') is True
+    assert styles['mehr'].get('href') == 'https://x.org'
+    assert styles['klein'].get('italic') is True
+    assert styles['alt'].get('strike') is True
 
 
 def test_PASTE_18():
