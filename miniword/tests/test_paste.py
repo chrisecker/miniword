@@ -22,7 +22,7 @@ from ..images.images import fetch_image, iter_images
 from ..plugins.htmlfilter import clipboard_html, html_text_to_fragment
 from ..plugins.mdfilter import md_text_to_fragment
 from ..textmodel.textmodel import TextModel
-from .guitest import app
+from .guitest import app, close
 
 
 def png(width=2, height=2):
@@ -290,7 +290,7 @@ def test_PASTE_11():
         frame.paste()
         assert model.get_text() == 'plain'
     finally:
-        frame.Destroy()
+        close(frame)
 
 
 def test_PASTE_12():
@@ -313,7 +313,7 @@ def test_PASTE_12():
         assert model.get_text() == 'Titel\n'
         assert model.get_parstyle(0).get('base') == 'h1'
     finally:
-        frame.Destroy()
+        close(frame)
 
 
 def test_PASTE_13():

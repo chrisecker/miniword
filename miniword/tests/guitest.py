@@ -65,6 +65,17 @@ def settings_inspector():
         frame.Destroy()
 
 
+def close(frame):
+    """Destroy a main frame in a test (no event loop, no on_close):
+    release it first - else the layout's pending timer would fire later,
+    in another test, on the destroyed canvas, and the file history would
+    keep its menu - then free the windows at once (Destroy alone only
+    schedules it; Windows has a limit of window handles)."""
+    frame.release()
+    frame.DestroyChildren()
+    frame.Destroy()
+
+
 def click(control, value=None):
     """Set a check box or toggle button (to value) and send its event."""
     if value is not None:

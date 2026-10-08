@@ -12,7 +12,7 @@ from contextlib import contextmanager
 
 import wx
 
-from .guitest import app
+from .guitest import app, close
 
 
 @contextmanager
@@ -113,7 +113,7 @@ def test_KEY_4():
         frame.ProcessEvent(wx.CommandEvent(wx.wxEVT_MENU, bold.GetId()))
         assert model.get_style(1).get('bold') is True
     finally:
-        frame.Destroy()
+        close(frame)
 
 
 def menu_item(frame, menu_name, label):
@@ -147,7 +147,7 @@ def test_KEY_5():
         assert menu_item(frame, 'Edit', 'Move Paragraph &Up').GetItemLabel() \
             == 'Move Paragraph &Up\tAlt+Up'
     finally:
-        frame.Destroy()
+        close(frame)
 
 
 def test_KEY_6():

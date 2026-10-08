@@ -813,3 +813,144 @@ def test_PB_3():
     builder.assure_finished()
     assert [page_sig(p) for p in builder._layout.childs] == \
         [page_sig(p) for p in mk_builder(model)._layout.childs]
+
+
+# --- FIT: images too large for the text area are scaled down when they
+# come in (opened from Markdown/HTML, pasted, inserted) - as in Word.
+
+def test_FIT_1():
+    "FIT-1: a too wide image in natural size is scaled to the width"
+    from ..images.images import fit_images
+    app()
+    wide, small = image(content=png(2000, 1000)), image(content=png(20, 10))
+    sized = image(content=png(2000, 1000), scale_x=0.9, scale_y=0.9)
+    fitted = list(fit_images(grouped([wide, small, sized]), 400, 600)
+                  .childs)
+    assert (fitted[0].scale_x, fitted[0].scale_y) == (0.2, 0.2)
+    assert (fitted[1].scale_x, fitted[1].scale_y) == (1, 1)  # fits
+    assert (fitted[2].scale_x, fitted[2].scale_y) == (0.9, 0.9)  # user's
+
+
+def test_FIT_2():
+    "FIT-2: a too tall image is scaled to the height; also in footnotes"
+    from ..images.images import fit_images
+    from ..textmodel.submodel import Footnote
+    from ..textmodel.texeltree import ENDMARK
+    app()
+    tall = image(content=png(100, 1200))
+    fn = Footnote(grouped([image(content=png(800, 100)), ENDMARK]))
+    fitted = list(fit_images(grouped([tall, fn]), 400, 600).childs)
+    assert fitted[0].scale_x == fitted[0].scale_y == 0.5
+    assert fitted[1].content.childs[0].scale_x == 0.5
+
+
+def test_FIT_3():
+    "FIT-3: the text area comes from the document's paper and margins"
+    from ..layout.rowfactory import text_area
+    from ..core.units import mm, cm
+    w, h = text_area({})  # A4, 2.5 cm margins
+    assert abs(w - (210 * mm - 5 * cm)) < 1e-6
+    assert abs(h - (297 * mm - 5 * cm)) < 1e-6
+    w, h = text_area({'margin_left': 1 * cm, 'margin_right': 1 * cm})
+    assert abs(w - (210 * mm - 2 * cm)) < 1e-6
+
+
+def test_FIT_4():
+    "FIT-4: opening Markdown fits its images; a TXL file keeps them"
+    import base64
+    from ..io.importexport import open_file
+    from ..images.images import iter_images
+    from ..plugins import mdfilter  # noqa: F401 -- registers the filter
+    app()
+    data = png(2000, 1000)
+    with tempfile.TemporaryDirectory() as tmp:
+        md = os.path.join(tmp, 'a.md')
+        with open(md, 'w') as f:
+            f.write('![x](data:image/png;base64,%s)\n'
+                    % base64.b64encode(data).decode('ascii'))
+        img, = iter_images(open_file(md).textmodel.texel)
+        assert img.scale_x == img.scale_y < 0.25
+        txl = os.path.join(tmp, 'a.txl')
+        doc = mk_doc(image(content=data), '\n')
+        doc.save(txl)
+        img, = iter_images(open_file(txl).textmodel.texel)
+        assert img.scale_x == img.scale_y == 1
+
+
+def test_FIT_5():
+    "FIT-5: pasting fits the images to the document's text area"
+    from ..ui.mainwindow import MainFrame
+    from ..images.images import Image, iter_images
+    from ..layout.rowfactory import text_area
+    from .guitest import close
+    from ..core.units import cm
+    app()
+    doc = Document()
+    doc.set_setting('margin_left', 10 * cm)  # a narrow text area
+    frame = MainFrame(doc)
+    try:
+        frame._paste_fragment(lambda data, doc: grouped([Image(data)]),
+                              png(2000, 1000))
+        img, = iter_images(doc.textmodel.texel)
+        width = text_area(doc.settings)[0]  # 8.5 cm
+        assert abs(img.scale_x * 2000 - width) < 1e-6
+    finally:
+        close(frame)
+
+
+def picture_table(content):
+    """A 1 x 2 table: an image (content) in the first cell, text in the
+    second."""
+    from ..tables.tables import Table
+    from ..textmodel.texeltree import T
+    return Table((grouped([image(content=content)]), {}), (T('x'), {}),
+                 ncols=2)
+
+
+def test_FIT_6():
+    "FIT-6: in a table an image is fitted to its column, not the page"
+    from ..images.images import fit_images, iter_images
+    from ..tables.table_boxes import CELL_HPAD
+    app()
+    table = picture_table(png(2000, 1000))
+    img, = iter_images(fit_images(grouped([table]), 400, 600))
+    assert abs(img.scale_x * 2000 - (200 - CELL_HPAD)) < 1e-6
+
+
+def test_FIT_7():
+    "FIT-7: inserting into a table cell fits to the cell's column"
+    from ..layout.rowfactory import width_at
+    from ..tables.table_boxes import CELL_HPAD
+    from ..textmodel.texeltree import T, NL
+    texel = grouped([T('ab'), NL, picture_table(b''), NL])
+    assert width_at(texel, 1, 400) == 400  # in the text
+    assert width_at(texel, 4, 400) == 200 - CELL_HPAD  # in the first cell
+
+
+def test_FIT_8():
+    "FIT-8: images loaded from the web (bar) are fitted; one undo step"
+    from ..ui.mainwindow import MainFrame
+    from ..images.images import Image, iter_images
+    from .guitest import close
+    app()
+    url, data = 'https://example.org/big.png', png(2000, 1000)
+    doc = mk_doc('a', image(path=url), '\n')
+    saved = imageio.load_url
+
+    def load_url(u):
+        imageio.external[u] = data
+        return True
+    imageio.load_url = load_url
+    frame = MainFrame(doc)
+    try:
+        frame.load_external_images()
+        img, = iter_images(doc.textmodel.texel)
+        assert img.scale_x == img.scale_y < 0.25
+        assert frame.editor.index == 0  # the cursor stays
+        frame.editor.undo()
+        img, = iter_images(doc.textmodel.texel)
+        assert img.scale_x == 1
+    finally:
+        imageio.load_url = saved
+        imageio.external.pop(url, None)
+        close(frame)

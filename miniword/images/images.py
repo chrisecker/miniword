@@ -238,6 +238,48 @@ def blob_key(content):
     return hashlib.sha256(content).hexdigest()[:16] + image_extension(content)
 
 
+def fit_images(texel, width, height):
+    """texel with each image in natural size (scale 1) that is larger
+    than width x height scaled down to fit, keeping its proportions - as
+    Word does when inserting. Sizes set by the user stay. In a table to
+    the cell's column; also in footnotes."""
+    from ..textmodel.texeltree import Group
+    from ..textmodel.submodel import Footnote
+    from ..tables.tables import Table
+    from ..layout.rowfactory import cell_width
+    from .imageio import pixel_size, content_of
+    if isinstance(texel, Image):
+        size = (texel.scale_x, texel.scale_y) == (1, 1) \
+            and pixel_size(content_of(texel))
+        scale = size and min(1, width / size[0], height / size[1])
+        if not scale or scale == 1:
+            return texel
+        return texel.set_scale_x(scale).set_scale_y(scale)
+    if isinstance(texel, Footnote):
+        return texel.set_content(fit_images(texel.content, width, height))
+    if isinstance(texel, Table):
+        return texel.set_childs([
+            fit_images(c, cell_width(texel, k, width) if k % 2 else width,
+                       height)
+            for k, c in enumerate(texel.childs)])
+    if texel.is_group:
+        return Group([fit_images(c, width, height) for c in texel.childs])
+    if texel.is_container:
+        return texel.set_childs([fit_images(c, width, height)
+                                 for c in texel.childs])
+    return texel
+
+
+def fit_to_page(texel, settings, where=None):
+    """fit_images to the text area of a document with settings; where:
+    (texel, index) it is inserted at, e.g. in a table cell."""
+    from ..layout.rowfactory import text_area, width_at
+    width, height = text_area(settings)
+    if where is not None:
+        width = width_at(*where, width)
+    return fit_images(texel, width, height)
+
+
 def iter_images(texel):
     """Yield all Image texels within texel (descending into groups,
     containers, e.g. tables, and footnote contents)."""

@@ -98,6 +98,9 @@ def open_file(path):
         raise ValueError("No import filter for '.%s' files." % ext)
     doc = fn(path)
     doc.home_format = ext
+    from ..images.images import fit_to_page  # too large images: smaller
+    model = doc.textmodel
+    model.texel = fit_to_page(model.texel, doc.settings)
     return doc
 
 

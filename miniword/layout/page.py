@@ -152,9 +152,14 @@ class Page(Box):
                 self.device.draw_text(text, x + dx, y + middle - h / 2, gc)
 
     def _draw(self, x, y, gc):
-        Box.draw(self, x, y, gc)
-        self.draw_footnotes(x, y, gc)
-        self.draw_header_footer(x, y, gc)
+        # nothing outside the page, e.g. an image set wider than it
+        self.device.push_clip(x, y, self.width, self.height, gc)
+        try:
+            Box.draw(self, x, y, gc)
+            self.draw_footnotes(x, y, gc)
+            self.draw_header_footer(x, y, gc)
+        finally:
+            self.device.pop_clip(gc)
 
     def draw(self, x, y, gc):
         self._draw(x, y, gc)

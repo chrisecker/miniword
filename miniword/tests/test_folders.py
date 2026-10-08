@@ -2,7 +2,8 @@
 
 """
 Tests for the folder the file dialogs start in: the folder of the last
-document opened or saved, while the app runs. IDs DIR-n.
+document opened or saved, while the app runs (IDs DIR-n); and for the
+file history when a window's menu goes away (IDs WIN-n).
 
 Run with: python runtests.py miniword/tests/test_folders.py
 """
@@ -10,7 +11,7 @@ Run with: python runtests.py miniword/tests/test_folders.py
 import os
 import tempfile
 
-from .guitest import app
+from .guitest import app, close
 
 
 def test_DIR_1():
@@ -35,6 +36,35 @@ def test_DIR_2():
             assert mw.last_dir() == tmp
             assert other._dialog_dir() == tmp
         finally:
-            for f in (frame, other):
-                f.DestroyChildren()
-                f.Destroy()
+            close(frame)
+            close(other)
+
+
+def test_WIN_1():
+    "WIN-1: a rebuilt menu (DPI change) leaves the file history"
+    from ..core.document import Document
+    from ..ui import mainwindow as mw
+    app()
+    frame = mw.MainFrame(Document())
+    try:
+        old = frame._recent_menu
+        frame._build_menu()
+        menus = mw.get_file_history().GetMenus()
+        assert old not in menus and frame._recent_menu in menus
+    finally:
+        close(frame)
+
+
+def test_WIN_2():
+    "WIN-2: release (on closing) stops the layout and leaves the history"
+    from ..core.document import Document
+    from ..ui import mainwindow as mw
+    app()
+    frame = mw.MainFrame(Document())
+    try:
+        frame.canvas.builder.schedule()
+        frame.release()
+        assert frame._recent_menu not in mw.get_file_history().GetMenus()
+        assert frame.canvas.builder._scheduled is None
+    finally:
+        close(frame)

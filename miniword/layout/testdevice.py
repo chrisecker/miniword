@@ -56,6 +56,12 @@ class TestDevice:
     def fill_rect(self, x, y, w, h, color, dc):
         pass
 
+    def push_clip(self, x, y, w, h, dc):
+        pass
+
+    def pop_clip(self, dc):
+        pass
+
     def draw_blinkingrect(self, x, y, w, h, dc):
         pass
 

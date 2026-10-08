@@ -47,6 +47,7 @@ from copy import copy as shallow_copy
 from ..textmodel.texeltree import length, NL, grouped
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.textmodel import get_texel
+from ..core.utils import get_path
 from ..core.styles import n_levels
 from ..core.units import mm, cm
 from ..core.styles import updated
@@ -174,6 +175,14 @@ def state_from_settings(settings):
     state.border = border
     state.settings = props
     return state
+
+
+def text_area(settings):
+    """(width, height) of the text area of a page: the paper without
+    the margins."""
+    state = state_from_settings(settings)
+    top, right, bottom, left = state.border
+    return state.width, state.geometry[1] - top - bottom
 
     
 class Factory:
@@ -518,6 +527,26 @@ def table_col_widths(col_widths, ncols, width):
         auto_w = (width - sum(explicit)) / n_auto if n_auto else 0
         return [w if w is not None else auto_w for w in col_widths]
     return [width / ncols] * ncols
+
+
+def cell_width(table, k, width):
+    """Text width in the cell that is the table's child k, the table
+    being width wide."""
+    column = (k - 1) // 2 % table.ncols  # childs: SEP, cell, SEP, ...
+    return table_col_widths(table.col_widths, table.ncols, width)[column] \
+        - CELL_HPAD
+
+
+def width_at(texel, i, width):
+    """Text width at index i of texel (width wide): in a table cell its
+    column's, also in nested tables."""
+    from ..tables.tables import Table
+    path = [node for _, _, node in get_path(texel, i)]
+    for node, child in zip(path, path[1:]):
+        if isinstance(node, Table):
+            k = next(k for k, c in enumerate(node.childs) if c is child)
+            width = cell_width(node, k, width)
+    return width
 
 
 def split_at_tables(boxes):

@@ -335,6 +335,15 @@ class PageBuilder(BuilderBase):
         if self._scheduled is None:
             self._scheduled = wx.CallLater(1, self.build_background)
 
+    def stop(self):
+        """Build no further (the window closes): also no pending
+        background step, which would run on the destroyed canvas."""
+        self.generator = None
+        self._layout.is_finished = True  # stops buildto_y immediately
+        if self._scheduled is not None:
+            self._scheduled.Stop()
+            self._scheduled = None
+
     @trace
     def assure_finished(self, callback=NOOP):
         layout = self._layout

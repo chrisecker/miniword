@@ -23,6 +23,15 @@ class CellBox(RowsBox):
         RowsBox.__init__(self, data, *args, **kwds)
         self.length += 1
 
+    def draw(self, x, y, gc):
+        # nothing in the neighbouring cells, e.g. a too wide image
+        self.device.push_clip(x, y, self.width, self.height + self.depth,
+                              gc)
+        try:
+            RowsBox.draw(self, x, y, gc)
+        finally:
+            self.device.pop_clip(gc)
+
     def draw_decorations(self, x, y, gc):
         bgcolor = self.style.get('cell_bgcolor')
         if bgcolor is not None:

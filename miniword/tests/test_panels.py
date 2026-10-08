@@ -10,7 +10,7 @@ from contextlib import contextmanager
 
 import wx
 
-from .guitest import app, click
+from .guitest import app, click, close
 
 
 @contextmanager
@@ -24,10 +24,7 @@ def main_frame(text=''):
     try:
         yield frame
     finally:
-        # without an event loop Destroy() only schedules a frame's
-        # deletion: free its many windows now (Windows has a handle limit)
-        frame.DestroyChildren()
-        frame.Destroy()
+        close(frame)
 
 
 def labels(window):

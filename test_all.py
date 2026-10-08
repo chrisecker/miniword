@@ -55,6 +55,7 @@ modules = [
     "miniword.tests.test_panels",
     "miniword.tests.test_folders",
     "miniword.tests.test_desktop",
+    "miniword.tests.test_clip",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",

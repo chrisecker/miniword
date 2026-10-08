@@ -108,6 +108,13 @@ def get_file_history():
     return file_history
 
 
+def _forget_menu(menu):
+    """Take menu out of the file history (before it is destroyed)."""
+    history = get_file_history()
+    if menu in history.GetMenus():
+        history.RemoveMenu(menu)
+
+
 def save_file_history():
     config = wx.FileConfig(localFilename=_config_path())
     file_history.Save(config)
@@ -341,6 +348,27 @@ class MainFrame(wx.Frame, ViewBase):
         self.image_inspector.update()
         self.check_external_images()
 
+    def _fit_loaded(self, urls):
+        """Images just loaded from urls, now of known size: too large ones
+        made smaller (fit_to_page), in one undo step. The cursor stays."""
+        from ..images.images import Image, fit_to_page
+        from ..textmodel.utils import iter_leafes
+        editor = self.editor
+        if getattr(editor, 'flow', 0) != 0:
+            return  # the images are replaced in the main text
+        root, index = self.document.textmodel.texel, editor.index
+        with editor.atomic():
+            for i1, i2, texel in list(iter_leafes(root, 0, True)):
+                if not isinstance(texel, Image) or texel.path not in urls:
+                    continue
+                fitted = fit_to_page(texel, self.document.settings,
+                                     (root, i1))
+                if fitted is not texel:
+                    editor.set_texel_attributes(
+                        i1, texel, scale_x=fitted.scale_x,
+                        scale_y=fitted.scale_y)
+        editor.index = index
+
     def check_external_images(self):
         """Web images aren't loaded on opening (privacy, as in Word): a
         bar offers to load them."""
@@ -359,6 +387,7 @@ class MainFrame(wx.Frame, ViewBase):
         urls = unloaded_urls(self.document.textmodel.texel)
         with wx.BusyCursor():
             failed = [url for url in sorted(urls) if not load_url(url)]
+        self._fit_loaded(urls - set(failed))
         self._rebuild()
         if failed:
             self.image_bar.show("%d of %d images not loaded: %s" % (
@@ -430,6 +459,8 @@ class MainFrame(wx.Frame, ViewBase):
         file_menu = wx.Menu()
         file_menu.Append(wx.ID_NEW,    "&New\tCtrl+N")
         file_menu.Append(wx.ID_OPEN,   "&Open\tCtrl+O")
+        if hasattr(self, '_recent_menu'):  # a rebuild (DPI change)
+            _forget_menu(self._recent_menu)
         self._recent_menu = wx.Menu()
         file_menu.AppendSubMenu(self._recent_menu, "Open &Recent")
         fh = get_file_history()
@@ -861,13 +892,18 @@ class MainFrame(wx.Frame, ViewBase):
             elif result == wx.ID_CANCEL:
                 event.Veto()
                 return
-        builder = getattr(getattr(self, 'canvas', None), 'builder', None)
-        if builder is not None:
-            builder.generator = None
-            builder._layout.is_finished = True  # stop buildto_y immediately
-        get_file_history().RemoveMenu(self._recent_menu)
+        self.release()
         self._save_geometry()
         event.Skip()
+
+    def release(self):
+        """Free what outlives the window: stop the layout, take the
+        recent files menu out of the app-wide file history (on closing;
+        tests call it too)."""
+        builder = getattr(getattr(self, 'canvas', None), 'builder', None)
+        if builder is not None:
+            builder.stop()
+        _forget_menu(self._recent_menu)
 
     def formatting_marks(self):
         """View > Formatting marks: only redrawn, nothing is rebuilt."""
@@ -1038,6 +1074,11 @@ class MainFrame(wx.Frame, ViewBase):
         return texel is not None
 
     def _insert_fragment(self, texel):
+        """Insert texel; too large images are made smaller (fit_to_page)."""
+        from ..images.images import fit_to_page
+        editor = self.editor
+        texel = fit_to_page(texel, self.document.settings,
+                            (editor.target.texel, editor.index))
         with self.editor.atomic():
             self.editor.remove()
             self.editor.insert_texel(texel)

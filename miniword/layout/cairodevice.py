@@ -523,6 +523,15 @@ class CairoDevice:
         ctx.rectangle(x, y, w, h)
         ctx.stroke()
 
+    def push_clip(self, x, y, w, h, ctx):
+        """Draw only inside the rect until pop_clip."""
+        ctx.save()
+        ctx.rectangle(x, y, w, h)
+        ctx.clip()
+
+    def pop_clip(self, ctx):
+        ctx.restore()
+
     def fill_rect(self, x, y, w, h, color, ctx):
         c = wx.Colour(color)
         ctx.set_source_rgba(
