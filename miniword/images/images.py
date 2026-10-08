@@ -249,10 +249,11 @@ def fit_images(texel, width, height):
     from ..layout.rowfactory import cell_width
     from .imageio import pixel_size, content_of
     if isinstance(texel, Image):
-        size = (texel.scale_x, texel.scale_y) == (1, 1) \
-            and pixel_size(content_of(texel))
-        scale = size and min(1, width / size[0], height / size[1])
-        if not scale or scale == 1:
+        if (texel.scale_x, texel.scale_y) != (1, 1):
+            return texel  # a size set by the user
+        size = pixel_size(content_of(texel))
+        scale = min(1, width / size[0], height / size[1]) if size else 1
+        if scale == 1:
             return texel
         return texel.set_scale_x(scale).set_scale_y(scale)
     if isinstance(texel, Footnote):

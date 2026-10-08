@@ -36,9 +36,7 @@ def _save(doc, path):
 
 def _doc_to_md(doc):
     from miniword.textmodel.utils import iter_paragraphs
-    from miniword.textmodel.texeltree import get_text
-    from miniword.textmodel.utils import iter_leafes
-    from miniword.textmodel.texeltree import NewLine
+    from miniword.textmodel.texeltree import get_text, NewLine
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
     from miniword.core.texels import Rule
@@ -64,16 +62,12 @@ def _doc_to_md(doc):
             continue  # ENDMARK — skip
 
         content = elems[:-1]
-        if len(content) == 1 and isinstance(content[0], TableTexel):
+        if len(content) == 1 and isinstance(content[0], (TableTexel, Rule)):
             close_pre()
-            if parts:
+            if parts:  # a blank line before (--- under text: a heading)
                 parts.append('')
-            parts.extend(_table_to_md(content[0]))
-            prev_block_key = None
-            continue
-        if len(content) == 1 and isinstance(content[0], Rule):
-            close_pre()
-            parts.extend([''] * bool(parts) + ['---'])  # not under text
+            parts.extend(['---'] if isinstance(content[0], Rule)
+                         else _table_to_md(content[0]))
             prev_block_key = None
             continue
 
@@ -102,12 +96,13 @@ def _doc_to_md(doc):
         close_pre()
 
         # Blank line between block elements, but not between consecutive same-type blocks
-        block_key = base if base in ('quote',) + _ALERTS else \
+        quote = base in ('quote',) + _ALERTS
+        block_key = base if quote else \
             ('list' if ptype in ('list', 'numbered') else None)  # one list
         same_block = block_key is not None and prev_block_key == block_key
         if parts and not same_block:
             parts.append('')
-        elif same_block and base in ('quote',) + _ALERTS:
+        elif same_block and quote:
             parts.append('>')  # else they'd join into one paragraph
         if base in _ALERTS and not same_block:
             parts.append('> [!%s]' % base.upper())
@@ -115,7 +110,7 @@ def _doc_to_md(doc):
         if base in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
             level = int(base[1])
             parts.append('#' * level + ' ' + inline)
-        elif base in ('quote',) + _ALERTS:
+        elif quote:
             parts.append('> ' + inline)
         elif ptype in ('list', 'numbered'):
             number = None
@@ -138,7 +133,6 @@ def _doc_to_md(doc):
 
     close_pre()
     if footnotes:
-        from miniword.textmodel.texeltree import get_text
         parts.append('')
         for n, fn in enumerate(footnotes, 1):
             # content ends with an ENDMARK ('\n'); strip it for the inline definition
@@ -172,13 +166,17 @@ def _table_to_md(table):
     return lines
 
 
+def _alignment_sets(table):
+    """Per column the set of its cells' alignments."""
+    seps = table.childs[2::2]  # their parstyle is the cell's paragraph's
+    return [{seps[r * table.ncols + c].parstyle.get('alignment')
+             for r in range(table.nrows)} for c in range(table.ncols)]
+
+
 def _column_aligns(table):
     """Each column's alignment: its cells', if they all agree."""
-    seps = table.childs[2::2]  # their parstyle is the cell's paragraph's
-    columns = [{seps[r * table.ncols + c].parstyle.get('alignment')
-                for r in range(table.nrows)} for c in range(table.ncols)]
     return [column.pop() if len(column) == 1 else None
-            for column in columns]
+            for column in _alignment_sets(table)]
 
 
 def _rule(align, width):
@@ -405,8 +403,8 @@ def _build_blocks(doc, blocks):
         size += len(s)
 
     def kind(block):
-        return block and (block[0] if block[0] in ('table', 'pre', 'quote')
-                          + _ALERTS else 'text')
+        return block[0] if block[0] in ('table', 'pre', 'quote') + _ALERTS \
+            else 'text'
 
     for k, block in enumerate(blocks):
         prev = kind(blocks[k - 1]) if k else None
@@ -453,13 +451,8 @@ def _build_blocks(doc, blocks):
 
 
 def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
-    if ptype.startswith('h') \
-            or ptype in ('pre', 'list', 'numbered', 'quote', 'rule') \
-            + _ALERTS:
-        base = ptype
-    else:
-        base = 'body'
-    ps = dict(more, base=base)
+    # the styles are named as the ptypes, but 'normal' is 'body'
+    ps = dict(more, base='body' if ptype == 'normal' else ptype)
     if ptype in ('list', 'numbered'):
         ps['paragraph_type'] = ptype
     model.set_parstyle(nl_pos, ps)
@@ -726,11 +719,10 @@ def _alert(children):
     m = first and first[0].get('type') == 'text' \
         and re.fullmatch(r'\[!(\w+)\]\s*', first[0].get('raw', ''))
     kind = m and m.group(1).lower()
-    if kind not in _ALERTS or first[1:2] \
-            and first[1].get('type') != 'softbreak':
+    after = first[1:]  # [!NOTE] must be alone: a line break, or nothing
+    if kind not in _ALERTS or after and after[0].get('type') != 'softbreak':
         return 'quote', children
-    rest = first[2:]
-    head = [dict(children[0], children=rest)] if rest else []
+    head = [dict(children[0], children=after[1:])] if after[1:] else []
     return kind, head + children[1:]
 
 
@@ -778,6 +770,8 @@ def _check_md(doc):
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables.tables import Table as TableTexel
     from miniword.images.images import Image as ImageTexel
+    from miniword.footnotes.footnotes import Footnote as FootnoteTexel
+    from miniword.core.texels import Rule, Checkbox
 
     _OK_BASES  = set(_ALERTS) | {
         'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -817,8 +811,6 @@ def _check_md(doc):
         for key in ps:
             if key not in _OK_PAR:
                 issues.add("paragraph attribute '%s'" % key)
-        from miniword.footnotes.footnotes import Footnote as FootnoteTexel
-        from miniword.core.texels import Rule, Checkbox
         for elem in elems[:-1]:
             if isinstance(elem, FootnoteTexel):
                 continue
@@ -838,10 +830,7 @@ def _check_md(doc):
                     if elem.crop is not None:
                         issues.add("image crop")
                 elif isinstance(elem, TableTexel):
-                    seps = elem.childs[2::2]
-                    if any(len({seps[r * elem.ncols + c].parstyle.get(
-                            'alignment') for r in range(elem.nrows)}) > 1
-                           for c in range(elem.ncols)):
+                    if any(len(s) > 1 for s in _alignment_sets(elem)):
                         issues.add("cells of a table column aligned "
                                    "differently")
                     if elem.nheader == 0:

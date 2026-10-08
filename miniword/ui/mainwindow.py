@@ -135,6 +135,14 @@ def remember_dir(path):
     _last_dir = os.path.dirname(os.path.abspath(path))
 
 
+def note_file(path):
+    """path was opened or saved: into the recent files; its folder is
+    where the file dialogs start."""
+    get_file_history().AddFileToHistory(path)
+    save_file_history()
+    remember_dir(path)
+
+
 def _miniword_dir():
     if sys.platform == 'win32':
         base = os.environ.get('APPDATA', os.path.expanduser('~'))
@@ -295,8 +303,7 @@ class _FileDropTarget(wx.FileDropTarget):
             frame._current_path = path
             frame._update_title()
             frame.Show()
-            get_file_history().AddFileToHistory(path)
-            save_file_history()
+            note_file(path)
         return True
 
 
@@ -968,9 +975,7 @@ class MainFrame(wx.Frame, ViewBase):
         frame._current_path = path
         frame._update_title()
         frame.Show()
-        get_file_history().AddFileToHistory(path)
-        save_file_history()
-        remember_dir(path)
+        note_file(path)
 
     def on_recent_file(self, event):
         idx = event.GetId() - wx.ID_FILE1
@@ -988,9 +993,7 @@ class MainFrame(wx.Frame, ViewBase):
         frame._current_path = path
         frame._update_title()
         frame.Show()
-        fh.AddFileToHistory(path)
-        save_file_history()
-        remember_dir(path)
+        note_file(path)
 
     def import_document(self):
         from ..io import importexport
@@ -1010,9 +1013,7 @@ class MainFrame(wx.Frame, ViewBase):
             return
         frame = MainFrame(doc)
         frame.Show()
-        get_file_history().AddFileToHistory(path)
-        save_file_history()
-        remember_dir(path)
+        note_file(path)
 
     def export_document(self):
         from ..io import importexport
@@ -1105,9 +1106,9 @@ class MainFrame(wx.Frame, ViewBase):
         editor = self.editor
         texel = fit_to_page(texel, self.document.settings,
                             (editor.target.texel, editor.index))
-        with self.editor.atomic():
-            self.editor.remove()
-            self.editor.insert_texel(texel)
+        with editor.atomic():
+            editor.remove()
+            editor.insert_texel(texel)
 
     def save(self):
         if not self._current_path:
@@ -1160,9 +1161,7 @@ class MainFrame(wx.Frame, ViewBase):
             fn(self.document, path)
         self.editor.clear_undo()
         self._update_title()
-        get_file_history().AddFileToHistory(path)
-        save_file_history()
-        remember_dir(path)
+        note_file(path)
 
     def _confirm_lossy_save(self, path, warnings):
         items = '\n'.join('\u2022 ' + w for w in warnings)

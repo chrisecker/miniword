@@ -440,9 +440,8 @@ class ImageInspector(SidePanel):
     def _insert(self, image):
         """Insert image at the cursor, too large ones made smaller."""
         editor = self.editor
-        editor.insert_texel(fit_to_page(
-            grouped([image]), self.document.settings,
-            (editor.target.texel, editor.index)))
+        editor.insert_texel(fit_to_page(image, self.document.settings,
+                                        (editor.target.texel, editor.index)))
 
     def _on_export(self, event):
         if self._image is None:
