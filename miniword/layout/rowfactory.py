@@ -53,8 +53,8 @@ from ..core.units import mm, cm
 from ..core.styles import updated
 from ..core.papersizes import PAPER_SIZES
 from ..core.document import settings_default
-from .boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, \
-    RowsBox
+from .boxes import TextBox, NewlineBox, EndBox, TabulatorBox, RuleBox, \
+    Row, RowsBox
 from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
@@ -216,6 +216,12 @@ class Factory:
         # what actually forces the break when wrapping.
         style = self.stylesheet.mk_style(parstyle, texel.style)
         return ForceBreakBox(style, self.device)
+
+    def Rule_handler(self, texel, parstyle):
+        """A rule as wide as the paragraph's (first) line."""
+        style = self.stylesheet.mk_style(parstyle, texel.style)
+        width = self._dims(parstyle, parstyle['level'])[2]
+        return RuleBox(width, style['font_size'], self.device)
 
     def Tabulator_handler(self, texel, parstyle):
         style = self.stylesheet.mk_style(parstyle, texel.style)

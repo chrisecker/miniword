@@ -21,7 +21,7 @@ ALERTS = {'note': ('Note', '#0969da'), 'tip': ('Tip', '#1a7f37'),
           'warning': ('Warning', '#9a6700'),
           'caution': ('Caution', '#d1242f')}
 STYLE_NAMES = ('body',) + HEADINGS + ('pre', 'list', 'numbered', 'quote') \
-    + tuple(ALERTS) + ('pageheader', 'pagefooter')
+    + tuple(ALERTS) + ('rule', 'pageheader', 'pagefooter')
 FONTS = {'sans': 'Arial', 'serif': 'Times New Roman'}
 MONO = 'Courier New'
 LINE = '#d0d7de'  # grey lines (code frame, quote bar, heading rules)
@@ -80,6 +80,8 @@ def _base(font, size, compact=False):
         'quote': dict(text, name='Quote', role='quote',
                       block_color='#F0F0F0',
                       block_offset=2 * MM * size / 12),
+        'rule': dict(text, name='Horizontal rule', role='rule',
+                     space_before=size, space_after=size),
         'pageheader': dict(name='Page header', role='header',
                            font_family=family, font_size=round(size * .75),
                            color='#606060'),

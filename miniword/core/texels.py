@@ -7,3 +7,11 @@ class BR(Single):
 
     def __repr__(self):
         return 'BR'
+
+
+class Rule(Single):
+    """Horizontal rule, alone in its paragraph (Markdown ---)."""
+    text = '\u2015'
+
+    def __repr__(self):
+        return 'HR'

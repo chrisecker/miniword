@@ -246,6 +246,15 @@ NL({indent=1, color="red"})     # indent=1, with text color override
 Tab character, used as horizontal separator within containers. Carries the same
 properties as `NL`.
 
+**`BR`** / **`BR({prop=val, ...})`**
+
+Forced line break (Shift+Enter): ends the line, not the paragraph.
+
+**`HR`** / **`HR({prop=val, ...})`**
+
+Horizontal rule, alone in its paragraph (Markdown `---`). The paragraph's
+style (role `rule`) gives the space above and below.
+
 ---
 
 **`IMG("blob_id")`** / **`IMG("blob_id", {scale=factor})`** / **`IMG("blob_id", {crop_x=x, crop_y=y, crop_w=w, crop_h=h})`**

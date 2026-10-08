@@ -526,6 +526,9 @@ class MainFrame(wx.Frame, ViewBase):
             item = insert_menu.Append(wx.ID_ANY, label)
             self.Bind(wx.EVT_MENU, lambda _, c=char: self.insert_char(c),
                       item)
+        insert_menu.AppendSeparator()
+        item = insert_menu.Append(wx.ID_ANY, "Horizontal &Rule")
+        self.Bind(wx.EVT_MENU, lambda _: self.insert_rule(), item)
         bar.Append(insert_menu, "&Insert")
 
         format_menu = wx.Menu()
@@ -911,6 +914,20 @@ class MainFrame(wx.Frame, ViewBase):
         self.canvas.show_marks = show
         get_config().set('show_formatting_marks', show)
         self.canvas.refresh()
+
+    def insert_rule(self):
+        """Insert a horizontal rule, in a paragraph of its own (style
+        with the role 'rule', if there is one)."""
+        from ..core.texels import Rule
+        from ..textmodel.texeltree import NL, grouped
+        editor = self.editor
+        with editor.atomic():
+            editor.remove()
+            if editor.index != editor.target.linestart(editor.index):
+                editor.insert_newline()
+            key = editor.role_key('rule')
+            nl = NL.set_parstyle({'base': key}) if key else NL
+            editor.insert_texel(grouped([Rule(), nl]))
 
     def insert_char(self, char):
         """Type char: it replaces the selection."""

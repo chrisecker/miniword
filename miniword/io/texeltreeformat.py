@@ -46,7 +46,7 @@ from ..textmodel.texeltree import (
     as_style, grouped, join, length, depth,
     iter_childs, takeout
 )
-from ..core.texels import BR
+from ..core.texels import BR, Rule
 from ..textmodel.submodel import Footnote
 
 
@@ -113,11 +113,12 @@ def serialize_texel(texel, indent=0):
                 return '%sTAB(%s)' % (pad, s)
             return '%sTAB' % pad
 
-        elif isinstance(texel, BR):
+        elif isinstance(texel, (BR, Rule)):
+            name = 'BR' if isinstance(texel, BR) else 'HR'
             s = serialize_style(texel.style) if texel.style else ''
             if s:
-                return '%sBR(%s)' % (pad, s)
-            return '%sBR' % pad
+                return '%s%s(%s)' % (pad, name, s)
+            return pad + name
 
         elif isinstance(texel, Footnote):
             return serialize_footnote(texel, indent)
@@ -455,8 +456,8 @@ class _Parser:
             return self.parse_newline()
         elif value == 'TAB':
             return self.parse_tab()
-        elif value == 'BR':
-            return self.parse_br()
+        elif value in ('BR', 'HR'):
+            return self.parse_br(BR if value == 'BR' else Rule)
         elif value == 'S':
             return self.parse_single()
         elif value == 'C':
@@ -510,15 +511,15 @@ class _Parser:
             tab = tab.set_style(style)
         return tab
 
-    def parse_br(self):
-        self.tok.consume('IDENT')  # BR
+    def parse_br(self, cls=BR):
+        self.tok.consume('IDENT')  # BR or HR
         style = EMPTYSTYLE
         if self.tok.peek()[0] == 'LPAREN':
             self.tok.consume('LPAREN')
             if self.tok.peek()[0] == 'LBRACE':
                 style = as_style(self.parse_style())
             self.tok.consume('RPAREN')
-        return BR(style or None)
+        return cls(style or None)
 
     def parse_single(self):
         self.tok.consume('IDENT')  # S

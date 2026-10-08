@@ -41,6 +41,7 @@ def _doc_to_md(doc):
     from miniword.textmodel.texeltree import NewLine
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
+    from miniword.core.texels import Rule
 
     texel          = doc.textmodel.get_xtexel()
     parts          = []
@@ -68,6 +69,11 @@ def _doc_to_md(doc):
             if parts:
                 parts.append('')
             parts.extend(_table_to_md(content[0]))
+            prev_block_key = None
+            continue
+        if len(content) == 1 and isinstance(content[0], Rule):
+            close_pre()
+            parts.extend([''] * bool(parts) + ['---'])  # not under text
             prev_block_key = None
             continue
 
@@ -373,7 +379,8 @@ def _scale(size, pixels):
 #                               'right' or None
 #
 # runs: (text, props); special runs carry '_image' (see image_run),
-# '_footnote' (its text) or '_br' (forced line break) instead of text.
+# '_footnote' (its text), '_br' (forced line break) or '_rule' (in a
+# paragraph of ptype 'rule') instead of text.
 
 def _build_blocks(doc, blocks):
     """Build blocks into a new doc.textmodel. Empty paragraphs separate
@@ -382,7 +389,7 @@ def _build_blocks(doc, blocks):
     from miniword.textmodel.textmodel import TextModel
     from miniword.textmodel.texeltree import T, ENDMARK, grouped
     from miniword.footnotes.footnotes import Footnote
-    from miniword.core.texels import BR
+    from miniword.core.texels import BR, Rule
     text, runs, pars, marks = [], [], [], []
     size = 0
     interned = {}
@@ -418,6 +425,8 @@ def _build_blocks(doc, blocks):
                     [T(props['_footnote']), ENDMARK]))))
             elif props.get('_br'):
                 marks.append((size, BR()))
+            elif props.get('_rule'):
+                marks.append((size, Rule()))
             else:
                 add(run_text, props)
         pars.append((size, ptype, indent, *ps))
@@ -439,7 +448,8 @@ def _build_blocks(doc, blocks):
 
 def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
     if ptype.startswith('h') \
-            or ptype in ('pre', 'list', 'numbered', 'quote') + _ALERTS:
+            or ptype in ('pre', 'list', 'numbered', 'quote', 'rule') \
+            + _ALERTS:
         base = ptype
     else:
         base = 'body'
@@ -549,8 +559,9 @@ def _register_styles(doc, preset='github', overwrite=True, skip=()):
 
 
 _ALERTS = ('note', 'tip', 'important', 'warning', 'caution')
-_CANONICAL_ROLES = set(_ALERTS) | {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body',
-                     'list', 'numbered', 'quote', 'pre'}
+_CANONICAL_ROLES = set(_ALERTS) | {'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+                                    'body', 'list', 'numbered', 'quote',
+                                    'pre', 'rule'}
 
 
 def _adopt_existing_styles(textmodel, doc):
@@ -666,6 +677,8 @@ def _md_blocks(nodes):
             kind, children = _alert(node.get('children', []))
             for child in children:
                 visit(child, quote=kind)
+        elif t == 'thematic_break':
+            blocks.append(_RULE)
         elif t == 'block_html':  # its text, without the tags
             text = html.unescape(re.sub(r'<[^>]*>', '', node.get('raw', '')))
             for line in filter(None, map(str.strip, text.splitlines())):
@@ -691,6 +704,9 @@ def _md_blocks(nodes):
     for node in nodes:
         visit(node)
     return blocks
+
+
+_RULE = ('rule', 0, [('', {'_rule': True})])  # the block of a rule
 
 
 def _alert(children):
@@ -756,7 +772,7 @@ def _check_md(doc):
 
     _OK_BASES  = set(_ALERTS) | {
         'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'pre', 'list', 'numbered', 'quote'}
+        'pre', 'list', 'numbered', 'quote', 'rule'}
     _OK_PTYPES = {'normal', 'list', 'numbered'}
     _OK_PAR    = {'base', 'paragraph_type', 'start_number'}
     _OK_CHAR   = {'bold', 'italic', 'font_family', 'href', 'strike', 'vertical_position'}
@@ -792,8 +808,13 @@ def _check_md(doc):
             if key not in _OK_PAR:
                 issues.add("paragraph attribute '%s'" % key)
         from miniword.footnotes.footnotes import Footnote as FootnoteTexel
+        from miniword.core.texels import Rule
         for elem in elems[:-1]:
             if isinstance(elem, FootnoteTexel):
+                continue
+            if isinstance(elem, Rule):
+                if len(elems) != 2:  # not alone in its paragraph
+                    issues.add("horizontal rule within text")
                 continue
             if isinstance(elem, (TableTexel, ImageTexel)):
                 if isinstance(elem, ImageTexel):

@@ -683,6 +683,34 @@ def draw_border(device, x, y, w, h, style, gc):
         device.fill_rect(x + w - width, y, width, h, color, gc)
 
 
+class RuleBox(Box):
+    """A horizontal rule over width, one line high (font size)."""
+    color = '#d1d9e0'
+
+    def __init__(self, width, size, device=None):
+        self.width = width
+        self.height, self.depth = 0.75 * size, 0.25 * size
+        self.thickness = size / 6
+        if device is not None:
+            self.device = device
+
+    def __len__(self):
+        return 1
+
+    def draw(self, x, y, gc):
+        middle = y + (self.height + self.depth) / 2
+        self.device.fill_rect(x, middle - self.thickness / 2, self.width,
+                              self.thickness, self.color, gc)
+
+    def draw_selection(self, i1, i2, x, y, gc):
+        if i1 < 1 and i2 > 0:
+            self.device.invert_rect(x, y, self.width,
+                                    self.height + self.depth, gc)
+
+    def get_index(self, x, y):
+        return 0 if x < self.width / 2 else 1
+
+
 class RowsBox(Box):
     """
     Baseclass for Page, FootnoteBox and CellBox.

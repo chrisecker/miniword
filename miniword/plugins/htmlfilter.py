@@ -18,7 +18,7 @@ from miniword.io.importexport import register_paste
 
 
 from miniword.plugins.mdfilter import (
-    _register_styles, _build_blocks, _adopt_existing_styles, image_run)
+    _register_styles, _build_blocks, _adopt_existing_styles, image_run, _RULE)
 
 _WHITESPACE_RE = re.compile(r'\s+')
 
@@ -191,6 +191,9 @@ class _HTMLBlockBuilder(HTMLParser):
             self._start_block(ptype, indent)
         elif tag == 'p':
             self._start_block('normal', 0)
+        elif tag == 'hr':
+            self._flush_block()
+            self.blocks.append(_RULE)
         elif tag == 'table':
             self._table = []
             self._pending_rowspans = {}
