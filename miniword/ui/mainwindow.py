@@ -529,6 +529,8 @@ class MainFrame(wx.Frame, ViewBase):
         insert_menu.AppendSeparator()
         item = insert_menu.Append(wx.ID_ANY, "Horizontal &Rule")
         self.Bind(wx.EVT_MENU, lambda _: self.insert_rule(), item)
+        item = insert_menu.Append(wx.ID_ANY, "&Checkbox")
+        self.Bind(wx.EVT_MENU, lambda _: self.insert_checkbox(), item)
         bar.Append(insert_menu, "&Insert")
 
         format_menu = wx.Menu()
@@ -928,6 +930,13 @@ class MainFrame(wx.Frame, ViewBase):
             key = editor.role_key('rule')
             nl = NL.set_parstyle({'base': key}) if key else NL
             editor.insert_texel(grouped([Rule(), nl]))
+
+    def insert_checkbox(self):
+        """Insert a checkbox at the cursor (it replaces the selection)."""
+        from ..core.texels import Checkbox
+        with self.editor.atomic():
+            self.editor.remove()
+            self.editor.insert_texel(Checkbox())
 
     def insert_char(self, char):
         """Type char: it replaces the selection."""

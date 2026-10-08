@@ -250,6 +250,11 @@ properties as `NL`.
 
 Forced line break (Shift+Enter): ends the line, not the paragraph.
 
+**`CB`** / **`CB({checked=True, ...})`**
+
+Checkbox, e.g. at the start of a task list item (Markdown `- [ ]`,
+`- [x]`); `checked` is left out when false.
+
 **`HR`** / **`HR({prop=val, ...})`**
 
 Horizontal rule, alone in its paragraph (Markdown `---`). The paragraph's

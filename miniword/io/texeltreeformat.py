@@ -46,7 +46,7 @@ from ..textmodel.texeltree import (
     as_style, grouped, join, length, depth,
     iter_childs, takeout
 )
-from ..core.texels import BR, Rule
+from ..core.texels import BR, Rule, Checkbox
 from ..textmodel.submodel import Footnote
 
 
@@ -113,12 +113,13 @@ def serialize_texel(texel, indent=0):
                 return '%sTAB(%s)' % (pad, s)
             return '%sTAB' % pad
 
-        elif isinstance(texel, (BR, Rule)):
-            name = 'BR' if isinstance(texel, BR) else 'HR'
-            s = serialize_style(texel.style) if texel.style else ''
-            if s:
-                return '%s%s(%s)' % (pad, name, s)
-            return pad + name
+        elif isinstance(texel, (BR, Rule, Checkbox)):
+            name = {BR: 'BR', Rule: 'HR', Checkbox: 'CB'}[type(texel)]
+            parts = dict(texel.style or {})
+            if getattr(texel, 'checked', False):
+                parts['checked'] = True
+            s = serialize_style(parts) if parts else ''
+            return pad + name + ('(%s)' % s if s else '')
 
         elif isinstance(texel, Footnote):
             return serialize_footnote(texel, indent)
@@ -456,8 +457,8 @@ class _Parser:
             return self.parse_newline()
         elif value == 'TAB':
             return self.parse_tab()
-        elif value in ('BR', 'HR'):
-            return self.parse_br(BR if value == 'BR' else Rule)
+        elif value in ('BR', 'HR', 'CB'):
+            return self.parse_br({'BR': BR, 'HR': Rule, 'CB': Checkbox}[value])
         elif value == 'S':
             return self.parse_single()
         elif value == 'C':
@@ -512,14 +513,17 @@ class _Parser:
         return tab
 
     def parse_br(self, cls=BR):
-        self.tok.consume('IDENT')  # BR or HR
-        style = EMPTYSTYLE
+        self.tok.consume('IDENT')  # BR, HR or CB
+        style, checked = EMPTYSTYLE, False
         if self.tok.peek()[0] == 'LPAREN':
             self.tok.consume('LPAREN')
             if self.tok.peek()[0] == 'LBRACE':
-                style = as_style(self.parse_style())
+                d = self.parse_style()
+                checked = d.pop('checked', False)  # a checkbox's
+                style = as_style(d)
             self.tok.consume('RPAREN')
-        return cls(style or None)
+        texel = cls(style or None)
+        return texel.set_checked(True) if checked else texel
 
     def parse_single(self):
         self.tok.consume('IDENT')  # S

@@ -237,11 +237,13 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
     from miniword.textmodel.texeltree import get_text
     from miniword.images.images import Image as ImageTexel, image_mime
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
-    from miniword.core.texels import BR
+    from miniword.core.texels import BR, Checkbox
     pieces = []  # (Markdown, its marks; None: keep the open ones)
     for elem in elems:
         marks = None if plain else _marks(getattr(elem, 'style', {}))
-        if isinstance(elem, BR):
+        if isinstance(elem, Checkbox):  # a task list item's
+            pieces.append(('[x] ' if elem.checked else '[ ] ', None))
+        elif isinstance(elem, BR):
             pieces.append(('\n' if plain else '\\\n', None))
         elif isinstance(elem, FootnoteTexel):
             if footnotes is not None:  # (it is drawn superscript)
@@ -379,8 +381,9 @@ def _scale(size, pixels):
 #                               'right' or None
 #
 # runs: (text, props); special runs carry '_image' (see image_run),
-# '_footnote' (its text), '_br' (forced line break) or '_rule' (in a
-# paragraph of ptype 'rule') instead of text.
+# '_footnote' (its text), '_br' (forced line break), '_rule' (in a
+# paragraph of ptype 'rule') or '_checkbox' (checked or not) instead of
+# text.
 
 def _build_blocks(doc, blocks):
     """Build blocks into a new doc.textmodel. Empty paragraphs separate
@@ -389,7 +392,7 @@ def _build_blocks(doc, blocks):
     from miniword.textmodel.textmodel import TextModel
     from miniword.textmodel.texeltree import T, ENDMARK, grouped
     from miniword.footnotes.footnotes import Footnote
-    from miniword.core.texels import BR, Rule
+    from miniword.core.texels import BR, Rule, Checkbox
     text, runs, pars, marks = [], [], [], []
     size = 0
     interned = {}
@@ -427,6 +430,9 @@ def _build_blocks(doc, blocks):
                 marks.append((size, BR()))
             elif props.get('_rule'):
                 marks.append((size, Rule()))
+            elif '_checkbox' in props:
+                marks.append((size, Checkbox().set_checked(
+                    props['_checkbox'])))
             else:
                 add(run_text, props)
         pars.append((size, ptype, indent, *ps))
@@ -643,7 +649,7 @@ def _build_mistune(doc, text):
     nodes = mistune.create_markdown(
         renderer='ast',
         plugins=['footnotes', 'strikethrough', 'table',
-                 'superscript', 'subscript'])(text)
+                 'superscript', 'subscript', 'task_lists'])(text)
     _build_blocks(doc, _md_blocks(nodes))
 
 
@@ -692,12 +698,15 @@ def _md_blocks(nodes):
         start = {'start_number': attrs.get('start', 1)} \
             if ptype == 'numbered' else {}
         for item in node.get('children', []):
+            box = []  # a task list item's checkbox, before its text
+            if item.get('type') == 'task_list_item':
+                box = [('', {'_checkbox': item['attrs'].get('checked')})]
             for child in item.get('children', []):
                 if child.get('type') == 'list':
                     visit_list(child, depth + 1)
                 elif child.get('type') in ('paragraph', 'block_text'):
-                    blocks.append((ptype, depth, runs(child), start))
-                    start = {}
+                    blocks.append((ptype, depth, box + runs(child), start))
+                    start, box = {}, []
                 else:
                     visit(child)
 
@@ -788,7 +797,8 @@ def _check_md(doc):
         if not isinstance(nl, NewLine):
             continue
         ps = nl.parstyle
-        ptype = ps.get('paragraph_type', 'normal')
+        ptype = ps.get('paragraph_type') or (doc.basestyles.get(
+            ps.get('base', 'normal')) or {}).get('paragraph_type', 'normal')
         if ptype not in ('list', 'numbered'):
             numbered = set()  # the list ends
         else:
@@ -808,13 +818,18 @@ def _check_md(doc):
             if key not in _OK_PAR:
                 issues.add("paragraph attribute '%s'" % key)
         from miniword.footnotes.footnotes import Footnote as FootnoteTexel
-        from miniword.core.texels import Rule
+        from miniword.core.texels import Rule, Checkbox
         for elem in elems[:-1]:
             if isinstance(elem, FootnoteTexel):
                 continue
             if isinstance(elem, Rule):
                 if len(elems) != 2:  # not alone in its paragraph
                     issues.add("horizontal rule within text")
+                continue
+            if isinstance(elem, Checkbox):
+                at_start = elem is elems[0] and ptype in ('list', 'numbered')
+                if not at_start:
+                    issues.add("checkbox not at the start of a list item")
                 continue
             if isinstance(elem, (TableTexel, ImageTexel)):
                 if isinstance(elem, ImageTexel):
@@ -1587,7 +1602,7 @@ def test_39():
 
 
 def test_40():
-    "task list items (kept as text) come back as task list items"
+    "task list items come back as task list items"
     md = '- [ ] todo\n- [x] done\n'
     assert _doc_to_md(_load_mistune(md)) == md
 
@@ -1734,3 +1749,19 @@ def test_49():
     doc.textmodel.texel = grouped([
         T('a ', dict(bold=True)), T('b '), T(' c', dict(italic=True)), NL])
     assert _doc_to_md(doc) == '**a** b  *c*\n'
+
+
+def test_50():
+    "test/markdown_all.md (every construct): saved unchanged, no losses"
+    global _folder
+    path = os.path.join(os.path.dirname(__file__), '..', '..', 'test',
+                        'markdown_all.md')
+    with open(path, encoding='utf-8') as f:
+        text = f.read()
+    doc = _load(path)
+    _folder = os.path.dirname(os.path.abspath(path))  # as _save sets it
+    try:
+        assert _doc_to_md(doc) == text
+    finally:
+        _folder = ''
+    assert _check_md(doc) == []

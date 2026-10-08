@@ -335,11 +335,36 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         self.Scroll(max(0, int(new_scroll_x / rx)), max(0, int(new_scroll_y / ry)))
         self.refresh()
 
+    def toggle_checkbox(self, x, y):
+        """Check or uncheck the checkbox whose box is at (x, y) (content
+        coordinates), one undo step; whether there was one."""
+        from ..layout.boxes import CheckboxBox, find_box_at
+        from ..core.utils import get_path
+        flow = self.layout.get_flow(x, y)
+        i = self.layout.get_index(x, y, flow)
+        # the box's index, or the one after it (right half of the box)
+        found = i is not None and (
+            find_box_at(self.layout, i, CheckboxBox, flow)
+            or find_box_at(self.layout, i - 1, CheckboxBox, flow))
+        if not found:
+            return False
+        ci1, (bx, by), box = found
+        if not (bx <= x < bx + box.size and by <= y < by + box.size):
+            return False  # beside the box: the cursor goes there
+        editor = self.editor
+        editor.switch_target(flow, ci1)
+        texel = get_path(editor.target.texel, editor.local_idx(ci1))[-1][2]
+        editor.set_texel_attributes(ci1, texel, checked=not texel.checked)
+        return True
+
     def on_leftdown(self, event):
         editor = self.editor
         if editor.controller.on_leftdown(event):
             return
         x, y = self.window_to_content(event.Position)
+        if self.toggle_checkbox(x, y):
+            self.SetFocus()
+            return
         flow  = self.layout.get_flow(x, y)
         i     = self.layout.get_index(x, y, flow)
         if i is not None and event.ControlDown():

@@ -4,21 +4,10 @@ from .images import Image, ImageBox
 
 
 def find_image_at(layout, index, flow=0):
-    """Return (ImageBox, (cx, cy)) for the ImageBox adjacent to index, or None.
-
-    index is a global (flow-relative) index, like the j1/j2 values yielded
-    by layout.iter_boxes.
-    """
-    for p1, p2, px, py, page in layout.iter_boxes(flow):
-        if not (p1 <= index <= p2):
-            continue
-        for r1, r2, rx, ry, row in page.iter_boxes(p1, px, py):
-            if not (r1 <= index <= r2):
-                continue
-            for ci1, ci2, cx, cy, child in row.iter_boxes(r1, rx, ry):
-                if isinstance(child, ImageBox) and ci1 <= index < ci2:
-                    return ci1, (cx, cy), child
-    return None
+    """(index, (x, y), ImageBox) of the image at a global (flow-relative)
+    index, or None."""
+    from ..layout.boxes import find_box_at
+    return find_box_at(layout, index, ImageBox, flow)
 
 
 

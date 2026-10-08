@@ -50,7 +50,7 @@ class TestDevice:
     def draw_rect(self, x, y, w, h, dc):
         pass
 
-    def draw_line(self, x1, y1, x2, y2, width, dc):
+    def draw_line(self, x1, y1, x2, y2, width, dc, color='black'):
         pass
 
     def fill_rect(self, x, y, w, h, color, dc):

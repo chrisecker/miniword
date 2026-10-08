@@ -219,6 +219,8 @@ class _HTMLBlockBuilder(HTMLParser):
             self._props_stack.append(dict(self._props, href=attrs['href']))
         elif tag == 'br':
             self._append(' ')
+        elif tag == 'input' and attrs.get('type') == 'checkbox':
+            self._runs_here().append(('', {'_checkbox': 'checked' in attrs}))
         elif tag == 'img' and attrs.get('src'):
             size = _length(attrs.get('width')), _length(attrs.get('height'))
             self._runs_here().append(image_run(

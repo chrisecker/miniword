@@ -543,8 +543,9 @@ class CairoDevice:
         ctx.rectangle(x, y, w, h)
         ctx.fill()
 
-    def draw_line(self, x1, y1, x2, y2, width, ctx):
-        ctx.set_source_rgb(0, 0, 0)
+    def draw_line(self, x1, y1, x2, y2, width, ctx, color='black'):
+        c = wx.Colour(color)
+        ctx.set_source_rgb(c.Red() / 255, c.Green() / 255, c.Blue() / 255)
         # `width` device pixels wide, regardless of the context's scaling
         lw, _ = ctx.device_to_user_distance(width, width)
         ctx.set_line_width(lw)
