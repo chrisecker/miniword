@@ -52,7 +52,8 @@ Alternatively, double-click `miniword.py` in your file explorer.
 ### Command line
 
 ```
-miniword [-h] [--debug] [--version] [file]
+miniword [-h] [--debug] [--install-desktop [--markdown]]
+         [--uninstall-desktop] [--version] [file]
 ```
 
 (without installation: `python miniword.py [options] [file]`)
@@ -63,6 +64,9 @@ miniword [-h] [--debug] [--version] [file]
 | `-h`, `--help` | Show the options and exit. |
 | `--version` | Show the version and exit. |
 | `--debug` | Print debug output of the page layout. |
+| `--install-desktop` | Linux: add MiniWord to the desktop menu and open `.txl` files with it (see below). |
+| `--markdown` | With `--install-desktop`: open `.md` files with MiniWord too. |
+| `--uninstall-desktop` | Linux: undo `--install-desktop`. |
 
 ### Linux
 
@@ -85,12 +89,18 @@ For ligature support, non-Latin scripts, and richer Markdown import, install wit
 pip install ".[full]"
 ```
 
-If you want to register MiniWord to the desktop (you probably will):
+To add MiniWord to the desktop menu and open `.txl` files with it
+(you probably will):
 
 ```
-cp miniword/icons/miniword.svg ~/.local/share/icons/
-cp miniword.desktop ~/.local/share/applications/
+miniword --install-desktop
 ```
+
+Add `--markdown` to open `.md` files with MiniWord too. This writes a
+menu entry, the `.txl` file type and the icon into `~/.local/share`
+(no root rights needed) and makes MiniWord the default application;
+pip itself can't do this. `miniword --uninstall-desktop` removes them
+again.
 
 ### Windows
 

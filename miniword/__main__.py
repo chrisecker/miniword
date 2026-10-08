@@ -99,12 +99,31 @@ def parse_args(argv):
         '--debug', action='store_true',
         help="debug output of the page layout")
     parser.add_argument(
+        '--install-desktop', action='store_true',
+        help="Linux: add MiniWord to the menu and open .txl files with it")
+    parser.add_argument(
+        '--markdown', action='store_true',
+        help="with --install-desktop: open .md files with MiniWord too")
+    parser.add_argument(
+        '--uninstall-desktop', action='store_true',
+        help="Linux: undo --install-desktop")
+    parser.add_argument(
         '--version', action='version', version='%(prog)s ' + __version__)
     return parser.parse_args(argv)
 
 
 def main():
     args = parse_args(sys.argv[1:])  # before wx: --help needs no window
+    if args.install_desktop or args.uninstall_desktop:
+        if not sys.platform.startswith('linux'):
+            print("Only on Linux; the installers do this on Windows/macOS.")
+            return
+        from . import desktop
+        if args.install_desktop:
+            desktop.install(args.markdown)
+        else:
+            desktop.uninstall()
+        return
     pagebuilder.DEBUG = args.debug
     path = args.file
 

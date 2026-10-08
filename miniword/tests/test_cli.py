@@ -49,3 +49,11 @@ def test_CLI_3():
     assert code == 0 and __version__ in output
     code, output = run('--unknown')
     assert code == 2 and 'unrecognized arguments' in output
+
+
+def test_CLI_4():
+    "CLI-4: --install-desktop (with --markdown), --uninstall-desktop"
+    args = parse_args(['--install-desktop', '--markdown'])
+    assert args.install_desktop and args.markdown
+    assert not args.uninstall_desktop
+    assert parse_args(['--uninstall-desktop']).uninstall_desktop
