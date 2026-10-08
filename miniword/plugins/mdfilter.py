@@ -47,6 +47,7 @@ def _doc_to_md(doc):
     footnotes      = []
     prev_block_key = None
     in_pre         = False
+    markers        = []  # list markers of the items above, by level
 
     def close_pre():
         nonlocal in_pre
@@ -94,7 +95,8 @@ def _doc_to_md(doc):
         close_pre()
 
         # Blank line between block elements, but not between consecutive same-type blocks
-        block_key = base if base == 'quote' else (ptype if ptype in ('list', 'numbered') else None)
+        block_key = base if base == 'quote' else \
+            ('list' if ptype in ('list', 'numbered') else None)  # one list
         same_block = block_key is not None and prev_block_key == block_key
         if parts and not same_block:
             parts.append('')
@@ -106,13 +108,14 @@ def _doc_to_md(doc):
             parts.append('#' * level + ' ' + inline)
         elif base == 'quote':
             parts.append('> ' + inline)
-        elif ptype == 'list':
-            prefix = '  ' * indent + '- '
-            # task list "[ ] "/"[x] " (kept as text) stays unescaped
-            inline = re.sub(r'^\\\[([ xX])\\\] ', r'[\1] ', inline)
-            parts.append(prefix + inline)
-        elif ptype == 'numbered':
-            prefix = '  ' * indent + '1. '
+        elif ptype in ('list', 'numbered'):
+            marker = '- ' if ptype == 'list' else '1. '
+            # indented by the width of the markers above (CommonMark)
+            above = (markers + ['  '] * indent)[:indent]  # a gap: '- '
+            markers = above + [marker]
+            prefix = ' ' * sum(map(len, above)) + marker
+            if ptype == 'list':  # task list "[ ] "/"[x] " stays as is
+                inline = re.sub(r'^\\\[([ xX])\\\] ', r'[\1] ', inline)
             parts.append(prefix + inline)
         else:
             parts.append(inline)
@@ -1479,3 +1482,16 @@ def test_42():
             if elems[-1].text == '\n']
     assert pars == [('body', 5), ('body', 1), ('pre', 2), ('body', 1),
                     ('quote', 6)]  # no empty paragraph at start or end
+
+
+def test_43():
+    "nested lists: indented by the width of the marker above, one list"
+    for md in ('1. a\n   - b\n1. c\n',
+               '- a\n  1. b\n     - c\n- d\n'):
+        doc = _load_mistune(md)
+        out = _doc_to_md(doc)
+        assert out == md, out
+        assert _extract_pars(_load_mistune(out)) == _extract_pars(doc)
+    pars = _parse('1. a\n   - b\n1. c\n')
+    assert [(ptype, indent) for _, ptype, indent, _ in pars] == \
+        [('numbered', 0), ('list', 1), ('numbered', 0)]
