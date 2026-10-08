@@ -15,8 +15,13 @@ from ..layout.rowfactory import block_space
 MM = 72 / 25.4
 HEADINGS = ('h1', 'h2', 'h3', 'h4', 'h5', 'h6')
 TEXT = ('body', 'list', 'numbered', 'quote')  # running text
-STYLE_NAMES = ('body',) + HEADINGS + ('pre', 'list', 'numbered', 'quote',
-                                      'pageheader', 'pagefooter')
+# GitHub's alerts (> [!NOTE] ...): quotes with a coloured bar
+ALERTS = {'note': ('Note', '#0969da'), 'tip': ('Tip', '#1a7f37'),
+          'important': ('Important', '#8250df'),
+          'warning': ('Warning', '#9a6700'),
+          'caution': ('Caution', '#d1242f')}
+STYLE_NAMES = ('body',) + HEADINGS + ('pre', 'list', 'numbered', 'quote') \
+    + tuple(ALERTS) + ('pageheader', 'pagefooter')
 FONTS = {'sans': 'Arial', 'serif': 'Times New Roman'}
 MONO = 'Courier New'
 LINE = '#d0d7de'  # grey lines (code frame, quote bar, heading rules)
@@ -122,6 +127,11 @@ def preset(name, settings=settings_default):
         styles = _changed(styles, TEXT, line_spacing=1.3)
         quote = dict(styles['quote'], block_color=None, italic=True)
         styles['quote'] = _inset(quote, 5 * MM)  # indented both sides
+    for key, (name, color) in ALERTS.items():
+        styles[key] = _inset(dict(
+            styles['quote'], name=name, role=key, block_color=None,
+            block_border_width=3, block_border_sides='l',
+            block_border_color=color, color='black'))
     return styles, settings
 
 

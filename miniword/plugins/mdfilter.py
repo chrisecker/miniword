@@ -48,6 +48,7 @@ def _doc_to_md(doc):
     prev_block_key = None
     in_pre         = False
     markers        = []  # list markers of the items above, by level
+    numbers        = []  # their numbers (None: bullet)
 
     def close_pre():
         nonlocal in_pre
@@ -95,21 +96,28 @@ def _doc_to_md(doc):
         close_pre()
 
         # Blank line between block elements, but not between consecutive same-type blocks
-        block_key = base if base == 'quote' else \
+        block_key = base if base in ('quote',) + _ALERTS else \
             ('list' if ptype in ('list', 'numbered') else None)  # one list
         same_block = block_key is not None and prev_block_key == block_key
         if parts and not same_block:
             parts.append('')
-        elif same_block and base == 'quote':
+        elif same_block and base in ('quote',) + _ALERTS:
             parts.append('>')  # else they'd join into one paragraph
+        if base in _ALERTS and not same_block:
+            parts.append('> [!%s]' % base.upper())
 
         if base in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
             level = int(base[1])
             parts.append('#' * level + ' ' + inline)
-        elif base == 'quote':
+        elif base in ('quote',) + _ALERTS:
             parts.append('> ' + inline)
         elif ptype in ('list', 'numbered'):
-            marker = '- ' if ptype == 'list' else '1. '
+            number = None
+            if ptype == 'numbered':  # numbered on, as Miniword shows it
+                prev = numbers[indent] if len(numbers) > indent else None
+                number = ps.get('start_number') or (prev or 0) + 1
+            numbers = (numbers + [None] * indent)[:indent] + [number]
+            marker = '%d. ' % number if number else '- '
             # indented by the width of the markers above (CommonMark)
             above = (markers + ['  '] * indent)[:indent]  # a gap: '- '
             markers = above + [marker]
@@ -151,10 +159,27 @@ def _table_to_md(table):
     def fmt(cells):
         return '| ' + ' | '.join(c.ljust(w) for c, w in zip(cells, widths)) + ' |'
     lines = [fmt(grid[0]),
-             '| ' + ' | '.join('-' * w for w in widths) + ' |']
+             '| ' + ' | '.join(_rule(a, w) for a, w in
+                               zip(_column_aligns(table), widths)) + ' |']
     for row in grid[1:]:
         lines.append(fmt(row))
     return lines
+
+
+def _column_aligns(table):
+    """Each column's alignment: its cells', if they all agree."""
+    seps = table.childs[2::2]  # their parstyle is the cell's paragraph's
+    columns = [{seps[r * table.ncols + c].parstyle.get('alignment')
+                for r in range(table.nrows)} for c in range(table.ncols)]
+    return [column.pop() if len(column) == 1 else None
+            for column in columns]
+
+
+def _rule(align, width):
+    """A column's part of a table's separator line: '---', ':--', ..."""
+    left = ':' if align in ('left', 'center') else '-'
+    right = ':' if align in ('right', 'center') else '-'
+    return left + '-' * (width - 2) + right
 
 
 def _cell_md(cell):
@@ -312,9 +337,14 @@ def _scale(size, pixels):
 # Markdown (mistune, see _md_blocks) and HTML (htmlfilter.py) are both
 # turned into a flat list of blocks, like Miniword's paragraphs:
 #
-#   (ptype, indent, runs)       a paragraph; ptype 'normal', 'h1'..'h6',
-#                               'list', 'numbered', 'quote' or 'pre'
-#   ('table', grid[, nheader])  grid: rows of cells (runs or strings)
+#   (ptype, indent, runs[, ps]) a paragraph; ptype 'normal', 'h1'..'h6',
+#                               'list', 'numbered', 'quote', 'pre' or an
+#                               alert ('note', 'warning' ...); ps:
+#                               more paragraph properties (start_number)
+#   ('table', grid[, nheader[, aligns]])
+#                               grid: rows of cells (runs or strings);
+#                               aligns: per column 'left', 'center',
+#                               'right' or None
 #
 # runs: (text, props); special runs carry '_image' (see image_run),
 # '_footnote' (its text) or '_br' (forced line break) instead of text.
@@ -340,7 +370,7 @@ def _build_blocks(doc, blocks):
 
     def kind(block):
         return block and (block[0] if block[0] in ('table', 'pre', 'quote')
-                          else 'text')
+                          + _ALERTS else 'text')
 
     for k, block in enumerate(blocks):
         prev = kind(blocks[k - 1]) if k else None
@@ -351,7 +381,7 @@ def _build_blocks(doc, blocks):
             marks.append((size, _table(*block[1:])))
             add('\n')  # the table's own NL
             continue
-        ptype, indent, block_runs = block
+        ptype, indent, block_runs, *ps = block
         for run_text, props in block_runs:
             if props.get('_image'):
                 alt, data, *rest = props['_image']
@@ -364,12 +394,12 @@ def _build_blocks(doc, blocks):
                 marks.append((size, BR()))
             else:
                 add(run_text, props)
-        pars.append((size, ptype, indent))
+        pars.append((size, ptype, indent, *ps))
         add('\n')
 
     model = TextModel(''.join(text))
-    for i, ptype, indent in pars:
-        _apply_parstyle(model, i, ptype, indent)
+    for i, *par in pars:
+        _apply_parstyle(model, i, *par)
     for i1, i2, props in runs:
         model.set_properties(i1, i2, **props)
     # zero-width marks, back to front: an insertion only shifts what
@@ -381,12 +411,13 @@ def _build_blocks(doc, blocks):
     doc.textmodel = model
 
 
-def _apply_parstyle(model, nl_pos, ptype, indent):
-    if ptype.startswith('h') or ptype in ('pre', 'list', 'numbered', 'quote'):
+def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
+    if ptype.startswith('h') \
+            or ptype in ('pre', 'list', 'numbered', 'quote') + _ALERTS:
         base = ptype
     else:
         base = 'body'
-    ps = {'base': base}
+    ps = dict(more, base=base)
     if ptype in ('list', 'numbered'):
         ps['paragraph_type'] = ptype
     model.set_parstyle(nl_pos, ps)
@@ -394,10 +425,14 @@ def _apply_parstyle(model, nl_pos, ptype, indent):
         model.set_indent(nl_pos, indent)
 
 
-def _table(grid, nheader=1):
-    """A Table texel from a 2-D list of cells (see _cell_texel)."""
+def _table(grid, nheader=1, aligns=()):
+    """A Table texel from a 2-D list of cells (see _cell_texel); aligns:
+    the columns' alignment, of their cells' paragraphs."""
     from miniword.tables.tables import Table
-    table = Table(*[(_cell_texel(cell), {}) for row in grid for cell in row],
+    styles = [{'alignment': a} if a else {} for a in aligns] \
+        or [{}] * len(grid[0])
+    table = Table(*[(_cell_texel(cell), dict(styles[c]))
+                    for row in grid for c, cell in enumerate(row)],
                   ncols=len(grid[0]))
     return table.set_nheader(nheader) if nheader else table
 
@@ -487,7 +522,8 @@ def _register_styles(doc, preset='github', overwrite=True, skip=()):
         doc.basestyles.set(name, style)
 
 
-_CANONICAL_ROLES = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body',
+_ALERTS = ('note', 'tip', 'important', 'warning', 'caution')
+_CANONICAL_ROLES = set(_ALERTS) | {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body',
                      'list', 'numbered', 'quote', 'pre'}
 
 
@@ -584,45 +620,67 @@ def _md_blocks(nodes):
     def runs(node):
         return _inline_runs(node.get('children', []), notes=notes)
 
-    def visit(node, quote=False):
+    def visit(node, quote=None):  # quote: in a quote, its style
         t = node.get('type')
         if t == 'heading':
             level = node.get('attrs', {}).get('level', 1)
             blocks.append(('h%d' % level, 0, runs(node)))
         elif t == 'paragraph':
-            blocks.append(('quote' if quote else 'normal', 0, runs(node)))
+            blocks.append((quote or 'normal', 0, runs(node)))
         elif t == 'list':
             visit_list(node, 0)
         elif t == 'block_code':
             for line in node.get('raw', '').splitlines():
                 blocks.append(('pre', 0, [(line or ' ', {})]))
         elif t == 'table':
-            grid, nheader = _table_grid(node)
+            grid, nheader, aligns = _table_grid(node)
             if grid:
-                blocks.append(('table', grid, nheader))
+                blocks.append(('table', grid, nheader, aligns))
         elif t == 'block_quote':
-            for child in node.get('children', []):
-                visit(child, quote=True)
+            kind, children = _alert(node.get('children', []))
+            for child in children:
+                visit(child, quote=kind)
         elif t == 'block_html':  # its text, without the tags
             text = html.unescape(re.sub(r'<[^>]*>', '', node.get('raw', '')))
             for line in filter(None, map(str.strip, text.splitlines())):
                 blocks.append(('normal', 0, [(line, {})]))
 
     def visit_list(node, depth):
-        ordered = node.get('attrs', {}).get('ordered', False)
-        ptype = 'numbered' if ordered else 'list'
+        attrs = node.get('attrs', {})
+        ptype = 'numbered' if attrs.get('ordered') else 'list'
+        # every numbered list starts anew, as in Markdown (Miniword would
+        # count on across other paragraphs)
+        start = {'start_number': attrs.get('start', 1)} \
+            if ptype == 'numbered' else {}
         for item in node.get('children', []):
             for child in item.get('children', []):
                 if child.get('type') == 'list':
                     visit_list(child, depth + 1)
                 elif child.get('type') in ('paragraph', 'block_text'):
-                    blocks.append((ptype, depth, runs(child)))
+                    blocks.append((ptype, depth, runs(child), start))
+                    start = {}
                 else:
                     visit(child)
 
     for node in nodes:
         visit(node)
     return blocks
+
+
+def _alert(children):
+    """(style, children) of a quote: an alert's ('note', 'warning' ...)
+    if its first line is [!NOTE] etc. alone, without that line; else
+    ('quote', children)."""
+    first = children[0].get('children', []) if children else []
+    m = first and first[0].get('type') == 'text' \
+        and re.fullmatch(r'\[!(\w+)\]\s*', first[0].get('raw', ''))
+    kind = m and m.group(1).lower()
+    if kind not in _ALERTS or first[1:2] \
+            and first[1].get('type') != 'softbreak':
+        return 'quote', children
+    rest = first[2:]
+    head = [dict(children[0], children=rest)] if rest else []
+    return kind, head + children[1:]
 
 
 def _plain_text(nodes):
@@ -642,19 +700,21 @@ def _plain_text(nodes):
 
 
 def _table_grid(node):
-    """2-D list of cells (runs, see _inline_runs) of a mistune table, and
-    the number of header rows."""
-    grid, nheader = [], 0
+    """2-D list of cells (runs, see _inline_runs) of a mistune table, the
+    number of header rows and the columns' alignments."""
+    grid, nheader, aligns = [], 0, []
     for child in node.get('children', []):
         if child.get('type') == 'table_head':
             grid.append([_inline_runs(c.get('children', []))
                          for c in child.get('children', [])])
+            aligns = [c.get('attrs', {}).get('align')
+                      for c in child.get('children', [])]
             nheader = 1
         elif child.get('type') == 'table_body':
             for tr in child.get('children', []):
                 grid.append([_inline_runs(c.get('children', []))
                              for c in tr.get('children', [])])
-    return grid, nheader
+    return grid, nheader, aligns
 
 
 # ---------------------------------------------------------------------------
@@ -668,22 +728,36 @@ def _check_md(doc):
     from miniword.tables.tables import Table as TableTexel
     from miniword.images.images import Image as ImageTexel
 
-    _OK_BASES  = {'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-                  'pre', 'list', 'numbered', 'quote'}
+    _OK_BASES  = set(_ALERTS) | {
+        'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'pre', 'list', 'numbered', 'quote'}
     _OK_PTYPES = {'normal', 'list', 'numbered'}
-    _OK_PAR    = {'base', 'paragraph_type'}
+    _OK_PAR    = {'base', 'paragraph_type', 'start_number'}
     _OK_CHAR   = {'bold', 'italic', 'font_family', 'href', 'strike', 'vertical_position'}
     _MONO      = {'courier', 'courier new', 'monospace', 'consolas',
                   'lucida console'}
 
     issues = set()
     texel = doc.textmodel.get_xtexel()
+    numbered = set()  # levels of the current list with a numbered item
 
     for _i1, _i2, elems in iter_paragraphs(texel, 0):
         nl = elems[-1]
         if not isinstance(nl, NewLine):
             continue
         ps = nl.parstyle
+        ptype = ps.get('paragraph_type', 'normal')
+        if ptype not in ('list', 'numbered'):
+            numbered = set()  # the list ends
+        else:
+            numbered = {k for k in numbered if k <= nl.indent}
+            if ps.get('start_number') is not None \
+                    and nl.indent in numbered:
+                issues.add("numbering restarted within a list")
+            if ptype == 'numbered':
+                numbered.add(nl.indent)
+            else:  # a bullet list on this level: the numbered one ends
+                numbered.discard(nl.indent)
         if ps.get('base', 'normal') not in _OK_BASES:
             issues.add("custom paragraph style")
         if ps.get('paragraph_type', 'normal') not in _OK_PTYPES:
@@ -702,6 +776,12 @@ def _check_md(doc):
                     if elem.crop is not None:
                         issues.add("image crop")
                 elif isinstance(elem, TableTexel):
+                    seps = elem.childs[2::2]
+                    if any(len({seps[r * elem.ncols + c].parstyle.get(
+                            'alignment') for r in range(elem.nrows)}) > 1
+                           for c in range(elem.ncols)):
+                        issues.add("cells of a table column aligned "
+                                   "differently")
                     if elem.nheader == 0:
                         issues.add("tables without header row (empty header added)")
                     elif elem.nheader > 1:
@@ -1268,7 +1348,7 @@ def test_31():
         ]},
     ]
     indents = [(ptype, indent, runs[0][0])
-               for ptype, indent, runs in _md_blocks(nodes)]
+               for ptype, indent, runs, *_ in _md_blocks(nodes)]
     assert indents == [('list', 0, 'Alpha'), ('list', 1, 'Nested'), ('list', 0, 'Beta')]
 
 
@@ -1486,12 +1566,93 @@ def test_42():
 
 def test_43():
     "nested lists: indented by the width of the marker above, one list"
-    for md in ('1. a\n   - b\n1. c\n',
+    for md in ('1. a\n   - b\n2. c\n',
                '- a\n  1. b\n     - c\n- d\n'):
         doc = _load_mistune(md)
         out = _doc_to_md(doc)
         assert out == md, out
         assert _extract_pars(_load_mistune(out)) == _extract_pars(doc)
-    pars = _parse('1. a\n   - b\n1. c\n')
+    pars = _parse('1. a\n   - b\n2. c\n')
     assert [(ptype, indent) for _, ptype, indent, _ in pars] == \
         [('numbered', 0), ('list', 1), ('numbered', 0)]
+
+
+def _start_numbers(doc):
+    """start_number of each paragraph that has one: [(text, number)]."""
+    from miniword.textmodel.utils import iter_paragraphs
+    from miniword.textmodel.texeltree import get_text
+    return [(''.join(get_text(e) for e in elems[:-1]),
+             elems[-1].parstyle['start_number'])
+            for *_, elems in iter_paragraphs(doc.textmodel.texel, 0)
+            if elems[-1].parstyle.get('start_number') is not None]
+
+
+def test_44():
+    "start numbers: every numbered list starts as in Markdown; roundtrip"
+    md = '3. x\n4. y\n'
+    doc = _load_mistune(md)
+    assert _start_numbers(doc) == [('x', 3)]
+    assert _doc_to_md(doc) == md  # numbered on
+    md = '1. a\n2. b\n\nText\n\n1. c\n2. d\n'  # two lists
+    doc = _load_mistune(md)
+    assert _start_numbers(doc) == [('a', 1), ('c', 1)]
+    assert _doc_to_md(doc) == md
+
+
+
+def _column_alignments(doc):
+    """The alignment of each cell of the first table, by row."""
+    from miniword.tables.tables import Table
+    table = next(t for t in doc.textmodel.texel.childs
+                 if isinstance(t, Table))
+    seps = table.childs[2::2]  # their parstyle is the cell's paragraph's
+    return [[seps[r * table.ncols + c].parstyle.get('alignment')
+             for c in range(table.ncols)] for r in range(table.nrows)]
+
+
+def test_45():
+    "column alignment: cells get it as their alignment; roundtrip"
+    md = '| a | b | c | d |\n|:--|:-:|--:|---|\n| 1 | 2 | 3 | 4 |\n'
+    doc = _load_mistune(md)
+    assert _column_alignments(doc) == \
+        [['left', 'center', 'right', None]] * 2
+    out = _doc_to_md(doc)
+    assert '| :-- | :-: | --: | --- |' in out, out
+    assert _column_alignments(_load_mistune(out)) == \
+        _column_alignments(doc)
+
+
+def test_46():
+    "check_md: a start number only starting a list, column alignments"
+    assert _check_md(_load_mistune('3. a\n4. b\n\nx\n\n1. c\n')) == []
+    # a bullet list on the same level ends the numbered one (TODO.md)
+    assert _check_md(_load_mistune('1. a\n- b\n1. c\n')) == []
+    doc = _load_mistune('1. a\n2. b\n')
+    model = doc.textmodel
+    i = model.get_text().index('b')
+    model.set_parstyle(i, dict(model.get_parstyle(i), start_number=7))
+    assert any('restart' in w for w in _check_md(doc))
+    md = '| a | b |\n|:-:|---|\n| 1 | 2 |\n'
+    assert _check_md(_load_mistune(md)) == []
+    doc = _load_mistune(md)
+    from miniword.tables.tables import Table
+    table = next(t for t in doc.textmodel.texel.childs
+                 if isinstance(t, Table))
+    from miniword.textmodel.texeltree import Group
+    doc.textmodel.texel = Group(
+        [table.set_cellattr(1, 0, 1, 0, alignment='right')
+         if t is table else t for t in doc.textmodel.texel.childs])
+    assert any('column' in w for w in _check_md(doc))
+
+
+def test_47():
+    "alerts (> [!NOTE] ...) become quotes in their own style; roundtrip"
+    md = '> [!WARNING]\n> Careful\n>\n> More\n'
+    doc = _load_mistune(md)
+    assert [(base, runs[0][0]) for base, _, _, runs in _extract_pars(doc)] \
+        == [('warning', 'Careful'), ('warning', 'More')]
+    assert doc.basestyles.get('warning')['role'] == 'warning'
+    assert _doc_to_md(doc) == md
+    assert _check_md(doc) == []
+    md = '> [!NOTE] not alone on its line\n'  # no alert on GitHub
+    assert _extract_pars(_load_mistune(md))[0][0] == 'quote'
