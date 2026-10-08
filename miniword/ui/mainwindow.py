@@ -114,6 +114,20 @@ def save_file_history():
     config.Flush()
 
 
+_last_dir = ''  # while the app runs: folder of the last file opened/saved
+
+
+def last_dir():
+    """Folder of the last document opened or saved ('' if none)."""
+    return _last_dir
+
+
+def remember_dir(path):
+    """Make path's folder the one the file dialogs start in."""
+    global _last_dir
+    _last_dir = os.path.dirname(os.path.abspath(path))
+
+
 def _miniword_dir():
     if sys.platform == 'win32':
         base = os.environ.get('APPDATA', os.path.expanduser('~'))
@@ -876,6 +890,7 @@ class MainFrame(wx.Frame, ViewBase):
         from ..io import importexport
         with wx.FileDialog(
             self, "Open",
+            defaultDir=last_dir(),
             wildcard=importexport.open_wildcard(),
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
@@ -893,6 +908,7 @@ class MainFrame(wx.Frame, ViewBase):
         frame.Show()
         get_file_history().AddFileToHistory(path)
         save_file_history()
+        remember_dir(path)
 
     def on_recent_file(self, event):
         idx = event.GetId() - wx.ID_FILE1
@@ -912,11 +928,13 @@ class MainFrame(wx.Frame, ViewBase):
         frame.Show()
         fh.AddFileToHistory(path)
         save_file_history()
+        remember_dir(path)
 
     def import_document(self):
         from ..io import importexport
         with wx.FileDialog(
             self, "Import",
+            defaultDir=last_dir(),
             wildcard=importexport.import_wildcard(),
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
@@ -932,12 +950,13 @@ class MainFrame(wx.Frame, ViewBase):
         frame.Show()
         get_file_history().AddFileToHistory(path)
         save_file_history()
+        remember_dir(path)
 
     def export_document(self):
         from ..io import importexport
         with wx.FileDialog(
             self, "Export",
-            defaultDir=self._doc_dir(),
+            defaultDir=self._dialog_dir(),
             wildcard=importexport.export_wildcard(),
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:
@@ -1032,11 +1051,16 @@ class MainFrame(wx.Frame, ViewBase):
     def _doc_dir(self):
         return os.path.dirname(self._current_path) if self._current_path else ''
 
+    def _dialog_dir(self):
+        """Where file dialogs start: the document's folder, else the
+        last one used."""
+        return self._doc_dir() or last_dir()
+
     def save_as(self):
         from ..io import importexport
         with wx.FileDialog(
             self, "Save As",
-            defaultDir=self._doc_dir(),
+            defaultDir=self._dialog_dir(),
             wildcard=importexport.saveas_wildcard(),
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:
@@ -1071,6 +1095,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._update_title()
         get_file_history().AddFileToHistory(path)
         save_file_history()
+        remember_dir(path)
 
     def _confirm_lossy_save(self, path, warnings):
         items = '\n'.join('\u2022 ' + w for w in warnings)
@@ -1109,7 +1134,7 @@ class MainFrame(wx.Frame, ViewBase):
     def export_pdf(self):
         with wx.FileDialog(
             self, "Export as PDF",
-            defaultDir=self._doc_dir(),
+            defaultDir=self._dialog_dir(),
             wildcard="PDF files (*.pdf)|*.pdf|All files (*.*)|*.*",
             style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
         ) as dlg:

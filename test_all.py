@@ -53,6 +53,7 @@ modules = [
     "miniword.tests.test_cli",
     "miniword.tests.test_shortcuts",
     "miniword.tests.test_panels",
+    "miniword.tests.test_folders",
     "miniword.layout.rect",
     "miniword.layout.cache",
     "miniword.layout.linewrap",
