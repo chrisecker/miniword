@@ -536,6 +536,17 @@ def test_WRAP_12():
 # FLAG - Record flags
 # ---------------------------------------------------------------------
 
+def test_WRAP_19():
+    "WRAP-19: a standalone box (e.g. a table) is a segment of its own"
+    from ..layout.rowfactory import segments
+    a, b, c = TextBox('a'), TextBox('b'), TextBox('c')
+    box = TextBox('x')
+    box.standalone = True
+    assert segments([a, b, box, c]) == [[a, b], [box], [c]]
+    assert segments([box]) == [[box]]
+    assert TableBox.standalone and not TextBox.standalone
+
+
 def test_FLAG_1():
     "FLAG-1: begins_par/ends_par on the first/last row"
     paragraphs, state = generate(doc(par('aaa bbb ccc ddd'), par('x')),

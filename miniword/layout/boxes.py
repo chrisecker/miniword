@@ -131,6 +131,7 @@ class Box:
     device = TESTDEVICE
     is_group = False # we will use this as base class for groups and
                      # non groups
+    standalone = False  # in a row of its own (not wrapped), e.g. a table
 
     def create_group(self, l):
         return SimpleGroupBox(l, device=self.device)
@@ -140,7 +141,7 @@ class Box:
 
     def split(self, height):
         """(first, rest) at a page break, first fitting into height (a
-        box in a row of its own, e.g. a table); None: not split."""
+        standalone box); None: not split."""
         return None
 
     def pointer_at(self, x, y):

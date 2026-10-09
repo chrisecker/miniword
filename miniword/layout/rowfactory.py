@@ -327,12 +327,12 @@ class RowFactory(Factory):
         # is wrapped on its own, continuing (never restarting) the
         # paragraph's hanging indent (only the very first segment gets
         # width_first/left_first).
-        # A table gets a row of its own (not wrapped), so that
-        # RowStack.take can split it across pages.
+        # A standalone box (a table) gets a row of its own (not
+        # wrapped), so that RowStack.take can split it across pages.
         hyphenate = self._hyphenate(p)
         lines = []
-        for segment in split_at_tables(boxes):
-            if isinstance(segment[0], TableBox):
+        for segment in segments(boxes):
+            if segment[0].standalone:
                 lines.append(segment)
                 continue
             for sub in split_at_breaks(segment):
@@ -593,20 +593,20 @@ def width_at(texel, i, width):
     return width
 
 
-def split_at_tables(boxes):
-    """Split boxes at tables: each TableBox becomes a segment of its own."""
-    segments, current = [], []
+def segments(boxes):
+    """boxes in segments: each standalone box is one of its own."""
+    result, current = [], []
     for box in boxes:
-        if isinstance(box, TableBox):
+        if box.standalone:
             if current:
-                segments.append(current)
+                result.append(current)
                 current = []
-            segments.append([box])
+            result.append([box])
         else:
             current.append(box)
     if current:
-        segments.append(current)
-    return segments
+        result.append(current)
+    return result
 
 
 def split_record(record, height):
@@ -784,7 +784,7 @@ def adjust_page_break(placed, buffer):
             break
     records = [rec for _, rec in placed[-k:]] + buffer[:r]
     if not style.get('widow_orphan_control', True) or \
-            any(isinstance(rec[0].childs[0], TableBox) for rec in records):
+            any(rec[0].childs[0].standalone for rec in records):
         return
     move = max(0, 2 - r)  # widow: take a line along
     if 0 < k - move < 2:  # orphan: the whole paragraph moves

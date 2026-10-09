@@ -66,6 +66,7 @@ class TableBox(Box):
     prev       = None  # previous fragment in page-split chain (None = first)
     next       = None  # next fragment in page-split chain (None = last)
     row_offset = 0     # index of first row in the original table
+    standalone = True
 
     def __init__(self, cells, col_widths, row_heights,
                  header_rows=0, break_level=0, device=None,
