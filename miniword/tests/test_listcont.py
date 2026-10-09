@@ -71,3 +71,39 @@ def test_LC_5():
         Text('more'), NL.set_parstyle({'base': 'body',
                                        'paragraph_type': 'continued'})])
     assert _doc_to_md(document) == 'text\n\nmore\n'
+
+
+def test_LC_6():
+    "LC-6: Backspace at the start of a list item: the marker goes "
+    "(continued), then the indent (normal), then the paragraphs join; "
+    "each one undo step; a numbered heading joins at once"
+    from ..textmodel.texeltree import Text
+    from .test_code import frame_with
+    from .guitest import close
+    frame = frame_with(Text('b'))
+    try:
+        editor, model = frame.editor, frame.document.textmodel
+        i = model.get_text().index('b')
+        model.set_parstyle(i, {'paragraph_type': 'numbered'})
+
+        def back():
+            editor.set_index(i)
+            editor.controller.handle_action('del_left', False)
+            return model.get_parstyle(i).get('paragraph_type')
+
+        assert back() == 'continued'
+        assert back() == 'normal'
+        back()
+        assert model.get_text().startswith('ab')  # joined
+        editor.undo()
+        assert model.get_parstyle(i).get('paragraph_type') == 'normal'
+        editor.undo()
+        assert model.get_parstyle(i).get('paragraph_type') == 'continued'
+        editor.undo()
+        assert model.get_parstyle(i).get('paragraph_type') == 'numbered'
+        model.set_parstyle(i, {'paragraph_type': 'numbered',
+                               'counter': 'section'})  # a heading
+        back()
+        assert model.get_text().startswith('ab')  # joined at once
+    finally:
+        close(frame)

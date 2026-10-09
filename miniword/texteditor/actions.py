@@ -97,6 +97,31 @@ def swap_paragraph(editor, model, index, direction):
     editor.set_index(min(new_start + col, model.lineend(new_start)))
 
 
+# Backspace at a paragraph's start, before it joins the one above
+STEPS_BACK = {'list': 'continued', 'numbered': 'continued',
+              'continued': 'normal'}
+
+
+def step_back(editor, model, index):
+    """Backspace at the start of a list item: its marker goes, its text
+    stays (a list continuation); at the start of a continuation: it
+    becomes a normal paragraph - as in Word. Whether it did."""
+    if index != model.linestart(index):
+        return False
+    parstyle = model.get_parstyle(index)
+    sheet = editor.stylesheet()
+    if sheet:  # the type may come from the base style
+        parstyle = sheet.mk_parstyle(parstyle)
+    new = STEPS_BACK.get(parstyle.get('paragraph_type', 'normal'))
+    if new is None or parstyle.get('counter') == 'section':
+        return False  # (counter 'section': a numbered heading, no item)
+    saved = editor.selection
+    editor.selection = model.expand_lines(index, index)
+    editor.set_parproperties(paragraph_type=new)
+    editor.selection = saved
+    return True
+
+
 def cycle_parproperty(editor, model, ctx, key, values, reverse=False):
     """Cycle the paragraph property `key` through `values`, wrapping around."""
     current = model.get_parstyle(ctx.index).get(key, values[0])
@@ -213,6 +238,8 @@ def default_handler(action, shift, ctx):
             editor.remove()
             editor.insert_newline()        
     elif action == 'del_left':
+        if not editor.has_selection() and step_back(editor, model, index):
+            return True
         with editor.atomic():
             editor.remove()
             if index > 0:
