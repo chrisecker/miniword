@@ -199,3 +199,14 @@ def test_QL_10():
     assert found == [('outer', 1, 'normal'), ('inner', 2, 'normal'),
                      ('item', 1, 'list'), ('x = 1', 1, 'normal'),
                      ('after', 0, 'normal')]
+
+
+def test_QL_11():
+    "QL-11: alerts come back unchanged - with a list or a nested quote "
+    "in them; an alert and a quote after it stay two"
+    from ..plugins.mdfilter import _load_mistune, _doc_to_md
+    for md in ('> [!WARNING]\n> Careful:\n>\n> - one\n> - two\n',
+               '> [!TIP]\n> Text\n>\n> > nested\n',
+               '> [!NOTE]\n> a\n\n> b\n',
+               '> a\n\n> b\n'):
+        assert _doc_to_md(_load_mistune(md)) == md, md

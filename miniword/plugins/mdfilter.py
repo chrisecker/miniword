@@ -451,9 +451,10 @@ def _build_blocks(doc, blocks):
         size += len(s)
 
     def kind(block):
-        # all of a quote is one kind: no empty paragraphs within it
+        # all of a quote (also an alert) is one kind: no empty
+        # paragraphs within it
         if block_ps(block).get('quote_level'):
-            return block[0] if block[0] in _ALERTS else 'quote'
+            return 'quote'
         if block[0] in ('table', 'pre', 'quote') + _ALERTS:
             return block[0]
         return 'text'
@@ -849,6 +850,11 @@ def _md_blocks(nodes):
                 blocks.append(('table', grid, nheader, aligns))
         elif t == 'block_quote':
             kind, children = _alert(node.get('children', []))
+            # an outer quote right after another one: an empty
+            # paragraph keeps the two apart
+            if quote is None and blocks and \
+                    block_ps(blocks[-1]).get('quote_level'):
+                blocks.append(('normal', 0, []))
             n = len(blocks)
             for child in children:
                 visit(child, quote=kind)
