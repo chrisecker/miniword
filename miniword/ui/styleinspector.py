@@ -2,7 +2,7 @@
 
 
 import wx
-from .design import make_tab, add_section, add_row
+from .design import make_tab, add_section, add_row, flat_button
 from .flatbutton import FlatButton, ResetButton
 from .sidepanel import SidePanel
 from ..textmodel.textmodel import TextModel
@@ -298,9 +298,6 @@ class StyleInspector(SidePanel):
         add_row(contentsizer, self.align, self.reset_align)
 
         self._par_checks = {}  # {property: (check box, reset button)}
-        self.hyphenate = self._par_checkbox(
-            panel, contentsizer, 'hyphenate', "Hyphenate",
-            "Hyphenate this paragraph (if switched on for the document)")
 
         add_section("Indentation", panel, contentsizer)
 
@@ -340,6 +337,51 @@ class StyleInspector(SidePanel):
             EVT_UNIT_CHANGED,
             lambda e: self.set_parproperties(right_indent=e.value))
 
+        # the depth of a quote, independent of the style (0: none)
+        add_section("Quote", panel, contentsizer)
+        dip = panel.FromDIP
+        self.quote_level = wx.TextCtrl(panel, size=(50, -1))
+        self.quote_level.SetEditable(False)
+        self.quote_less = flat_button(panel, "\u2212", (dip(24), dip(24)))
+        self.quote_more = flat_button(panel, "+", (dip(24), dip(24)))
+        self.quote_less.Bind(wx.EVT_BUTTON, lambda e: self.on_quote(-1))
+        self.quote_more.Bind(wx.EVT_BUTTON, lambda e: self.on_quote(1))
+        self.reset_quote_level = ResetButton(panel, ['quote_level'])
+        add_row(contentsizer, wx.StaticText(panel, label='Level'),
+                self.quote_level, self.quote_less, self.quote_more,
+                self.reset_quote_level)
+        # in a quote only: how far each level moves the text in (after
+        # Left), the bar (width 0: none), the ground (none: no colour)
+        self.quote_details = wx.BoxSizer(wx.VERTICAL)
+        self.quote_indent = LengthInput(panel, category='typographic')
+        self.reset_quote_indent = ResetButton(panel, ['quote_indent'])
+        self.quote_indent.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(quote_indent=e.value))
+        add_row(self.quote_details, wx.StaticText(panel, label='Indent'),
+                self.quote_indent, self.reset_quote_indent)
+        self.quote_bar_width = LengthInput(panel, category='typographic')
+        self.reset_quote_bar_width = ResetButton(panel, ['quote_bar_width'])
+        self.quote_bar_width.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(quote_bar_width=e.value))
+        add_row(self.quote_details, wx.StaticText(panel, label='Bar'),
+                self.quote_bar_width, self.reset_quote_bar_width)
+        self.quote_bar_color = ColourButton(panel)
+        self.reset_quote_bar_color = ResetButton(panel, ['quote_bar_color'])
+        self.quote_bar_color.callback = lambda: self.set_parproperties(
+            quote_bar_color=self.quote_bar_color.get_colour())
+        add_row(self.quote_details,
+                wx.StaticText(panel, label='Bar color'),
+                self.quote_bar_color, self.reset_quote_bar_color)
+        self.quote_color = ColourButton(panel)
+        self.reset_quote_color = ResetButton(panel, ['quote_color'])
+        self.quote_color.callback = lambda: self.set_parproperties(
+            quote_color=self.quote_color.get_colour())
+        add_row(self.quote_details, wx.StaticText(panel, label='Ground'),
+                self.quote_color, self.reset_quote_color)
+        contentsizer.Add(self.quote_details, 0, wx.EXPAND)
+
         add_section("Bullets and numbers", panel, contentsizer)
         self.paragraph_type = wx.Choice(
             panel, choices=[label for _, label in PARAGRAPH_TYPES])
@@ -350,8 +392,11 @@ class StyleInspector(SidePanel):
         self.list_indent = LengthInput(panel, category='typographic')
         self.reset_list_indent = ResetButton(panel, ['list_indent'])
         self.list_indent.Bind(EVT_UNIT_CHANGED, self.on_list_indent)
-        add_row(contentsizer, wx.StaticText(panel, label='List indent'),
+        self.list_indent_row = wx.BoxSizer(wx.VERTICAL)  # lists only
+        add_row(self.list_indent_row,
+                wx.StaticText(panel, label='List indent'),
                 self.list_indent, self.reset_list_indent)
+        contentsizer.Add(self.list_indent_row, 0, wx.EXPAND)
 
         ### Marker properties
         spanel = self.marker_panel = wx.Panel(panel)
@@ -474,7 +519,10 @@ class StyleInspector(SidePanel):
         self.block_border_sides.Bind(EVT_BUTTONBAR,
                                      self.on_block_border_sides)
 
-        add_section("Page break", panel, contentsizer)
+        add_section("Breaks", panel, contentsizer)
+        self.hyphenate = self._par_checkbox(
+            panel, contentsizer, 'hyphenate', "Hyphenate",
+            "Hyphenate this paragraph (if switched on for the document)")
         self.page_break_before = self._par_checkbox(
             panel, contentsizer, 'page_break_before', "Break before")
         self.keep_with_next = self._par_checkbox(
@@ -514,7 +562,10 @@ class StyleInspector(SidePanel):
                 self.reset_block_color,
                 self.reset_block_offset, self.reset_block_border_width,
                 self.reset_block_border_color, self.reset_block_border_sides,
-                self.reset_right_indent, self.reset_role] + [
+                self.reset_right_indent, self.reset_role,
+                self.reset_quote_level, self.reset_quote_indent,
+                self.reset_quote_bar_width, self.reset_quote_bar_color,
+                self.reset_quote_color] + [
                 reset for _, reset in self._par_checks.values()]:
             resetter.callback = self.clear_parproperties
 
@@ -543,6 +594,14 @@ class StyleInspector(SidePanel):
         i = self.paragraph_type.Selection
         value = PARAGRAPH_TYPES[i][0]
         self.set_parproperties(paragraph_type=value)
+
+    def on_quote(self, step):
+        """One quote level deeper (step 1) or less (-1) than at the
+        cursor."""
+        editor = self.editor
+        parstyle = editor.target.get_parstyle(editor.index)
+        level = self.mk_style(parstyle, {})['quote_level']
+        self.set_parproperties(quote_level=max(0, level + step))
 
     def on_numbering(self, event):
         fmt = _NUMBERING_FORMATS[self.numbering.Selection]
@@ -1061,7 +1120,21 @@ class StyleInspector(SidePanel):
             self.start_number.SetValue("")
         self.reset_start.set_x('start_number' in overrides)
             
+        level = properties['quote_level']  # None: mixed
+        self.quote_level.SetValue('' if level is None else str(level))
+        self.quote_less.Enable(level != 0)  # (None: mixed)
+        self.quote_details.ShowItems(level != 0)
+        self.reset_quote_level.set_x('quote_level' in overrides)
+        self.quote_indent.SetValue(properties['quote_indent'])
+        self.quote_bar_width.SetValue(properties['quote_bar_width'])
+        self.quote_bar_color.set_colour(properties['quote_bar_color'])
+        self.quote_color.set_colour(properties['quote_color'])
+        for key in ('quote_indent', 'quote_bar_width', 'quote_bar_color',
+                    'quote_color'):
+            getattr(self, 'reset_' + key).set_x(key in overrides)
+
         ptype = properties['paragraph_type']
+        self.list_indent_row.ShowItems(ptype != 'normal')
         self.marker_panel.Show(ptype in ("list", "numbered"))
         self.list_panel.Show(ptype == "list")
         self.enum_panel.Show(ptype == "numbered")

@@ -117,3 +117,70 @@ def test_QL_5():
         document = _load_mistune(md)
         assert _doc_to_md(document) == md
         assert _check_md(document) == []
+
+
+def test_QL_6():
+    "QL-6: the style inspector shows the quote level; - and + change it "
+    "(one undo step each)"
+    from .guitest import style_inspector, click_button
+    with style_inspector() as (inspector, model, editor):
+        assert inspector.quote_level.GetValue() == '0'
+        assert not inspector.quote_less.IsEnabled()
+        click_button(inspector.quote_more)
+        click_button(inspector.quote_more)
+        assert model.get_parstyle(0)['quote_level'] == 2
+        inspector.update()
+        assert inspector.quote_level.GetValue() == '2'
+        click_button(inspector.quote_less)
+        assert model.get_parstyle(0)['quote_level'] == 1
+        editor.undo()
+        assert model.get_parstyle(0)['quote_level'] == 2
+
+
+def test_QL_7():
+    "QL-7: the style inspector shows and sets the quote's indent per "
+    "level (quote_indent), next to the level"
+    import wx
+    from ..core.units import mm
+    from .guitest import style_inspector
+    with style_inspector() as (inspector, model, editor):
+        assert abs(inspector.quote_indent.GetValue() - Q) < 1e-9
+        inspector.quote_indent.text.SetValue("8 mm")
+        inspector.quote_indent._commit()
+        wx.GetApp().ProcessPendingEvents()
+        assert abs(model.get_parstyle(0)['quote_indent'] - 8 * mm) < 1e-9
+
+
+def test_QL_8():
+    "QL-8: the style inspector shows and sets the quote's bar (width, "
+    "colour) and ground"
+    import wx
+    from .guitest import style_inspector
+    with style_inspector() as (inspector, model, editor):
+        assert wx.Colour(inspector.quote_bar_color.get_colour()) == \
+            wx.Colour(style_default['quote_bar_color'])
+        inspector.quote_bar_width.text.SetValue("2 pt")
+        inspector.quote_bar_width._commit()
+        wx.GetApp().ProcessPendingEvents()
+        for field, colour in ((inspector.quote_bar_color, '#ff0000'),
+                              (inspector.quote_color, '#eeeeee')):
+            field.set_colour(colour)
+            field.callback()
+        ps = model.get_parstyle(0)
+        assert abs(ps['quote_bar_width'] - 2) < 1e-9
+        assert wx.Colour(ps['quote_bar_color']) == wx.Colour('#ff0000')
+        assert wx.Colour(ps['quote_color']) == wx.Colour('#eeeeee')
+
+
+def test_QL_9():
+    "QL-9: the style inspector shows the quote's settings (indent, bar, "
+    "ground) only in a quote; the level always"
+    from .guitest import style_inspector
+    with style_inspector() as (inspector, model, editor):
+        details = (inspector.quote_indent, inspector.quote_bar_width,
+                   inspector.quote_bar_color, inspector.quote_color)
+        assert inspector.quote_level.IsShown()
+        assert not any(field.IsShown() for field in details)
+        model.set_parstyle(0, {'quote_level': 1})
+        inspector.update()
+        assert all(field.IsShown() for field in details)

@@ -90,6 +90,19 @@ def test_INS_5():
             assert field.GetSize()[1] >= field.GetBestSize()[1]
 
 
+def test_INS_6():
+    "INS-6: List indent only for lists (and continuations); Hyphenate in "
+    "the tab Other"
+    with style_inspector() as (inspector, model, editor):
+        assert not inspector.list_indent.IsShown()
+        for ptype in ('list', 'continued'):
+            model.set_parstyle(0, dict(paragraph_type=ptype))
+            inspector.update()
+            assert inspector.list_indent.IsShown(), ptype
+        assert inspector.hyphenate.GetParent() is \
+            inspector.page_break_before.GetParent()
+
+
 # ---------------------------------------------------------------------
 # SET - document settings
 # ---------------------------------------------------------------------
