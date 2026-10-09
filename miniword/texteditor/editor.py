@@ -539,10 +539,13 @@ class Editor(UndoRedo):
                 if k:
                     changes.append((ls, -k))
 
-        def moved(j):  # a position at a line start stays there
+        def moved(j, along=False):
+            # a position at a line start stays there (a selection keeps
+            # whole lines), unless along (the cursor alone)
             return j + sum(d if d > 0 else -min(-d, j - ls)
-                           for ls, d in changes if ls < j)
-        index = moved(self.index)
+                           for ls, d in changes
+                           if ls < j or (along and ls == j))
+        index = moved(self.index, along=not self.has_selection())
         selection = self.selection and tuple(map(moved, self.selection))
         self.begin_undo_group()
         try:

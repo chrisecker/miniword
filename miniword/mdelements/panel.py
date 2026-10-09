@@ -14,6 +14,7 @@ from .rule import insert_rule
 from .checkbox import insert_checkbox
 from .code import code_at, insert_code
 from .rawhtml import html_at, toggle_html, insert_html
+from .colorize import colorizers
 
 
 class ElementsPanel(SidePanel):
@@ -44,9 +45,12 @@ class ElementsPanel(SidePanel):
 
         self.code_section = wx.BoxSizer(wx.VERTICAL)
         add_section("Code block", self, self.code_section)
-        self.language = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        # the registered languages (colorized), others can be typed
+        self.language = wx.ComboBox(
+            self, style=wx.CB_DROPDOWN | wx.TE_PROCESS_ENTER)
         self.language.SetHint("e.g. python")
-        for event in (wx.EVT_TEXT_ENTER, wx.EVT_KILL_FOCUS):
+        for event in (wx.EVT_TEXT_ENTER, wx.EVT_COMBOBOX,
+                      wx.EVT_KILL_FOCUS):
             self.language.Bind(event, self.on_language)
         add_row(self.code_section, wx.StaticText(self, label="Language"),
                 self.language)
@@ -68,6 +72,9 @@ class ElementsPanel(SidePanel):
         kind = code[1].kind if code else None
         self.code_section.ShowItems(kind == 'code')
         if kind == 'code' and not self.language.HasFocus():
+            names = sorted(colorizers)  # plugins may add some
+            if self.language.GetStrings() != names:
+                self.language.Set(names)
             self.language.ChangeValue(code[1].lang)
         self.html_section.ShowItems(bool(html) or kind == 'html')
         self.expand.Show(bool(html))

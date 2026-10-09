@@ -481,7 +481,7 @@ class RowFactory(Factory):
         styles set in the code are ignored (see shown)."""
         width = self._dims(parstyle, parstyle['level'])[2]
         content, sep = texel.childs[1:]
-        lines = grouped([shown(content, sep.parstyle),
+        lines = grouped([shown(content, sep.parstyle, texel.lang),
                          NL.set_parstyle(sep.parstyle)])
         child = self.create_child(width)
         records = [record for par in child.generate(lines, 0)

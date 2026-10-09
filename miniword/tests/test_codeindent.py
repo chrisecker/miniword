@@ -98,3 +98,23 @@ def test_CODE_5():
         assert codes(model.texel) == [('code', '', '    xy\nz')]
     finally:
         close(frame)
+
+
+def test_CODE_6():
+    "CODE-6: the cursor at a line start (e.g. an empty last line) moves "
+    "behind the spaces; a selection keeps its whole lines"
+    frame = frame_with(code('x', ''))
+    try:
+        editor, model = frame.editor, frame.document.textmodel
+        j = model.get_text().index('x') + 2  # the empty last line
+        editor.set_index(j)
+        act(frame, 'indent')
+        assert codes(model.texel) == [('code', '', 'x\n    ')]
+        assert editor.index == j + 4
+        i = j - 2  # 'x'
+        editor.set_index(i)
+        editor.set_index(i + 1, extend=True)
+        act(frame, 'indent')
+        assert editor.selection == (i, i + 5)
+    finally:
+        close(frame)

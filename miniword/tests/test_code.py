@@ -362,3 +362,37 @@ def test_CODE_18():
         assert text[j:j + 7] == box_lines(box)[0]
     finally:
         close(frame)
+
+
+def test_CODE_19():
+    "CODE-19: a code block in a known language is colorized, in another "
+    "one not"
+    from ..mdelements.colorize import KEYWORD
+
+    def colors(lang):
+        page = pages_from(doc(par(code('def f():', '    pass', lang=lang))),
+                          small_memo(width=300, height=300))[0]
+        box, = code_parts([page])
+        return {style['color'] for style in text_styles(box)}
+
+    found = colors('python')
+    assert KEYWORD['color'] in found and len(found) > 1
+    for lang in ('', 'cobol'):
+        assert len(colors(lang)) == 1
+
+
+def test_CODE_20():
+    "CODE-20: the panel offers the registered languages, others can be "
+    "typed"
+    from .guitest import close, enter
+    frame = frame_with(code('x = 1'))
+    try:
+        panel, editor = frame.elements_panel, frame.editor
+        model = frame.document.textmodel
+        editor.set_index(model.get_text().index('x') + 1)
+        panel.update()
+        assert 'python' in panel.language.GetStrings()
+        enter(panel.language, 'cobol')
+        assert codes(model.texel) == [('code', 'cobol', 'x = 1')]
+    finally:
+        close(frame)

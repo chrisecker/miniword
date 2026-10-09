@@ -5,6 +5,7 @@ rawhtml.py).
 """
 
 from copy import copy as shallow_copy
+from itertools import groupby
 from ..textmodel.texeltree import Container, Text, NewLine, NL, \
     NULL_TEXEL, grouped, length, get_text
 from ..textmodel.utils import iter_leafes
@@ -13,6 +14,7 @@ from ..layout.boxes import Box
 from ..tables.table_boxes import TableBox, create_cell
 from ..texteditor.controller import ElementController
 from ..texteditor.editor import Editor
+from .colorize import colorizer
 from . import insert_par
 
 
@@ -108,16 +110,26 @@ class CodeBox(TableBox):
             self.icon.draw(x + ix + self.pad, y + iy + self.pad, dc)
 
 
-def shown(content, parstyle):
-    """content as shown: the text without its styles, each line in
-    parstyle (later: colorized)."""
+def shown(content, parstyle, lang=''):
+    """content as shown: the text in the colors of its language lang
+    (else plain) instead of its styles, each line in parstyle."""
+    styles = [{}] * length(content)  # of each character
+    colorize = colorizer(lang)
+    if colorize:
+        for i1, i2, style in colorize(get_text(content)):
+            styles[i1:i2] = [style] * (i2 - i1)
     texels = []
-    for *_, texel in iter_leafes(content, 0):
+    for i1, i2, texel in iter_leafes(content, 0):
         if isinstance(texel, NewLine):
-            texel = NL.set_parstyle(parstyle)
-        elif texel.is_text:
-            texel = Text(texel.text)
-        texels.append(texel)
+            texels.append(NL.set_parstyle(parstyle))
+        elif texel.is_text:  # in pieces of one style
+            k = 0
+            for style, run in groupby(styles[i1:i2]):
+                n = len(list(run))
+                texels.append(Text(texel.text[k:k + n], style))
+                k += n
+        else:
+            texels.append(texel)
     return grouped(texels)
 
 
