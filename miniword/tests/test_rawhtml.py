@@ -7,12 +7,25 @@ Tests for raw HTML (texel RawHTML): shown as its source, never rendered
 Run with: python runtests.py miniword/tests/test_rawhtml.py
 """
 
-from ..core.texels import RawHTML
+from ..mdelements.rawhtml import RawHTML
+from contextlib import contextmanager
 from ..textmodel.texeltree import Group, Text, NL
 from ..textmodel.utils import iter_leafes
 from .test_rowfactory import doc, par, pages_from, small_memo
 
 BLOCK = '<div align="center">\n  <b>x</b>\n</div>'
+
+
+@contextmanager
+def answering(answer):
+    """The HTML dialog replaced: answer (source -> new one or None)."""
+    from ..mdelements import rawhtml
+    ask_html = rawhtml.ask_html
+    rawhtml.ask_html = lambda parent, source='': answer(source)
+    try:
+        yield
+    finally:
+        rawhtml.ask_html = ask_html
 
 
 def sources(texel):
@@ -28,9 +41,9 @@ def test_HTML_1():
 
 
 def test_HTML_2():
-    "HTML-2: shown as its source: a box of its lines, one index long"
-    from ..layout.boxes import RawHTMLBox
-    page = pages_from(doc(par(RawHTML(BLOCK)), par('a', RawHTML('<kbd>'))),
+    "HTML-2: inline HTML is shown as its source: its lines, one index"
+    from ..mdelements.rawhtml import RawHTMLBox
+    page = pages_from(doc(par('a', RawHTML(BLOCK)), par('a', RawHTML('<kbd>'))),
                       small_memo(width=400, height=400))[0]
     block, inline = [box for _, _, row in page.rows for box in row.childs
                      if isinstance(box, RawHTMLBox)]
@@ -70,33 +83,40 @@ def test_HTML_5():
 
 
 def test_HTML_6():
-    "HTML-6: a double click on the box edits the source (one undo step)"
+    "HTML-6: a double click on inline HTML edits it (one undo step)"
     from ..core.document import Document
-    from ..layout.boxes import RawHTMLBox, find_box_at
+    from ..mdelements.rawhtml import RawHTMLBox
+    from ..layout.boxes import find_box_at
     from ..ui.mainwindow import MainFrame
-    from .guitest import app, close
+    from .guitest import app, close, double_click
     app()
     document = Document()
     frame = MainFrame(document)
     try:
-        frame.editor.insert_texel(Group([RawHTML(BLOCK), NL]))
-        frame.canvas.builder.assure_index(len(document.textmodel), 0)
-        _, (x, y), box = find_box_at(frame.canvas.layout, 0, RawHTMLBox)
+        frame.editor.insert_texel(Group([Text('a'), RawHTML(BLOCK), NL]))
         canvas, model = frame.canvas, document.textmodel
-        assert not canvas.edit_rawhtml(x + box.width + 5, y + 2,
-                                       ask=lambda source: 'never')
-        assert canvas.edit_rawhtml(x + 2, y + 2,
-                                   ask=lambda source: source + '<hr>')
+        build = lambda: canvas.builder.assure_index(len(model), 0)
+        build()
+        _, (x, y), box = find_box_at(canvas.layout, 1, RawHTMLBox)
+        with answering(lambda source: 'never'):
+            double_click(canvas, x + box.width + 5, y + 2)
+        assert sources(model.texel) == [BLOCK]
+        with answering(lambda source: source + '<hr>'):
+            double_click(canvas, x + 2, y + 2)
         assert sources(model.texel) == [BLOCK + '<hr>']
         frame.editor.undo()
         assert sources(model.texel) == [BLOCK]
-        assert not canvas.edit_rawhtml(x + 2, y + 2, ask=lambda s: None)
+        build()
+        with answering(lambda source: None):  # cancelled
+            double_click(canvas, x + 2, y + 2)
+        assert sources(model.texel) == [BLOCK]
     finally:
         close(frame)
 
 
 def test_HTML_7():
     "HTML-7: Insert > HTML: one line at the cursor, a block on its own"
+    from ..mdelements.rawhtml import insert_html
     from ..core.document import Document
     from ..ui.mainwindow import MainFrame
     from .guitest import app, close
@@ -107,9 +127,11 @@ def test_HTML_7():
     try:
         model = document.textmodel
         frame.editor.set_index(2)
-        frame.insert_html(ask=lambda source: '<kbd>')
+        with answering(lambda source: '<kbd>'):
+            insert_html(frame.editor, frame)
         assert model.get_text() == 'ab%scd' % RawHTML.text
-        frame.insert_html(ask=lambda source: BLOCK)
+        with answering(lambda source: BLOCK):
+            insert_html(frame.editor, frame)
         assert model.get_text() == 'ab%s\n%s\ncd' % ((RawHTML.text,) * 2)
         assert sources(model.texel) == ['<kbd>', BLOCK]
     finally:

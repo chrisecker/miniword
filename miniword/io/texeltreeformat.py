@@ -46,7 +46,11 @@ from ..textmodel.texeltree import (
     as_style, grouped, join, length, depth,
     iter_childs, takeout
 )
-from ..core.texels import BR, Rule, Checkbox, RawHTML, Code
+from ..core.texels import BR
+from ..mdelements.rule import Rule
+from ..mdelements.checkbox import Checkbox
+from ..mdelements.rawhtml import RawHTML
+from ..mdelements.code import Code
 from ..textmodel.submodel import Footnote
 
 

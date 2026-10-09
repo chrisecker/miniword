@@ -138,6 +138,11 @@ class Box:
     def __len__(self):
         raise NotImplementedError()
 
+    def pointer_at(self, x, y):
+        """The mouse pointer at (x, y) (relative to the box): 'hand' -
+        a click does something -, or None (the text cursor)."""
+        return None
+
     def dump_boxes(self, i, x, y, indent=0):
         """Print out a graphical representation of the tree."""
         print(" "*indent, "[%i:%i]" % (i, i+len(self)), "%.1f" % x, "%.1f" % y, end=' ')
@@ -684,7 +689,7 @@ def draw_border(device, x, y, w, h, style, gc):
 
 
 class SingleBox(Box):
-    """A box of one index (a rule, a checkbox)."""
+    """A box of one index (a rule, a checkbox; see mdelements)."""
 
     def __len__(self):
         return 1
@@ -696,76 +701,6 @@ class SingleBox(Box):
 
     def get_index(self, x, y):
         return 0 if x < self.width / 2 else 1
-
-
-class RuleBox(SingleBox):
-    """A horizontal rule over width, one line high (font size)."""
-    color = '#d1d9e0'
-
-    def __init__(self, width, size, device=None):
-        self.width = width
-        self.height, self.depth = 0.75 * size, 0.25 * size
-        self.thickness = size / 6
-        if device is not None:
-            self.device = device
-
-    def draw(self, x, y, gc):
-        middle = y + (self.height + self.depth) / 2
-        self.device.fill_rect(x, middle - self.thickness / 2, self.width,
-                              self.thickness, self.color, gc)
-
-
-class CheckboxBox(SingleBox):
-    """A checkbox as large as the text (font size), on the baseline,
-    with some space after it; checked: filled, with a tick."""
-    color = '#57606a'
-    checked_color = '#0969da'
-
-    def __init__(self, checked, size, device=None):
-        self.checked = checked
-        self.size = 0.75 * size  # the square
-        self.width = self.size + 0.4 * size
-        self.height = self.size
-        if device is not None:
-            self.device = device
-
-    def draw(self, x, y, gc):
-        s, device = self.size, self.device
-        if self.checked:  # filled, a white tick
-            device.fill_rect(x, y, s, s, self.checked_color, gc)
-            for (x1, y1), (x2, y2) in (((.2, .55), (.42, .75)),
-                                       ((.42, .75), (.8, .28))):
-                device.draw_line(x + x1 * s, y + y1 * s, x + x2 * s,
-                                 y + y2 * s, 2, gc, color='white')
-        else:  # a frame
-            line = max(1, s / 10)
-            device.fill_rect(x, y, s, s, self.color, gc)
-            device.fill_rect(x + line, y + line, s - 2 * line,
-                             s - 2 * line, 'white', gc)
-
-
-class RawHTMLBox(SingleBox):
-    """The source of raw HTML: its lines on a grey ground; the baseline
-    is the last line's (inline HTML sits on the text's)."""
-    color = '#f6f8fa'
-    pad = 2
-
-    def __init__(self, source, style, device=None):
-        if device is not None:
-            self.device = device
-        self.lines = [TextBox(line or ' ', style, self.device)
-                      for line in source.split('\n')]
-        self.width = max(box.width for box in self.lines) + 2 * self.pad
-        self.depth = self.lines[-1].depth
-        self.height = sum(box.height + box.depth for box in self.lines) \
-            - self.depth
-
-    def draw(self, x, y, gc):
-        self.device.fill_rect(x, y, self.width, self.height + self.depth,
-                              self.color, gc)
-        for box in self.lines:
-            box.draw(x + self.pad, y, gc)
-            y += box.height + box.depth
 
 
 def find_box_at(layout, index, cls, flow=0):

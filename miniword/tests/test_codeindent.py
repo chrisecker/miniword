@@ -1,79 +1,100 @@
 # -*- coding: utf-8 -*-
 
 """
-Tests for indenting code: in paragraphs whose base style has the role
-'pre', indent/dedent (Alt+Right/Left) insert or remove 4
-spaces at the line starts instead of changing the level. IDs CODE-n.
+Tests for indenting code: in a code block indent/dedent (Alt+Right/
+Left) insert or remove 4 spaces at the line starts instead of changing
+the level; elsewhere they change the level. IDs CODE-n.
 
 Run with: python runtests.py miniword/tests/test_codeindent.py
 """
 
-from types import SimpleNamespace
-
-from ..core.stylesheet import StyleSheet
-from ..texteditor.editor import Editor
-from ..textmodel.textmodel import TextModel
+from ..textmodel.texeltree import Group, Text, NL
+from .test_code import frame_with, code, codes
+from .guitest import close
 
 
-def code_editor(text, code_lines, base='pre'):
-    """(model, editor) for text; the lines code_lines are code."""
-    sheet = StyleSheet()
-    sheet.set('normal', dict(role='body'))
-    sheet.set(base, dict(role='pre'))
-    model = TextModel(text)
-    editor = Editor(model)
-    # the stylesheet comes from the canvas' builder
-    editor.canvas = SimpleNamespace(
-        builder=SimpleNamespace(stylesheet=sheet),
-        reset_blink=lambda: None, adjust_viewport=lambda: None,
-        refresh=lambda: None)
-    starts = [0] + [i + 1 for i, c in enumerate(text) if c == '\n']
-    for k in code_lines:
-        model.set_parstyle(starts[k], dict(base=base))
-    return model, editor
+def act(frame, action):
+    """The action as from a key or the menu: via the controller."""
+    frame.editor.controller.handle_action(action, False)
 
 
 def test_CODE_1():
     "CODE-1: indent in a code line: 4 spaces at its start, cursor follows"
-    model, editor = code_editor("def f():\nreturn 1\n", [0, 1])
-    editor.index = 12  # in 'return'
-    editor.indent()
-    assert model.get_text() == "def f():\n    return 1\n"
-    assert editor.index == 16
+    frame = frame_with(code('def f():', 'return 1'))
+    try:
+        editor, model = frame.editor, frame.document.textmodel
+        j = model.get_text().index('return') + 2
+        editor.set_index(j)
+        act(frame, 'indent')
+        assert codes(model.texel) == [('code', '', 'def f():\n    return 1')]
+        assert editor.index == j + 4
+    finally:
+        close(frame)
 
 
 def test_CODE_2():
     "CODE-2: a selection over code lines: each line, one undo step"
-    model, editor = code_editor("a\nb\nc\n", [0, 1, 2])
-    editor.selection = (0, 3)  # 'a\nb'
-    editor.indent()
-    assert model.get_text() == "    a\n    b\nc\n"
-    assert editor.selection == (0, 11)
-    editor.undo()
-    assert model.get_text() == "a\nb\nc\n"
+    frame = frame_with(code('x', 'y', 'z'))
+    try:
+        editor, model = frame.editor, frame.document.textmodel
+        i = model.get_text().index('x')
+        editor.set_index(i)
+        editor.set_index(i + 3, extend=True)  # 'x\ny'
+        act(frame, 'indent')
+        assert codes(model.texel) == [('code', '', '    x\n    y\nz')]
+        assert editor.selection == (i, i + 11)
+        editor.undo()
+        assert codes(model.texel) == [('code', '', 'x\ny\nz')]
+    finally:
+        close(frame)
 
 
 def test_CODE_3():
     "CODE-3: dedent removes up to 4 leading spaces per line; one undo step"
-    text = "  a\n      b\nc\n"
-    model, editor = code_editor(text, [0, 1, 2])
-    editor.selection = (0, len(text) - 1)
-    editor.dedent()
-    assert model.get_text() == "a\n  b\nc\n"
-    editor.undo()
-    assert model.get_text() == text
+    frame = frame_with(code('  x', '      y', 'z'))
+    try:
+        editor, model = frame.editor, frame.document.textmodel
+        text = model.get_text()
+        editor.set_index(text.index('  x'))
+        editor.set_index(text.index('z'), extend=True)
+        act(frame, 'dedent')
+        assert codes(model.texel) == [('code', '', 'x\n  y\nz')]
+        editor.undo()
+        assert codes(model.texel) == [('code', '', '  x\n      y\nz')]
+    finally:
+        close(frame)
 
 
 def test_CODE_4():
-    "CODE-4: outside code indent changes the level, as before"
-    model, editor = code_editor("Text\n", [])
-    editor.indent()
-    assert model.get_text() == "Text\n"
-    assert model.get_indent(0) == 1
+    "CODE-4: outside code indent changes the level - also in a paragraph "
+    "of the style 'pre' (code is what is in a code block)"
+    frame = frame_with(code('x'))
+    try:
+        editor, model = frame.editor, frame.document.textmodel
+        editor.set_index(0)  # in 'a', the paragraph before the code
+        act(frame, 'indent')
+        assert model.get_text().startswith('a\n')
+        assert model.get_indent(0) == 1
+        model.set_parstyle(1, {'base': 'pre'})
+        frame.canvas.builder.assure_index(len(model), 0)
+        act(frame, 'indent')
+        assert model.get_text().startswith('a\n')
+        assert model.get_indent(0) == 2
+    finally:
+        close(frame)
 
 
 def test_CODE_5():
-    "CODE-5: code is found by the role of the base style, not its name"
-    model, editor = code_editor("x = 1\n", [0], base='Quelltext')
-    editor.indent()
-    assert model.get_text() == "    x = 1\n"
+    "CODE-5: a line pasted into code with another paragraph style is "
+    "indented by spaces too"
+    frame = frame_with(code('x'))
+    try:
+        editor, model = frame.editor, frame.document.textmodel
+        editor.set_index(model.get_text().index('x') + 1)
+        editor.insert_texel(Group([
+            Text('y'), NL.set_parstyle({'base': 'h1'}), Text('z')]))
+        editor.set_index(model.get_text().index('xy'))
+        act(frame, 'indent')
+        assert codes(model.texel) == [('code', '', '    xy\nz')]
+    finally:
+        close(frame)

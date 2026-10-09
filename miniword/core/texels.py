@@ -1,7 +1,4 @@
-from copy import copy as shallow_copy
-
-from ..textmodel.texeltree import Single, Container, EMPTYSTYLE, NL, \
-    NULL_TEXEL
+from ..textmodel.texeltree import Single
 
 
 class BR(Single):
@@ -10,61 +7,3 @@ class BR(Single):
 
     def __repr__(self):
         return 'BR'
-
-
-class Checkbox(Single):
-    """A checkbox, e.g. at the start of a task list item (Markdown
-    - [ ] / - [x])."""
-    checked = False
-
-    @property
-    def text(self):
-        return '\u2611' if self.checked else '\u2610'
-
-    def set_checked(self, checked):
-        clone = shallow_copy(self)
-        clone.checked = bool(checked)
-        return clone
-
-    def __repr__(self):
-        return 'CB(checked)' if self.checked else 'CB'
-
-
-class Code(Container):
-    """A code block (kind 'code', in a language lang) or HTML block (kind
-    'html'): a container like a table with one cell, followed by a
-    newline of its own (develnotes/code_block_concept.md)."""
-    kind = 'code'
-    lang = ''
-
-    def __init__(self, content=NULL_TEXEL, kind='code', lang=''):
-        self.kind, self.lang = kind, lang
-        # childs as a table cell's: SEP, content, SEP ending its last line
-        self.childs = [NL, content, NL.set_parstyle({'base': 'pre'})]
-        self.compute_weights()
-
-
-class RawHTML(Single):
-    """HTML from Markdown, kept as its source: shown, never rendered (a
-    passive document), written back unchanged."""
-    text = '\ufffc'
-
-    def __init__(self, source='', style=None):
-        Single.__init__(self, style)
-        self.source = source
-
-    def set_source(self, source):
-        clone = shallow_copy(self)
-        clone.source = source
-        return clone
-
-    def __repr__(self):
-        return 'RAW(%r)' % self.source
-
-
-class Rule(Single):
-    """Horizontal rule, alone in its paragraph (Markdown ---)."""
-    text = '\u2015'
-
-    def __repr__(self):
-        return 'HR'

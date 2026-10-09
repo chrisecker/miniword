@@ -39,7 +39,9 @@ def _doc_to_md(doc):
     from miniword.textmodel.texeltree import get_text, NewLine
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
-    from miniword.core.texels import Rule, RawHTML, Code
+    from miniword.mdelements.rule import Rule
+    from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.code import Code
 
     texel          = doc.textmodel.get_xtexel()
     parts          = []
@@ -239,7 +241,9 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
     from miniword.textmodel.texeltree import get_text
     from miniword.images.images import Image as ImageTexel, image_mime
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
-    from miniword.core.texels import BR, Checkbox, RawHTML
+    from miniword.core.texels import BR
+    from miniword.mdelements.checkbox import Checkbox
+    from miniword.mdelements.rawhtml import RawHTML
     pieces = []  # (Markdown, its marks; None: keep the open ones)
     for elem in elems:
         marks = None if plain else _marks(getattr(elem, 'style', {}))
@@ -458,7 +462,10 @@ def _special(props):
     """The texel of a special run (see _build_blocks), or None."""
     from miniword.textmodel.texeltree import T, ENDMARK, grouped
     from miniword.footnotes.footnotes import Footnote
-    from miniword.core.texels import BR, Rule, Checkbox, RawHTML
+    from miniword.core.texels import BR
+    from miniword.mdelements.rule import Rule
+    from miniword.mdelements.checkbox import Checkbox
+    from miniword.mdelements.rawhtml import RawHTML
     if props.get('_image'):
         return _image(*props['_image'])
     if props.get('_footnote'):
@@ -487,7 +494,9 @@ def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
 def block_md(block):
     """The Markdown lines of a paragraph that is one block: a rule, raw
     HTML, a code block or a table."""
-    from miniword.core.texels import Rule, RawHTML, Code
+    from miniword.mdelements.rule import Rule
+    from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.code import Code
     if isinstance(block, Rule):
         return ['---']
     if isinstance(block, RawHTML):
@@ -499,19 +508,14 @@ def block_md(block):
 
 def code_block(lines, lang=''):
     """A Code texel of lines (strings)."""
-    from miniword.core.texels import Code
-    from miniword.textmodel.texeltree import Text, NL, grouped
-    texels = []
-    for line in lines:
-        texels += [Text(line), NL.set_parstyle({'base': 'pre'})]
-    return Code(grouped(texels[:-1]), lang=lang)  # the last NL: Code's
+    from miniword.mdelements.code import Code
+    return Code.from_text('\n'.join(lines), lang=lang)
 
 
 def code_md(code):
     """The Markdown lines of a Code texel: fenced (longer than any
     backticks in it), an HTML block as it is."""
-    from miniword.textmodel.texeltree import get_text
-    lines = get_text(code.childs[1]).split('\n')
+    lines = code.source.split('\n')
     if code.kind == 'html':
         return lines
     ticks = max(map(len, re.findall('`+', '\n'.join(lines))), default=0)
@@ -832,7 +836,8 @@ def _check_md(doc):
     from miniword.tables.tables import Table as TableTexel
     from miniword.images.images import Image as ImageTexel
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
-    from miniword.core.texels import Rule, Checkbox
+    from miniword.mdelements.rule import Rule
+    from miniword.mdelements.checkbox import Checkbox
 
     _OK_BASES  = set(_ALERTS) | {
         'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -1105,7 +1110,7 @@ def test_09():
 
 def code_texts(texel):
     """(lang, text) of each code block (Code) in texel."""
-    from miniword.core.texels import Code
+    from miniword.mdelements.code import Code
     from miniword.textmodel.texeltree import get_text
     if isinstance(texel, Code):
         return [(texel.lang, get_text(texel.childs[1]))]
@@ -1177,7 +1182,7 @@ def test_14(load=_load_mistune):
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
-    from miniword.core.texels import Code
+    from miniword.mdelements.code import Code
 
     def bases(md):
         doc = load(md)

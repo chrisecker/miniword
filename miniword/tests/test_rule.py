@@ -7,7 +7,7 @@ file format, layout, Markdown and HTML, inserting. IDs RULE-n.
 Run with: python runtests.py miniword/tests/test_rule.py
 """
 
-from ..core.texels import Rule
+from ..mdelements.rule import Rule
 from ..textmodel.texeltree import Group, Text, NL
 from ..textmodel.utils import iter_leafes
 from .test_rowfactory import doc, par, pages_from, small_memo
@@ -28,7 +28,7 @@ def test_RULE_1():
 
 def test_RULE_2():
     "RULE-2: a rule is as wide as its paragraph's text"
-    from ..layout.rowfactory import RuleBox
+    from ..mdelements.rule import RuleBox
     page = pages_from(doc(par('ab'), par(Rule())),
                       small_memo(width=40, height=100))[0]
     boxes = [box for _, _, row in page.rows for box in row.childs
@@ -69,6 +69,7 @@ def test_RULE_5():
 
 def test_RULE_6():
     "RULE-6: inserting a rule puts it into a paragraph of its own"
+    from ..mdelements.rule import insert_rule
     from ..core.document import Document
     from ..ui.mainwindow import MainFrame
     from .guitest import app, close
@@ -78,7 +79,7 @@ def test_RULE_6():
     frame = MainFrame(document)
     try:
         frame.editor.set_index(2)  # ab|cd
-        frame.insert_rule()
+        insert_rule(frame.editor)
         assert document.textmodel.get_text() == 'ab\n%s\ncd' % Rule.text
         frame.editor.undo()
         assert document.textmodel.get_text() == 'abcd'

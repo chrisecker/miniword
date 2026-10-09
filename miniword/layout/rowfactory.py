@@ -53,15 +53,18 @@ from ..core.units import mm, cm
 from ..core.styles import updated
 from ..core.papersizes import PAPER_SIZES
 from ..core.document import settings_default
-from .boxes import TextBox, NewlineBox, EndBox, TabulatorBox, RuleBox, \
-    CheckboxBox, RawHTMLBox, Row, RowsBox
+from .boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, RowsBox
+from ..mdelements.rule import RuleBox
+from ..mdelements.checkbox import CheckboxBox
+from ..mdelements.code import CodeBox, shown
+from ..mdelements.rawhtml import RawHTML, RawHTMLBox, HTML_ICON
 from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
 from .linewrap import simple_linewrap
 from ..hyphenation import get_hyphenator
 from .stretchable import justify_line
-from ..tables.table_boxes import TableBox, CodeBox, create_cell, \
+from ..tables.table_boxes import TableBox, create_cell, \
     split_at_height, CELL_HPAD, CELL_VPAD
 
 
@@ -221,11 +224,15 @@ class Factory:
         style = self.stylesheet.mk_style(parstyle, texel.style)
         return CheckboxBox(texel.checked, style['font_size'], self.device)
 
-    def RawHTML_handler(self, texel, parstyle):
+    def RawHTML_handler(self, texel, parstyle, collapsed=False):
         """The source in grey monospace (see RawHTMLBox)."""
-        style = self.stylesheet.mk_style(parstyle, dict(
-            texel.style, font_family='Courier New', color='#57606a'))
-        return RawHTMLBox(texel.source, style, self.device)
+        style = self.html_style(parstyle, texel.style)
+        return RawHTMLBox(texel.source, style, self.device, collapsed)
+
+    def html_style(self, parstyle, style={}):
+        """The style of HTML source: grey monospace."""
+        return self.stylesheet.mk_style(parstyle, dict(
+            style, font_family='Courier New', color='#57606a'))
 
     def Rule_handler(self, texel, parstyle):
         """A rule as wide as the paragraph's (first) line."""
@@ -303,6 +310,9 @@ class RowFactory(Factory):
 
     def _process_paragraph(self, i1, i2, texels, p_prev, p, p_next):
         boxes = [self.create_box(elem, p) for elem in texels]
+        if len(texels) == 2 and isinstance(texels[0], RawHTML):
+            # alone in its paragraph: an HTML block, shown collapsed
+            boxes[0] = self.RawHTML_handler(texels[0], p, collapsed=True)
         begins_block = not _is_same_block(p, p_prev)
         ends_block = not _is_same_block(p, p_next)
         
@@ -467,17 +477,23 @@ class RowFactory(Factory):
 
     def Code_handler(self, texel, parstyle):
         """A CodeBox: the code set by a child factory as wide as the
-        paragraph, its lines in the style of their newlines ('pre')."""
+        paragraph, all lines in the style of the closing SEP ('pre');
+        styles set in the code are ignored (see shown)."""
         width = self._dims(parstyle, parstyle['level'])[2]
         content, sep = texel.childs[1:]
-        lines = grouped([content, NL.set_parstyle(sep.parstyle)])
+        lines = grouped([shown(content, sep.parstyle),
+                         NL.set_parstyle(sep.parstyle)])
         child = self.create_child(width)
         records = [record for par in child.generate(lines, 0)
                    for record in par]
         self.update_from_child(child)
         cell = create_cell(records, width, self.device)
         cell.length = length(content) + 1  # with the closing SEP
-        return CodeBox(cell, texel.kind, self.device)
+        icon = None
+        if texel.kind == 'html':
+            icon = TextBox(HTML_ICON, self.html_style(parstyle),
+                           self.device)
+        return CodeBox(cell, texel.kind, self.device, icon)
 
     def Table_handler(self, texel, parstyle):
         """A TableBox for a Table texel: childs are [SEP, content, SEP,

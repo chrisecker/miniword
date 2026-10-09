@@ -18,6 +18,8 @@ from .icons import ICONS_DIR, app_icon_bundle
 from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
 from .linkpanel import LinksPanel
+from ..mdelements.panel import ElementsPanel
+from ..mdelements import rule, checkbox, code, rawhtml
 from ..images import ImageInspector
 from ..core.config import get_config
 from ..core.document import Document
@@ -534,12 +536,15 @@ class MainFrame(wx.Frame, ViewBase):
             self.Bind(wx.EVT_MENU, lambda _, c=char: self.insert_char(c),
                       item)
         insert_menu.AppendSeparator()
-        item = insert_menu.Append(wx.ID_ANY, "Horizontal &Rule")
-        self.Bind(wx.EVT_MENU, lambda _: self.insert_rule(), item)
-        item = insert_menu.Append(wx.ID_ANY, "&Checkbox")
-        self.Bind(wx.EVT_MENU, lambda _: self.insert_checkbox(), item)
-        item = insert_menu.Append(wx.ID_ANY, "&HTML\u2026")
-        self.Bind(wx.EVT_MENU, lambda _: self.insert_html(), item)
+        for label, insert in (
+                ("Horizontal &Rule", rule.insert_rule),
+                ("&Checkbox", checkbox.insert_checkbox),
+                ("&HTML\u2026",
+                 lambda editor: rawhtml.insert_html(editor, self)),
+                ("Code &Block", code.insert_code)):
+            item = insert_menu.Append(wx.ID_ANY, label)
+            self.Bind(wx.EVT_MENU,
+                      lambda _, f=insert: f(self.editor), item)
         bar.Append(insert_menu, "&Insert")
 
         format_menu = wx.Menu()
@@ -665,6 +670,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._search_panel = SearchPanel(self._inspector_book, self.editor)
         self._outline_panel = OutlinePanel(self._inspector_book, self.document, self.editor)
         self._links_panel = LinksPanel(self._inspector_book, self.editor, self.document)
+        self.elements_panel = ElementsPanel(self._inspector_book, self)
         self.panels = [
             ("style",    self.inspector),
             ("settings", self.document_settings),
@@ -673,6 +679,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("search",   self._search_panel),
             ("outline",  self._outline_panel),
             ("links",    self._links_panel),
+            ("elements", self.elements_panel),
         ]
         for key, panel in self.panels:
             idx = self._inspector_book.GetPageCount()
@@ -832,6 +839,7 @@ class MainFrame(wx.Frame, ViewBase):
     def _build_strip(self):
         self._strip = RightStrip(self._base, [
             ("style",    "Styles"),    # format text and objects
+            ("elements", "Elements"),
             ("table",    "Table"),
             ("image",    "Image"),
             ("links",    "Links"),
@@ -925,46 +933,6 @@ class MainFrame(wx.Frame, ViewBase):
         self.canvas.show_marks = show
         get_config().set('show_formatting_marks', show)
         self.canvas.refresh()
-
-    def insert_rule(self):
-        """Insert a horizontal rule, in a paragraph of its own (style
-        with the role 'rule', if there is one)."""
-        from ..core.texels import Rule
-        key = self.editor.role_key('rule')
-        self._insert_par(Rule(), {'base': key} if key else {})
-
-    def insert_html(self, ask=None):
-        """Insert raw HTML asked for (ask: '' -> source or None, default
-        the dialog ask_html): more lines (a block) in a paragraph of
-        their own, else at the cursor."""
-        from ..core.texels import RawHTML
-        from ..texteditor.textcanvas import ask_html
-        source = (ask or (lambda s: ask_html(self, s)))('')
-        if not source:
-            return
-        if '\n' in source:
-            self._insert_par(RawHTML(source))
-        else:
-            with self.editor.atomic():
-                self.editor.remove()
-                self.editor.insert_texel(RawHTML(source))
-
-    def _insert_par(self, texel, parstyle={}):
-        """Insert texel in a paragraph of its own (with parstyle)."""
-        from ..textmodel.texeltree import NL, grouped
-        editor = self.editor
-        with editor.atomic():
-            editor.remove()
-            if editor.index != editor.target.linestart(editor.index):
-                editor.insert_newline()
-            editor.insert_texel(grouped([texel, NL.set_parstyle(parstyle)]))
-
-    def insert_checkbox(self):
-        """Insert a checkbox at the cursor (it replaces the selection)."""
-        from ..core.texels import Checkbox
-        with self.editor.atomic():
-            self.editor.remove()
-            self.editor.insert_texel(Checkbox())
 
     def insert_char(self, char):
         """Type char: it replaces the selection."""

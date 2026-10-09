@@ -8,7 +8,7 @@ IDs CB-n.
 Run with: python runtests.py miniword/tests/test_checkbox.py
 """
 
-from ..core.texels import Checkbox
+from ..mdelements.checkbox import Checkbox
 from ..textmodel.texeltree import Group, Text, NL
 from ..textmodel.utils import iter_leafes
 from .test_rowfactory import doc, par, pages_from, small_memo
@@ -30,7 +30,7 @@ def test_CB_1():
 
 def test_CB_2():
     "CB-2: a checkbox is a box of the text's size, before the text"
-    from ..layout.boxes import CheckboxBox
+    from ..mdelements.checkbox import CheckboxBox
     page = pages_from(doc(par(Checkbox(), 'todo')),
                       small_memo(width=100, height=100))[0]
     (_, _, row), = page.rows
@@ -68,35 +68,42 @@ def test_CB_5():
 
 
 def test_CB_6():
-    "CB-6: a click into the box toggles it (one undo step), next to it "
-    "not; the hand cursor shows where"
+    "CB-6: a click into the box toggles it (one undo step) - also with "
+    "the cursor elsewhere -, next to it not; the hand pointer shows where"
     from ..core.document import Document
-    from ..layout.boxes import CheckboxBox, find_box_at
+    from ..mdelements.checkbox import CheckboxBox
+    from ..layout.boxes import find_box_at
     from ..ui.mainwindow import MainFrame
-    from .guitest import app, close
+    from .guitest import app, close, mouse
     app()
     document = Document()
     frame = MainFrame(document)
     try:
         frame.editor.insert_texel(Group([Checkbox(), Text('todo')]))
-        builder = frame.canvas.builder
-        builder.assure_index(len(document.textmodel), 0)
-        _, (x, y), box = find_box_at(frame.canvas.layout, 0, CheckboxBox)
-        model = document.textmodel
-        canvas = frame.canvas
-        assert canvas.checkbox_at(x + 2, y + 2) is not None  # hand cursor
-        assert canvas.checkbox_at(x + box.width + 5, y + 2) is None
-        assert not frame.canvas.toggle_checkbox(x + box.width + 5, y + 2)
-        assert frame.canvas.toggle_checkbox(x + 2, y + 2)
+        canvas, model = frame.canvas, document.textmodel
+        build = lambda: canvas.builder.assure_index(len(model), 0)
+        build()
+        _, (x, y), box = find_box_at(canvas.layout, 0, CheckboxBox)
+        flow, i, under, (bx, by) = canvas.box_under(x + 2, y + 2)
+        assert under is box and box.pointer_at(bx, by) == 'hand'
+        assert box.pointer_at(box.width - 1, 2) is None  # beside it
+        assert frame.editor.index > 1  # the cursor elsewhere
+        canvas.on_leftdown(mouse(canvas, x + 2, y + 2))
         assert checkboxes(model.texel) == [True]
         frame.editor.undo()
         assert checkboxes(model.texel) == [False]
+        build()
+        canvas.on_leftdown(mouse(canvas, x + box.width - 1, y + 2))
+        assert checkboxes(model.texel) == [False]  # only the cursor
+        canvas.on_leftdown(mouse(canvas, x + 2, y + 2))
+        assert checkboxes(model.texel) == [True]
     finally:
         close(frame)
 
 
 def test_CB_7():
     "CB-7: Insert > Checkbox inserts one at the cursor"
+    from ..mdelements.checkbox import insert_checkbox
     from ..core.document import Document
     from ..ui.mainwindow import MainFrame
     from .guitest import app, close
@@ -106,7 +113,7 @@ def test_CB_7():
     frame = MainFrame(document)
     try:
         frame.editor.set_index(0)
-        frame.insert_checkbox()
+        insert_checkbox(frame.editor)
         assert checkboxes(document.textmodel.texel) == [False]
         assert document.textmodel.get_text().endswith('todo')
     finally:

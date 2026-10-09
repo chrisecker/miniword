@@ -296,6 +296,10 @@ class Editor(UndoRedo):
         new_texel = texel
         for key, value in attributes.items():
             new_texel = getattr(new_texel, 'set_' + key)(value)
+        self.replace_texel(i1, texel, new_texel)
+
+    def replace_texel(self, i1, texel, new_texel):
+        """Replace the texel at i1 by new_texel (one undo step)."""
         new = self.target.create_textmodel()
         new.texel = new_texel
         j = self.local_idx(i1)
@@ -490,21 +494,16 @@ class Editor(UndoRedo):
         return self._set_indents, flow, i1, i2, indents
 
     def indent(self):
-        """One level more; in code 4 spaces at the line starts."""
+        """One level more."""
         j1, j2 = self.selected_range()
-        if self.is_code(j1):
-            return self.shift_lines(j1, j2, 4)
         j2 = self.target.lineend(j2)+1
         i1, i2 = self.abs_idxs(j1, j2)
         old = self.target.increase_indent(j1, j2)
         self.add_undo((self._set_indents, self.flow, i1, i2, old))
 
     def dedent(self):
-        """One level less; in code up to 4 spaces less at the line
-        starts."""
+        """One level less."""
         j1, j2 = self.selected_range()
-        if self.is_code(j1):
-            return self.shift_lines(j1, j2, -4)
         j2 = self.target.lineend(j2)+1
         i1, i2 = self.abs_idxs(j1, j2)
         old = self.target.decrease_indent(j1, j2)
@@ -515,11 +514,6 @@ class Editor(UndoRedo):
         if self.has_selection():
             return tuple(sorted(self.selection))
         return self.index, self.index
-
-    def is_code(self, j):
-        """Whether the paragraph at j is code: its base style has the
-        role 'pre'."""
-        return self.role(self.target.get_parstyle(j)) == 'pre'
 
     def _line_starts(self, i1, i2):
         """Line starts of all lines overlapping [i1, i2]."""

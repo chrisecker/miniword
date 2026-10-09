@@ -25,6 +25,7 @@ class ElementController:
     """
     auto_installable  = False
     click_installable = False
+    click_through = False  # also gets the click that installed it
     is_null = False
 
     def __init__(self, editor, texel, i1, i2, depth):
@@ -40,6 +41,7 @@ class ElementController:
 
     # Events — always return False (not consumed)
     def on_leftdown(self, event): return False
+    def on_leftdclick(self, event): return False
     def on_motion(self, event):   return False
     def on_leftup(self, event):   return False
     def on_key(self, key, event): return False

@@ -76,6 +76,24 @@ def close(frame):
     frame.Destroy()
 
 
+def mouse(canvas, x, y):
+    """A mouse event at (x, y) (content coordinates) for the canvas's
+    handlers, e.g. canvas.on_leftdown(mouse(canvas, x, y))."""
+    ox, oy = canvas.content_offset()
+    scale = canvas.scale
+    event = wx.MouseEvent(wx.wxEVT_LEFT_DOWN)
+    event.SetPosition(wx.Point(canvas.CalcScrolledPosition(
+        round(x * scale) + ox, round(y * scale) + oy)))
+    return event
+
+
+def double_click(canvas, x, y):
+    """A double click at (x, y): its first click, then the double."""
+    event = mouse(canvas, x, y)
+    canvas.on_leftdown(event)
+    canvas.on_leftdclick(event)
+
+
 def click(control, value=None):
     """Set a check box or toggle button (to value) and send its event."""
     if value is not None:
