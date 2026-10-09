@@ -84,6 +84,7 @@ class _HTMLBlockBuilder(HTMLParser):
         self._runs = []              # current block's accumulated runs
         self._block_stack = [('normal', 0)]   # (ptype, indent), outermost first
         self._list_stack = []        # 'list' | 'numbered', outermost first
+        self._items = []             # open <li>: [ptype, indent, first]
         self._props_stack = [{}]     # current inline char-props
         self._in_pre = False
         self.lang = ''               # of <pre><code class="language-x">
@@ -105,8 +106,18 @@ class _HTMLBlockBuilder(HTMLParser):
         # whitespace only (e.g. around a browser's fragment): no block
         if any(t.strip() or p.get('_image') for t, p in self._runs):
             ptype, indent = self._block_stack[-1]
+            if self._items and ptype in ('normal', self._items[-1][0]):
+                ptype, indent = self._item_block()  # (a <p> in an <li>)
             self.blocks.append((ptype, indent, self._runs))
         self._runs = []
+
+    def _item_block(self):
+        """(ptype, indent) of a block in the open <li>: its first one is
+        the item, further ones continue it."""
+        item = self._items[-1]
+        ptype, indent, first = item
+        item[2] = False
+        return (ptype if first else 'continued'), indent
 
     def _start_block(self, ptype, indent):
         """Flush whatever the enclosing block had accumulated so far (e.g.
@@ -193,6 +204,7 @@ class _HTMLBlockBuilder(HTMLParser):
             ptype = self._list_stack[-1] if self._list_stack else 'list'
             indent = max(0, len(self._list_stack) - 1)
             self._start_block(ptype, indent)
+            self._items.append([ptype, indent, True])
         elif tag == 'p':
             self._start_block('normal', 0)
         elif tag == 'hr':
@@ -233,9 +245,14 @@ class _HTMLBlockBuilder(HTMLParser):
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
             self._end_block()
+            if tag == 'li' and self._items:
+                self._items.pop()
         elif tag == 'pre':  # a code block
             text = ''.join(t for t, _ in self._runs).rstrip('\n')
-            self.blocks.append(('code', text.split('\n'), self.lang))
+            block = ('code', text.split('\n'), self.lang)
+            if self._items:  # more of a list item
+                block += ('continued', self._item_block()[1])
+            self.blocks.append(block)
             self._runs = []
             if len(self._block_stack) > 1:
                 self._block_stack.pop()

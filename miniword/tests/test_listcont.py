@@ -107,3 +107,16 @@ def test_LC_6():
         assert model.get_text().startswith('ab')  # joined at once
     finally:
         close(frame)
+
+
+def test_LC_7():
+    "LC-7: HTML import: an <li>'s first block is the item, further ones "
+    "(paragraphs, code) are continued, on its level"
+    from ..plugins.htmlfilter import _parse
+    html = '<ol><li><p>a</p><p>b</p><pre><code>x</code></pre>' \
+        '<ul><li>c</li></ul><p>d</p></li><li>e</li></ol>'
+    found = [(ptype, indent, ''.join(t for t, _ in runs).strip())
+             for base, ptype, indent, runs in _parse(html)]  # (code: SEPs)
+    assert found == [('numbered', 0, 'a'), ('continued', 0, 'b'),
+                     ('continued', 0, 'x'), ('list', 1, 'c'),
+                     ('continued', 0, 'd'), ('numbered', 0, 'e')]
