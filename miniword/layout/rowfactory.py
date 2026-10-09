@@ -341,6 +341,10 @@ class RowFactory(Factory):
         hyphenate = self._hyphenate(p)
         lines, starts = [], set()
         for segment in segments(boxes):
+            if lines and lines[-1][0].standalone and all(
+                    isinstance(box, (NewlineBox, EndBox)) for box in segment):
+                lines[-1] = lines[-1] + segment  # the end: beside the box
+                continue
             starts.add(len(lines))
             if segment[0].standalone:
                 lines.append(segment)
@@ -369,7 +373,11 @@ class RowFactory(Factory):
             # spaces ending the line hang over the right edge
             text_width = row.width - trailing_space(line)
             row.start = (align_x(alignment, left, width, text_width), 0)
-            apply_line_spacing(row, p['line_spacing'])
+            if line[0].standalone:  # as high as it, its margin around
+                row.height = line[0].height + line[0].margin
+                row.depth = line[0].depth + line[0].margin
+            else:
+                apply_line_spacing(row, p['line_spacing'])
             if k == 0 and marker is not None:
                 row.set_marker(marker, p['marker_pos'][level], p)
             r.append((row, p, is_first, is_last, begins_block and k == 0,
@@ -506,7 +514,9 @@ class RowFactory(Factory):
         icon = None
         if texel.kind == 'html':
             icon = self.html_icon(parstyle)
-        return CodeBox(records, width, texel.kind, self.device, icon)
+        box = CodeBox(records, width, texel.kind, self.device, icon)
+        box.margin = self.stylesheet.mk_parstyle(sep.parstyle)['block_margin']
+        return box
 
     def Table_handler(self, texel, parstyle):
         """A TableBox for a Table texel: childs are [SEP, content, SEP,
@@ -636,8 +646,8 @@ def split_record(record, height):
     rest) records or None. The first part keeps begins_par, the rest
     ends_par; both keep the row's extra leading."""
     row, parstyle, begins_par, ends_par, begins_block, ends_block = record
-    box = row.childs[0]
-    if len(row.childs) != 1:
+    box, *ends = row.childs  # ends: the paragraph's end beside the box
+    if not box.standalone:
         return None
     top, bottom = row.height - box.height, row.depth - box.depth
     parts = box.split(height - top - bottom)
@@ -645,17 +655,18 @@ def split_record(record, height):
         return None
     frag, rest = parts
 
-    def table_row(part, marker):
+    def table_row(part, marker, ends=()):
         new = shallow_copy(row)
-        new.childs = [part]
-        new.length, new.width = len(part), part.width
+        new.childs = [part, *ends]
+        new.length = len(part) + sum(len(end) for end in ends)
+        new.width = part.width
         new.height, new.depth = part.height + top, part.depth + bottom
         new.marker = marker
         return new
 
     return ((table_row(frag, row.marker), parstyle, begins_par, False,
              begins_block, ends_block),
-            (table_row(rest, None), parstyle, False, ends_par,
+            (table_row(rest, None, ends), parstyle, False, ends_par,
              begins_block, ends_block))
 
 

@@ -132,6 +132,7 @@ class Box:
     is_group = False # we will use this as base class for groups and
                      # non groups
     standalone = False  # in a row of its own (not wrapped), e.g. a table
+    margin = 0  # standalone: space above and below its row
 
     def create_group(self, l):
         return SimpleGroupBox(l, device=self.device)

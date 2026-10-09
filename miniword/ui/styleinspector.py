@@ -484,11 +484,21 @@ class StyleInspector(SidePanel):
 
         self.block_offset = LengthInput(panel, category='typographic')
         self.reset_block_offset = ResetButton(panel, ['block_offset'])
-        add_row(contentsizer, wx.StaticText(panel, label="Offset"),
+        add_row(contentsizer, wx.StaticText(panel, label="Inside"),
                 self.block_offset, self.reset_block_offset)
         self.block_offset.Bind(
             EVT_UNIT_CHANGED,
             lambda e: self.set_parproperties(block_offset=e.value))
+
+        # the space around a code block (above and below its row)
+        self.block_margin = LengthInput(panel, category='typographic')
+        self.block_margin.SetToolTip("Space above and below a code block")
+        self.reset_block_margin = ResetButton(panel, ['block_margin'])
+        add_row(contentsizer, wx.StaticText(panel, label="Outside"),
+                self.block_margin, self.reset_block_margin)
+        self.block_margin.Bind(
+            EVT_UNIT_CHANGED,
+            lambda e: self.set_parproperties(block_margin=e.value))
 
         self.block_border_width = LengthInput(panel, category='typographic')
         self.reset_block_border_width = ResetButton(
@@ -560,7 +570,8 @@ class StyleInspector(SidePanel):
                 self.reset_marker_pos, self.reset_marker_color, self.reset_marker_size,
                 self.reset_bullet, self.reset_numbering, self.reset_start,
                 self.reset_block_color,
-                self.reset_block_offset, self.reset_block_border_width,
+                self.reset_block_offset, self.reset_block_margin,
+                self.reset_block_border_width,
                 self.reset_block_border_color, self.reset_block_border_sides,
                 self.reset_right_indent, self.reset_role,
                 self.reset_quote_level, self.reset_quote_indent,
@@ -1144,7 +1155,7 @@ class StyleInspector(SidePanel):
         self.block_color.set_colour(properties['block_color'])
         self.reset_block_color.set_x('block_color' in overrides)
 
-        for key in ('block_offset', 'block_border_width'):
+        for key in ('block_offset', 'block_margin', 'block_border_width'):
             getattr(self, key).SetValue(properties[key])
             getattr(self, 'reset_' + key).set_x(key in overrides)
         self.block_border_color.set_colour(properties['block_border_color'])

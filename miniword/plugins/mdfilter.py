@@ -434,9 +434,10 @@ def _scale(size, pixels):
 # _special.
 
 def _build_blocks(doc, blocks):
-    """Build blocks into a new doc.textmodel. Empty paragraphs separate
-    tables, code (pre) and quotes from the text around them. Equal image
-    data (e.g. the same data URI twice) ends up as one bytes object."""
+    """Build blocks into a new doc.textmodel (the space around tables and
+    code blocks comes from their boxes' margin, no empty paragraphs).
+    Equal image data (e.g. the same data URI twice) ends up as one bytes
+    object."""
     from miniword.textmodel.textmodel import TextModel
     from miniword.textmodel.texeltree import grouped
     text, runs, pars, marks = [], [], [], []
@@ -450,22 +451,10 @@ def _build_blocks(doc, blocks):
         text.append(s)
         size += len(s)
 
-    def kind(block):
-        # all of a quote (also an alert) is one kind: no empty
-        # paragraphs within it
-        if block_ps(block).get('quote_level'):
-            return 'quote'
-        if block[0] in ('table', 'pre', 'quote') + _ALERTS:
-            return block[0]
-        return 'text'
-
-    for k, block in enumerate(blocks):
-        prev = kind(blocks[k - 1]) if k else None
-        if prev and (kind(block) != prev or prev == 'table'):
-            pars.append((size, 'normal', 0))  # an empty paragraph between
-            add('\n')
+    for block in blocks:
         if block[0] == 'table':
             marks.append((size, _table(*block[1:])))
+            pars.append((size, 'normal', 0))  # its paragraph: body
             add('\n')  # the table's own NL
             continue
         if block[0] == 'code':
@@ -1301,7 +1290,8 @@ def test_13(load=_load_mistune):
 
 
 def test_14(load=_load_mistune):
-    "blank NL paragraphs around a table, not around a code block"
+    "no blank paragraphs around a table or a code block (the space "
+    "around them: their boxes' margin)"
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
     from miniword.tables import Table as TableTexel
@@ -1312,7 +1302,7 @@ def test_14(load=_load_mistune):
         result = []
         for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
             nl = elems[-1]
-            if not isinstance(nl, NewLine):
+            if not isinstance(nl, NewLine) or nl.is_endmark:
                 continue
             content = elems[:-1]
             if content and isinstance(content[0], TableTexel):
@@ -1325,14 +1315,11 @@ def test_14(load=_load_mistune):
                               nl.parstyle.get('base', 'normal'))
         return result
 
-    # table surrounded by text → blank before and after
     bs = bases("Before.\n\n| A | B |\n| - | - |\n| C | D |\n\nAfter.\n")
-    assert 'blank' in bs
     ti = bs.index('table')
-    assert bs[ti - 1] == 'blank'
-    assert bs[ti + 1] == 'blank'
+    assert 'blank' not in bs
+    assert bs[ti - 1] == bs[ti + 1] == 'body'
 
-    # a code block: its paragraph's style gives the space around it
     bs = bases("Before.\n\n```\ncode\n```\n\nAfter.\n")
     ci = bs.index('code')
     assert bs[ci - 1:ci + 2] == ['body', 'code', 'body']
@@ -1352,7 +1339,7 @@ def test_15():
 
 
 def test_16(load=_load_mistune):
-    "blank NL paragraphs inserted around quote blocks"
+    "no blank paragraphs around quotes (two quotes in a row: one)"
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine, get_text
 
@@ -1361,7 +1348,7 @@ def test_16(load=_load_mistune):
         result = []
         for _i1, _i2, elems in iter_paragraphs(doc.textmodel.get_xtexel(), 0):
             nl = elems[-1]
-            if not isinstance(nl, NewLine):
+            if not isinstance(nl, NewLine) or nl.is_endmark:
                 continue
             text = ''.join(get_text(e) for e in elems[:-1])
             base = nl.parstyle.get('base', 'normal')
@@ -1369,9 +1356,8 @@ def test_16(load=_load_mistune):
         return result
 
     bs = bases("Before.\n\n> Quote line\n\nAfter.\n")
-    qi = bs.index('quote')
-    assert bs[qi - 1] == 'blank'
-    assert bs[qi + 1] == 'blank'
+    assert bs == ['body', 'quote', 'body']
+    assert bases("> a\n\n> b\n") == ['quote', 'blank', 'quote']
 
 
 def test_17():
@@ -1802,15 +1788,14 @@ def test_41():
 
 
 def test_42():
-    "an empty body paragraph separates quotes and tables from text"
+    "no empty paragraphs between text, code blocks and quotes"
     from miniword.textmodel.utils import iter_paragraphs
     doc = _load_mistune("Text\n\n```\nx\n```\n\n> quote\n")
     pars = [(elems[-1].parstyle.get('base'), i2 - i1)  # style, length
             for i1, i2, elems in iter_paragraphs(doc.textmodel.texel, 0)
             if elems[-1].text == '\n']
-    # text, code block (its own paragraph), empty, quote; none at the
-    # start or end
-    assert pars == [('body', 5), ('body', 4), ('body', 1), ('quote', 6)]
+    # text, code block (its own paragraph), quote
+    assert pars == [('body', 5), ('body', 4), ('quote', 6)]
 
 
 def test_43():

@@ -72,7 +72,8 @@ def _base(font, size, compact=False):
                      space_after=_space(size, compact)),
         'pre': dict(name='Code', role='pre', font_family=MONO,
                     font_size=max(8, round(size * 0.83)), hyphenate=False,
-                    block_color='#F6F8FA', block_offset=2 * MM * size / 12),
+                    block_color='#F6F8FA', block_offset=2 * MM * size / 12,
+                    block_margin=round(size / 2)),  # around a code block
         'list': dict(text, name='List', role='list', space_after=0,
                      paragraph_type='list'),
         'numbered': dict(text, name='Numbered', role='numbered',
@@ -80,7 +81,8 @@ def _base(font, size, compact=False):
         # a quote by its quote_level (bar or ground: quote_*), any
         # paragraph can be in one, e.g. a list item
         'quote': dict(text, name='Quote', role='quote', quote_level=1,
-                      quote_color='#F0F0F0'),
+                      quote_color='#F0F0F0',
+                      space_after=_space(size, compact)),
         'rule': dict(text, name='Horizontal rule', role='rule',
                      space_before=size, space_after=size),
         'pageheader': dict(name='Page header', role='header',

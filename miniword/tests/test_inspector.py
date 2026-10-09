@@ -103,6 +103,16 @@ def test_INS_6():
             inspector.page_break_before.GetParent()
 
 
+def test_INS_7():
+    "INS-7: Border and background: Inside (block_offset) and Outside "
+    "(block_margin, around a code block)"
+    with style_inspector() as (inspector, model, editor):
+        inspector.block_margin.text.SetValue("6 pt")
+        inspector.block_margin._commit()
+        wx.GetApp().ProcessPendingEvents()
+        assert abs(model.get_parstyle(0)['block_margin'] - 6) < 1e-9
+
+
 # ---------------------------------------------------------------------
 # SET - document settings
 # ---------------------------------------------------------------------

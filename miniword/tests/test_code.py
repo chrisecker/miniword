@@ -29,7 +29,8 @@ def test_CODE_1():
     boxes = [(row, box) for _, _, row in page.rows for box in row.childs
              if isinstance(box, CodeBox)]
     (row, box), = boxes
-    assert row.childs == [box] and len(box) == length(texel)
+    assert row.childs[0] is box and len(box) == length(texel)
+    assert len(row) == length(texel) + 1  # its end beside it
     assert box.width == 300
 
 
@@ -233,7 +234,8 @@ def test_CODE_13():
     rows = [row.childs for _, _, row in page.rows]
     icons = [boxes for boxes in rows
              if any(isinstance(box, HTMLIconBox) for box in boxes)]
-    assert len(icons) == 2 and all(len(boxes) == 1 for boxes in icons)
+    assert len(icons) == 2  # (in a row with the paragraph's end only)
+    assert all(len(boxes) == 1 or len(boxes[1]) == 1 for boxes in icons)
     expanded, = code_parts([page])
     assert isinstance(expanded.icon, HTMLIconBox)
 
@@ -456,3 +458,41 @@ def test_CODE_22():
         assert wx.Window.FindFocus() is focus
     finally:
         close(frame)
+
+
+def test_CODE_23():
+    "CODE-23: a code block's paragraph is one row - the block, its end "
+    "beside it -, with the code style's block_margin above and below; a "
+    "table's with the table's margin"
+    from ..plugins.mdfilter import _load_mistune
+    from ..layout.rowfactory import RowFactory, State
+    from ..layout.testdevice import TESTDEVICE
+    from ..tables.table_boxes import TableBox
+    document = _load_mistune('```\nx\n```\n\n| a |\n| - |\n| 1 |\n')
+    sheet = document.basestyles
+    margin = sheet.mk_parstyle({'base': 'pre'})['block_margin']
+    assert margin > 0
+    factory = RowFactory(State(300), sheet, TESTDEVICE)
+    rows = [par[0][0] for par in factory.generate(document.textmodel.texel,
+                                                  0)]
+    for row, expected in zip(rows, (margin, TableBox.margin)):
+        assert len(rows) == 2  # no empty paragraphs, no empty rows
+        box = row.childs[0]
+        assert box.standalone and len(row.childs) == 2  # (its end)
+        assert row.height == box.height + expected
+        assert row.depth == box.depth + expected
+
+
+def test_CODE_24():
+    "CODE-24: Markdown import: no empty paragraphs around code blocks, "
+    "tables and quotes (two quotes in a row: one between them)"
+    from ..plugins.mdfilter import _load_mistune
+    from ..textmodel.utils import iter_paragraphs
+    from ..textmodel.texeltree import get_text
+    md = 'a\n\n```\nx\n```\n\nb\n\n| t |\n| - |\n| 1 |\n\nc\n\n> q\n\n' \
+        'd\n\n> e\n\n> f\n'
+    document = _load_mistune(md)
+    texts = [''.join(get_text(e) for e in elems[:-1]).strip()
+             for *_, elems in iter_paragraphs(document.textmodel.texel, 0)]
+    assert texts.count('') == 1  # between the two quotes
+    assert texts.index('') == texts.index('f') - 1

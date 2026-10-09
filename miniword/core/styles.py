@@ -92,6 +92,8 @@ layout_default = {
     "block_border_width":   0,      # line width, 0 = no line
     "block_border_color":   "black",
     "block_border_sides":   "tblr", # lines top/bottom/left/right
+    # a container's box (a code block): space above and below its row
+    "block_margin":         0,
     # Quotes, independent of the style: their depth (0: no quote); per
     # level the text moves in by quote_indent, and a bar (and a ground)
     # runs along the consecutive paragraphs of that depth or deeper
