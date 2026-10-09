@@ -43,6 +43,7 @@ test_footnotes.py.
 
 import os
 from copy import copy as shallow_copy
+from itertools import groupby
 
 from ..textmodel.texeltree import length, NL, grouped
 from ..textmodel.utils import iter_paragraphs
@@ -397,7 +398,8 @@ class RowFactory(Factory):
         in_list = parstyle['paragraph_type'] in ('list', 'numbered',
                                                  'continued')
         list_indent = parstyle['list_indent'] if in_list else 0
-        block_indent = parstyle['indent_levels'][level] + list_indent
+        block_indent = parstyle['indent_levels'][level] + list_indent \
+            + quote_inset(parstyle)
         first_line_indent = parstyle['first_line_indent']
         left_rest = block_indent
         left_first = left_rest + first_line_indent
@@ -560,7 +562,13 @@ def block_left(parstyle):
     hanging first line; list markers lie inside (no list_indent)."""
     levels = parstyle.get('indent_levels')
     left = levels[parstyle.get('level', 0)] if levels else 0
-    return left + min(0, parstyle.get('first_line_indent', 0))
+    return left + min(0, parstyle.get('first_line_indent', 0)) \
+        + quote_inset(parstyle)
+
+
+def quote_inset(parstyle):
+    """How far a quote moves the text in: a step per level."""
+    return parstyle.get('quote_level', 0) * parstyle.get('quote_indent', 0)
 
 
 def block_space(parstyle):
@@ -744,7 +752,34 @@ class RowStack:
                          parstyle.get('block_border_sides', 'tblr'))
                 borders.append((x1, top, x2 - x1, bottom - top, style))
             top = None
-        return shadings, borders
+        ground, bars = self.quote_decorations()
+        # a quote's ground first: a code block's lies on top of it
+        return ground + shadings, borders + bars
+
+    def quote_decorations(self):
+        """Grounds and bars of quotes: per level k, along each run of
+        consecutive rows deeper than k, a bar at the left of level k (as
+        the run's first paragraph has it)."""
+        ground, bars = [], []
+        depth = max((record[1].get('quote_level', 0)
+                     for _, record in self.placed), default=0)
+        for k in range(depth):
+            for deeper, run in groupby(
+                    self.placed,
+                    lambda placed: placed[1][1].get('quote_level', 0) > k):
+                if not deeper:
+                    continue
+                run = list(run)
+                (top, first), (y2, last) = run[0], run[-1]
+                p = first[1]
+                x = k * p['quote_indent']
+                rect = (x, top, self.width - x, _row_bottom(y2, last) - top)
+                if p['quote_color']:
+                    ground.append(rect + (p['quote_color'],))
+                if p['quote_bar_width']:
+                    bars.append(rect + ((p['quote_bar_color'],
+                                         p['quote_bar_width'], 'l'),))
+        return ground, bars
 
     def create_box(self, device, cls=RowsBox, **kw):
         shadings, borders = self.decorations()

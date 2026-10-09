@@ -103,9 +103,9 @@ def test_MDS_8():
 def test_MDS_9():
     "MDS-9: GitHub look: quote with a bar on the left, H1/H2 underlined"
     styles, settings = preset('github')
-    quote = styles['quote']
-    assert quote['block_border_sides'] == 'l'
-    assert quote['block_border_width'] > 0 and quote['block_color'] is None
+    quote = styles['quote']  # a quote by its level: bar, no ground
+    assert quote['quote_level'] == 1
+    assert quote['quote_bar_width'] > 0 and quote['quote_color'] is None
     for key in ('h1', 'h2'):
         assert styles[key]['block_border_sides'] == 'b', key
         assert styles[key]['block_border_width'] > 0, key
@@ -273,22 +273,25 @@ def test_MDS_19():
 
 
 def test_MDS_20():
-    "MDS-20: code and quote boxes lie on the text edges, text inside"
-    from ..layout.rowfactory import block_left, block_space
+    "MDS-20: code boxes lie on the text edges, text inside; a quote "
+    "moves its text in by its quote_indent (bar or ground left of it)"
+    from ..layout.rowfactory import block_left, block_space, quote_inset
 
     def on_edges(style):
         space = block_space(style)
         return block_left(style) == space and style['right_indent'] == space
 
     styles, settings = preset('github')
-    assert on_edges(styles['pre']) and on_edges(styles['quote'])
-    assert block_space(styles['quote']) > 3  # line and padding
+    assert on_edges(styles['pre'])
+    quote = styles['quote']
+    assert quote_inset(quote) == quote['quote_indent'] > 3  # bar and gap
     for name in PRESETS:
         styles, settings = preset(name)
-        for feature, key in (('code_frame', 'pre'), ('quote_bar', 'quote')):
-            for on in (True, False):
-                s2, _ = set_feature(styles, settings, feature, on)
-                assert on_edges(s2[key]), (name, feature, on)
+        for on in (True, False):
+            s2, _ = set_feature(styles, settings, 'code_frame', on)
+            assert on_edges(s2['pre']), (name, on)
+            s2, _ = set_feature(styles, settings, 'quote_bar', on)
+            assert quote_inset(s2['quote']) > 0, (name, on)
 
 
 def test_MDS_21():

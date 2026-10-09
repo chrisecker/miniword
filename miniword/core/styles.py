@@ -92,6 +92,14 @@ layout_default = {
     "block_border_width":   0,      # line width, 0 = no line
     "block_border_color":   "black",
     "block_border_sides":   "tblr", # lines top/bottom/left/right
+    # Quotes, independent of the style: their depth (0: no quote); per
+    # level the text moves in by quote_indent, and a bar (and a ground)
+    # runs along the consecutive paragraphs of that depth or deeper
+    "quote_level":          0,
+    "quote_indent":         0.5 * cm,
+    "quote_bar_width":      3,      # 0: no bar
+    "quote_bar_color":      "#d0d7de",
+    "quote_color":          None,   # ground
 }
 
 other_default = {

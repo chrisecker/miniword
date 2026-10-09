@@ -50,6 +50,16 @@ def _doc_to_md(doc):
     in_pre         = False
     markers        = []  # list markers of the items above, by level
     numbers        = []  # their numbers (None: bullet)
+    levels         = []  # (first line in parts, quote level), by paragraph
+
+    def quote_level(nl):
+        """The quote level of nl's paragraph (an old document's quote
+        style, without one: 1)."""
+        base = nl.parstyle.get('base', 'normal')
+        ps = updated(doc.basestyles.get(base) or style_default, nl.parstyle)
+        if base in ('quote',) + _ALERTS:
+            return max(1, ps['quote_level'])
+        return ps['quote_level']
 
     def item_pad(nl):
         """The indent of a continued paragraph - more of the list item
@@ -76,6 +86,7 @@ def _doc_to_md(doc):
         if not isinstance(nl, NewLine):
             close_pre()
             continue  # ENDMARK — skip
+        levels.append((len(parts), quote_level(nl)))
 
         content = elems[:-1]
         block = content[0] if len(content) == 1 else None
@@ -130,18 +141,16 @@ def _doc_to_md(doc):
         else:
             block_key = None
         same_block = block_key is not None and prev_block_key == block_key
-        if parts and not same_block:
+        # a blank line, also between two quote paragraphs (in a
+        # quote it becomes '>', see quoted_lines)
+        if parts and (quote or not same_block):
             parts.append('')
-        elif same_block and quote:
-            parts.append('>')  # else they'd join into one paragraph
         if base in _ALERTS and not same_block:
-            parts.append('> [!%s]' % base.upper())
+            parts.append('[!%s]' % base.upper())
 
         if base in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
             level = int(base[1])
             parts.append('#' * level + ' ' + inline)
-        elif quote:
-            parts.append('> ' + inline)
         elif ptype in ('list', 'numbered'):
             number = None
             if ptype == 'numbered':  # numbered on, as Miniword shows it
@@ -162,6 +171,7 @@ def _doc_to_md(doc):
         prev_block_key = block_key
 
     close_pre()
+    parts = quoted_lines(parts, levels)
     if footnotes:
         parts.append('')
         for n, fn in enumerate(footnotes, 1):
@@ -409,7 +419,7 @@ def _scale(size, pixels):
 #                               a list item), 'quote', 'pre' or an
 #                               alert ('note', 'warning' ...); ps:
 #                               more paragraph properties (start_number)
-#   ('code', lines, lang[, ptype, indent])
+#   ('code', lines, lang[, ptype, indent[, ps]])
 #                               a code block (container Code), in a list
 #                               item: ptype 'continued'
 #   ('table', grid[, nheader[, aligns]])
@@ -441,6 +451,9 @@ def _build_blocks(doc, blocks):
         size += len(s)
 
     def kind(block):
+        # all of a quote is one kind: no empty paragraphs within it
+        if block_ps(block).get('quote_level'):
+            return block[0] if block[0] in _ALERTS else 'quote'
         if block[0] in ('table', 'pre', 'quote') + _ALERTS:
             return block[0]
         return 'text'
@@ -456,9 +469,9 @@ def _build_blocks(doc, blocks):
             continue
         if block[0] == 'code':
             _, lines, lang, *par = block
-            ptype, indent = par or ('normal', 0)
+            ptype, indent, *ps = par or ('normal', 0)
             marks.append((size, code_block(lines, lang)))
-            pars.append((size, ptype, indent))
+            pars.append((size, ptype, indent, *ps))
             add('\n')  # the code block's own NL
             continue
         ptype, indent, block_runs, *ps = block
@@ -515,6 +528,29 @@ def _special(props):
     return None
 
 
+def block_ps(block):
+    """The more paragraph properties of a block (see _build_blocks)."""
+    if block[0] == 'code':
+        return block[5] if len(block) > 5 else {}
+    if block[0] == 'table':
+        return {}
+    return block[3] if len(block) > 3 else {}
+
+
+def quoted(block):
+    """block one quote level deeper (quote_level in its properties); a
+    table stays as it is (not in quotes yet)."""
+    if block[0] == 'table':
+        return block
+    ps = block_ps(block)
+    ps = dict(ps, quote_level=ps.get('quote_level', 0) + 1)
+    if block[0] == 'code':
+        _, lines, lang, *par = block
+        ptype, indent = par[:2] if par else ('normal', 0)
+        return ('code', lines, lang, ptype, indent, ps)
+    return block[:3] + (ps,)
+
+
 def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
     # the styles are named as the ptypes, but 'normal' is 'body', so is
     # 'continued' (more of a list item)
@@ -522,9 +558,27 @@ def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
     ps = dict(more, base=base)
     if ptype in ('list', 'numbered', 'continued'):
         ps['paragraph_type'] = ptype
+    if ps.get('quote_level') == 1 and base in ('quote',) + _ALERTS:
+        del ps['quote_level']  # the style's
     model.set_parstyle(nl_pos, ps)
     if indent:
         model.set_indent(nl_pos, indent)
+
+
+def quoted_lines(lines, levels):
+    """lines with '> ' per quote level before them; levels: (first line,
+    level) of the paragraphs, in order. A blank line between two
+    paragraphs has the smaller level of the two ('>' in a quote)."""
+    result, prev = [], 0
+    bounds = levels + [(len(lines), 0)]
+    for (start, level), (end, _) in zip(bounds, bounds[1:]):
+        leading = True  # the blank lines before the paragraph
+        for line in lines[start:end]:
+            leading = leading and not line
+            prefix = '> ' * (min(prev, level) if leading else level)
+            result.append(prefix + line if line else prefix.rstrip())
+        prev = level
+    return lines[:bounds[0][0]] + result
 
 
 def beside_blocks(elems, blocks):
@@ -795,8 +849,10 @@ def _md_blocks(nodes):
                 blocks.append(('table', grid, nheader, aligns))
         elif t == 'block_quote':
             kind, children = _alert(node.get('children', []))
+            n = len(blocks)
             for child in children:
                 visit(child, quote=kind)
+            blocks[n:] = map(quoted, blocks[n:])  # one level deeper
         elif t == 'thematic_break':
             blocks.append(_RULE)
         elif t == 'block_html':
@@ -902,7 +958,7 @@ def _check_md(doc):
         'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
         'pre', 'list', 'numbered', 'quote', 'rule'}
     _OK_PTYPES = {'normal', 'list', 'numbered', 'continued'}
-    _OK_PAR    = {'base', 'paragraph_type', 'start_number'}
+    _OK_PAR    = {'base', 'paragraph_type', 'start_number', 'quote_level'}
     _OK_CHAR   = {'bold', 'italic', 'font_family', 'href', 'strike', 'vertical_position'}
     _MONO      = {'courier', 'courier new', 'monospace', 'consolas',
                   'lucida console'}

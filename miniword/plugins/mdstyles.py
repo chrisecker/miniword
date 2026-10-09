@@ -77,9 +77,10 @@ def _base(font, size, compact=False):
                      paragraph_type='list'),
         'numbered': dict(text, name='Numbered', role='numbered',
                          space_after=0, paragraph_type='numbered'),
-        'quote': dict(text, name='Quote', role='quote',
-                      block_color='#F0F0F0',
-                      block_offset=2 * MM * size / 12),
+        # a quote by its quote_level (bar or ground: quote_*), any
+        # paragraph can be in one, e.g. a list item
+        'quote': dict(text, name='Quote', role='quote', quote_level=1,
+                      quote_color='#F0F0F0'),
         'rule': dict(text, name='Horizontal rule', role='rule',
                      space_before=size, space_after=size),
         'pageheader': dict(name='Page header', role='header',
@@ -99,8 +100,7 @@ def _base(font, size, compact=False):
             indent_levels=(0,) * n_levels, counter='section',
             hyphenate=False, keep_with_next=True)
     styles = {key: updated(style_default, p) for key, p in props.items()}
-    for key in ('pre', 'quote'):
-        styles[key] = _inset(styles[key])
+    styles['pre'] = _inset(styles['pre'])
     return styles
 
 
@@ -127,13 +127,13 @@ def preset(name, settings=settings_default):
                         footer_center=('none', ''),
                         footer_right=('page_pages', ''))
         styles = _changed(styles, TEXT, line_spacing=1.3)
-        quote = dict(styles['quote'], block_color=None, italic=True)
-        styles['quote'] = _inset(quote, 5 * MM)  # indented both sides
+        styles['quote'] = dict(styles['quote'], quote_color=None,
+                               italic=True, quote_indent=7 * MM,
+                               right_indent=7 * MM)  # in on both sides
     for key, (name, color) in ALERTS.items():
-        styles[key] = _inset(dict(
-            styles['quote'], name=name, role=key, block_color=None,
-            block_border_width=3, block_border_sides='l',
-            block_border_color=color, color='black'))
+        styles[key] = dict(
+            styles['quote'], name=name, role=key, quote_color=None,
+            quote_bar_width=3, quote_bar_color=color, color='black')
     return styles, settings
 
 
@@ -179,11 +179,10 @@ def set_feature(styles, settings, feature, on):
             styles['pre'], block_border_width=0.75 if on else 0,
             block_border_color=LINE)))
     elif feature == 'quote_bar':
-        styles = dict(styles, quote=_inset(dict(
-            styles['quote'], block_border_width=3 if on else 0,
-            block_border_sides='l', block_border_color=LINE,
-            block_color=None if on else '#F0F0F0',
-            color='#59636e' if on else 'black')))
+        styles = dict(styles, quote=dict(
+            styles['quote'], quote_bar_width=3 if on else 0,
+            quote_bar_color=LINE, quote_color=None if on else '#F0F0F0',
+            color='#59636e' if on else 'black'))
     elif feature == 'first_line_indent':
         styles = _changed(styles, ['body'],
                           first_line_indent=size if on else 0,
@@ -215,9 +214,7 @@ def feature_state(styles, settings, feature):
     if feature == 'code_frame':
         return bool(styles['pre']['block_border_width'])
     if feature == 'quote_bar':
-        quote = styles['quote']
-        return bool(quote['block_border_width']) \
-            and quote['block_border_sides'] == 'l'
+        return bool(styles['quote']['quote_bar_width'])
     if feature == 'first_line_indent':
         return bool(styles['body']['first_line_indent'])
     if feature == 'chapters':
