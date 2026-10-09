@@ -547,6 +547,21 @@ def test_WRAP_19():
     assert TableBox.standalone and not TextBox.standalone
 
 
+def test_WRAP_20():
+    "WRAP-20: text beside a standalone box (a table) in one paragraph: "
+    "the parts are paragraphs of its style (space, first line), one block"
+    from ..tables.tables import from_strings
+    texel = doc(par('left', from_strings([['a']]), 'right',
+                    space_before=3, first_line_indent=2))
+    records = flat(generate(texel, width=100)[0])
+    flags = [(begins, ends) for _, _, begins, ends, *_ in records]
+    assert flags == [(True, True)] * 3
+    blocks = [(begins, ends) for *_, begins, ends in records]
+    assert blocks == [(True, False), (False, False), (False, True)]
+    left, table, right = [row for row, *_ in records]
+    assert left.start[0] == right.start[0] == 2  # each a first line
+
+
 def test_FLAG_1():
     "FLAG-1: begins_par/ends_par on the first/last row"
     paragraphs, state = generate(doc(par('aaa bbb ccc ddd'), par('x')),

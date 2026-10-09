@@ -57,7 +57,13 @@ def _doc_to_md(doc):
             parts.append('```')
             in_pre = False
 
-    for i1, i2, elems in iter_paragraphs(texel, 0):
+    blocks = (TableTexel, Rule, RawHTML, Code)
+
+    def paragraphs():  # text beside a block: paragraphs of their own
+        for *_, elems in iter_paragraphs(texel, 0):
+            yield from beside_blocks(elems, blocks)
+
+    for elems in paragraphs():
         nl = elems[-1]
         if not isinstance(nl, NewLine):
             close_pre()
@@ -65,7 +71,7 @@ def _doc_to_md(doc):
 
         content = elems[:-1]
         block = content[0] if len(content) == 1 else None
-        if isinstance(block, (TableTexel, Rule, RawHTML, Code)):
+        if isinstance(block, blocks):
             close_pre()
             if parts:  # a blank line before (--- under text: a heading)
                 parts.append('')
@@ -494,6 +500,25 @@ def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
     model.set_parstyle(nl_pos, ps)
     if indent:
         model.set_indent(nl_pos, indent)
+
+
+def beside_blocks(elems, blocks):
+    """A paragraph's elems in parts, each ending with its newline: a
+    block (of the classes blocks, e.g. a table) with text beside it is a
+    part of its own, so is the text before and after it."""
+    *content, nl = elems
+    parts, current = [], []
+    for elem in content:
+        if isinstance(elem, blocks):
+            if current:
+                parts.append(current + [nl])
+                current = []
+            parts.append([elem, nl])
+        else:
+            current.append(elem)
+    if current or not parts:  # an empty paragraph stays one
+        parts.append(current + [nl])
+    return parts
 
 
 def block_md(block):

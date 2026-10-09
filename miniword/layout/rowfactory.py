@@ -335,17 +335,22 @@ class RowFactory(Factory):
         # width_first/left_first).
         # A standalone box (a table) gets a row of its own (not
         # wrapped), so that RowStack.take can split it across pages.
+        # Text beside it is set as paragraphs of their own, of this
+        # style; starts: the first line of each part.
         hyphenate = self._hyphenate(p)
-        lines = []
+        lines, starts = [], set()
         for segment in segments(boxes):
+            starts.add(len(lines))
             if segment[0].standalone:
                 lines.append(segment)
                 continue
             for sub in split_at_breaks(segment):
-                w_first = width_first if not lines else width_rest
+                w_first = width_first if len(lines) in starts \
+                    else width_rest
                 lines.extend(simple_linewrap(sub, w_first, width_rest,
                                              hyphenate=hyphenate))
         n = len(lines)
+        starts.add(n)
 
         # Must be set before the first yield: code after a yield only
         # runs on the next next() call.
@@ -354,7 +359,7 @@ class RowFactory(Factory):
 
         r = []
         for k, line in enumerate(lines):
-            is_first, is_last = k == 0, k == n - 1
+            is_first, is_last = k in starts, k + 1 in starts
             width, left = (width_first, left_first) if is_first \
                 else (width_rest, left_rest)
             if alignment == 'justify' and not is_last:
@@ -364,9 +369,10 @@ class RowFactory(Factory):
             text_width = row.width - trailing_space(line)
             row.start = (align_x(alignment, left, width, text_width), 0)
             apply_line_spacing(row, p['line_spacing'])
-            if is_first and marker is not None:
+            if k == 0 and marker is not None:
                 row.set_marker(marker, p['marker_pos'][level], p)
-            r.append((row, p, is_first, is_last, begins_block, ends_block))
+            r.append((row, p, is_first, is_last, begins_block and k == 0,
+                      ends_block and k == n - 1))
         if p.get('role') in ('h1', 'h2'):  # for the running heads
             text = ''.join(getattr(t, 'text', '') for t in texels)
             r[0][0].heading = p['role'], text.strip()

@@ -399,3 +399,20 @@ def test_CODE_20():
         assert codes(model.texel) == [('code', 'cobol', 'x = 1')]
     finally:
         close(frame)
+
+
+def test_CODE_21():
+    "CODE-21: Markdown: text beside a block in one paragraph is written "
+    "as paragraphs of their own, the block intact"
+    from ..plugins.mdfilter import _load_mistune, _doc_to_md
+    from ..mdelements.rawhtml import RawHTML
+    from ..tables.tables import from_strings
+    for block, md in (
+            (Code.from_text('x = 1', lang='python'),
+             '```python\nx = 1\n```'),
+            (RawHTML('<div>\n</div>'), '<div>\n</div>'),
+            (from_strings([['a']]), '|     |\n| --- |\n| a   |')):
+        document = _load_mistune('')
+        document.textmodel.texel = grouped([Text('left'), block,
+                                            Text('right'), NL])
+        assert _doc_to_md(document) == 'left\n\n%s\n\nright\n' % md
