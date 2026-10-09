@@ -224,15 +224,16 @@ def test_CODE_12():
 
 
 def test_CODE_13():
-    "CODE-13: an HTML block collapsed shows only its icon, inline HTML "
-    "its source; expanded the icon is at the top right"
-    from ..mdelements.rawhtml import RawHTML, RawHTMLBox, HTMLIconBox
-    page = pages_from(doc(par(RawHTML(HTML)), par('a', RawHTML('<kbd>')),
+    "CODE-13: an HTML block collapsed is only its icon, in a row of its "
+    "own (also with text beside it); expanded the icon is at the top right"
+    from ..mdelements.rawhtml import RawHTML, HTMLIconBox
+    page = pages_from(doc(par(RawHTML(HTML)), par('a', RawHTML(HTML), 'b'),
                           par(Code.from_text(HTML, kind='html'))),
                       small_memo(width=400, height=400))[0]
-    boxes = [box for _, _, row in page.rows for box in row.childs
-             if isinstance(box, (RawHTMLBox, HTMLIconBox))]
-    assert [type(box) for box in boxes] == [HTMLIconBox, RawHTMLBox]
+    rows = [row.childs for _, _, row in page.rows]
+    icons = [boxes for boxes in rows
+             if any(isinstance(box, HTMLIconBox) for box in boxes)]
+    assert len(icons) == 2 and all(len(boxes) == 1 for boxes in icons)
     expanded, = code_parts([page])
     assert isinstance(expanded.icon, HTMLIconBox)
 

@@ -50,6 +50,7 @@ from ..core.texels import BR
 from ..mdelements.rule import Rule
 from ..mdelements.checkbox import Checkbox
 from ..mdelements.rawhtml import RawHTML
+from ..mdelements.tag import Tag
 from ..mdelements.code import Code
 from ..textmodel.submodel import Footnote
 
@@ -165,6 +166,9 @@ def serialize_texel(texel, indent=0):
             if s:
                 return '%sS(%r, %s)' % (pad, texel.text, s)
             return '%sS(%r)' % (pad, texel.text)
+
+    elif isinstance(texel, Tag):  # a container, written as its source
+        return '%sTAG(%r)' % (pad, texel.source)
 
     elif texel.is_container:
         return serialize_container(texel, indent)
@@ -478,6 +482,8 @@ class _Parser:
         elif value == 'RAW':
             text = self.parse_text()  # the same form: RAW("...", {style})
             return RawHTML(text.text, text.style or None)
+        elif value == 'TAG':
+            return Tag(self.parse_text().text)
         elif value == 'NL':
             return self.parse_newline()
         elif value == 'TAB':

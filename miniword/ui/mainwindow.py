@@ -19,7 +19,7 @@ from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
 from .linkpanel import LinksPanel
 from ..mdelements.panel import ElementsPanel
-from ..mdelements import rule, checkbox, code, rawhtml
+from ..mdelements import rule, checkbox, code, rawhtml, tag
 from ..images import ImageInspector
 from ..core.config import get_config
 from ..core.document import Document
@@ -539,9 +539,9 @@ class MainFrame(wx.Frame, ViewBase):
         for label, insert in (
                 ("Horizontal &Rule", rule.insert_rule),
                 ("&Checkbox", checkbox.insert_checkbox),
-                ("&HTML\u2026",
-                 lambda editor: rawhtml.insert_html(editor, self)),
-                ("Code &Block", code.insert_code)):
+                ("Code &Block", code.insert_code),
+                ("HTML &Tag", tag.insert_tag),
+                ("&HTML Block", rawhtml.insert_html)):
             item = insert_menu.Append(wx.ID_ANY, label)
             self.Bind(wx.EVT_MENU,
                       lambda _, f=insert: f(self.editor), item)

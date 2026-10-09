@@ -61,6 +61,7 @@ modules = [
     "miniword.tests.test_rawhtml",
     "miniword.tests.test_code",
     "miniword.tests.test_colorize",
+    "miniword.tests.test_tag",
     "miniword.tests.test_parstyle_editing",
     "miniword.layout.rect",
     "miniword.layout.cache",

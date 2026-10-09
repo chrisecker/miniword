@@ -244,12 +244,13 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
     from miniword.core.texels import BR
     from miniword.mdelements.checkbox import Checkbox
     from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.tag import Tag
     pieces = []  # (Markdown, its marks; None: keep the open ones)
     for elem in elems:
         marks = None if plain else _marks(getattr(elem, 'style', {}))
         if isinstance(elem, Checkbox):  # a task list item's
             pieces.append(('[x] ' if elem.checked else '[ ] ', None))
-        elif isinstance(elem, RawHTML):  # as it is
+        elif isinstance(elem, (Tag, RawHTML)):  # as it is
             pieces.append((elem.source, None))
         elif isinstance(elem, BR):
             pieces.append(('\n' if plain else '\\\n', None))
@@ -391,8 +392,9 @@ def _scale(size, pixels):
 #
 # runs: (text, props); special runs carry '_image' (see image_run),
 # '_footnote' (its text), '_br' (forced line break), '_rule' (in a
-# paragraph of ptype 'rule'), '_checkbox' (checked or not) or '_html'
-# (its source) instead of text - see _special.
+# paragraph of ptype 'rule'), '_checkbox' (checked or not), '_html' (an
+# HTML block's source) or '_tag' (an inline tag's) instead of text - see
+# _special.
 
 def _build_blocks(doc, blocks):
     """Build blocks into a new doc.textmodel. Empty paragraphs separate
@@ -466,6 +468,7 @@ def _special(props):
     from miniword.mdelements.rule import Rule
     from miniword.mdelements.checkbox import Checkbox
     from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.tag import Tag
     if props.get('_image'):
         return _image(*props['_image'])
     if props.get('_footnote'):
@@ -478,6 +481,8 @@ def _special(props):
         return Checkbox().set_checked(props['_checkbox'])
     if '_html' in props:
         return RawHTML(props['_html'])
+    if '_tag' in props:
+        return Tag(props['_tag'])
     return None
 
 
@@ -555,7 +560,7 @@ def _inline_runs(nodes, props={}, notes={}):
                 and _BR.fullmatch(node.get('raw', '')):
             runs.append(('', {'_br': True}))
         elif t == 'inline_html':
-            runs.append(('', {'_html': node.get('raw', '')}))
+            runs.append(('', {'_tag': node.get('raw', '')}))
         elif t == 'footnote_ref':
             key = node.get('raw')
             runs.append(('', {'_footnote': notes.get(key, key)}))

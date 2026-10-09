@@ -3,8 +3,8 @@
 """
 The Elements panel (develnotes/panels_concept.md): inserts the Markdown
 constructs that have no panel of their own; below, the inspector of the
-one at the cursor (a code block's language, expanding and collapsing an
-HTML block).
+one at the cursor (a code block's language, expanding and collapsing
+an HTML block).
 """
 
 import wx
@@ -14,6 +14,7 @@ from .rule import insert_rule
 from .checkbox import insert_checkbox
 from .code import code_at, insert_code
 from .rawhtml import html_at, toggle_html, insert_html
+from .tag import insert_tag
 from .colorize import colorizers
 
 
@@ -21,7 +22,6 @@ class ElementsPanel(SidePanel):
 
     def __init__(self, parent, frame):
         SidePanel.__init__(self, parent)
-        self.frame = frame
         self.editor = frame.editor
         self.add_model(self.editor)
         self.create()
@@ -35,8 +35,8 @@ class ElementsPanel(SidePanel):
                 ('rule', "Horizontal rule", insert_rule),
                 ('checkbox', "Checkbox", insert_checkbox),
                 ('code', "Code block", insert_code),
-                ('html', "HTML…",
-                 lambda editor: insert_html(editor, self.frame))):
+                ('tag', "HTML tag", insert_tag),
+                ('html', "HTML block", insert_html)):
             button = flat_button(self, label, size=(-1, dip(24)))
             button.Bind(wx.EVT_BUTTON,
                         lambda event, f=insert: f(self.editor))

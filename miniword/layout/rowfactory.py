@@ -57,7 +57,8 @@ from .boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, RowsBox
 from ..mdelements.rule import RuleBox
 from ..mdelements.checkbox import CheckboxBox
 from ..mdelements.code import CodeBox, shown
-from ..mdelements.rawhtml import RawHTML, RawHTMLBox, HTMLIconBox
+from ..mdelements.rawhtml import HTMLIconBox
+from ..mdelements.tag import TagBox
 from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
@@ -225,10 +226,17 @@ class Factory:
         return CheckboxBox(texel.checked, style['font_size'], self.device)
 
     def RawHTML_handler(self, texel, parstyle):
-        """The source in grey monospace (see RawHTMLBox)."""
-        style = self.stylesheet.mk_style(parstyle, dict(
-            texel.style, font_family='Courier New', color='#57606a'))
-        return RawHTMLBox(texel.source, style, self.device)
+        """An HTML block, collapsed: only its icon."""
+        return self.html_icon(parstyle)
+
+    def Tag_handler(self, texel, parstyle):
+        """Inline HTML: a chip with the tag's source (styles set in it
+        are ignored, a line break is a space)."""
+        style = self.stylesheet.mk_style(parstyle, {'color': TagBox.color})
+        inner = texel.source[1:-1].replace('\n', ' ')
+        parts = ['<'] + ([inner] if inner else []) + ['>']
+        return TagBox([TextBox(part, style, self.device) for part in parts],
+                      self.device)
 
     def html_icon(self, parstyle):
         """The icon of an HTML block, as large as the text."""
@@ -311,9 +319,6 @@ class RowFactory(Factory):
 
     def _process_paragraph(self, i1, i2, texels, p_prev, p, p_next):
         boxes = [self.create_box(elem, p) for elem in texels]
-        if len(texels) == 2 and isinstance(texels[0], RawHTML):
-            # alone in its paragraph: an HTML block, collapsed
-            boxes[0] = self.html_icon(p)
         begins_block = not _is_same_block(p, p_prev)
         ends_block = not _is_same_block(p, p_next)
         
