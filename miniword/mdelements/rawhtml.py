@@ -1,9 +1,9 @@
 """
 Raw HTML (Markdown HTML, shown as its source, never rendered): texel,
-box, controller, insert command. Alone in its paragraph it is an HTML
-block, collapsed (RawHTML: the icon and the first line) or expanded (a
-Code of kind 'html'); a double click on the icon toggles it. A double
-click on inline HTML edits its source.
+boxes, controller, insert command. Alone in its paragraph it is an HTML
+block, collapsed (RawHTML: only its icon) or expanded (a Code of kind
+'html', the icon at the top right); a double click on the icon toggles
+it. A double click on inline HTML edits its source.
 """
 
 import wx
@@ -13,9 +13,6 @@ from ..layout.boxes import SingleBox, TextBox
 from ..texteditor.editor import Editor
 from .code import Code, CodeController, code_at
 from . import texel_at, box_hit, insert_par
-
-
-HTML_ICON = '</>'  # of an HTML block: a double click toggles it
 
 
 class RawHTML(Single):
@@ -37,34 +34,20 @@ class RawHTML(Single):
 
 
 class RawHTMLBox(SingleBox):
-    """The source of raw HTML: its lines on a grey ground; the baseline
-    is the last line's (inline HTML sits on the text's). collapsed (an
-    HTML block): one line, the icon and the source's first line."""
+    """The source of inline HTML: its lines on a grey ground; the
+    baseline is the last line's (it sits on the text's)."""
     color = '#f6f8fa'
     pad = 2
-    icon_width = 0  # collapsed: where the icon ends
 
-    def __init__(self, source, style, device=None, collapsed=False):
+    def __init__(self, source, style, device=None):
         if device is not None:
             self.device = device
-        self.collapsed = collapsed
-        lines = source.split('\n')
-        if collapsed:
-            more = ' …' if len(lines) > 1 else ''
-            lines = ['%s %s%s' % (HTML_ICON, lines[0], more)]
-            icon = TextBox(HTML_ICON, style, self.device)
-            self.icon_width = icon.width + self.pad
         self.lines = [TextBox(line or ' ', style, self.device)
-                      for line in lines]
+                      for line in source.split('\n')]
         self.width = max(box.width for box in self.lines) + 2 * self.pad
         self.depth = self.lines[-1].depth
         self.height = sum(box.height + box.depth for box in self.lines) \
             - self.depth
-
-    def pointer_at(self, x, y):
-        if x < self.icon_width:
-            return 'hand'  # a double click expands the HTML block
-        return None
 
     def draw(self, x, y, gc):
         self.device.fill_rect(x, y, self.width, self.height + self.depth,
@@ -72,6 +55,37 @@ class RawHTMLBox(SingleBox):
         for box in self.lines:
             box.draw(x + self.pad, y, gc)
             y += box.height + box.depth
+
+
+class HTMLIconBox(SingleBox):
+    """The icon of an HTML block, as large as the text: a chip with </>
+    in lines. Collapsed it is the block, expanded at its top right; a
+    double click toggles."""
+    color = '#0969da'
+    ground = '#ddf4ff'
+    strokes = (((.32, .3), (.2, .5)), ((.2, .5), (.32, .7)),  # <
+               ((.56, .22), (.44, .78)),  # /
+               ((.68, .3), (.8, .5)), ((.8, .5), (.68, .7)))  # >
+
+    def __init__(self, size, device=None):
+        self.size = size
+        self.width = 1.8 * size
+        self.height, self.depth = 0.75 * size, 0.15 * size
+        if device is not None:
+            self.device = device
+
+    def pointer_at(self, x, y):
+        return 'hand'
+
+    def draw(self, x, y, gc):
+        w, h, device = self.width, self.height + self.depth, self.device
+        line = self.size / 16  # the frame
+        device.fill_rect(x, y, w, h, self.color, gc)
+        device.fill_rect(x + line, y + line, w - 2 * line, h - 2 * line,
+                         self.ground, gc)
+        for (x1, y1), (x2, y2) in self.strokes:
+            device.draw_line(x + x1 * w, y + y1 * h, x + x2 * w,
+                             y + y2 * h, 1.5, gc, color=self.color)
 
 
 def html_at(editor, j):
@@ -158,7 +172,7 @@ class HTMLController(CodeController):
         if box.pointer_at(bx, by):  # the icon
             # i1 + 1: after a collapsed block, in an expanded one
             return toggle_html(self.editor, self.i1 + 1)
-        if isinstance(box, RawHTMLBox) and not box.collapsed:
+        if isinstance(box, RawHTMLBox):
             return self.edit()
         return False
 

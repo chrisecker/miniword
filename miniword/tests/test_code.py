@@ -224,21 +224,22 @@ def test_CODE_12():
 
 
 def test_CODE_13():
-    "CODE-13: an HTML block shows collapsed (icon, first line), inline not"
-    from ..mdelements.rawhtml import RawHTML
-    from ..mdelements.rawhtml import RawHTMLBox
-    page = pages_from(doc(par(RawHTML(HTML)), par('a', RawHTML('<kbd>'))),
+    "CODE-13: an HTML block collapsed shows only its icon, inline HTML "
+    "its source; expanded the icon is at the top right"
+    from ..mdelements.rawhtml import RawHTML, RawHTMLBox, HTMLIconBox
+    page = pages_from(doc(par(RawHTML(HTML)), par('a', RawHTML('<kbd>')),
+                          par(Code.from_text(HTML, kind='html'))),
                       small_memo(width=400, height=400))[0]
-    block, inline = [box for _, _, row in page.rows for box in row.childs
-                     if isinstance(box, RawHTMLBox)]
-    assert block.collapsed and len(block.lines) == 1 and block.icon_width
-    assert not inline.collapsed
+    boxes = [box for _, _, row in page.rows for box in row.childs
+             if isinstance(box, (RawHTMLBox, HTMLIconBox))]
+    assert [type(box) for box in boxes] == [HTMLIconBox, RawHTMLBox]
+    expanded, = code_parts([page])
+    assert isinstance(expanded.icon, HTMLIconBox)
 
 
 def test_CODE_14():
     "CODE-14: a double click on the icon toggles, collapsed and expanded"
-    from ..mdelements.rawhtml import RawHTML
-    from ..mdelements.rawhtml import RawHTMLBox
+    from ..mdelements.rawhtml import RawHTML, HTMLIconBox
     from ..layout.boxes import find_box_at
     from ..mdelements.code import CodeBox
     from .guitest import close, double_click
@@ -247,8 +248,9 @@ def test_CODE_14():
         canvas, model = frame.canvas, frame.document.textmodel
         build = lambda: canvas.builder.assure_index(len(model), 0)
         i = model.get_text().index(RawHTML.text)
-        _, (x, y), box = find_box_at(canvas.layout, i, RawHTMLBox)
-        double_click(canvas, x + box.width - 2, y + 2)  # not the icon
+        _, (x, y), box = find_box_at(canvas.layout, i, HTMLIconBox)
+        assert box.pointer_at(2, 2) == 'hand'
+        double_click(canvas, x + box.width + 5, y + 2)  # beside it
         assert codes(model.texel) == []
         double_click(canvas, x + 2, y + 2)  # on the icon
         assert codes(model.texel) == [('html', '', HTML)]
