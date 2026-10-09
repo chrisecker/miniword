@@ -138,6 +138,11 @@ class Box:
     def __len__(self):
         raise NotImplementedError()
 
+    def split(self, height):
+        """(first, rest) at a page break, first fitting into height (a
+        box in a row of its own, e.g. a table); None: not split."""
+        return None
+
     def pointer_at(self, x, y):
         """The mouse pointer at (x, y) (relative to the box): 'hand' -
         a click does something -, or None (the text cursor)."""

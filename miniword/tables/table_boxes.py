@@ -103,6 +103,17 @@ class TableBox(Box):
     def __len__(self):
         return self.length
 
+    def split(self, height):
+        """At a row boundary (break level 1 at least); see Box.split."""
+        if self.break_level < 1:
+            return None
+        frag, rest = split_at_height(self, height)
+        if rest is None:
+            return None
+        frag.row_offset = self.row_offset
+        rest.row_offset = self.row_offset + frag.n_rows
+        return frag, rest
+
     def iter_boxes(self, i0, x0, y0):
         y = y0
         for r, row in enumerate(self.cells):

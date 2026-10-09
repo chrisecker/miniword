@@ -292,3 +292,73 @@ def test_CODE_15():
         assert codes(model.texel) == [('html', '', HTML)]
     finally:
         close(frame)
+
+
+LINES = ['line%02d' % k for k in range(30)]
+
+
+def code_parts(pages):
+    """The CodeBoxes on pages, in order."""
+    from ..mdelements.code import CodeBox
+    return [box for page in pages for _, _, row in page.rows
+            for box in row.childs if isinstance(box, CodeBox)]
+
+
+def box_lines(box):
+    """The text lines in a CodeBox."""
+    from ..layout.boxes import TextBox
+    cell, = box.cells[0]
+    return [''.join(b.text for _, _, b in row.iter_childs()
+                    if isinstance(b, TextBox)).strip()
+            for _, _, rows in cell.iter_childs()
+            for _, _, row in rows.iter_childs()]
+
+
+def test_CODE_16():
+    "CODE-16: a long code block is split across pages at line breaks, "
+    "nothing lost; the first part owns the leading SEP"
+    texel = code(*LINES)
+    document = doc(par('a'), par(texel), par('b'))
+    pages = pages_from(document, small_memo(width=200, height=12))
+    parts = code_parts(pages)
+    assert len(parts) > 1
+    assert [line for box in parts for line in box_lines(box)] == LINES
+    assert sum(len(box) for box in parts) == length(texel)
+    assert sum(len(page) for page in pages) == length(document)
+    assert all(box_lines(box) for box in parts)  # a line at least
+    assert [box.is_continuation for box in parts] == \
+        [False] + [True] * (len(parts) - 1)
+    for page in pages:
+        bottom = max(y + r.height + r.depth for _, y, r in page.rows)
+        assert bottom <= 1 + 12
+
+
+def test_CODE_17():
+    "CODE-17: restarting in the middle of a code block gives the same"
+    texel = doc(par('a'), par(code(*LINES)), par('b'))
+    pages = pages_from(texel, small_memo(width=200, height=12))
+    assert len(pages) > 2
+    start = 0
+    for k in range(len(pages) - 1):
+        start += len(pages[k])
+        again = pages_from(texel, pages[k].restartmemo, start)
+        assert [box_lines(b) for b in code_parts(again)] == \
+            [box_lines(b) for b in code_parts(pages[k + 1:])]
+
+
+def test_CODE_18():
+    "CODE-18: a click into a later part gives the index of its line"
+    from ..layout.boxes import find_box_at
+    from ..mdelements.code import CodeBox
+    from .guitest import close
+    frame = frame_with(code(*['line%03d' % k for k in range(150)]))
+    try:
+        canvas, model = frame.canvas, frame.document.textmodel
+        text = model.get_text()
+        i = text.index('line140')
+        _, (x, y), box = find_box_at(canvas.layout, i, CodeBox)
+        assert box_lines(box)[0] != 'line000'  # a later part
+        j = canvas.layout.get_index(x + 1, y + 1, 0)
+        assert text[j:j + 7] == box_lines(box)[0]
+    finally:
+        close(frame)

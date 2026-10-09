@@ -65,7 +65,7 @@ from .linewrap import simple_linewrap
 from ..hyphenation import get_hyphenator
 from .stretchable import justify_line
 from ..tables.table_boxes import TableBox, create_cell, \
-    split_at_height, CELL_HPAD, CELL_VPAD
+    CELL_HPAD, CELL_VPAD
 
 
 # Needed for testing
@@ -487,13 +487,11 @@ class RowFactory(Factory):
         records = [record for par in child.generate(lines, 0)
                    for record in par]
         self.update_from_child(child)
-        cell = create_cell(records, width, self.device)
-        cell.length = length(content) + 1  # with the closing SEP
         icon = None
         if texel.kind == 'html':
             icon = TextBox(HTML_ICON, self.html_style(parstyle),
                            self.device)
-        return CodeBox(cell, texel.kind, self.device, icon)
+        return CodeBox(records, width, texel.kind, self.device, icon)
 
     def Table_handler(self, texel, parstyle):
         """A TableBox for a Table texel: childs are [SEP, content, SEP,
@@ -611,23 +609,20 @@ def split_at_tables(boxes):
     return segments
 
 
-def split_table_record(record, height):
-    """Split a record whose row is a table (break_level >= 1) so that
-    the first part fits into height. Returns (first, rest) records or
-    None if the row is no splittable table or can't be split. The first
-    part keeps begins_par, the rest ends_par; both keep the row's extra
-    leading."""
+def split_record(record, height):
+    """Split a record whose row is one box that splits (Box.split, e.g.
+    a table) so that the first part fits into height. Returns (first,
+    rest) records or None. The first part keeps begins_par, the rest
+    ends_par; both keep the row's extra leading."""
     row, parstyle, begins_par, ends_par, begins_block, ends_block = record
     box = row.childs[0]
-    if len(row.childs) != 1 or not isinstance(box, TableBox) \
-            or box.break_level < 1:
+    if len(row.childs) != 1:
         return None
     top, bottom = row.height - box.height, row.depth - box.depth
-    frag, rest = split_at_height(box, height - top - bottom)
-    if rest is None:
+    parts = box.split(height - top - bottom)
+    if parts is None:
         return None
-    frag.row_offset = box.row_offset
-    rest.row_offset = box.row_offset + frag.n_rows
+    frag, rest = parts
 
     def table_row(part, marker):
         new = shallow_copy(row)
@@ -690,9 +685,9 @@ class RowStack:
             forced = force and n == 0
             if max_height is not None \
                     and _row_bottom(y, record) > max_height:
-                # A table that doesn't fit is split at a row boundary:
-                # the first part goes here, the rest stays in buffer.
-                parts = split_table_record(record, max_height - y)
+                # A box that doesn't fit is split (a table at a row
+                # boundary): the first part here, the rest in buffer.
+                parts = split_record(record, max_height - y)
                 if parts is not None:
                     first, rest = parts
                     if forced or _row_bottom(y, first) <= max_height:

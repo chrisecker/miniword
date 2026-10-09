@@ -10,7 +10,7 @@ from ..textmodel.texeltree import Container, Text, NewLine, NL, \
 from ..textmodel.utils import iter_leafes
 from ..core.utils import get_path
 from ..layout.boxes import Box
-from ..tables.table_boxes import TableBox
+from ..tables.table_boxes import TableBox, create_cell
 from ..texteditor.controller import ElementController
 from ..texteditor.editor import Editor
 from . import insert_par
@@ -49,16 +49,37 @@ class Code(Container):
 
 
 class CodeBox(TableBox):
-    """A code block: a table box of one cell, without cell lines (the
-    'pre' style draws ground and frame); an HTML block (icon: a TextBox)
-    gets a thin frame and the icon at the top right."""
+    """A code block: a table box of one cell, set from row records (the
+    lines), without cell lines (the 'pre' style draws ground and frame);
+    an HTML block (icon: a TextBox) gets a thin frame and the icon at
+    the top right. Split at a page break into parts of whole lines; a
+    continuation has no leading SEP and no icon."""
     pad = 2
 
-    def __init__(self, cell, kind, device=None, icon=None):
+    def __init__(self, records, width, kind, device=None, icon=None,
+                 is_continuation=False):
+        cell = create_cell(records, width, device)
+        cell.length = sum(len(record[0]) for record in records)
         TableBox.__init__(self, [[cell]], [cell.width],
                           [cell.height + cell.depth], break_level=1,
-                          device=device)
-        self.kind, self.icon = kind, icon
+                          device=device, is_continuation=is_continuation)
+        self.records, self.kind, self.icon = records, kind, icon
+        self.is_continuation = is_continuation
+
+    def split(self, height):
+        """The lines that fit into height (one at least) and the rest;
+        None if there is no rest."""
+        from ..layout.rowfactory import RowStack  # avoids a circular import
+        rest = list(self.records)
+        stack = RowStack(self.width)
+        stack.take(rest, height)
+        if not rest:
+            return None
+        first = [record for _, record in stack.placed]
+        return (CodeBox(first, self.width, self.kind, self.device,
+                        self.icon, self.is_continuation),
+                CodeBox(rest, self.width, self.kind, self.device,
+                        is_continuation=True))
 
     def icon_rect(self):
         """(x, y, w, h) of the icon, relative to the box, or None."""
