@@ -18,7 +18,8 @@ from miniword.io.importexport import register_paste
 
 
 from miniword.plugins.mdfilter import (
-    _register_styles, _build_blocks, _adopt_existing_styles, image_run, _RULE)
+    _register_styles, _build_blocks, _adopt_existing_styles, image_run, _RULE,
+    quoted)
 
 _WHITESPACE_RE = re.compile(r'\s+')
 
@@ -85,6 +86,7 @@ class _HTMLBlockBuilder(HTMLParser):
         self._block_stack = [('normal', 0)]   # (ptype, indent), outermost first
         self._list_stack = []        # 'list' | 'numbered', outermost first
         self._items = []             # open <li>: [ptype, indent, first]
+        self._quotes = 0             # open <blockquote>
         self._props_stack = [{}]     # current inline char-props
         self._in_pre = False
         self.lang = ''               # of <pre><code class="language-x">
@@ -108,8 +110,16 @@ class _HTMLBlockBuilder(HTMLParser):
             ptype, indent = self._block_stack[-1]
             if self._items and ptype in ('normal', self._items[-1][0]):
                 ptype, indent = self._item_block()  # (a <p> in an <li>)
-            self.blocks.append((ptype, indent, self._runs))
+            if self._quotes and ptype == 'normal':
+                ptype = 'quote'  # (a <p> in a <blockquote>)
+            self._add((ptype, indent, self._runs))
         self._runs = []
+
+    def _add(self, block):
+        """Add block, as deep in quotes as the open <blockquote>."""
+        for _ in range(self._quotes):
+            block = quoted(block)
+        self.blocks.append(block)
 
     def _item_block(self):
         """(ptype, indent) of a block in the open <li>: its first one is
@@ -192,6 +202,7 @@ class _HTMLBlockBuilder(HTMLParser):
             self._start_block(_HEADINGS[tag], 0)
         elif tag == 'blockquote':
             self._start_block('quote', 0)
+            self._quotes += 1
         elif tag == 'pre':
             self._start_block('pre', 0)
             self._in_pre, self.lang = True, ''
@@ -209,7 +220,7 @@ class _HTMLBlockBuilder(HTMLParser):
             self._start_block('normal', 0)
         elif tag == 'hr':
             self._flush_block()
-            self.blocks.append(_RULE)
+            self._add(_RULE)
         elif tag == 'table':
             self._table = []
             self._pending_rowspans = {}
@@ -247,12 +258,14 @@ class _HTMLBlockBuilder(HTMLParser):
             self._end_block()
             if tag == 'li' and self._items:
                 self._items.pop()
+            if tag == 'blockquote':
+                self._quotes = max(0, self._quotes - 1)
         elif tag == 'pre':  # a code block
             text = ''.join(t for t, _ in self._runs).rstrip('\n')
             block = ('code', text.split('\n'), self.lang)
             if self._items:  # more of a list item
                 block += ('continued', self._item_block()[1])
-            self.blocks.append(block)
+            self._add(block)
             self._runs = []
             if len(self._block_stack) > 1:
                 self._block_stack.pop()

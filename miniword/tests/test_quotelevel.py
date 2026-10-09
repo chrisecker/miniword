@@ -184,3 +184,18 @@ def test_QL_9():
         model.set_parstyle(0, {'quote_level': 1})
         inspector.update()
         assert all(field.IsShown() for field in details)
+
+
+def test_QL_10():
+    "QL-10: HTML import: blocks in <blockquote> get its depth (also "
+    "with <p>), nested ones deeper; lists and code too"
+    from ..core.document import Document
+    from ..plugins.htmlfilter import html_text_to_fragment
+    document = Document()
+    html = '<blockquote><p>outer</p><blockquote><p>inner</p></blockquote>' \
+        '<ul><li>item</li></ul><pre>x = 1</pre></blockquote><p>after</p>'
+    document.textmodel.texel = html_text_to_fragment(html, document)
+    found = [entry for entry in levels(document) if entry[0]]
+    assert found == [('outer', 1, 'normal'), ('inner', 2, 'normal'),
+                     ('item', 1, 'list'), ('x = 1', 1, 'normal'),
+                     ('after', 0, 'normal')]
