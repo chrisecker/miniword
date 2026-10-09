@@ -70,9 +70,9 @@ def html_at(editor, j):
 
 
 def toggle_html(editor, j):
-    """Expand the collapsed HTML block at j (RawHTML -> Code), or
-    collapse the expanded one j is in; one undo step. Whether there was
-    one."""
+    """Expand the collapsed HTML block at j (RawHTML -> Code; the cursor
+    goes into it), or collapse the expanded one j is in; one undo step.
+    Whether there was one."""
     found = html_at(editor, j)
     if found:
         i, texel = found
@@ -84,6 +84,8 @@ def toggle_html(editor, j):
         i, texel = found
         new = RawHTML(texel.source)
     editor.replace_texel(editor.abs_idx(i), texel, new)
+    if isinstance(new, Code):
+        editor.set_index(i + 1)
     return True
 
 

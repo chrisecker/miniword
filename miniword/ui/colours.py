@@ -83,4 +83,14 @@ colours.define('ButtonBorder',         lambda: wx.SystemSettings.GetColour(wx.SY
 colours.define('ButtonBorderDisabled', lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNSHADOW).ChangeLightness(140))
 colours.define('Highlight',            lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_HOTLIGHT))
 colours.define('WarningRed',           lambda: wx.Colour(200, 0, 0))
+def mix(a, b, t):
+    """The colours a and b mixed, t of a."""
+    return wx.Colour(*(round(t * x + (1 - t) * y)
+                       for x, y in zip(a.Get(False), b.Get(False))))
+
+
+# icons: between the text and its ground (in a light theme about #5a5a5a)
+colours.define('IconGrey',             lambda: mix(
+    wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOWTEXT),
+    wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE), 0.65))
 colours.define('CanvasBg',             lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(93))

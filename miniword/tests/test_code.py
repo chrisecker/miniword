@@ -290,9 +290,11 @@ def test_CODE_15():
         model = frame.document.textmodel
         editor.set_index(model.get_text().index(RawHTML.text))
         panel.update()
-        assert panel.expand.IsShown()
-        click_button(panel.expand)
+        assert panel.toggle.IsShown() and panel.toggle.label == 'Expand'
+        click_button(panel.toggle)
         assert codes(model.texel) == [('html', '', HTML)]
+        panel.update()
+        assert panel.toggle.label == 'Collapse'
     finally:
         close(frame)
 
@@ -416,3 +418,41 @@ def test_CODE_21():
         document.textmodel.texel = grouped([Text('left'), block,
                                             Text('right'), NL])
         assert _doc_to_md(document) == 'left\n\n%s\n\nright\n' % md
+
+
+def test_CODE_22():
+    "CODE-22: the Elements panel names the element at the cursor (any of "
+    "its elements) and shows its settings, or 'No settings.'; elsewhere "
+    "'-' and a hint; the focus stays where it is"
+    import wx
+    from ..mdelements.rawhtml import RawHTML
+    from ..mdelements.checkbox import Checkbox
+    from ..mdelements.tag import Tag
+    from .guitest import close
+    frame = frame_with(Group([code('x = 1'), NL, Text('text'), NL,
+                              Checkbox(), Text('todo '), Tag('<kbd>'), NL,
+                              RawHTML(HTML)]))
+    try:
+        panel, editor = frame.elements_panel, frame.editor
+        text = frame.document.textmodel.get_text()
+
+        def at(i):
+            editor.set_index(i)
+            panel.update()
+            return panel.current.GetLabel()
+
+        frame.canvas.SetFocus()
+        focus = wx.Window.FindFocus()
+        assert at(text.index('x') + 1) == 'Code block'
+        assert panel.language.IsShown() and not panel.toggle.IsShown()
+        assert not panel.hint.IsShown() and not panel.no_settings.IsShown()
+        assert at(text.index(RawHTML.text)) == 'HTML block'
+        assert panel.toggle.IsShown() and not panel.language.IsShown()
+        assert at(text.index('todo')) == 'Checkbox'
+        assert panel.no_settings.IsShown() and not panel.toggle.IsShown()
+        assert at(text.index('<kbd>') + 2) == 'HTML tag'
+        assert at(text.index('text') + 1) == '\u2013'
+        assert panel.hint.IsShown() and not panel.no_settings.IsShown()
+        assert wx.Window.FindFocus() is focus
+    finally:
+        close(frame)

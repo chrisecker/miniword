@@ -5,10 +5,13 @@ from .icons import themed_icon
 
 class FlatButton(wx.Control):
     pressed = False  # drawn pressed (see FlatToggle)
+    icon_size = (20, 20)
+    colour_icon = None  # the icon's colour, if not the text's
     event_type = wx.wxEVT_BUTTON
 
     def __init__(self, parent, label, size=None, bordered=False, icon=None):
-        """icon: an SVG in icons/, drawn in the text colour."""
+        """icon: an SVG in icons/, drawn in the text colour; with a
+        label too, the label is a caption below it (a palette)."""
         if size is None:
             size = (-1, parent.FromDIP(24))
         super().__init__(parent, size=size, style=wx.BORDER_NONE)
@@ -80,14 +83,21 @@ class FlatButton(wx.Control):
             dc.SetPen(wx.Pen(border))
             dc.SetBrush(wx.TRANSPARENT_BRUSH)
             dc.DrawRectangle(0, 0, w, h)
-        if self.icon:
-            bitmap = themed_icon(self.icon, fg).GetBitmapFor(self)
-            bw, bh = bitmap.GetLogicalSize()
-            dc.DrawBitmap(bitmap, int(w - bw) // 2, int(h - bh) // 2, True)
-            return
         dc.SetFont(self.GetFont())
         dc.SetTextForeground(fg)
         tw, th = dc.GetTextExtent(self.label)
+        if self.icon:
+            colour = self.colour_icon if self.IsEnabled() else None
+            bitmap = themed_icon(self.icon, colour or fg, self.icon_size) \
+                .GetBitmapFor(self)
+            bw, bh = bitmap.GetLogicalSize()
+            if self.label:  # a caption below the icon
+                y = int(h - bh - th) // 2
+                dc.DrawText(self.label, (w - tw) // 2, y + bh)
+            else:
+                y = int(h - bh) // 2
+            dc.DrawBitmap(bitmap, int(w - bw) // 2, y, True)
+            return
         dc.DrawText(self.label, (w - tw) // 2, (h - th) // 2)
 
 

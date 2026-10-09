@@ -101,6 +101,26 @@ def add_row2(label, panel, sizer, *widgets):
     sizer.Add(rowsizer, 0, wx.EXPAND | wx.LEFT, dip(24))
 
 
+class Card(wx.Panel):
+    """A card: a light ground in a thin frame; its content goes into
+    self.sizer (padded)."""
+
+    def __init__(self, parent):
+        wx.Panel.__init__(self, parent)
+        colours.set(self, 'BackgroundColour', 'ButtonNormal')
+        self.sizer = wx.BoxSizer(wx.VERTICAL)
+        outer = wx.BoxSizer(wx.VERTICAL)
+        outer.Add(self.sizer, 1, wx.EXPAND | wx.ALL, self.FromDIP(8))
+        self.SetSizer(outer)
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+
+    def on_paint(self, event):
+        dc = wx.PaintDC(self)
+        dc.SetPen(wx.Pen(colours.get('ButtonBorder')))
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.DrawRectangle(wx.Rect(self.GetClientSize()))
+
+
 def flat_button(parent, label, size):
     return FlatButton(parent, label, size, bordered=True)
 

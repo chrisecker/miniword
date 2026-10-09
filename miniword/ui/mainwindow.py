@@ -839,10 +839,10 @@ class MainFrame(wx.Frame, ViewBase):
     def _build_strip(self):
         self._strip = RightStrip(self._base, [
             ("style",    "Styles"),    # format text and objects
-            ("elements", "Elements"),
             ("table",    "Table"),
             ("image",    "Image"),
             ("links",    "Links"),
+            ("elements", "Elements"),
             ("outline",  "Outline"),   # navigate
             ("search",   "Search"),
             ("settings", "Settings"),  # the document

@@ -222,7 +222,7 @@ def test_UI_12():
     "UI-12: side strip order: format, navigate, document"
     with main_frame() as frame:
         assert list(frame._strip._key_to_btn) == [
-            'style', 'elements', 'table', 'image', 'links', 'outline', 'search',
+            'style', 'table', 'image', 'links', 'elements', 'outline', 'search',
             'settings']
 
 
