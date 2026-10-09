@@ -274,11 +274,9 @@ class Box:
             w, h, d = self.device.measure('M', getattr(self, 'style', style))
             yb = y0+self.height
             x1, y1, x2, y2 = list(self.get_rect(i, x0, y0).items())
-            # Use h-d (≈ ascent) instead of h (= line_h) so the cursor top
-            # stays at a consistent position when switching between font
-            # variants (e.g. Normal ↔ Bold) that report different line_h
-            # values for the same nominal font size.
-            return Rect(x1, yb-(h-d), x1+1, yb+d)
+            # h is the height above the baseline (device.measure), the
+            # descent is not in it
+            return Rect(x1, yb-h, x1+1, yb+d)
             
     def get_index(self, x, y):
         """Returns the index which is closest to point (x, y). A return value
@@ -897,9 +895,9 @@ def test_05():
     t = TextBox('0123456789', device=device)
     r = t.get_cursorrect(1, 0, 0, {})
     x1, y1, x2, y2 = r.items()
-    # Cursor height = h (line_h of style), NOT h+d — the cursor spans
-    # from baseline-(line_h-descent) to baseline+descent = line_h total.
-    assert y2-y1 == t.height
+    # the cursor covers the box: its height above the baseline and its
+    # depth below
+    assert (y1, y2) == (0, t.height + t.depth) and t.depth > 0
 
     
 def test_06():
