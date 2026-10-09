@@ -390,10 +390,12 @@ class RowFactory(Factory):
 
     def _dims(self, parstyle, level):
         """Compute left_first/left_rest/width_first/width_rest:
-        list_indent applies only for list/numbered paragraphs, plus
+        list_indent applies only for list/numbered paragraphs and
+        continued ones (more of an item: aligned with its text), plus
         indent_levels[level] and first_line_indent (can be negative -
         hanging indent)."""
-        in_list = parstyle['paragraph_type'] in ('list', 'numbered')
+        in_list = parstyle['paragraph_type'] in ('list', 'numbered',
+                                                 'continued')
         list_indent = parstyle['list_indent'] if in_list else 0
         block_indent = parstyle['indent_levels'][level] + list_indent
         first_line_indent = parstyle['first_line_indent']
@@ -410,7 +412,7 @@ class RowFactory(Factory):
             # Every section paragraph clears the item counter - also an
             # unnumbered heading, which doesn't count itself.
             self.state.counters['item'] = [0] * n_levels
-        if ptype == 'normal':
+        if ptype in ('normal', 'continued'):  # no marker, no count
             return None
         level = parstyle['level']
         if ptype == 'list':

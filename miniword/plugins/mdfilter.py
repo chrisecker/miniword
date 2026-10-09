@@ -51,6 +51,14 @@ def _doc_to_md(doc):
     markers        = []  # list markers of the items above, by level
     numbers        = []  # their numbers (None: bullet)
 
+    def item_pad(nl):
+        """The indent of a continued paragraph - more of the list item
+        above, aligned with its text -, or None (no item above)."""
+        if nl.parstyle.get('paragraph_type') != 'continued' \
+                or prev_block_key != 'list' or len(markers) <= nl.indent:
+            return None
+        return ' ' * sum(map(len, markers[:nl.indent + 1]))
+
     def close_pre():
         nonlocal in_pre
         if in_pre:
@@ -75,8 +83,12 @@ def _doc_to_md(doc):
             close_pre()
             if parts:  # a blank line before (--- under text: a heading)
                 parts.append('')
-            parts.extend(block_md(block))
-            prev_block_key = None
+            pad = item_pad(nl)
+            lines = block_md(block)
+            if pad is not None:  # in a list item
+                lines = [pad + line if line else line for line in lines]
+            parts.extend(lines)
+            prev_block_key = None if pad is None else 'list'
             continue
 
         basestyle = doc.basestyles.get(nl.parstyle.get('base', 'normal')) or style_default
@@ -102,6 +114,12 @@ def _doc_to_md(doc):
             continue
 
         close_pre()
+
+        pad = item_pad(nl)
+        if pad is not None:  # more of a list item, after a blank line
+            parts.append('')
+            parts.extend(pad + line for line in inline.split('\n'))
+            continue
 
         # Blank line between block elements, but not between consecutive same-type blocks
         quote = base in ('quote',) + _ALERTS
@@ -387,10 +405,13 @@ def _scale(size, pixels):
 # turned into a flat list of blocks, like Miniword's paragraphs:
 #
 #   (ptype, indent, runs[, ps]) a paragraph; ptype 'normal', 'h1'..'h6',
-#                               'list', 'numbered', 'quote', 'pre' or an
+#                               'list', 'numbered', 'continued' (more of
+#                               a list item), 'quote', 'pre' or an
 #                               alert ('note', 'warning' ...); ps:
 #                               more paragraph properties (start_number)
-#   ('code', lines, lang)        a code block (container Code)
+#   ('code', lines, lang[, ptype, indent])
+#                               a code block (container Code), in a list
+#                               item: ptype 'continued'
 #   ('table', grid[, nheader[, aligns]])
 #                               grid: rows of cells (runs or strings);
 #                               aligns: per column 'left', 'center',
@@ -434,8 +455,10 @@ def _build_blocks(doc, blocks):
             add('\n')  # the table's own NL
             continue
         if block[0] == 'code':
-            marks.append((size, code_block(*block[1:])))
-            pars.append((size, 'normal', 0))
+            _, lines, lang, *par = block
+            ptype, indent = par or ('normal', 0)
+            marks.append((size, code_block(lines, lang)))
+            pars.append((size, ptype, indent))
             add('\n')  # the code block's own NL
             continue
         ptype, indent, block_runs, *ps = block
@@ -493,9 +516,11 @@ def _special(props):
 
 
 def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
-    # the styles are named as the ptypes, but 'normal' is 'body'
-    ps = dict(more, base='body' if ptype == 'normal' else ptype)
-    if ptype in ('list', 'numbered'):
+    # the styles are named as the ptypes, but 'normal' is 'body', so is
+    # 'continued' (more of a list item)
+    base = 'body' if ptype in ('normal', 'continued') else ptype
+    ps = dict(more, base=base)
+    if ptype in ('list', 'numbered', 'continued'):
         ps['paragraph_type'] = ptype
     model.set_parstyle(nl_pos, ps)
     if indent:
@@ -789,12 +814,16 @@ def _md_blocks(nodes):
             box = []  # a task list item's checkbox, before its text
             if item.get('type') == 'task_list_item':
                 box = [('', {'_checkbox': item['attrs'].get('checked')})]
+            first = ptype  # the item's first paragraph, then more of it
             for child in item.get('children', []):
                 if child.get('type') == 'list':
                     visit_list(child, depth + 1)
                 elif child.get('type') in ('paragraph', 'block_text'):
-                    blocks.append((ptype, depth, box + runs(child), start))
-                    start, box = {}, []
+                    blocks.append((first, depth, box + runs(child), start))
+                    first, start, box = 'continued', {}, []
+                elif child.get('type') == 'block_code':
+                    visit(child)  # the code block, more of the item
+                    blocks[-1] += ('continued', depth)
                 else:
                     visit(child)
 
@@ -872,7 +901,7 @@ def _check_md(doc):
     _OK_BASES  = set(_ALERTS) | {
         'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
         'pre', 'list', 'numbered', 'quote', 'rule'}
-    _OK_PTYPES = {'normal', 'list', 'numbered'}
+    _OK_PTYPES = {'normal', 'list', 'numbered', 'continued'}
     _OK_PAR    = {'base', 'paragraph_type', 'start_number'}
     _OK_CHAR   = {'bold', 'italic', 'font_family', 'href', 'strike', 'vertical_position'}
     _MONO      = {'courier', 'courier new', 'monospace', 'consolas',
@@ -889,7 +918,9 @@ def _check_md(doc):
         ps = nl.parstyle
         ptype = ps.get('paragraph_type') or (doc.basestyles.get(
             ps.get('base', 'normal')) or {}).get('paragraph_type', 'normal')
-        if ptype not in ('list', 'numbered'):
+        if ptype == 'continued':
+            pass  # more of an item: the list goes on
+        elif ptype not in ('list', 'numbered'):
             numbered = set()  # the list ends
         else:
             numbered = {k for k in numbered if k <= nl.indent}

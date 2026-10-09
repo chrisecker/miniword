@@ -68,6 +68,12 @@ def passfocus(widget: wx.Window, mainwidget: wx.Window, interval_ms: int = 100):
     widget._passfocus_timer = timer  # reference to prevent gc
 
     
+# paragraph_type: its value, its label
+PARAGRAPH_TYPES = [('normal', "Normal"), ('list', "List"),
+                   ('numbered', "Numbered"),
+                   ('continued', "List continuation")]
+
+
 class AlignBar(ButtonBar):
     def __init__(self, parent):
         ButtonBar.__init__(self, parent, exclusive=True)
@@ -335,7 +341,8 @@ class StyleInspector(SidePanel):
             lambda e: self.set_parproperties(right_indent=e.value))
 
         add_section("Bullets and numbers", panel, contentsizer)
-        self.paragraph_type = wx.Choice(panel, choices=["Normal", "List", "Numbered"])
+        self.paragraph_type = wx.Choice(
+            panel, choices=[label for _, label in PARAGRAPH_TYPES])
         self.reset_paragraph_type = ResetButton(panel, ['paragraph_type'])
         self.paragraph_type.Bind(wx.EVT_CHOICE, self.on_paragraph_type)
         add_row(contentsizer, self.paragraph_type, self.reset_paragraph_type)
@@ -534,7 +541,7 @@ class StyleInspector(SidePanel):
 
     def on_paragraph_type(self, event):
         i = self.paragraph_type.Selection
-        value = ['normal', 'list', 'numbered'][i]
+        value = PARAGRAPH_TYPES[i][0]
         self.set_parproperties(paragraph_type=value)
 
     def on_numbering(self, event):
@@ -1020,9 +1027,9 @@ class StyleInspector(SidePanel):
         self.reset_marker_size.set_x(x)
         
         ### update paragraph_type & visibility
+        values = [value for value, _ in PARAGRAPH_TYPES]
         try:
-            i = ["normal", "list", "numbered"].index(properties[ \
-                                               'paragraph_type'])
+            i = values.index(properties['paragraph_type'])
         except ValueError:
             i = -1
         self.paragraph_type.Selection = i

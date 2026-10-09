@@ -257,7 +257,7 @@ def default_handler(action, shift, ctx):
         swap_paragraph(editor, model, index, 1)
     elif action == 'cycle_list_type':
         cycle_parproperty(editor, model, ctx, 'paragraph_type',
-                          ['normal', 'list', 'numbered'])
+                          ['normal', 'list', 'numbered', 'continued'])
     elif action == 'cycle_basestyle':
         if editor.canvas is None:
             return False
