@@ -110,6 +110,10 @@ class Tester:
             self.redirect_io()        
 
         ok = True
+        # exceptions in wx callbacks (CallAfter, timers, event handlers)
+        # only reach sys.excepthook - they fail the test, too
+        hooked = []
+        sys.excepthook = lambda *exc_info: hooked.append(exc_info)
         if self.profile:
             from cProfile import runctx
             try:
@@ -127,6 +131,11 @@ class Tester:
                 tb = get_tb(1)
             finally:
                 self.restore_io()
+        sys.excepthook = sys.__excepthook__
+        if ok and hooked:
+            ok = False
+            tb = ''.join(''.join(traceback.format_exception(*exc_info))
+                         for exc_info in hooked)
         if ok:
             print("ok")
             if not self.redirect:

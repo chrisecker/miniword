@@ -812,6 +812,8 @@ class MainFrame(wx.Frame, ViewBase):
             tv.set_zoom(min(cw / layout.width, ch / page_h))
 
     def _layout(self):
+        if not self._base:  # destroyed before the CallAfter
+            return
         w, h = self._base.GetClientSize()
         if w <= 0 or h <= 0:
             return

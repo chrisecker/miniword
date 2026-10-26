@@ -40,7 +40,7 @@ def style_inspector(text="Eins\nZwei", size=wx.DefaultSize):
         editor.canvas = SimpleNamespace(
             builder=SimpleNamespace(stylesheet=sheet),
             reset_blink=lambda: None, adjust_viewport=lambda: None,
-            refresh=lambda: None)
+            refresh=lambda: None, SetFocus=lambda: None)
         inspector = StyleInspector(frame, editor, sheet)
         inspector.update()
         yield inspector, model, editor
