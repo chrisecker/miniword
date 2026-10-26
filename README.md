@@ -186,4 +186,6 @@ cp examples/*.py ~/.config/miniword/plugins
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 - see LICENSE for details. Contact me if you need something else.
+This project is licensed under the GNU Lesser General Public License v3.0 or later - see LICENSE (LGPL) and COPYING (GPL, which the LGPL builds on) for details. Contact me if you need something else.
+
+The bundled hyphenation patterns (`miniword/hyphenation/patterns/`) come from the hyph-utf8 package and have their own permissive licences - see `miniword/hyphenation/patterns/LICENSES.md`.
