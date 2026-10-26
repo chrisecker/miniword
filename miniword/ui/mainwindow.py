@@ -6,7 +6,7 @@ from ..textmodel.viewbase import ViewBase
 from .styleinspector import StyleInspector
 from .settingsinspector import SettingsInspector
 from ..texteditor.editor import TwoFlowEditor
-from ..texteditor.textcanvas import TextCanvas
+from ..texteditor.textcanvas import TextCanvas, CLIPBOARD_FORMAT
 from ..layout.pagebuilder import PageBuilder
 from ..layout.rowfactory import Factory
 from ..layout.cairodevice import CairoDevice
@@ -1057,7 +1057,7 @@ class MainFrame(wx.Frame, ViewBase):
         from ..images.images import Image
         from ..textmodel.texeltree import grouped
         canvas = self.editor.canvas
-        if canvas.read_clipboard_data('pytextmodel') is None:
+        if canvas.read_clipboard_data(CLIPBOARD_FORMAT) is None:
             image = canvas.read_clipboard_image()
             for flavor, handler in paste_handlers():
                 data = canvas.read_clipboard_data(flavor)

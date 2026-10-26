@@ -12,10 +12,14 @@ from ..layout import marks
 import io
 import wx
 import string
-import pickle
 import sys
 from math import ceil
 from ..footnotes.footnotes import footnote_anchored_at
+from ..io import txlio
+from ..io.texeltreeformat import ParseError
+
+# Miniword's own clipboard format: a part of a text as TXL (see txlio.dumps)
+CLIPBOARD_FORMAT = "miniword-txl"
 
 
 """
@@ -222,10 +226,10 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             text = textmodel.get_text()
             plain = wx.TextDataObject()
             plain.SetText(text)
-            pickled = wx.CustomDataObject("pytextmodel")
-            pickled.SetData(pickle.dumps(textmodel))
+            txl = wx.CustomDataObject(CLIPBOARD_FORMAT)
+            txl.SetData(txlio.dumps(textmodel).encode('utf-8'))
             data = wx.DataObjectComposite()
-            data.Add(pickled, preferred=True)
+            data.Add(txl, preferred=True)
             data.Add(plain)
             if not wx.TheClipboard.Open():
                 continue
@@ -242,12 +246,16 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         if not wx.TheClipboard.Open():
             return None
         try:
-            pickled = wx.CustomDataObject("pytextmodel")
+            txl = wx.CustomDataObject(CLIPBOARD_FORMAT)
             plain = wx.TextDataObject()
             textmodel = None
-            if wx.TheClipboard.GetData(pickled):
-                textmodel = pickle.loads(pickled.GetData())
-            elif wx.TheClipboard.GetData(plain):
+            if wx.TheClipboard.GetData(txl):
+                try:
+                    text = bytes(txl.GetData()).decode('utf-8')
+                    textmodel = txlio.loads(text)
+                except (ValueError, ParseError):
+                    pass  # not ours after all: plain text
+            if textmodel is None and wx.TheClipboard.GetData(plain):
                 textmodel = TextModel(plain.GetText())
         finally:
             wx.TheClipboard.Close()
@@ -255,7 +263,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
 
     def read_clipboard_data(self, flavor):
         """The clipboard's data in flavor ('html', or a format name such
-        as 'pytextmodel') as bytes, or None."""
+        as 'miniword-txl') as bytes, or None."""
         fmt = wx.DataFormat(wx.DF_HTML) if flavor == 'html' \
             else wx.DataFormat(flavor)
         if wx.TheClipboard.IsOpened() or not wx.TheClipboard.Open():

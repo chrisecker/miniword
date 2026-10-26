@@ -689,11 +689,11 @@ def test_PANEL_1():
 # PASTE - copy & paste, import
 
 def test_PASTE_1():
-    "PASTE-1: an image copied from A to B (via pickle) keeps its data"
-    import pickle
+    "PASTE-1: an image copied from A to B (via the clipboard) keeps its data"
+    from ..io import txlio
     data = png(4, 2)
     a = mk_doc('x', image(content=data, alt='Photo'), 'y')
-    clip = pickle.loads(pickle.dumps(a.textmodel.copy(1, 2)))
+    clip = txlio.loads(txlio.dumps(a.textmodel.copy(1, 2)))
     b = mk_doc('abc')
     b.textmodel.insert(1, clip)
     img, = images_in(b.textmodel.texel)

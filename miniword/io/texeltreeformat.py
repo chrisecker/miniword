@@ -153,6 +153,8 @@ def serialize_texel(texel, indent=0):
                 if texel.path:
                     from ..images.images import file_path
                     parts['path'] = file_path(texel, _folder)
+                    if texel.relative and not _folder:  # clipboard
+                        parts['relative'] = True
                 s = serialize_style(parts) if parts else ''
                 # The data itself goes to the [blobs] section (txlio),
                 # the texel refers to it by its key ('' for no data).
@@ -579,6 +581,7 @@ class _Parser:
         crop = None
         alt = ''
         path = None
+        d = {}
         if self.tok.peek()[0] == 'COMMA':
             self.tok.consume('COMMA')
             d = self.parse_style()
@@ -596,6 +599,8 @@ class _Parser:
         # share one bytes object. A missing blob gives no content.
         from ..images.images import memory_path
         path, relative = memory_path(path, self.folder)
+        if d.get('relative'):  # clipboard: absolute, relative in files
+            relative = True
         return Image(self.blobs.get(key), scale_x, scale_y, proportional,
                      crop, alt, path, relative)
 

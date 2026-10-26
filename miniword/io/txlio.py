@@ -79,19 +79,7 @@ def save(doc, path):
             parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
         parts.append('')
 
-    # Blobs section — only written when non-empty. Built from the image
-    # data in the texels, keyed by blob_key: equal data is written once,
-    # and there are no unused blobs.
-    from ..images.images import iter_images, blob_key
-    blobs = {}
-    for image in iter_images(doc.textmodel.texel):
-        if image.content:
-            blobs[blob_key(image.content)] = image.content
-    if blobs:
-        parts.append('[blobs]')
-        for key, data in blobs.items():
-            parts.append('"%s" = "%s"' % (key, base64.b64encode(data).decode('ascii')))
-        parts.append('')
+    parts.extend(blobs_section(doc.textmodel.texel))
 
     # Document section — always written
     parts.append('[document]')
@@ -102,6 +90,49 @@ def save(doc, path):
 
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(parts) + '\n')
+
+
+def blobs_section(texel):
+    """Lines of the [blobs] section for the images in texel, [] if there
+    are none. Keyed by blob_key: equal data is written once, and there
+    are no unused blobs."""
+    from ..images.images import iter_images, blob_key
+    blobs = {}
+    for image in iter_images(texel):
+        if image.content:
+            blobs[blob_key(image.content)] = image.content
+    if not blobs:
+        return []
+    lines = ['[blobs]']
+    for key, data in blobs.items():
+        lines.append('"%s" = "%s"' % (key, base64.b64encode(data).decode('ascii')))
+    lines.append('')
+    return lines
+
+
+def dumps(model):
+    """A copied part of a text (a TextModel) as TXL text, for the
+    clipboard: [blobs] and [document] without ENDMARK and settings.
+    Image paths stay absolute."""
+    parts = blobs_section(model.texel)
+    parts.append('[document]')
+    parts.append(serialize(model.texel))
+    return '\n'.join(parts) + '\n'
+
+
+def loads(text):
+    """The TextModel of TXL text from dumps. Raises ParseError (or
+    ValueError) for anything else."""
+    sections = _split_sections(text)
+    if 'document' not in sections:
+        raise ValueError("Missing [document] section")
+    blobs = {}
+    if 'blobs' in sections:
+        blobs = _parse_blobs(sections['blobs'])
+    root, endmark, settings = parse(sections['document'], blobs)
+    model = TextModel()
+    model.texel = root
+    return model
 
 
 def load(path):
@@ -330,3 +361,38 @@ def test_05():
         assert 'block_padding' not in nl.parstyle
     finally:
         os.unlink(path)
+
+
+def test_06():
+    "clipboard: dumps/loads keep text, styles, paragraphs and images"
+    from ..textmodel.texeltree import Group, Text, NewLine, get_text
+    from ..textmodel.styles import create_style
+    from ..images import Image
+    from ..images.images import iter_images
+    style = create_style(bold=True)
+    img = Image(b'\x89PNG data', alt='Photo', path='/tmp/a.png',
+                relative=True)
+    model = TextModel()
+    model.texel = Group([Text('ab', style), img,
+                         NewLine().set_parstyle({'base': 'h1'}),
+                         Text('cd')])
+    model2 = loads(dumps(model))
+    assert get_text(model2.texel) == get_text(model.texel)
+    assert model2.texel.childs[0].style is style
+    assert model2.get_parstyle(0)['base'] == 'h1'
+    img2, = iter_images(model2.texel)
+    assert img2.content == img.content and img2.alt == 'Photo'
+    assert img2.path == '/tmp/a.png' and img2.relative
+
+
+def test_07():
+    "clipboard: loads rejects text that is not from dumps"
+    from .texeltreeformat import ParseError
+    for text in ['', 'hello', '[document]\nos.system("x")',
+                 '[document]\nT(']:
+        try:
+            loads(text)
+        except (ValueError, ParseError):
+            pass
+        else:
+            assert False, text
