@@ -7,6 +7,8 @@ from .rect import Rect
 
 
 class LayoutBase:
+    is_finished = True  # built completely (PageLayout: in the background)
+
     def __init__(self, childs):
         self.childs = childs
         self.layout()

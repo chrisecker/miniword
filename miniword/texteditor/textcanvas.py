@@ -450,7 +450,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         if getattr(self.builder, 'busy', False):  # layout incomplete
             wx.PaintDC(self)
             return
-        self._update_scroll()
+        self.queue_update_scroll()
 
         pdc = wx.PaintDC(self)
         pdc.SetAxisOrientation(True, False)
@@ -483,6 +483,24 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
 
     # --- scroll ---
 
+    # Delay of the scroll update in ms. Below the blink interval (500 ms):
+    # each blink paints and so restarts it.
+    scroll_delay = 300
+    scroll_timer = None  # wx.CallLater for _update_scroll
+
+    def queue_update_scroll(self):
+        """_update_scroll a little later, not in the paint: a new size
+        repaints the window. Each call restarts the delay."""
+        if self.scroll_timer is None:
+            self.scroll_timer = wx.CallLater(
+                self.scroll_delay, self.queued_update_scroll)
+        else:
+            self.scroll_timer.Start(self.scroll_delay)
+
+    def queued_update_scroll(self):
+        if self:  # not destroyed meanwhile
+            self._update_scroll()
+
     def _update_scroll(self):
         """Update scroll parameters (virtual size & scroll rate)."""
         layout = self.layout
@@ -494,7 +512,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             return
         # While building, the height doesn't shrink (keeps the scroll
         # position); the width is the pages' width.
-        if not getattr(self.layout, 'is_finished', True):
+        if not self.layout.is_finished:
             h = max(h, vh)
         if vw == w and vh == h:
             return
