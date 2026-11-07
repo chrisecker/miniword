@@ -1,5 +1,8 @@
 #!/bin/sh
-# Starts MiniWord as installed by the .deb/.rpm packages: the code lies in
-# /usr/share/miniword, not in the site-packages of a particular Python
-# version, so the package survives Python updates of the distribution.
-exec /usr/bin/python3 -c 'import sys; sys.path.insert(0, "/usr/share/miniword"); from miniword.__main__ import main; sys.exit(main())' "$@"
+# Starts MiniWord from /usr/share/miniword (.deb/.rpm): not in the
+# site-packages of one Python version, so it survives Python updates.
+exec /usr/bin/python3 -c '
+import sys
+sys.path.insert(0, "/usr/share/miniword")
+from miniword.__main__ import main
+sys.exit(main())' "$@"

@@ -1,13 +1,6 @@
-# nfpm configuration for the Linux packages (.deb, .rpm), built by the
-# job "linux" in .github/workflows/release.yml:
-#
-#   pip install --no-deps --no-compile --target build/linux/stage .
-#   PYTHONPATH=. python packaging/linux/make_desktop_files.py build/linux
-#   VERSION=0.2.1 nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/
-#
-# MiniWord is pure Python: one package for all architectures. The code
-# goes to /usr/share/miniword (see packaging/linux/miniword), the
-# dependencies come from the distribution.
+# Linux packages (.deb, .rpm), built by the job "linux" in
+# .github/workflows/release.yml. Pure Python: one package for all
+# architectures; dependencies from the distribution.
 
 name: miniword
 arch: all
@@ -44,8 +37,7 @@ contents:
   - src: ./COPYING
     dst: /usr/share/doc/miniword/COPYING
 
-# Menu, file types and icon caches are updated by the triggers of the
-# distributions (desktop-file-utils, shared-mime-info), no scripts needed.
+# menu, file type and icon caches: updated by the distribution's triggers
 
 overrides:
   deb:
