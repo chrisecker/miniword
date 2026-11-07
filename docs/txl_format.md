@@ -6,20 +6,34 @@
 A file consists of sections in fixed order. All sections except `[document]` are optional.
 Empty sections may be omitted. Comments start with `#`.
 
-1. **`[metadata]`** – Document properties (paper size, margins, author).
-2. **`[basestyles]`** – Named basestyles.
-3. **`[blobs]`** – Embedded binary data (images, etc.), base64-encoded.
-4. **`[document]`** – Content stream.
+1. **`[basestyles]`** – Named basestyles.
+2. **`[blobs]`** – Embedded binary data (images, etc.), base64-encoded.
+3. **`[document]`** – Document properties (`PROPS`, optional) and content stream.
+
+Strings are Python string literals in single or double quotes: `T('it\'s')`,
+`T("say \"hi\"")`, `T('a\\b')`. Element names (`T`, `NL`, `FN`, …) and container
+types (`"table"`, `"code"`) are case-sensitive. Rule of thumb: keywords of the syntax
+are upper case, all names and values in quotes are lower case.
 
 ---
 
-## 2. Metadata (`[metadata]`)
+## 2. Document Properties (`PROPS`)
+
+Document properties are written as the first element of `[document]`; only
+values that differ from the default are written:
+
+```
+[document]
+PROPS({author="Ada", paper="Letter"})
+T("Hello")
+ENDMARK
+```
 
 | Field                           | Type   | Default | Description                          |
 | ------------------------------- | ------ | ------- | ------------------------------------ |
 | `title` / `author`              | String | `""`    | Document info                        |
 | `paper`                         | String | `"A4"`  | `"A4"`, `"Letter"`, `"custom"`       |
-| `margin_top/bottom/left/right`  | Number | `70.08` | Page margins in pt                   |
+| `margin_top/bottom/left/right`  | Number | `70.87` | Page margins in pt (2.5 cm)          |
 | `paper_width` / `paper_height`  | Number | *(A4)*  | Only when `paper="custom"`           |
 | `header_left/center/right`      | Tuple  | `("none", "")` | Header field `(kind, text)`   |
 | `footer_left/center/right`      | Tuple  | `("none", "")` | Footer field; `footer_center` defaults to `("page", "")` |
@@ -36,17 +50,20 @@ Header/footer kinds: `none`, `page`, `page_pages` ("3 / 10"), `title`,
 
 ## 3. Blobs (`[blobs]`)
 
-Binary data (images and other media) is embedded directly in the file, base64-encoded.
-Each entry maps a blob ID (a filename string) to its data.
+The data of the images is embedded in the file, base64-encoded. Each entry maps a key to
+the data; `IMG` elements refer to it by the key.
 
 ```
 [blobs]
-"photo.jpg" = "base64encodeddata..."
-"logo.png"  = "base64encodeddata..."
+"3f9a1c0d2b7e4a56.png" = "base64encodeddata..."
+"a07c55e19d0b3f28.jpg" = "base64encodeddata..."
 ```
 
-Blob IDs are referenced by `IMG` elements in the content stream. The ID is arbitrary but
-conventionally matches the original filename.
+MiniWord writes as key the first 16 hex digits of the SHA-256 of the data plus the
+extension: equal images are stored once, and there are no unused entries. When a file
+is written by other programs, any unique string works as key. The section is only a
+storage form of the file – in the document, each image holds its data itself. It keeps
+the long base64 data out of the content stream, so `[document]` stays readable.
 
 ---
 
@@ -267,22 +284,62 @@ style (role `rule`) gives the space above and below.
 
 ---
 
-**`IMG("blob_id")`** / **`IMG("blob_id", {scale=factor})`** / **`IMG("blob_id", {crop_x=x, crop_y=y, crop_w=w, crop_h=h})`**
+**`IMG("key")`** / **`IMG("key", {prop=val, ...})`**
 
-Inline image. `blob_id` references an entry in the `[blobs]` section. The image occupies
-one character position in the paragraph (it is a Single, not a Container).
+Inline image. `key` references an entry in the `[blobs]` section (`""`: an image
+without data, e.g. a linked file that was not found). The image occupies one character position in the paragraph (it is a
+Single, not a Container).
 
 | Parameter | Default | Description |
 | --------- | ------- | ----------- |
-| `scale`   | `1.0`   | Uniform scale factor applied to the source pixel dimensions |
+| `scale_x`, `scale_y` | `1.0` | Scale factors applied to the source pixel dimensions (old files: `scale` for both) |
+| `proportional` | `True` | Keep the aspect ratio when resizing in the editor |
 | `crop_x`, `crop_y` | `0` | Crop origin in source pixels (reserved, not yet rendered) |
 | `crop_w`, `crop_h` | — | Display size in pt when cropping; also serves as explicit size override |
+| `alt` | `""` | Alternative text |
+| `path` | — | File the image came from, relative to the document |
 
 ```
-IMG("photo.jpg")                                    # natural size (scale=1.0)
-IMG("photo.jpg", {scale=0.5})                       # half size
+IMG("photo.jpg")                                    # natural size
+IMG("photo.jpg", {scale_x=0.5, scale_y=0.5})        # half size
 IMG("photo.jpg", {crop_x=0, crop_y=0, crop_w=150, crop_h=200})  # 150×200 pt
 ```
+
+---
+
+**`FN(…)`** / **`FN({prop=val, ...}, …)`**
+
+Footnote, at the position of its anchor in the text. Its content is written like a
+document and ends with `ENDMARK`.
+
+| Parameter   | Default     | Description |
+| ----------- | ----------- | ----------- |
+| `numbering` | `"numbers"` | `"numbers"`, `"letters"`, `"roman"` |
+| `label`     | —           | Explicit label, overrides the automatic number |
+
+```
+T("Text")
+FN(
+  T("The note.")
+  ENDMARK
+)
+FN({label="*"},
+  T("Another note.")
+  ENDMARK
+)
+NL({base="body"})
+```
+
+---
+
+**`S("c")`** / **`S("c", {prop=val, ...})`**
+
+A single character as an atomic element (a Single).
+
+**`TAG("<kbd>")`**
+
+Inline HTML tag from Markdown, kept as its source: shown, never rendered, written back
+unchanged.
 
 ---
 
@@ -290,14 +347,24 @@ IMG("photo.jpg", {crop_x=0, crop_y=0, crop_w=150, crop_h=200})  # 150×200 pt
 
 Container (e.g. table). The property block and slots are all optional.
 
+- The type is lower case: `"table"`, `"code"`. Files written before 2026-11 use
+  `"Table"` and `"Code"`; they are still read.
 - The `{…}` block carries both style properties and structural parameters.
 - Each slot is enclosed in `[…]` and contains a sequence of elements.
 - The number of rows in a table is implicit from the slot count and `ncols`.
 
-### `C("Table", …)` — Table cells
+### `C("table", …)` — Table cells
 
-`Table` uses `C` with `ctype="Table"`. The container `{…}` block carries
-table-level parameters (`ncols`, `header_rows`, `break_level`, `col_widths`).
+The container `{…}` block carries the table-level parameters:
+
+| Parameter    | Default | Description |
+| ------------ | ------- | ----------- |
+| `ncols`      | `1`     | Number of columns (required for a table) |
+| `nheader`    | `0`     | Number of header rows |
+| `breaklevel` | `1`     | Page break behaviour |
+| `col_widths` | —       | Column widths as a tuple |
+
+Old files use `header_rows` and `break_level`; they are still read.
 Each slot corresponds to one cell; slots are ordered row by row.
 
 Every slot may carry an optional `{…}` block with **cell-style attributes**.
@@ -320,7 +387,7 @@ Border values are strings: `"none"`, `"thin"`, `"thick"`, `"double"`.
 Example — 2×1 table, first cell with a thick bottom border:
 
 ```
-C("Table",
+C("table",
   {ncols=1},
   [T("Hello"), {border_bottom="thick"}],
   [T("World")]
@@ -329,6 +396,24 @@ C("Table",
 
 At shared cell edges both neighbours may define the same border. The
 **right/bottom** cell takes precedence.
+
+### `C("code", …)` — Code block
+
+A code block (Markdown fenced code) or HTML block: one slot with the lines,
+separated by `NL`.
+
+| Parameter | Default  | Description |
+| --------- | -------- | ----------- |
+| `kind`    | `"code"` | `"code"` or `"html"` (HTML block) |
+| `lang`    | `""`     | Language of the code, e.g. `"python"` |
+
+```
+C("code", {lang="python"},
+  [T("x = 1")
+   NL
+   T("print(x)")]
+)
+```
 
 ---
 
@@ -342,12 +427,6 @@ at the end of `[document]`.
 ## 6. Full Reference Example
 
 ```
-[metadata]
-title = "Technical Specification"
-author = "C. Ecker"
-paper = "A4"
-margin_left = 50.0
-
 [basestyles]
 "h1"     = {name="Header 1",  role="h1",     bold, font_size=18,
             paragraph_type="numbered", counter="section"}
@@ -359,6 +438,8 @@ margin_left = 50.0
 "photo.jpg" = "base64encodeddata..."
 
 [document]
+PROPS({title="Technical Specification", author="C. Ecker", margin_left=50.0})
+
 T("Introduction")
 NL({base="h1"})
 
@@ -382,7 +463,7 @@ NL({base="enum"})
 T("Second numbered item.")
 NL({base="enum"})
 
-C("table", {ncols=2},
+C("table", {ncols=2, nheader=1},
   [T("Name")],
   [T("Value")],
   [T("Alpha")],
@@ -403,4 +484,5 @@ ENDMARK({base="body"})
 4. **`indent`:** Sets the indent level (0–9), selecting the active value from `indent_levels` and all other level-indexed properties. It is an index, not a distance. `indent=0` corresponds to the normal text column (no extra indentation). List paragraphs get an additional `list_indent` offset on top of `indent_levels[indent]`, so `indent=0` is correct for a top-level list item.
 5. **Markers:** A bullet or number is rendered on the first line of a paragraph when `paragraph_type="list"` or `"numbered"` is set. For numbered paragraphs, `counter="section"` uses the section counter (resets the item counter on increment); `counter="item"` (default) uses the item counter.
 6. **Unified property block:** All element parameters — structural and stylistic — go in the `{…}` block. There are no positional arguments other than the element type string and slot contents.
-7. **Singles vs. Containers:** `IMG` and other keyword elements are Singles — they behave as atomic units in the edit model (length 1, no slots). Use `C("type", …)` only when slots are needed.
+7. **Case:** Element names are upper case (`T`, `NL`, `C`), container types lower case (`C("table", …)`); both are case-sensitive.
+8. **Singles vs. Containers:** `IMG` and other keyword elements are Singles — they behave as atomic units in the edit model (length 1, no slots). Use `C("type", …)` only when slots are needed.

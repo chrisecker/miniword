@@ -6,9 +6,6 @@ File structure (all sections except [document] are optional):
     [basestyles]
     "h1" = {font_size=18, bold, name="Header 1", role="h1"}
 
-    [blobs]
-    "photo.png" = "base64encodeddata..."
-
     [document]
     PROPS({author="Ada"})
     T("Hello")
@@ -16,6 +13,12 @@ File structure (all sections except [document] are optional):
     T("First item.")
     NL({indent=1, base="bullet"})
     ENDMARK
+
+    [blobs]
+    "photo.png" = "base64encodeddata..."
+
+Sections are found by name; files before 2026-11 have [blobs] before
+[document] and are read as well.
 """
 
 import re
@@ -79,14 +82,16 @@ def save(doc, path):
             parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
         parts.append('')
 
-    parts.extend(blobs_section(doc.textmodel.texel))
-
     # Document section — always written
     parts.append('[document]')
     endmark = _extract_nl(doc.textmodel.ENDMARK)
     settings = doc.settings if doc.settings else None
     parts.append(serialize(doc.textmodel.texel, endmark, settings,
                            os.path.dirname(os.path.abspath(path))))
+
+    blobs = blobs_section(doc.textmodel.texel)  # last: long base64 data
+    if blobs:
+        parts += [''] + blobs
 
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(parts) + '\n')
@@ -112,11 +117,12 @@ def blobs_section(texel):
 
 def dumps(model):
     """A copied part of a text (a TextModel) as TXL text, for the
-    clipboard: [blobs] and [document] without ENDMARK and settings.
+    clipboard: [document] without ENDMARK and settings, then [blobs].
     Image paths stay absolute."""
-    parts = blobs_section(model.texel)
-    parts.append('[document]')
-    parts.append(serialize(model.texel))
+    parts = ['[document]', serialize(model.texel)]
+    blobs = blobs_section(model.texel)
+    if blobs:
+        parts += [''] + blobs
     return '\n'.join(parts) + '\n'
 
 
@@ -396,3 +402,25 @@ def test_07():
             pass
         else:
             assert False, text
+
+
+def test_08():
+    "[blobs] is written after [document]; the old order is read as well"
+    import tempfile
+    from ..textmodel.texeltree import Group, Text, ENDMARK
+    from ..images import Image
+    from ..images.images import iter_images
+    doc = Document()
+    doc.textmodel.texel = Group([Text('a'), Image(b'\x89PNG data'), ENDMARK])
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, 'new.txl')
+        save(doc, path)
+        text = open(path, encoding='utf-8').read()
+        assert text.index('[document]') < text.index('[blobs]')
+        document, blobs = text.split('\n[blobs]\n')
+        old = os.path.join(folder, 'old.txl')
+        with open(old, 'w', encoding='utf-8') as f:
+            f.write('[blobs]\n' + blobs + '\n' + document)
+        for p in (path, old):
+            img, = iter_images(load(p).textmodel.texel)
+            assert img.content == b'\x89PNG data'

@@ -379,9 +379,7 @@ def test_FILE_6():
     "FILE-6: a missing blob loads as an image without content"
     data = png(4, 2)
     doc2, text = roundtrip(mk_doc(image(content=data), 'x'))
-    start = text.index('[blobs]')
-    end = text.index('[document]')
-    doc3 = load_text(text[:start] + text[end:])
+    doc3 = load_text(text[:text.index('[blobs]')])  # the last section
     assert images_in(doc3.textmodel.texel)[0].content is None
 
 
