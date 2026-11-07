@@ -14,15 +14,26 @@ A minimal word processor in python. In development but already great.
 
 ## Install from a pre-built package
 
-Pre-built installers for Windows (`.exe`) and macOS (`.dmg`) are published on the [Releases page](https://github.com/chrisecker/miniword/releases) for each tagged version, with all dependencies (including the optional extras) already bundled — nothing else to install. On Linux, install from source instead (see below); no separate installer is provided there.
+Pre-built packages are published on the [Releases page](https://github.com/chrisecker/miniword/releases) for each tagged version: installers for Windows (`.exe`) and macOS (`.dmg`) with all dependencies (including the optional extras) already bundled, and packages for Linux (`.deb`, `.rpm`) that take the dependencies from the distribution.
+
+### Linux
+
+On Linux, installing from source is easy (see below): two system packages and `pip install`. Alternatively, `.deb` (Debian, Ubuntu) and `.rpm` (Fedora) packages are available on the [Releases page](https://github.com/chrisecker/miniword/releases). The package manager installs the dependencies from the distribution (`mistune` 3 or newer is needed, e.g. Ubuntu 24.04):
+
+```bash
+sudo apt install ./miniword_*_all.deb      # Debian, Ubuntu
+sudo dnf install ./miniword-*.noarch.rpm   # Fedora
+```
+
+The package adds MiniWord to the menu, opens `.txl` files with it and offers it for `.md` and `.txt` files.
 
 ### Windows
 
-Download the `.exe` from the [Releases page](https://github.com/chrisecker/miniword/releases) and run it.
+Download the `.exe` from the [Releases page](https://github.com/chrisecker/miniword/releases) and run it. The installer registers `.txl` files and offers MiniWord for `.md` and `.txt` files ("Open with").
 
 ### macOS
 
-Download the `.dmg` from the [Releases page](https://github.com/chrisecker/miniword/releases), open it, and drag `MiniWord.app` into your Applications folder.
+Download the `.dmg` from the [Releases page](https://github.com/chrisecker/miniword/releases), open it, and drag `MiniWord.app` into your Applications folder. MiniWord then opens `.txl` and `.md` files from the Finder and is offered for `.txt` files.
 
 **First launch:** MiniWord isn't (yet) signed with a paid Apple Developer ID, so macOS blocks it the first time with "MiniWord can't be opened because Apple cannot check it for malicious software." To allow it, no Terminal needed:
 
