@@ -707,6 +707,7 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_DISPLAY_CHANGED, self.on_dpi_changed)
 
         wx.CallAfter(self._layout)
+        wx.CallAfter(self._zoom_fit_page)  # a new window shows a whole page
 
     def _on_panel_toggle(self, key):
         book = self._inspector_book
@@ -796,6 +797,8 @@ class MainFrame(wx.Frame, ViewBase):
 
     def _zoom_fit_page(self):
         tv = self.canvas
+        if not tv:  # destroyed before the CallAfter
+            return
         layout = tv.layout
         cw, ch = tv.GetClientSize()
         if layout.width <= 0 or cw <= 0 or ch <= 0:
@@ -1127,7 +1130,8 @@ class MainFrame(wx.Frame, ViewBase):
                 return
             path = dlg.GetPath()
             if not os.path.splitext(path)[1]:
-                default = importexport.saveas_default_ext(dlg.GetFilterIndex())
+                default = importexport.saveas_default_ext(
+                    dlg.GetFilterIndex(), self.document.home_format)
                 if default:
                     path += '.' + default
         ext = os.path.splitext(path)[1].lstrip('.').lower()

@@ -132,8 +132,12 @@ def open_wildcard():
 
 
 def saveas_wildcard():
-    """Wildcard for Save As dialog: TXL + all registered export formats."""
-    parts = ["TXL files (*.txl)|*.txl"]
+    """Wildcard for Save As dialog: TXL and Markdown together (default),
+    TXL, all registered export formats."""
+    md = ''.join(';*.' + e for _n, extensions, _fn, _l, _c in _export_filters
+                 if 'md' in extensions for e in extensions)
+    parts = ["TXL and Markdown (*.txl%s)|*.txl%s" % (md, md),
+             "TXL files (*.txl)|*.txl"]
     for name, extensions, _fn, _lossless, _check in _export_filters:
         pattern = ';'.join('*.' + e for e in extensions)
         parts.append('%s (%s)|%s' % (name, pattern, pattern))
@@ -149,9 +153,11 @@ def export_wildcard():
     return _build_wildcard(_export_filters)
 
 
-def saveas_default_ext(filter_index):
-    """Return the default extension for a saveas_wildcard filter index, or None."""
-    exts = ['txl'] + [e[1][0] for e in _export_filters] + [None]
+def saveas_default_ext(filter_index, home_format='txl'):
+    """Return the default extension for a saveas_wildcard filter index, or
+    None; for TXL and Markdown the document's own format."""
+    first = home_format if home_format == 'md' else 'txl'
+    exts = [first, 'txl'] + [e[1][0] for e in _export_filters] + [None]
     return exts[filter_index] if filter_index < len(exts) else None
 
 
@@ -303,3 +309,14 @@ def test_05():
     doc = Document()
     warns = check_export("out.xyz", doc)
     assert warns == []
+
+
+def test_06():
+    "Save As: TXL and Markdown first; no extension - the document's format"
+    from ..plugins import mdfilter  # registers Markdown
+    first = saveas_wildcard().split('|')[1]
+    assert first == '*.txl;*.md;*.markdown'
+    assert saveas_default_ext(0) == 'txl'
+    assert saveas_default_ext(0, 'md') == 'md'
+    assert saveas_default_ext(0, 'txt') == 'txl'
+    assert saveas_default_ext(1, 'md') == 'txl'
