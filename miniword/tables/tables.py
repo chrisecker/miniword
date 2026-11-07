@@ -78,6 +78,8 @@ SEP = NL
 
 
 class Table(Container):
+    txl_name = 'table'  # the type in TXL files: C("table", ...)
+
     def __init__(self, *entries, ncols=1, col_widths=None, row_heights=None,
                  nheader=0, breaklevel=1, ):
         """

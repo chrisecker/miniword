@@ -22,6 +22,7 @@ class Code(Container):
     """A code block (kind 'code', in a language lang) or HTML block (kind
     'html'): a container like a table with one cell, followed by a
     newline of its own (develnotes/code_block_concept.md)."""
+    txl_name = 'code'  # the type in TXL files: C("code", ...)
     kind = 'code'
     lang = ''
 

@@ -22,6 +22,12 @@ type string and slot contents.
       [T("cell1")],
       [T("cell2")]
     )
+    C("code", {lang="python"},          -- Code block: one slot, its lines
+      [T("x = 1")]
+    )
+
+Container types are lower case; older files with "Table", "Code" are
+read as well (OLD_TYPE_NAMES).
 
     FN(                                 -- Footnote: its content like a
       T("note")                            document, ending with ENDMARK
@@ -257,14 +263,14 @@ def serialize_container(texel, indent=0):
 
     ctype = texel.__class__.__name__
 
-    # Code: C("Code", {kind=..., lang=...}, [line, NL, line ...])
+    # Code: C("code", {kind=..., lang=...}, [line, NL, line ...])
     if isinstance(texel, Code):
         props = {}  # without the defaults
         if texel.kind != Code.kind:
             props['kind'] = texel.kind
         if texel.lang:
             props['lang'] = texel.lang
-        head = '%sC("Code",' % pad
+        head = '%sC("%s",' % (pad, Code.txl_name)
         if props:
             head += ' %s,' % serialize_style(props)
         slot = _serialize_slot(texel.childs[1], None, indent + 1)
@@ -284,7 +290,8 @@ def serialize_container(texel, indent=0):
         if getattr(texel, 'col_widths', None) is not None:
             props['col_widths'] = tuple(texel.col_widths)
         cells = texel.childs[1::2]
-        lines = ['%sC("Table",' % pad, '%s%s,' % (inner, serialize_style(props))]
+        lines = ['%sC("%s",' % (pad, _Table.txl_name),
+                 '%s%s,' % (inner, serialize_style(props))]
         for i, cell in enumerate(cells):
             trailing_sep = texel.childs[2 * i + 2]
             slot_style = _sep_slot_style(trailing_sep)
@@ -644,14 +651,15 @@ class _Parser:
 
         self.tok.consume('RPAREN')
 
-        if ctype == 'Code':
+        ctype = OLD_TYPE_NAMES.get(ctype, ctype)
+        if ctype == Code.txl_name:
             d = dict(sep0_style or {})
             content = slots[0][1] if slots else Group([])
             return Code(content, d.get('kind', Code.kind),
                         d.get('lang', Code.lang))
 
-        if ctype == 'Table' and has_ncols:
-            from ..tables import Table
+        from ..tables import Table
+        if ctype == Table.txl_name and has_ncols:
             d = dict(sep0_style) if sep0_style else {}
             # support both old (header_rows/break_level) and new (nheader/breaklevel) keys
             nheader = d.pop('nheader', d.pop('header_rows', 0))
@@ -796,6 +804,10 @@ class _Parser:
         return ast.literal_eval(value)  # decode escape sequences (e.g. \' \" \\)
 
 
+# container types of files before 2026-11 (the class names)
+OLD_TYPE_NAMES = {'Table': 'table', 'Code': 'code'}
+
+
 def _make_container(ctype, childs):
     """Create a Container instance with a given type name."""
     c = Container.__new__(Container)
@@ -892,7 +904,7 @@ def test_06():
     "Roundtrip: Container with ncols"
     from ..textmodel.texeltree import get_text
     childs = [TAB, Text("A"), TAB, Text("B"), TAB, Text("C"), TAB, Text("D"), TAB]
-    c = _make_container("table", childs)
+    c = _make_container("grid", childs)  # generic ("table" is a Table)
     c._ncols = 2
     root = Group([c])
     out = serialize(root)
@@ -1024,3 +1036,15 @@ def test_13():
     loaded, = [t for t in root.childs if isinstance(t, Table)]
     assert [dict(sep.parstyle) for sep in loaded.childs[2::2]] == \
         [dict(sep.parstyle) for sep in table.childs[2::2]]
+
+
+def test_14():
+    "Container types: written in lower case, old names still read"
+    from ..tables.tables import from_strings, Table
+    text = serialize(Group([from_strings([['a']]), Code(), NL]))
+    assert 'C("table",' in text and 'C("code",' in text
+    old = 'C("Table", {ncols=1}, [T("a")])\nC("Code", {lang="py"}, [T("x")])'
+    root, _, _ = parse(old)
+    kinds = [type(t) for t in root.childs if t.is_container]
+    assert kinds == [Table, Code]
+    assert 'C("table",' in serialize(root)
