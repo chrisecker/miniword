@@ -69,7 +69,10 @@ class ColourManager:
         for ref in self._callbacks:
             cb = ref()
             if cb is not None:
-                cb()
+                try:
+                    cb()
+                except RuntimeError:
+                    continue
                 live.append(ref)
         self._callbacks = live
 
