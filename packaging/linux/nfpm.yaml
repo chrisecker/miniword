@@ -1,0 +1,70 @@
+# nfpm configuration for the Linux packages (.deb, .rpm), built by the
+# job "linux" in .github/workflows/release.yml:
+#
+#   pip install --no-deps --no-compile --target build/linux/stage .
+#   PYTHONPATH=. python packaging/linux/make_desktop_files.py build/linux
+#   VERSION=0.2.1 nfpm package -f packaging/linux/nfpm.yaml -p deb -t dist/
+#
+# MiniWord is pure Python: one package for all architectures. The code
+# goes to /usr/share/miniword (see packaging/linux/miniword), the
+# dependencies come from the distribution.
+
+name: miniword
+arch: all
+platform: linux
+version: ${VERSION}
+section: editors
+priority: optional
+maintainer: Christof Ecker <chrisecker@zoho.com>
+description: |
+  WYSIWYG word processor for Markdown files.
+  MiniWord edits Markdown and its own text format (.txl) with page
+  layout, footnotes, tables, images and PDF export.
+homepage: https://codeberg.org/chrisecker/miniword
+license: LGPL-3.0-or-later
+
+contents:
+  - src: ./build/linux/stage/miniword
+    dst: /usr/share/miniword/miniword
+    type: tree
+  - src: ./packaging/linux/miniword
+    dst: /usr/bin/miniword
+    file_info:
+      mode: 0755
+  - src: ./build/linux/miniword.desktop
+    dst: /usr/share/applications/miniword.desktop
+  - src: ./build/linux/miniword.xml
+    dst: /usr/share/mime/packages/miniword.xml
+  - src: ./miniword/icons/miniword.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/miniword.svg
+  - src: ./miniword/icons/miniword.iconset/icon_256x256.png
+    dst: /usr/share/icons/hicolor/256x256/apps/miniword.png
+  - src: ./LICENSE
+    dst: /usr/share/doc/miniword/LICENSE
+  - src: ./COPYING
+    dst: /usr/share/doc/miniword/COPYING
+
+# Menu, file types and icon caches are updated by the triggers of the
+# distributions (desktop-file-utils, shared-mime-info), no scripts needed.
+
+overrides:
+  deb:
+    depends:
+      - python3 (>= 3.9)
+      - python3-wxgtk4.0
+      - python3-cairocffi
+      - python3-mistune (>= 3.0)
+      - fontconfig
+    recommends:
+      - python3-fonttools
+      - python3-uharfbuzz
+  rpm:
+    depends:
+      - python3 >= 3.9
+      - python3-wxpython4
+      - python3-cairocffi
+      - python3-mistune >= 3.0
+      - fontconfig
+    recommends:
+      - python3-fonttools
+      - python3-uharfbuzz

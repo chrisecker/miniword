@@ -4,12 +4,16 @@ on:
   push:
     tags:
       - 'v*'
+  # manual start (Actions tab, "Run workflow"): only the job "linux" runs,
+  # its packages go to the run as a download instead of a release
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   windows:
+    if: github.event_name == 'push'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +42,7 @@ jobs:
 
   macos:
     needs: windows
+    if: github.event_name == 'push'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,8 +85,59 @@ jobs:
         with:
           files: dist/MiniWord-*.dmg
 
+  linux:
+    # .deb and .rpm with the dependencies of the distribution, see
+    # packaging/linux/nfpm.yaml. Independent of the other jobs.
+    runs-on: ubuntu-latest
+    env:
+      NFPM_VERSION: 2.41.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Stage the code as pip installs it (without dependencies)
+        run: pip install --no-deps --no-compile --target build/linux/stage .
+      - name: Desktop entry and file type (from miniword/desktop.py)
+        run: PYTHONPATH=. python packaging/linux/make_desktop_files.py build/linux
+      - name: Install nfpm
+        run: |
+          curl -sSfL -o nfpm.tar.gz \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
+          tar -xzf nfpm.tar.gz nfpm
+      - name: Build .deb and .rpm
+        # the version from miniword/__init__.py (a manual start has no
+        # tag; for a tag the job "pypi" checks that both match)
+        run: |
+          export VERSION=$(python -c "import re; print(re.search(r'__version__ = \"(.+)\"', open('miniword/__init__.py').read())[1])")
+          mkdir -p dist
+          ./nfpm package --config packaging/linux/nfpm.yaml --packager deb --target dist/
+          ./nfpm package --config packaging/linux/nfpm.yaml --packager rpm --target dist/
+      - name: Smoke test - install the .deb with Ubuntu's own packages
+        # fails if Ubuntu lacks a dependency or has a too old mistune
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ./dist/*.deb
+          /usr/bin/python3 -c "import mistune; assert int(mistune.__version__.split('.')[0]) >= 3, mistune.__version__"
+          /usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/share/miniword'); import wx, cairocffi, miniword.ui.mainwindow"
+          miniword --version
+      - if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.deb
+            dist/*.rpm
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+
   pypi:
     needs: [windows, macos]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
