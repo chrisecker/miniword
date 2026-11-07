@@ -63,6 +63,8 @@ jobs:
             --add-data "miniword/hyphenation/patterns:miniword/hyphenation/patterns" \
             --add-data "miniword/plugins:miniword/plugins" \
             --hidden-import mistune
+      - name: File types .txl and .md
+        run: python installer/macos_file_types.py dist/MiniWord.app
       - name: Bundle cairo (PyInstaller can't see its dlopen-by-name load)
         run: bash installer/bundle_cairo_macos.sh dist/MiniWord.app
       - name: Bundle fontconfig (PyInstaller can't see the fc-match subprocess call)

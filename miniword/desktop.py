@@ -19,6 +19,8 @@ import subprocess
 import sys
 
 MIME_TYPE = 'application/x-miniword'
+# in the menu entry: .txl, and "Open with" for Markdown and plain text
+MIME_TYPES = MIME_TYPE + ';text/markdown;text/plain;'
 
 MIME_XML = '''\
 <?xml version="1.0" encoding="UTF-8"?>
@@ -72,10 +74,11 @@ def _update(data_dir, run):
 
 def install(markdown=False, data_dir=None, run=_run):
     """Install the desktop entry, the .txl file type and the icon, and
-    make MiniWord the default for .txl (and with markdown for .md)."""
+    make MiniWord the default for .txl (and with markdown for .md); for
+    .md and .txt it is offered under "Open with"."""
     data_dir = data_dir or data_home()
     entry, mime, icon = _files(data_dir)
-    mime_types = [MIME_TYPE] + (['text/markdown'] if markdown else [])
+    defaults = [MIME_TYPE] + (['text/markdown'] if markdown else [])
     program = sys.executable
     if ' ' in program:
         program = '"%s"' % program
@@ -83,14 +86,13 @@ def install(markdown=False, data_dir=None, run=_run):
         os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(entry, 'w', encoding='utf-8') as f:
         f.write(ENTRY.format(exec=program + ' -m miniword',
-                             mime_types=''.join(t + ';'
-                                                for t in mime_types)))
+                             mime_types=MIME_TYPES))
     with open(mime, 'w', encoding='utf-8') as f:
         f.write(MIME_XML)
     shutil.copyfile(os.path.join(os.path.dirname(__file__), 'icons',
                                  'miniword.svg'), icon)
     _update(data_dir, run)
-    for mime_type in mime_types:
+    for mime_type in defaults:
         run(['xdg-mime', 'default', 'miniword.desktop', mime_type])
 
 

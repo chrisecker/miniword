@@ -112,6 +112,33 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
+class App(wx.App):
+    def MacOpenFiles(self, filenames):
+        """macOS: files opened in the Finder (double click, Open With).
+        An untouched empty window gives way to them."""
+        from .io import importexport
+        from .ui.mainwindow import note_file
+        empty = [w for w in wx.GetTopLevelWindows()
+                 if isinstance(w, MainFrame) and not w._current_path
+                 and w.editor.undocount() == 0]
+        opened = False
+        for path in filenames:
+            try:
+                doc = importexport.open_file(path)
+            except Exception as e:
+                wx.MessageBox(str(e), "Open", wx.OK | wx.ICON_ERROR)
+                continue
+            frame = MainFrame(doc)
+            frame._current_path = path
+            frame._update_title()
+            frame.Show()
+            note_file(path)
+            opened = True
+        if opened:
+            for w in empty:
+                w.Close()
+
+
 def main():
     args = parse_args(sys.argv[1:])  # before wx: --help needs no window
     if args.install_desktop or args.uninstall_desktop:
@@ -133,7 +160,7 @@ def main():
         layout=config.get("layout_unit"),
         typographic=config.get("typographic_unit"),
     )
-    app = wx.App(redirect=False)
+    app = App(redirect=False)
     app.SetAppName("miniword")
     from .ui.mainwindow import load_plugins
     load_plugins()

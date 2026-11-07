@@ -15,9 +15,8 @@ from miniword import desktop
 
 def main(folder):
     os.makedirs(folder, exist_ok=True)
-    # Markdown only under "Open with", not as default application
-    entry = desktop.ENTRY.format(
-        exec='miniword', mime_types=desktop.MIME_TYPE + ';text/markdown;')
+    entry = desktop.ENTRY.format(exec='miniword',
+                                 mime_types=desktop.MIME_TYPES)
     with open(os.path.join(folder, 'miniword.desktop'), 'w',
               encoding='utf-8') as f:
         f.write(entry)
