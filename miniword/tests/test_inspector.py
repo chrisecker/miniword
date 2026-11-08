@@ -113,6 +113,31 @@ def test_INS_7():
         assert abs(model.get_parstyle(0)['block_margin'] - 6) < 1e-9
 
 
+def test_INS_8():
+    "INS-8: Set role: Normal has one style, undo restores both; the normal "
+    "style can be deleted, its paragraphs then have no base"
+    with style_inspector() as (inspector, model, editor):
+        sheet = inspector.basestyles
+        inspector.set_role('h1', 'normal')
+        assert sheet.normal_key() == 'h1'
+        assert sheet.get('normal')['role'] is None
+        editor.undo()
+        assert sheet.normal_key() == 'normal'
+        assert sheet.get('h1')['role'] == 'h2'
+        inspector.set_role('h1', 'h1')  # not unique: h0 keeps it
+        assert sheet.get('h0')['role'] == sheet.get('h1')['role'] == 'h1'
+
+        model.set_parstyle(0, dict(base='normal'))
+        inspector.basestyle.DeleteStyle('normal')
+        assert not sheet.contains('normal')
+        assert 'base' not in model.get_parstyle(0)
+        inspector.update()
+        assert inspector.basestyle.selection == -1
+        editor.undo()
+        assert sheet.normal_key() == 'normal'
+        assert model.get_parstyle(0)['base'] == 'normal'
+
+
 # ---------------------------------------------------------------------
 # SET - document settings
 # ---------------------------------------------------------------------

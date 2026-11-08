@@ -378,7 +378,7 @@ def _parse(html):
         nl = elems[-1]
         if not isinstance(nl, NewLine):
             continue
-        basestyle = doc.basestyles.get(nl.parstyle.get('base', 'normal')) or style_default
+        basestyle = doc.basestyles.base_style(nl.parstyle) or style_default
         ps     = updated(basestyle, nl.parstyle)
         base   = ps.get('base', 'normal')
         ptype  = ps.get('paragraph_type', 'normal')
@@ -396,7 +396,7 @@ def test_00():
     pars = _parse("<p>Hello world</p>")
     assert len(pars) == 1
     base, ptype, indent, runs = pars[0]
-    assert base == 'body'
+    assert base == 'normal'  # body text: the document's normal style
     assert ''.join(t for t, _ in runs) == 'Hello world'
 
 
@@ -601,5 +601,5 @@ def test_17():
                 bases[text] = nl.parstyle.get('base')
 
     assert bases['Title'] == 'MyHeading'
-    assert bases['Body text.'] == 'body'
+    assert bases['Body text.'] == 'normal'
     assert not doc.basestyles.contains('h1')

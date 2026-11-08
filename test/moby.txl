@@ -1,6 +1,7 @@
 [basestyles]
+"normal" = {line_spacing=1.15, name="Normal", role="normal", space_after=7}
 "h1" = {bold, font_size=18, name="Heading 1", page_break_before, role="h1"}
-"h2" = {bold, name="Heading 2", space_after=19.84251968503937, role="h2"}
+"h2" = {bold, name="Heading 2", role="h2", space_after=19.84251968503937}
 "h3" = {bold, font_size=14, name="Heading 3", role="h3"}
 "h4" = {bold, name="Heading 4", role="h4"}
 "style0" = {alignment="center", bold, font_size=22.0, name="Title"}
@@ -36,31 +37,31 @@ NL
 NL
 NL
 T('NEW YORK:')
-NL
+NL({base="style1"})
 T('HARPER & BROTHERS, PUBLISHERS.')
-NL
+NL({base="style1"})
 T('LONDON: RICHARD BENTLEY.')
-NL
+NL({base="style1"})
 T('1851.')
-NL
+NL({base="style1"})
 NL
 T('Entered, according to Act of Congress, in the year 1851, by')
-NL
+NL({base="style1", page_break_before})
 T('HERMAN MELVILLE,')
-NL
+NL({base="style1"})
 T('in the Clerk’s Office of the District Court for the Southern District of New York.')
-NL
-NL
+NL({base="style1"})
+NL({base="style1"})
 T('IN TOKEN')
-NL
+NL({base="style1", page_break_before})
 T('OF MY ADMIRATION FOR HIS GENIUS,')
-NL
+NL({base="style1"})
 T('This Book is Inscribed')
-NL
+NL({base="style1"})
 T('TO')
-NL
+NL({base="style1"})
 T('NATHANIEL HAWTHORNE.')
-NL
+NL({base="style1"})
 NL
 T('CONTENTS.')
 NL({base="h1"})

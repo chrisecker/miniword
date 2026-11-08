@@ -15,7 +15,7 @@ from ..layout.cairodevice import defaultstyle
 from .unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED
 from .threestate import SpinCtrl3, EVT_SPIN_VALUE, ColourButton
 from .buttonbar import ButtonBar, ButtonBarEvent, EVT_BUTTONBAR
-from .stylemenu import BasestyleSelector
+from .stylemenu import BasestyleSelector, UNIQUE_ROLES
 from ..core.styles import defaultbullets, n_levels, style_default
 from ..core.stylesheet import undo_basestyle_change
 from ..core.utils import updated
@@ -23,23 +23,6 @@ from ..core.utils import updated
 
 # Display labels and matching format strings for the numbering dropdown.
 _NUMBERING_FORMATS = ['1.', 'a.', 'A.', 'i.']
-
-# (label, parstyle value) pairs for the role dropdown.
-_ROLES = [
-    ('(None)',         None),
-    ('Header 1',      'h1'),
-    ('Header 2',      'h2'),
-    ('Header 3',      'h3'),
-    ('Header 4',      'h4'),
-    ('Header 5',      'h5'),
-    ('Header 6',      'h6'),
-    ('List',          'list'),
-    ('Enumeration',   'numbered'),
-    ('Code',          'pre'),
-    ('Quote',         'quote'),
-    ('Page header',   'header'),  # style for page headers (layout.page)
-    ('Page footer',   'footer'),
-]
 
 
 
@@ -190,6 +173,7 @@ class StyleInspector(SidePanel):
         self.basestyle.on_revert_style   = self._revert_style
         self.basestyle.on_rename_style   = self._rename_style
         self.basestyle.on_delete_style   = self._delete_style
+        self.basestyle.on_set_role       = self.set_role
         mainsizer.Add(self.basestyle, 0, wx.ALL|wx.EXPAND, self.FromDIP(5))
 
         notebook = wx.Notebook(self)
@@ -544,14 +528,6 @@ class StyleInspector(SidePanel):
             "No single line of a paragraph alone at the top or bottom "
             "of a page")
 
-        add_section("Semantics", panel, contentsizer)
-        self.role = wx.Choice(panel, choices=[lbl for lbl, _ in _ROLES])
-        self.reset_role = ResetButton(panel, ['role'])
-        add_row(contentsizer, wx.StaticText(panel, label="Role"),
-                self.role, self.reset_role)
-        self.role.SetSelection(0)
-        self.role.Bind(wx.EVT_CHOICE, self.on_role)
-
         ### epilog
         mainsizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 5)
         self.SetSizer(mainsizer)
@@ -573,7 +549,7 @@ class StyleInspector(SidePanel):
                 self.reset_block_offset, self.reset_block_margin,
                 self.reset_block_border_width,
                 self.reset_block_border_color, self.reset_block_border_sides,
-                self.reset_right_indent, self.reset_role,
+                self.reset_right_indent,
                 self.reset_quote_level, self.reset_quote_indent,
                 self.reset_quote_bar_width, self.reset_quote_bar_color,
                 self.reset_quote_color] + [
@@ -617,10 +593,6 @@ class StyleInspector(SidePanel):
     def on_numbering(self, event):
         fmt = _NUMBERING_FORMATS[self.numbering.Selection]
         self.set_parproperties(numbering_style=(fmt,) * n_levels)
-
-    def on_role(self, event):
-        _, value = _ROLES[self.role.GetSelection()]
-        self.set_parproperties(role=value)
 
     def on_counter(self, event):
         value = ['item', 'section'][self.counter.Selection]
@@ -863,8 +835,26 @@ class StyleInspector(SidePanel):
             editor.add_undo((undo_basestyle_change, self.basestyles, name, old_style, new_style))
             self.basestyles.set(name, new_style)
 
+    def set_role(self, name, role):
+        """Give a style a role (undo-able). Normal, page header and footer
+        have one style each: the previous one loses the role."""
+        editor = self.editor
+        changes = []
+        for key, style in self.basestyles.items():
+            if key == name:
+                changes.append((key, style, role))
+            elif role in UNIQUE_ROLES and style.get('role') == role:
+                changes.append((key, style, None))
+        with editor.atomic():
+            for key, style, new_role in changes:
+                new_style = dict(style, role=new_role)
+                editor.add_undo((undo_basestyle_change, self.basestyles,
+                                 key, dict(style), new_style))
+                self.basestyles.set(key, new_style)
+
     def _delete_style(self, name):
-        """Delete a style and remap all uses to 'normal' (undo-able)."""
+        """Delete a style (undo-able); its paragraphs get the normal
+        style."""
         editor = self.editor
         textmodel = editor.target
         texel = textmodel.get_xtexel()
@@ -873,7 +863,7 @@ class StyleInspector(SidePanel):
                   if textmodel.get_parstyle(j1).get('base') == name]
         with editor.atomic():
             self._apply_to_ranges(ranges,
-                lambda: editor.set_parproperties(base='normal'))
+                lambda: editor.clear_parproperties('base'))
             # Add stylesheet undo last so it's applied first when undoing,
             # ensuring the style exists before paragraph bases are restored.
             editor.add_undo((undo_basestyle_change, self.basestyles, name, old_style, None))
@@ -886,10 +876,10 @@ class StyleInspector(SidePanel):
         # styles. Further we include defaultstyles which is not done
         # in nbviews (but in wxdevice).
         stylesheet = self.editor.canvas.builder.stylesheet
-        basestyle = stylesheet.get(parstyle.get('base', 'normal')) or {}
-        r = updated(style_default, basestyle, parstyle, style)
-        if not 'base' in r:
-            r['base'] = 'normal'
+        r = updated(style_default, stylesheet.base_style(parstyle),
+                    parstyle, style)
+        if not r.get('base'):
+            r['base'] = stylesheet.normal_key()
         return r
 
     def get_range(self):
@@ -955,8 +945,8 @@ class StyleInspector(SidePanel):
             return
         self._state = state
 
-        base = properties.get('base', 'normal')
-        self.basestyle.set_properties(base, properties, overrides)
+        self.basestyle.set_properties(properties.get('base'), properties,
+                                      overrides)
                                   
         self.color.set_colour(properties['color'])
         self.bgcolor.set_colour(properties['bgcolor'])
@@ -1168,13 +1158,6 @@ class StyleInspector(SidePanel):
         has_line = bool(properties['block_border_width'])
         self.block_border_color.Enable(has_line)
         self.block_border_sides.Enable(has_line)
-
-        role = properties.get('role')
-        role_values = [v for _, v in _ROLES]
-        self.role.Unbind(wx.EVT_CHOICE)
-        self.role.SetSelection(role_values.index(role) if role in role_values else 0)
-        self.role.Bind(wx.EVT_CHOICE, self.on_role)
-        self.reset_role.set_x('role' in overrides)
 
         self.Layout()
         

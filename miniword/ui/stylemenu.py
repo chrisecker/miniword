@@ -47,6 +47,21 @@ def get_font(style: dict) -> wx.Font:
     return wx.Font(info)
 
 
+# (label, role) for the "Set role" menu of the paragraph styles
+ROLES = [('None', None), ('Normal', 'normal'),
+         ('H1', 'h1'), ('H2', 'h2'), ('H3', 'h3'),
+         ('H4', 'h4'), ('H5', 'h5'), ('H6', 'h6'),
+         ('List', 'list'), ('Enumeration', 'numbered'), ('Code', 'pre'),
+         ('Quote', 'quote'), ('Page header', 'header'),
+         ('Page footer', 'footer')]
+UNIQUE_ROLES = {'normal', 'header', 'footer'}  # one style each
+
+
+def role_label(role):
+    """The label of role, the role itself for one not in ROLES."""
+    return next((label for label, r in ROLES if r == role), role)
+
+
 PADDING_LEFT  = 8
 TRIANGLE_AREA = 30
 PLUS_HEIGHT   = 28
@@ -65,6 +80,7 @@ LIST_HOVER   = wx.Colour(222, 222, 218)
 LIST_BORDER  = wx.Colour(140, 140, 135)
 LIST_SEP     = wx.Colour(180, 180, 175)
 LIST_TEXT    = wx.Colour(60,  60,  60)
+LIST_NOTE    = wx.Colour(140, 140, 140)
 LIST_TRI     = wx.Colour(30,  30,  30)
 LIST_TRI_H   = wx.Colour(180, 210, 255)
 
@@ -178,6 +194,14 @@ class StyleList(wx.PopupTransientWindow):
                 dc.SetPen(wx.TRANSPARENT_PEN)
                 dc.DrawRectangle(0, item_y, w, item_h)
             self.Parent.DrawItem(name, dc, pad, item_y, item_h)
+            note = self.Parent.GetItemNote(name)
+            if note:  # right-aligned, left of the triangle
+                dc.SetFont(wx.SystemSettings.GetFont(
+                    wx.SYS_DEFAULT_GUI_FONT))
+                dc.SetTextForeground(LIST_NOTE)
+                tw, th = dc.GetTextExtent(note)
+                dc.DrawText(note, w - dip(TRIANGLE_AREA) - tw,
+                            item_y + (item_h - th) // 2)
             if i + 1 == self.hover_item:
                 self._draw_triangle(dc, w, item_y, item_h)
 
@@ -262,6 +286,7 @@ class StyleList(wx.PopupTransientWindow):
 
         menu = wx.Menu()
         self._menu_ids: list[int] = []
+        self.role_ids: dict = {}  # {menu id: role}
 
         def add(text: str, enabled: bool = True):
             item = menu.Append(wx.ID_ANY, text)
@@ -274,6 +299,15 @@ class StyleList(wx.PopupTransientWindow):
         menu.AppendSeparator()
         add("Rename style",                   not is_protected)
         add("Delete style",                   not is_protected)
+        if self.Parent.on_set_role:
+            submenu = wx.Menu()
+            role = self.Parent.stylesheet.get(style).get('role')
+            for label, value in ROLES:
+                item = submenu.AppendCheckItem(wx.ID_ANY, label)
+                item.Check(value == role)
+                self.role_ids[item.GetId()] = value
+            menu.AppendSeparator()
+            menu.AppendSubMenu(submenu, "Set role")
 
         w, _ = self.panel.GetSize()
         item_y, item_h = self._item_rects[idx]
@@ -283,6 +317,9 @@ class StyleList(wx.PopupTransientWindow):
         self.Dismiss()
 
     def on_menu(self, event):
+        if event.GetId() in self.role_ids:
+            role = self.role_ids[event.GetId()]
+            return self.Parent.on_set_role(self._clicked_style, role)
         try:
             i = self._menu_ids.index(event.GetId())
         except ValueError:
@@ -334,6 +371,7 @@ class StyleSelector(wx.Control, ViewBase):
     on_revert_style   = None  # callable(overrides)
     on_rename_style   = None  # callable(name, new_label)
     on_delete_style   = None  # callable(name)
+    on_set_role       = None  # callable(name, role); None: no role menu
 
     def set_stylesheet(self, stylesheet):
         if self.stylesheet is not None:
@@ -448,6 +486,8 @@ class StyleSelector(wx.Control, ViewBase):
 
         existing_labels = [self.GetItemLabel(k) for k in self.styles]
         new_style["name"] = mk_label(label, existing_labels)
+        if new_style.get("role") in UNIQUE_ROLES:  # stays with the old one
+            new_style["role"] = None
 
         if self.on_create_style:
             # Delegate stylesheet.set() to the callback so it can wrap both
@@ -499,6 +539,10 @@ class StyleSelector(wx.Control, ViewBase):
     def GetItemLabel(self, name: str) -> str:
         return name
 
+    def GetItemNote(self, name: str) -> str:
+        """Grey text right in the list entry."""
+        return ''
+
     def GetItemFont(self, name: str) -> wx.Font:
         return wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
 
@@ -519,14 +563,12 @@ class StyleSelector(wx.Control, ViewBase):
 # ---------------------------------------------------------------------------
 
 class BasestyleSelector(StyleSelector):
-    protected = frozenset({'normal'})
-
-    def UpdateSelection(self):
-        name = self.properties.get("base", "normal")
-        self.SetSelection(self.styles.index(name))
-
     def GetItemLabel(self, name: str) -> str:
         return self.stylesheet.get(name).get("name", name)
+
+    def GetItemNote(self, name: str) -> str:
+        role = self.stylesheet.get(name).get("role")
+        return role_label(role) if role else ''
 
     def GetItemFont(self, name: str) -> wx.Font:
         return get_font(self.stylesheet.get(name))
@@ -593,7 +635,7 @@ def test_02():
 
 
 def test_04():
-    "DeleteStyle – blocks 'normal', fires callback for other styles"
+    "DeleteStyle fires the callback, also for the normal style"
     app = wx.App(False)
     frame = wx.Frame(None)
     dropdown = BasestyleSelector(frame)
@@ -602,11 +644,28 @@ def test_04():
     called = []
     dropdown.on_delete_style = lambda name: called.append(name)
 
-    dropdown.DeleteStyle('normal')   # protected — must not fire
-    assert called == []
-
+    dropdown.DeleteStyle('normal')
     dropdown.DeleteStyle('h1')
-    assert called == ['h1']
+    assert called == ['normal', 'h1']
+
+
+def test_05():
+    "The role is the grey note; a copy of Normal is not a second Normal"
+    app = wx.App(False)
+    frame = wx.Frame(None)
+    dropdown = BasestyleSelector(frame)
+    from ..core.stylesheet import StyleSheet, testsheet
+    stylesheet = StyleSheet()
+    for key, style in testsheet.items():
+        stylesheet.set(key, style)
+    dropdown.set_stylesheet(stylesheet)
+    assert dropdown.GetItemNote('normal') == 'Normal'
+    assert dropdown.GetItemNote('h1') == 'H2'  # testsheet's h1: role h2
+    dropdown.set_properties("normal", {}, {})
+    dropdown.CreateNewStyle("normal")
+    key = stylesheet.keys()[-1]
+    assert stylesheet.get(key)['role'] is None
+    assert stylesheet.normal_key() == 'normal'
 
 
 def test_03():

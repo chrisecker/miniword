@@ -8,7 +8,7 @@ type string and slot contents.
 
     T("text")                           -- Text with empty style
     T("text", {bold, color="red"})      -- Text with style
-    NL                                  -- NewLine, indent=0, base="normal"
+    NL                                  -- NewLine, indent=0, normal style
     NL({base="h1"})                     -- NewLine with basestyle
     NL({indent=2, base="bullet"})       -- NewLine with indent and basestyle
     TAB                                 -- Tabulator
@@ -108,9 +108,7 @@ def serialize_texel(texel, indent=0):
             if texel.indent:
                 parts['indent'] = texel.indent
             if texel.parstyle:
-                ps = {k: v for k, v in texel.parstyle.items()
-                      if not (k == 'base' and v == 'normal')}
-                parts.update(ps)
+                parts.update(texel.parstyle)
             if texel.style:
                 parts['_style'] = texel.style  # rare, stored separately
             s = serialize_style(parts) if parts else ''
@@ -208,15 +206,13 @@ def serialize_footnote(texel, indent=0):
 
 
 def _serialize_endmark(endmark, indent=0):
-    """ENDMARK, with its indent and parstyle (base "normal" omitted)."""
+    """ENDMARK, with its indent and parstyle."""
     pad = '  ' * indent
     parts = {}
     if endmark.indent:
         parts['indent'] = endmark.indent
     if endmark.parstyle:
-        ps = {k: v for k, v in endmark.parstyle.items()
-              if not (k == 'base' and v == 'normal')}
-        parts.update(ps)
+        parts.update(endmark.parstyle)
     s = serialize_style(parts) if parts else ''
     if s:
         return '%sENDMARK(%s)' % (pad, s)
@@ -532,6 +528,7 @@ class _Parser:
                 d = self.parse_style()
                 indent = d.pop('indent', 0)
                 nl_style = d.pop('_style', None)
+                d.pop('role', None)  # old files: roles are the styles'
                 parstyle = as_style(d)
             self.tok.consume('RPAREN')
         nl = NL.set_parstyle(parstyle)
@@ -727,6 +724,7 @@ class _Parser:
             if self.tok.peek()[0] == 'LBRACE':
                 d = self.parse_style()
                 indent = d.pop('indent', 0)
+                d.pop('role', None)  # old files: roles are the styles'
                 parstyle = as_style(d)
             self.tok.consume('RPAREN')
         em = ENDMARK.set_parstyle(parstyle)

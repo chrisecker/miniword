@@ -73,8 +73,8 @@ def _extend_tuples(style):
 def save(doc, path):
     parts = []
 
-    # basestyles section — only written when non-empty (beyond built-in 'normal')
-    items = [(k, v) for k, v in doc.basestyles.items() if k != 'normal']
+    # basestyles section — only written when non-empty
+    items = doc.basestyles.items()
     if items:
         parts.append('[basestyles]')
         for key, style in items:
@@ -154,7 +154,11 @@ def load(path):
 
     # basestyles — optional (charstyles/liststyles silently ignored for compat)
     if 'basestyles' in sections:
-        for key, style in _parse_stylesheet(sections['basestyles']).items():
+        styles = _parse_stylesheet(sections['basestyles'])
+        if 'normal' in styles or any(style.get('role') == 'normal'
+                                     for style in styles.values()):
+            doc.basestyles.delete('normal')  # the file has its own
+        for key, style in styles.items():
             doc.basestyles.set(key, updated(style_default, style))
 
     # Blobs — optional; they hydrate the Image texels (one bytes object
@@ -325,6 +329,7 @@ def test_02():
 
     doc = Document()
     doc.textmodel = TextModel("Minimal")
+    doc.basestyles.delete('normal')
 
     with tempfile.NamedTemporaryFile(
             suffix='.txl', delete=False, mode='w') as f:
@@ -332,11 +337,54 @@ def test_02():
     try:
         doc.save(path)
         assert '[basestyles]' not in open(path).read()
-        doc2 = Document.load(path)
+        doc2 = Document.load(path)  # as an old file: the built-in Normal
         assert doc2.basestyles.get('normal') is not None
+        assert doc2.basestyles.normal_key() == 'normal'
         assert len(doc2.basestyles.items()) == 1
     finally:
         os.unlink(path)
+
+
+def test_05():
+    "Normal is saved like any style; the file's own replaces the built-in"
+    import tempfile, os
+    from ..core.styles import normal
+
+    def roundtrip(doc):
+        with tempfile.NamedTemporaryFile(
+                suffix='.txl', delete=False, mode='w') as f:
+            path = f.name
+        try:
+            doc.save(path)
+            return Document.load(path)
+        finally:
+            os.unlink(path)
+
+    doc = Document()
+    doc.textmodel = TextModel("Hi")
+    doc.basestyles.set('normal', dict(normal, name='Text', font_size=11))
+    doc2 = roundtrip(doc)
+    assert doc2.basestyles.get('normal')['name'] == 'Text'
+    assert doc2.basestyles.get('normal')['font_size'] == 11
+
+    # the role moved to another style: no built-in Normal besides it
+    doc.basestyles.delete('normal')
+    doc.basestyles.set('body', dict(normal, name='Body'))
+    doc2 = roundtrip(doc)
+    assert doc2.basestyles.keys() == ['body']
+    assert doc2.basestyles.normal_key() == 'body'
+
+
+def test_06():
+    "A role on a paragraph (old files) is ignored, an explicit base kept"
+    from .texeltreeformat import parse
+    root, endmark, settings = parse(
+        'T("a")\nNL({base="normal", role="h1"})\nENDMARK({role="h2"})')
+    model = TextModel()
+    model.texel = root
+    assert model.get_parstyle(0) == {'base': 'normal'}
+    assert dict(endmark.parstyle) == {}
+    assert 'base="normal"' in serialize(root)
 
 
 def test_05():

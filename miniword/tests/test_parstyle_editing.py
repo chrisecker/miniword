@@ -136,7 +136,6 @@ def with_sheet(editor, roles):
     """A canvas stand-in whose stylesheet has styles {key: role}."""
     from ..core.stylesheet import StyleSheet
     sheet = StyleSheet()
-    sheet.set('normal', dict(role=None))
     for key, role in roles.items():
         sheet.set(key, dict(role=role))
     editor.canvas = SimpleNamespace(
@@ -153,7 +152,7 @@ def enter(editor, index):
 def test_PAR_8():
     "PAR-8: Enter at the end of a heading: a body paragraph follows"
     model, editor = doc(('Titel', 'Kapitel', 1), ('Text', 'Fliesstext'))
-    with_sheet(editor, dict(Kapitel='h1', Fliesstext='body'))
+    with_sheet(editor, dict(Kapitel='h1', Fliesstext='normal'))
     enter(editor, 5)
     assert styles(model)[:3] == [('Titel', 'Kapitel', 1),
                                  ('', 'Fliesstext', 0),
@@ -164,9 +163,9 @@ def test_PAR_8():
 
 
 def test_PAR_9():
-    "PAR-9: Enter elsewhere continues the style; without body: normal"
+    "PAR-9: Enter elsewhere continues the style; without normal style: none"
     model, editor = doc(('Titel', 'Kapitel'), ('Text', 'Fliesstext'))
-    with_sheet(editor, dict(Kapitel='h1', Fliesstext='body'))
+    with_sheet(editor, dict(Kapitel='h1', Fliesstext='normal'))
     enter(editor, 2)  # Ti|tel
     assert [s[1] for s in styles(model)[:2]] == ['Kapitel', 'Kapitel']
     enter(editor, len('Ti\ntel\nText'))  # end of a body paragraph
@@ -174,4 +173,4 @@ def test_PAR_9():
     model, editor = doc(('Titel', 'Kapitel'))
     with_sheet(editor, dict(Kapitel='h2'))
     enter(editor, 5)
-    assert styles(model)[1][1] == 'normal'
+    assert styles(model)[1][1] is None

@@ -178,6 +178,14 @@ Each basestyle may have:
 - `name` – display name in the UI (optional)
 - `role` – semantic role for exporters, e.g. `"h1"`, `"bullet"`, `"code"` (optional)
 
+**The normal style** is the first basestyle with `role="normal"`. It applies to
+paragraphs without `base` (and to a `base` that names no basestyle). Without one,
+such paragraphs have only the built-in defaults. A file without a normal style and
+without a basestyle `"normal"` (files before 2026-11) gets the built-in one:
+`"normal" = {name="Normal", role="normal", line_spacing=1.15, space_after=7}`.
+
+A `role` belongs to the basestyle: a `role` in a paragraph's properties is ignored.
+
 **IDs are stable.** When editing a document, always reuse existing IDs. The `role` can be
 changed without touching the content stream.
 
@@ -247,10 +255,10 @@ Paragraph end. Carries the properties of the preceding paragraph.
 Key parameters:
 - `indent` – indent level 0–9 (default `0`). Selects the active value from all
   level-indexed properties (e.g. `marker[indent]`, `indent_levels[indent]`).
-- `base` – references a basestyle (default `"normal"`).
+- `base` – references a basestyle (default: the normal style, see Named Styles).
 
 ```
-NL                              # indent=0, base="normal"
+NL                              # indent=0, the normal style
 NL({base="h1"})                 # indent=0, base="h1"
 NL({indent=2, base="bullet"})   # indent=2: uses marker[2], indent_levels[2], etc.
 NL({indent=1, color="red"})     # indent=1, with text color override

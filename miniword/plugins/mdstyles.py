@@ -68,7 +68,7 @@ def _base(font, size, compact=False):
     spacing = 1.0 if compact else 1.15
     text = dict(font_family=family, font_size=size, line_spacing=spacing)
     props = {
-        'body': dict(text, name='Body', role='body',
+        'body': dict(text, name='Body', role='normal',
                      space_after=_space(size, compact)),
         'pre': dict(name='Code', role='pre', font_family=MONO,
                     font_size=max(8, round(size * 0.83)), hyphenate=False,
@@ -268,7 +268,7 @@ def size_state(styles):
 # ---------------------------------------------------------------------
 
 ROLES = dict({name: name for name in STYLE_NAMES},  # {name: role}
-             pageheader='header', pagefooter='footer')
+             body='normal', pageheader='header', pagefooter='footer')
 
 
 def read(document):

@@ -265,7 +265,8 @@ def test_MDS_19():
     assert not serif[2](frame)
     assert not find(menu_items(), 'Size', '12 pt')[2](frame)
     find(menu_items(), 'Size', '10 pt')[1](frame)
-    assert document.basestyles.get('body')['font_size'] == 10
+    styles = document.basestyles
+    assert styles.get(styles.normal_key())['font_size'] == 10
     book = find(menu_items(), 'Predefined', 'Book')
     assert len(book) == 2  # no enabled function
     book[1](frame)

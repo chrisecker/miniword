@@ -9,6 +9,8 @@ class StyleSheet(DocumentNode):
     Style einen eindeutigen Key, mit dem er identifiziert werden kann.
 
     """
+    normal = None  # key of the normal style, kept by set and delete
+
     def __init__(self):
         self.data = OrderedDict()
 
@@ -16,11 +18,29 @@ class StyleSheet(DocumentNode):
         # create_style ist eigentlich nicht nötig. Zumindest wenn das
         # Dict wirklich ein registrierter Style ist.
         self.data[key] = create_style(**value)
+        self.normal = self.role_key('normal')
         self.notify('style_changed', key)
 
     def delete(self, key):
         del self.data[key]
+        self.normal = self.role_key('normal')
         self.notify('style_removed', key)
+
+    def role_key(self, role):
+        """Key of the first style with role, None if there is none."""
+        return next((key for key, style in self.data.items()
+                     if style.get('role') == role), None)
+
+    def normal_key(self):
+        """Key of the normal style (role 'normal'), used for paragraphs
+        without base. None if there is none."""
+        return self.normal
+
+    def base_style(self, parstyle):
+        """The base style of a paragraph: its base, else (also for a
+        missing one) the normal style; {} if there is none."""
+        return self.get(parstyle.get('base')) \
+            or self.get(self.normal_key()) or {}
 
     def get(self, key):
         return self.data.get(key)
@@ -36,13 +56,12 @@ class StyleSheet(DocumentNode):
 
     def mk_style(self, parstyle, style):
         # XXX implement caching
-        basestyle = self.get(parstyle.get('base', 'normal')) or {}
-        return updated(style_default, basestyle, parstyle, style)
+        return updated(style_default, self.base_style(parstyle), parstyle,
+                       style)
 
     def mk_parstyle(self, parstyle):
         # XXX implement caching
-        basestyle = self.get(parstyle.get('base', 'normal')) or {}
-        return updated(style_default, basestyle, parstyle)
+        return updated(style_default, self.base_style(parstyle), parstyle)
 
     
 
@@ -66,6 +85,21 @@ def test_00():
     assert s == dict(fontsize=12, color="red")
     assert ss.items() == [('normal', {'fontsize': 10, 'color': 'black'}),
                           ('h1', {'fontsize': 12, 'color': 'red'})]
+
+
+def test_01():
+    "The normal style is found by its role, not by its key"
+    ss = StyleSheet()
+    ss.set('h1', dict(role='h1', font_size=18))
+    assert ss.normal_key() is None
+    assert ss.base_style({}) == {}
+    ss.set('body', dict(role='normal', font_size=11))
+    assert ss.normal_key() == 'body'
+    assert ss.base_style({})['font_size'] == 11
+    assert ss.base_style({'base': 'h1'})['font_size'] == 18
+    assert ss.base_style({'base': 'gone'})['font_size'] == 11
+    ss.delete('body')
+    assert ss.normal_key() is None
 
 
     

@@ -130,15 +130,16 @@ def updated(default, *styles):
     return r
 
 
-# The base style of every document. Line spacing and the space after a
-# paragraph follow LibreOffice's "Text Body" (115 %, 0.25 cm): single
-# spacing (1.0) is the font's own line distance, which looks tight.
+# The normal style of a new document (role 'normal': for paragraphs
+# without base). Line spacing and the space after a paragraph follow
+# LibreOffice's "Text Body" (115 %, 0.25 cm): single spacing (1.0) is the
+# font's own line distance, which looks tight.
 normal = updated(
     text_default,
     structure_default,
     layout_default,
     other_default,
-    dict(name="Normal", line_spacing=1.15, space_after=7),
+    dict(name="Normal", role="normal", line_spacing=1.15, space_after=7),
 )
 
 h0 = updated(normal, dict(name="Heading 1", role="h1", font_size=18, bold=True,
@@ -147,16 +148,6 @@ h1 = updated(normal, dict(name="Heading 2", role="h2", font_size=16, bold=True,
                           color="red"))
 h2 = updated(normal, dict(name="Heading 3", role="h3", font_size=14, bold=True))
 h3 = updated(normal, dict(name="Heading 4", role="h4", font_size=12, bold=True))
-
-def mk_style(stylesheet, parstyle, style):
-    basestyle = stylesheet[parstyle.get("base", "normal")]
-    return updated(basestyle, parstyle, style)
-
-
-def mk_parstyle(stylesheet, parstyle):
-    basestyle = stylesheet[parstyle.get("base", "normal")]
-    return updated(basestyle, parstyle)
-
 
 def test_00():
     assert (21*cm - 595.27) < 0.1

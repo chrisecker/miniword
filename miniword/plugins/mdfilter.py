@@ -56,7 +56,8 @@ def _doc_to_md(doc):
         """The quote level of nl's paragraph (an old document's quote
         style, without one: 1)."""
         base = nl.parstyle.get('base', 'normal')
-        ps = updated(doc.basestyles.get(base) or style_default, nl.parstyle)
+        ps = updated(doc.basestyles.base_style(nl.parstyle) or style_default,
+                     nl.parstyle)
         if base in ('quote',) + _ALERTS:
             return max(1, ps['quote_level'])
         return ps['quote_level']
@@ -102,7 +103,7 @@ def _doc_to_md(doc):
             prev_block_key = None if pad is None else 'list'
             continue
 
-        basestyle = doc.basestyles.get(nl.parstyle.get('base', 'normal')) or style_default
+        basestyle = doc.basestyles.base_style(nl.parstyle) or style_default
         ps     = updated(basestyle, nl.parstyle)
         base   = ps.get('base', 'normal')
         ptype  = ps.get('paragraph_type', 'normal')
@@ -711,6 +712,8 @@ def _register_styles(doc, preset='github', overwrite=True, skip=()):
     """
     from miniword.plugins.mdstyles import preset as md_preset
     styles, _ = md_preset(preset)
+    if overwrite and doc.basestyles.contains('normal'):
+        doc.basestyles.delete('normal')  # body is the normal style
     for name, style in styles.items():
         if name in skip:
             continue
@@ -739,11 +742,13 @@ def _adopt_existing_styles(textmodel, doc):
     """
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine
-    from miniword.plugins.mdstyles import role_keys
+    from miniword.plugins.mdstyles import role_keys, ROLES
 
     role_to_key = role_keys(doc)
-    remap = {role: key for role, key in role_to_key.items()
-             if role in _CANONICAL_ROLES and key != role}
+    keys = {name: role_to_key.get(ROLES.get(name, name))
+            for name in _CANONICAL_ROLES}  # body: doc's normal style
+    remap = {name: key for name, key in keys.items()
+             if key and key != name}
 
     if remap:
         for i1, i2, elems in iter_paragraphs(textmodel.get_xtexel(), 0):
@@ -754,7 +759,7 @@ def _adopt_existing_styles(textmodel, doc):
             if base in remap:
                 textmodel.set_parstyle(i2 - 1, dict(nl.parstyle, base=remap[base]))
 
-    return set(role_to_key) & _CANONICAL_ROLES
+    return {name for name, key in keys.items() if key}
 
 
 def md_text_to_fragment(text, target_doc):
@@ -967,8 +972,8 @@ def _check_md(doc):
         if not isinstance(nl, NewLine):
             continue
         ps = nl.parstyle
-        ptype = ps.get('paragraph_type') or (doc.basestyles.get(
-            ps.get('base', 'normal')) or {}).get('paragraph_type', 'normal')
+        ptype = ps.get('paragraph_type') or doc.basestyles.base_style(
+            ps).get('paragraph_type', 'normal')
         if ptype == 'continued':
             pass  # more of an item: the list goes on
         elif ptype not in ('list', 'numbered'):
@@ -982,7 +987,8 @@ def _check_md(doc):
                 numbered.add(nl.indent)
             else:  # a bullet list on this level: the numbered one ends
                 numbered.discard(nl.indent)
-        if ps.get('base', 'normal') not in _OK_BASES:
+        if ps.get('base', 'normal') not in _OK_BASES \
+                and ps['base'] != doc.basestyles.normal_key():
             issues.add("custom paragraph style")
         if ps.get('paragraph_type', 'normal') not in _OK_PTYPES:
             issues.add("paragraph type '%s'" % ps.get('paragraph_type'))
@@ -1054,7 +1060,7 @@ def _extract_pars(doc):
         nl = elems[-1]
         if not isinstance(nl, NewLine):
             continue
-        basestyle = doc.basestyles.get(nl.parstyle.get('base', 'normal')) or style_default
+        basestyle = doc.basestyles.base_style(nl.parstyle) or style_default
         ps     = updated(basestyle, nl.parstyle)
         base   = ps.get('base', 'normal')
         ptype  = ps.get('paragraph_type', 'normal')
@@ -1607,12 +1613,12 @@ def test_32():
         text = ''.join(get_text(e) for e in elems[:-1])
         if isinstance(nl, NewLine) and text:
             bases.append(nl.parstyle.get('base', 'normal'))
-    assert bases == ['h1', 'body']
+    assert bases == ['h1', 'normal']  # body text: the document's normal
 
     # the fragment only renders correctly if the styles it references
-    # (h1, body, ...) actually got registered on the target document
+    # (h1, ...) actually got registered on the target document
     assert doc.basestyles.contains('h1')
-    assert doc.basestyles.contains('body')
+    assert not doc.basestyles.contains('body')
 
 
 def test_33():
@@ -1655,7 +1661,7 @@ def test_34():
                 bases[text] = nl.parstyle.get('base')
 
     assert bases['Title'] == 'MyHeading'         # adopted, not the canonical 'h1'
-    assert bases['Body text.'] == 'body'          # no role='body' match -> fallback
+    assert bases['Body text.'] == 'normal'        # the normal style
     assert not doc.basestyles.contains('h1')      # no disconnected extra style added
     assert doc.basestyles.get('MyHeading') == {'role': 'h1', 'font_size': 42}
 

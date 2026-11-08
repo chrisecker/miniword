@@ -843,10 +843,8 @@ def adjust_page_break(placed, buffer):
 
 def page_style(stylesheet, role):
     """The style for headers or footers: the basestyle with this role
-    ('header'/'footer'), else normal."""
-    base = next((key for key, style in stylesheet.items()
-                 if style.get('role') == role), 'normal')
-    return stylesheet.mk_parstyle({'base': base})
+    ('header'/'footer'), else the normal style."""
+    return stylesheet.mk_parstyle({'base': stylesheet.role_key(role)})
 
 
 def keep_with_next(placed, buffer):

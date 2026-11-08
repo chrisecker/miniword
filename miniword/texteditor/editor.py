@@ -326,22 +326,18 @@ class Editor(UndoRedo):
         with self.atomic():
             self.add_undo(self._insert(self.flow, i, tmp))
             if at_end and self.role(parstyle) in HEADINGS:
-                body = self.role_key('body') or 'normal'
-                self.keep_par(index + 1, (dict(base=body), 0))
+                body = self.role_key('normal')
+                self.keep_par(index + 1, (dict(base=body) if body else {}, 0))
 
     def role(self, parstyle):
         """The role of a paragraph style's base style, or None."""
         sheet = self.stylesheet()
-        style = sheet and sheet.get(parstyle.get('base', 'normal'))
-        return style.get('role') if style else None
+        return sheet.base_style(parstyle).get('role') if sheet else None
 
     def role_key(self, role):
         """The key of the first base style with role, or None."""
         sheet = self.stylesheet()
-        if not sheet:
-            return None
-        return next((key for key, style in sheet.items()
-                     if style.get('role') == role), None)
+        return sheet.role_key(role) if sheet else None
 
     def stylesheet(self):
         """The document's base styles (from the canvas), or None."""

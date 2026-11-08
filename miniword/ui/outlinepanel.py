@@ -18,9 +18,7 @@ def iter_headings(model, stylesheet):
 
     for index, nl in get_newlines(xtexel, 0, n):
         parstyle  = nl.parstyle
-        base      = parstyle.get('base', 'normal')
-        basestyle = stylesheet.get(base) or {}
-        merged    = {**basestyle, **parstyle}
+        merged    = {**stylesheet.base_style(parstyle), **parstyle}
 
         role = merged.get('role', '')
         if not (role and len(role) >= 2 and role[0] == 'h' and role[1:].isdigit()):

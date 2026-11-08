@@ -216,7 +216,7 @@ def _check_txt(doc):
         if not isinstance(nl, NewLine):
             continue
         ps = nl.parstyle
-        if ps.get('base', 'normal') != 'normal':
+        if ps.get('base') not in (None, doc.basestyles.normal_key()):
             issues.add("paragraph styles (headings, code blocks)")
         if ps.get('paragraph_type', 'normal') != 'normal':
             issues.add("list formatting")
