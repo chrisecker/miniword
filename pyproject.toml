@@ -13,13 +13,13 @@ license-files = ["LICENSE", "COPYING"]
 dependencies = [
     "wxPython>=4.0",
     "cairocffi",
-    "mistune",
+    "mistune>=3",
+    "uharfbuzz",
 ]
 
 [project.optional-dependencies]
 full = [
-    "uharfbuzz",
-    "fonttools",
+    "fonttools",  # font fallback for non-Latin scripts on Windows
 ]
 
 [project.urls]

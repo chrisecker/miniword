@@ -88,8 +88,8 @@ jobs:
           files: dist/MiniWord-*.dmg
 
   linux:
-    # .deb and .rpm with the dependencies of the distribution, see
-    # packaging/linux/nfpm.yaml. Independent of the other jobs.
+    # .deb and .rpm for amd64 and arm64, see packaging/linux/nfpm.yaml.
+    # Independent of the other jobs.
     runs-on: ubuntu-latest
     env:
       NFPM_VERSION: 2.41.1
@@ -98,31 +98,50 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Stage the code as pip installs it (without dependencies)
-        run: pip install --no-deps --no-compile --target build/linux/stage .
       - name: Desktop entry and file type (from miniword/desktop.py)
-        run: PYTHONPATH=. python packaging/linux/make_desktop_files.py build/linux
+        run: >
+          PYTHONPATH=. python packaging/linux/make_desktop_files.py build/linux
       - name: Install nfpm
         run: |
+          url=https://github.com/goreleaser/nfpm/releases/download
           curl -sSfL -o nfpm.tar.gz \
-            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
+            "$url/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz"
           tar -xzf nfpm.tar.gz nfpm
-      - name: Build .deb and .rpm
-        # the version from miniword/__init__.py (a manual start has no
-        # tag; for a tag the job "pypi" checks that both match)
+      - name: Build .deb and .rpm per architecture
+        # the code as pip installs it, plus the uharfbuzz and mistune
+        # wheels of the architecture; the version from
+        # miniword/__init__.py (for a tag, the job "pypi" checks it)
         run: |
-          export VERSION=$(python -c "import re; print(re.search(r'__version__ = \"(.+)\"', open('miniword/__init__.py').read())[1])")
+          export VERSION=$(python -c \
+            "import miniword; print(miniword.__version__)")
           mkdir -p dist
-          ./nfpm package --config packaging/linux/nfpm.yaml --packager deb --target dist/
-          ./nfpm package --config packaging/linux/nfpm.yaml --packager rpm --target dist/
-      - name: Smoke test - install the .deb with Ubuntu's own packages
-        # fails if Ubuntu lacks a dependency or has a too old mistune
+          for arch in amd64:x86_64 arm64:aarch64; do
+            stage=build/linux/stage
+            rm -rf $stage
+            pip install --no-deps --no-compile --target $stage .
+            pip install --no-deps --no-compile --target $stage \
+              --only-binary=:all: --platform manylinux_2_17_${arch#*:} \
+              --python-version 3.11 --implementation cp \
+              uharfbuzz "mistune>=3"
+            rm -rf $stage/bin
+            sed "s/^arch: .*/arch: ${arch%:*}/" packaging/linux/nfpm.yaml \
+              > build/linux/nfpm.yaml
+            ./nfpm package -f build/linux/nfpm.yaml -p deb -t dist/
+            ./nfpm package -f build/linux/nfpm.yaml -p rpm -t dist/
+          done
+      - name: Smoke test - install the amd64 packages in containers
+        # fails if a distribution lacks a dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ./dist/*.deb
-          /usr/bin/python3 -c "import mistune; assert int(mistune.__version__.split('.')[0]) >= 3, mistune.__version__"
-          /usr/bin/python3 -c "import sys; sys.path.insert(0, '/usr/share/miniword'); import wx, cairocffi, miniword.ui.mainwindow"
-          miniword --version
+          for image in debian:12 debian:13 ubuntu:24.04 ubuntu:26.04; do
+            docker run --rm -v "$PWD:/src" \
+              -e DEBIAN_FRONTEND=noninteractive $image sh -c \
+              "apt-get update -q &&
+               apt-get install -y -q /src/dist/*_amd64.deb &&
+               python3 /src/packaging/linux/smoke_test.py"
+          done
+          docker run --rm -v "$PWD:/src" fedora:42 sh -c \
+            "dnf install -y -q /src/dist/*.x86_64.rpm &&
+             python3 /src/packaging/linux/smoke_test.py"
       - if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
