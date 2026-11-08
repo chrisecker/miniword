@@ -12,62 +12,18 @@ A small word processor. In development but already great.
 - Good Markdown support
 - Extensible via Python-plugins
 
-## Install from a pre-built package
+## Install
 
-Pre-built packages are published on the [Releases page](https://github.com/chrisecker/miniword/releases) for each tagged version: installers for Windows (`.exe`) and macOS (`.dmg`) with all dependencies (including the optional extras) already bundled, and packages for Linux (`.deb`, `.rpm`) that take the dependencies from the distribution.
+Download the installer for Windows (`.exe`), macOS (`.dmg`) or Linux (`.deb`, `.rpm`) from the [Releases page](https://github.com/chrisecker/miniword/releases). On Linux, MiniWord can also be installed with pip. Details and other systems: see [INSTALL.md](INSTALL.md).
 
-### Linux
-
-On Linux, installing from source is easy (see below): two system packages and `pip install`. Alternatively, `.deb` (Debian, Ubuntu) and `.rpm` (Fedora) packages are available on the [Releases page](https://github.com/chrisecker/miniword/releases). The package manager installs the dependencies from the distribution (`mistune` 3 or newer is needed, e.g. Ubuntu 24.04):
-
-```bash
-sudo apt install ./miniword_*_all.deb      # Debian, Ubuntu
-sudo dnf install ./miniword-*.noarch.rpm   # Fedora
-```
-
-The package adds MiniWord to the menu, opens `.txl` files with it and offers it for `.md` and `.txt` files.
-
-### Windows
-
-Download the `.exe` from the [Releases page](https://github.com/chrisecker/miniword/releases) and run it. The installer registers `.txl` files and offers MiniWord for `.md` and `.txt` files ("Open with").
-
-### macOS
-
-Download the `.dmg` from the [Releases page](https://github.com/chrisecker/miniword/releases), open it, and drag `MiniWord.app` into your Applications folder. MiniWord then opens `.txl` and `.md` files from the Finder and is offered for `.txt` files.
-
-**First launch:** MiniWord isn't (yet) signed with a paid Apple Developer ID, so macOS blocks it the first time with "MiniWord can't be opened because Apple cannot check it for malicious software." To allow it, no Terminal needed:
-
-1. Double-click MiniWord in Applications once and dismiss the warning.
-2. Open **System Settings → Privacy & Security**, scroll down to the **Security** section.
-3. Click **Open Anyway** next to the MiniWord entry, then confirm with your password or Touch ID.
-4. Open MiniWord again and confirm **Open** in the dialog that appears.
-
-This is a one-time step per installed version.
-
-## Install from source
-
-Miniword is developed under Linux. In principle it should run under Windows and Mac as well.
-
-You always need Python >= 3.9 and wxPython >= 4.0. Further required dependencies vary between platforms — see the per-platform instructions below.
-
-Two optional packages add extra features and are installed together via the `full` extra (`pip install ".[full]"`): `uharfbuzz` adds ligatures and non-Latin script support, `fonttools` is needed for non-Latin scripts specifically on Windows. `mistune`, the Markdown parser, is always installed.
-
-### Running without installation
-
-```
-python miniword.py
-```
-
-Alternatively, double-click `miniword.py` in your file explorer.
-
-### Command line
+## Command line
 
 ```
 miniword [-h] [--debug] [--install-desktop [--markdown]]
          [--uninstall-desktop] [--version] [file]
 ```
 
-(without installation: `python miniword.py [options] [file]`)
+(from a source folder without installation: `python miniword.py [options] [file]`)
 
 | Option | Meaning |
 |---|---|
@@ -75,80 +31,9 @@ miniword [-h] [--debug] [--install-desktop [--markdown]]
 | `-h`, `--help` | Show the options and exit. |
 | `--version` | Show the version and exit. |
 | `--debug` | Print debug output of the page layout. |
-| `--install-desktop` | Linux: add MiniWord to the desktop menu and open `.txl` files with it (see below). |
+| `--install-desktop` | Linux: add MiniWord to the desktop menu and open `.txl` files with it (see [INSTALL.md](INSTALL.md)). |
 | `--markdown` | With `--install-desktop`: open `.md` files with MiniWord too. |
 | `--uninstall-desktop` | Linux: undo `--install-desktop`. |
-
-### Linux
-
-Install system dependencies:
-
-```
-sudo apt install python3-wxgtk4.0 fontconfig
-```
-
-Then install miniword (this also pulls in `cairocffi`):
-
-```
-cd miniword
-pip install .
-```
-
-For ligature support and non-Latin scripts, install with the `full` extra instead:
-
-```
-pip install ".[full]"
-```
-
-To add MiniWord to the desktop menu and open `.txl` files with it
-(you probably will):
-
-```
-miniword --install-desktop
-```
-
-Add `--markdown` to open `.md` files with MiniWord too. This writes a
-menu entry, the `.txl` file type and the icon into `~/.local/share`
-(no root rights needed) and makes MiniWord the default application;
-pip itself can't do this. `miniword --uninstall-desktop` removes them
-again.
-
-### Windows
-
-```
-cd miniword
-pip install ".[full]"   # full installs uharfbuzz, fonttools: ligatures, non-Latin scripts
-```
-
-wxPython bundled `libcairo-2.dll` up through 4.2.1, so `pip install .` alone was enough for `cairocffi` to bind to it. wxPython >=4.2.2 dropped the bundled DLL (an upstream regression, reported at wxWidgets/Phoenix), so on those versions install a Cairo runtime yourself first, e.g. the [GTK3 runtime for Windows](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer).
-
-(Advanced: alternatively, download just `libcairo-2.dll` from [wxWidgets/Phoenix's packaging assets](https://github.com/wxWidgets/Phoenix/blob/wxPython-4.2.1/packaging/msw-cairo/x64/bin/libcairo-2.dll) and drop it into your installed `wx` package folder, e.g. `site-packages/wx/`.)
-
-If you skip this and see an error mentioning a missing `libcairo-2.dll`, install a Cairo runtime as described above (or downgrade to `wxPython<4.2.2`).
-
-
-MiniWord stores its configuration and plugins in `%APPDATA%\miniword\` (e.g. `C:\Users\<you>\AppData\Roaming\miniword\`).
-
-**Note** that MiniWord is not yet **optimised** for Windows. While it mostly works, the GUI is less polished and startup takes a bit longer.
-
-### macOS
-
-`fontconfig` must be installed via Homebrew:
-
-```
-brew install fontconfig
-```
-
-Then install miniword (this also pulls in `cairocffi`):
-
-```
-cd miniword
-pip install ".[full]"   # full installs uharfbuzz: ligatures, non-Latin scripts
-```
-
-MiniWord stores its configuration and plugins in `~/Library/Application Support/miniword/`.
-
-**Note** that MiniWord is not yet **optimised** for macOS (tested on Apple Silicon; Intel Macs are untested). While it works, some GUI elements aren't as polished as on Linux.
 
 ## Hacking
 
