@@ -91,3 +91,79 @@ def test_CLI_6():
             assert convert(txl, os.path.join(folder, 'a.xyz')) == 1
             assert convert(os.path.join(folder, 'missing.md'), pdf) == 1
         assert 'no format' in err.getvalue()
+
+
+def test_CLI_7():
+    "CLI-7: --set KEY=VALUE, read by the type of the default"
+    from ..core.units import cm, mm
+    args = parse_args(['a.md', '-o', 'a.pdf', '--set', 'margin_left=2cm',
+                       '--set', 'hyphenation=Yes', '--set', 'paper=a5',
+                       '--set', 'header_left=text:Draft: 1',
+                       '--set', 'footer_center=title',
+                       '--set', 'title=A=B'])
+    assert args.set == [[('margin_left', 2 * cm)], [('hyphenation', True)],
+                        [('paper', 'A5')],
+                        [('header_left', ('text', 'Draft: 1'))],
+                        [('footer_center', ('title', ''))],
+                        [('title', 'A=B')]]
+    args = parse_args(['a.md', '-o', 'a.pdf', '--set', 'paper=170x240mm'])
+    (paper, (_, width), (_, height)), = args.set
+    assert paper == ('paper', 'custom')
+    assert abs(width - 170 * mm) < 1e-9 and abs(height - 240 * mm) < 1e-9
+    for setting in ('margin_left', 'colour=red', 'margin_left=2km',
+                    'hyphenation=maybe', 'paper=A9', 'footer_left=xyz'):
+        code, output = run('a.md', '-o', 'a.pdf', '--set', setting)
+        assert code == 2 and '--set' in output, setting
+
+
+def test_CLI_8():
+    "CLI-8: --template and --set need -o"
+    assert parse_args(['a.md', '-o', 'a.pdf', '--template', 't.txl'])\
+        .template == 't.txl'
+    for argv in (['a.md', '--template', 't.txl'],
+                 ['a.md', '--set', 'paper=A5']):
+        code, output = run(*argv)
+        assert code == 2 and 'need -o' in output
+
+
+def test_CLI_9():
+    "CLI-9: convert with a template (settings, styles by role) and --set"
+    import os
+    import tempfile
+    import wx
+    from ..__main__ import convert
+    from ..core.document import Document
+    from ..io.importexport import open_file
+    from ..plugins import mdfilter  # registers Markdown
+    if wx.App.Get() is None:
+        wx.App(False)
+    template = Document()
+    template.basestyles.set('normal', dict(role='normal', font_size=9))
+    template.basestyles.set('Title', dict(role='h1', font_size=30))
+    template.basestyles.set('plain', dict(font_size=7))  # no role
+    template.settings = dict(paper='Letter', margin_left=99.0, title='T')
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, 't.txl')
+        template.save(path)
+        md = os.path.join(folder, 'a.md')
+        with open(md, 'w', encoding='utf-8') as f:
+            f.write('# Title\n\nSome text.\n')
+        txl = os.path.join(folder, 'a.txl')
+        assert convert(md, txl, path, [('margin_left', 50.0)]) == 0
+        doc = open_file(txl)
+    styles = doc.basestyles
+    assert styles.get('h1')['font_size'] == 30  # name stays
+    assert styles.get('body')['font_size'] == 9
+    assert not styles.contains('Title') and not styles.contains('plain')
+    assert doc.settings == dict(paper='Letter', margin_left=50.0)
+
+
+def test_CLI_10():
+    "CLI-10: a template keeps the document's title and author"
+    from ..__main__ import apply_template
+    from ..core.document import Document
+    doc, template = Document(), Document()
+    doc.settings = dict(author='A', paper='A5')
+    template.settings = dict(title='T', author='B', paper='Letter')
+    apply_template(doc, template)
+    assert doc.settings == dict(author='A', paper='Letter')

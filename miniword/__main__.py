@@ -100,6 +100,17 @@ def parse_args(argv):
         help="write the document to OUTFILE and exit, without a window; "
              "the format follows the extension (.pdf, .txl, .md, .txt)")
     parser.add_argument(
+        '--template', metavar='TEMPLATE',
+        help="with -o: page setup from TEMPLATE (.txl), and the values of "
+             "its styles for the styles with the same role")
+    parser.add_argument(
+        '--set', metavar='KEY=VALUE', action='append', default=[],
+        type=parse_setting,
+        help="with -o: a document setting, after --template, e.g. "
+             "paper=A5, paper=170x240mm, margin_left=2cm, "
+             "hyphenation=yes, footer_center=page, header_left=text:Draft; "
+             "repeatable")
+    parser.add_argument(
         '--debug', action='store_true',
         help="debug output of the page layout")
     parser.add_argument(
@@ -113,13 +124,85 @@ def parse_args(argv):
     args = parser.parse_args(argv)
     if args.output and not args.file:
         parser.error("-o needs a document to read")
+    if (args.template or args.set) and not args.output:
+        parser.error("--template and --set need -o")
     return args
 
 
-def convert(path, output):
+BOOLS = {'yes': True, 'true': True, 'on': True, '1': True,
+         'no': False, 'false': False, 'off': False, '0': False}
+
+
+def parse_setting(text):
+    """--set KEY=VALUE: the settings [(key, value)], the value read by the
+    type of the default (see develnotes/cli_converter_concept.md)."""
+    from argparse import ArgumentTypeError
+    from .core.document import settings_default
+    from .core.units import parse_length
+    from .ui.settingsinspector import FIELD_KINDS
+    key, sep, value = text.partition('=')
+    if not sep or key not in settings_default:
+        raise ArgumentTypeError("%r: KEY is one of %s"
+                                % (text, ', '.join(settings_default)))
+    default = settings_default[key]
+    try:
+        if key == 'paper':
+            return paper_settings(value)
+        if isinstance(default, bool):
+            return [(key, BOOLS[value.lower()])]
+        if isinstance(default, float):
+            return [(key, parse_length(value))]
+        if isinstance(default, tuple):
+            kind, _, field = value.partition(':')
+            if kind not in [k for _, k in FIELD_KINDS]:
+                raise ValueError
+            return [(key, (kind, field))]
+    except (KeyError, ValueError):
+        raise ArgumentTypeError("%r: invalid value for %s" % (text, key))
+    return [(key, value)]
+
+
+def paper_settings(value):
+    """--set paper=: a name from PAPER_SIZES (any case), custom, or
+    WIDTHxHEIGHT with a unit, e.g. 170x240mm."""
+    import re
+    from .core.papersizes import PAPER_SIZES
+    from .core.units import parse_length
+    names = {name.lower(): name for name in list(PAPER_SIZES) + ['custom']}
+    if value.lower() in names:
+        return [('paper', names[value.lower()])]
+    m = re.fullmatch(r'([\d.]+)x([\d.]+)([a-z]*)', value.lower())
+    if m is None:
+        raise ValueError(value)
+    width, height, unit = m.groups()
+    return [('paper', 'custom'), ('paper_width', parse_length(width + unit)),
+            ('paper_height', parse_length(height + unit))]
+
+
+CONTENT_SETTINGS = ('title', 'author')  # not taken from a template
+
+
+def apply_template(doc, template):
+    """--template: doc takes the settings of template except title and
+    author (content, not layout), and each of its styles with a role the
+    values of template's style with that role; the names stay."""
+    doc.settings = {key: value for key, value in template.settings.items()
+                    if key not in CONTENT_SETTINGS} | \
+        {key: value for key, value in doc.settings.items()
+         if key in CONTENT_SETTINGS}
+    sheet = doc.basestyles
+    for key, style in sheet.items():
+        role = style.get('role')
+        other = template.basestyles.role_key(role) if role else None
+        if other:
+            sheet.set(key, template.basestyles.get(other))
+
+
+def convert(path, output, template=None, settings=()):
     """Command line -o: write the document at path to output, in the
     format of its extension; returns the exit code. Losses (e.g. .txl to
-    .md) are only reported."""
+    .md) are only reported. template: path of a template (--template),
+    settings: [(key, value)] (--set)."""
     import os
     from .io import importexport
     from .io.pdf import export_pdf
@@ -129,6 +212,10 @@ def convert(path, output):
 
     try:
         doc = importexport.open_file(path)
+        if template:
+            apply_template(doc, importexport.open_file(template))
+        for key, value in settings:
+            doc.set_setting(key, value)
         ext = os.path.splitext(output)[1].lower()
         if ext == '.pdf':
             export_pdf(doc, output)
@@ -205,7 +292,8 @@ def main():
     if args.output:
         if _scan_needed:
             run_preload_sync()  # no dialog without a window
-        return convert(path, args.output)
+        settings = [pair for pairs in args.set for pair in pairs]
+        return convert(path, args.output, args.template, settings)
     if _scan_needed:
         _run_font_preload_dialog()
 
