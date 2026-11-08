@@ -1,6 +1,6 @@
 import os
 import wx
-from .images import Image, image_extension, fit_to_page
+from .images import Image, image_extension
 from .imageio import decode_cached, content_of, load_url, errors
 from .images import fetch, is_url, file_path
 from ..core.utils import get_path
@@ -438,10 +438,8 @@ class ImageInspector(SidePanel):
         self._insert(Image(path=path, relative=relative))
 
     def _insert(self, image):
-        """Insert image at the cursor, too large ones made smaller."""
-        editor = self.editor
-        editor.insert_texel(fit_to_page(image, self.document.settings,
-                                        (editor.target.texel, editor.index)))
+        """Insert image at the cursor (too large ones are shown smaller)."""
+        self.editor.insert_texel(image)
 
     def _on_export(self, event):
         if self._image is None:

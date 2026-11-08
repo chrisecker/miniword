@@ -48,7 +48,6 @@ from itertools import groupby
 from ..textmodel.texeltree import length, NL, grouped
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.textmodel import get_texel
-from ..core.utils import get_path
 from ..core.styles import n_levels
 from ..core.units import mm, cm
 from ..core.styles import updated
@@ -182,14 +181,6 @@ def state_from_settings(settings):
     return state
 
 
-def text_area(settings):
-    """(width, height) of the text area of a page: the paper without
-    the margins."""
-    state = state_from_settings(settings)
-    top, right, bottom, left = state.border
-    return state.width, state.geometry[1] - top - bottom
-
-    
 class Factory:
     # A simple factory which creates the basic boxes from their texels
     
@@ -319,7 +310,6 @@ class RowFactory(Factory):
         return p
 
     def _process_paragraph(self, i1, i2, texels, p_prev, p, p_next):
-        boxes = [self.create_box(elem, p) for elem in texels]
         begins_block = not _is_same_block(p, p_prev)
         ends_block = not _is_same_block(p, p_next)
         
@@ -328,6 +318,9 @@ class RowFactory(Factory):
         marker = self._update_counters(p)
         left_first, left_rest, width_first, width_rest = \
             self._dims(p, level)
+        boxes = [self.limit(self.create_box(elem, p),
+                            min(width_first, width_rest))
+                 for elem in texels]
         alignment = p['alignment']
         # A forced line break (BR/ForceBreakBox) always ends its own
         # line, even if more would still fit - each segment after one
@@ -386,6 +379,21 @@ class RowFactory(Factory):
             text = ''.join(getattr(t, 'text', '') for t in texels)
             r[0][0].heading = p['role'], text.strip()
         return r
+
+    def limit(self, box, width):
+        """An image larger than width or the page's text height is shown
+        smaller, whatever its scale; the document keeps the scale."""
+        from ..images.images import ImageBox
+        if not isinstance(box, ImageBox) or box.width <= 0 \
+                or box.height <= 0:
+            return box
+        top, right, bottom, left = self.state.border
+        height = self.state.geometry[1] - top - bottom
+        fit = min(1, width / box.width, height / box.height)
+        if fit == 1:
+            return box
+        return ImageBox(box.bitmap, box.width * fit, box.height * fit,
+                        box.image_data, box.device, fit)
 
     def _hyphenate(self, parstyle):
         """The hyphenation function (word -> pieces) for a paragraph:
@@ -602,26 +610,6 @@ def table_col_widths(col_widths, ncols, width):
         auto_w = (width - sum(explicit)) / n_auto if n_auto else 0
         return [w if w is not None else auto_w for w in col_widths]
     return [width / ncols] * ncols
-
-
-def cell_width(table, k, width):
-    """Text width in the cell that is the table's child k, the table
-    being width wide."""
-    column = (k - 1) // 2 % table.ncols  # childs: SEP, cell, SEP, ...
-    return table_col_widths(table.col_widths, table.ncols, width)[column] \
-        - CELL_HPAD
-
-
-def width_at(texel, i, width):
-    """Text width at index i of texel (width wide): in a table cell its
-    column's, also in nested tables."""
-    from ..tables.tables import Table
-    path = [node for _, _, node in get_path(texel, i)]
-    for node, child in zip(path, path[1:]):
-        if isinstance(node, Table):
-            k = next(k for k, c in enumerate(node.childs) if c is child)
-            width = cell_width(node, k, width)
-    return width
 
 
 def segments(boxes):

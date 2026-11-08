@@ -813,87 +813,47 @@ def test_PB_3():
         [page_sig(p) for p in mk_builder(model)._layout.childs]
 
 
-# --- FIT: images too large for the text area are scaled down when they
-# come in (opened from Markdown/HTML, pasted, inserted) - as in Word.
+# --- FIT: an image larger than the text area (paragraph width, page
+# height) is shown smaller, whatever its scale; the document keeps the
+# scale - no undo step, nothing lost when saved as Markdown.
+
+def text_height(width=400):
+    """Height of the text area of State(width) (A4 minus margins)."""
+    state = State(width)
+    top, right, bottom, left = state.border
+    return state.geometry[1] - top - bottom
+
 
 def test_FIT_1():
-    "FIT-1: a too wide image in natural size is scaled to the width"
-    from ..images.images import fit_images
+    "FIT-1: a too wide image is shown at the width, also an enlarged one"
     app()
-    wide, small = image(content=png(2000, 1000)), image(content=png(20, 10))
-    sized = image(content=png(2000, 1000), scale_x=0.9, scale_y=0.9)
-    fitted = list(fit_images(grouped([wide, small, sized]), 400, 600)
-                  .childs)
-    assert (fitted[0].scale_x, fitted[0].scale_y) == (0.2, 0.2)
-    assert (fitted[1].scale_x, fitted[1].scale_y) == (1, 1)  # fits
-    assert (fitted[2].scale_x, fitted[2].scale_y) == (0.9, 0.9)  # user's
+    wide, small, enlarged = image_boxes(par(
+        image(content=png(2000, 1000)), image(content=png(20, 10)),
+        image(content=png(200, 100), scale_x=3, scale_y=3)))
+    assert (wide.width, wide.height, wide.fit) == (400, 200, 0.2)
+    assert (small.width, small.height, small.fit) == (20, 10, 1)
+    assert (enlarged.width, enlarged.height) == (400, 200)
 
 
 def test_FIT_2():
-    "FIT-2: a too tall image is scaled to the height; also in footnotes"
-    from ..images.images import fit_images
-    from ..textmodel.submodel import Footnote
-    from ..textmodel.texeltree import ENDMARK
+    "FIT-2: a too tall image is shown at the page's text height"
     app()
-    tall = image(content=png(100, 1200))
-    fn = Footnote(grouped([image(content=png(800, 100)), ENDMARK]))
-    fitted = list(fit_images(grouped([tall, fn]), 400, 600).childs)
-    assert fitted[0].scale_x == fitted[0].scale_y == 0.5
-    assert fitted[1].content.childs[0].scale_x == 0.5
+    tall, = image_boxes(par(image(content=png(100, 2000))))
+    assert abs(tall.height - text_height()) < 1e-6
+    assert abs(tall.width - 100 * text_height() / 2000) < 1e-6
 
 
-def test_FIT_3():
-    "FIT-3: the text area comes from the document's paper and margins"
-    from ..layout.rowfactory import text_area
-    from ..core.units import mm, cm
-    w, h = text_area({})  # A4, 2.5 cm margins
-    assert abs(w - (210 * mm - 5 * cm)) < 1e-6
-    assert abs(h - (297 * mm - 5 * cm)) < 1e-6
-    w, h = text_area({'margin_left': 1 * cm, 'margin_right': 1 * cm})
-    assert abs(w - (210 * mm - 2 * cm)) < 1e-6
-
-
-def test_FIT_4():
-    "FIT-4: opening Markdown fits its images; a TXL file keeps them"
-    import base64
-    from ..io.importexport import open_file
-    from ..images.images import iter_images
-    from ..plugins import mdfilter  # noqa: F401 -- registers the filter
-    app()
-    data = png(2000, 1000)
-    with tempfile.TemporaryDirectory() as tmp:
-        md = os.path.join(tmp, 'a.md')
-        with open(md, 'w') as f:
-            f.write('![x](data:image/png;base64,%s)\n'
-                    % base64.b64encode(data).decode('ascii'))
-        img, = iter_images(open_file(md).textmodel.texel)
-        assert img.scale_x == img.scale_y < 0.25
-        txl = os.path.join(tmp, 'a.txl')
-        doc = mk_doc(image(content=data), '\n')
-        doc.save(txl)
-        img, = iter_images(open_file(txl).textmodel.texel)
-        assert img.scale_x == img.scale_y == 1
-
-
-def test_FIT_5():
-    "FIT-5: pasting fits the images to the document's text area"
-    from ..ui.mainwindow import MainFrame
-    from ..images.images import Image, iter_images
-    from ..layout.rowfactory import text_area
-    from .guitest import close
-    from ..core.units import cm
-    app()
-    doc = Document()
-    doc.set_setting('margin_left', 10 * cm)  # a narrow text area
-    frame = MainFrame(doc)
-    try:
-        frame._paste_fragment(lambda data, doc: grouped([Image(data)]),
-                              png(2000, 1000))
-        img, = iter_images(doc.textmodel.texel)
-        width = text_area(doc.settings)[0]  # 8.5 cm
-        assert abs(img.scale_x * 2000 - width) < 1e-6
-    finally:
-        close(frame)
+def all_images(box):
+    """The ImageBoxes in box, also in table cells."""
+    if isinstance(box, ImageBox):
+        yield box
+    for row in getattr(box, 'cells', ()):
+        for cell in row:
+            yield from all_images(cell)
+    for _, _, row in getattr(box, 'data', ()):  # a cell's rows
+        yield from all_images(row)
+    for child in getattr(box, 'childs', ()):
+        yield from all_images(child)
 
 
 def picture_table(content):
@@ -905,30 +865,38 @@ def picture_table(content):
                  ncols=2)
 
 
-def test_FIT_6():
-    "FIT-6: in a table an image is fitted to its column, not the page"
-    from ..images.images import fit_images, iter_images
+def test_FIT_3():
+    "FIT-3: in a table an image is limited to its column"
     from ..tables.table_boxes import CELL_HPAD
     app()
-    table = picture_table(png(2000, 1000))
-    img, = iter_images(fit_images(grouped([table]), 400, 600))
-    assert abs(img.scale_x * 2000 - (200 - CELL_HPAD)) < 1e-6
+    found = [img for box in boxes(par(picture_table(png(2000, 1000))))
+             for img in all_images(box)]
+    assert len(found) == 1
+    assert abs(found[0].width - (200 - CELL_HPAD)) < 1e-6
 
 
-def test_FIT_7():
-    "FIT-7: inserting into a table cell fits to the cell's column"
-    from ..layout.rowfactory import width_at
-    from ..tables.table_boxes import CELL_HPAD
-    from ..textmodel.texeltree import T, NL
-    texel = grouped([T('ab'), NL, picture_table(b''), NL])
-    assert width_at(texel, 1, 400) == 400  # in the text
-    assert width_at(texel, 4, 400) == 200 - CELL_HPAD  # in the first cell
+def test_FIT_4():
+    "FIT-4: opening Markdown keeps the scale; saving it loses nothing"
+    import base64
+    from ..io.importexport import open_file, check_export
+    from ..images.images import iter_images
+    from ..plugins import mdfilter  # noqa: F401 -- registers the filter
+    app()
+    with tempfile.TemporaryDirectory() as tmp:
+        md = os.path.join(tmp, 'a.md')
+        with open(md, 'w') as f:
+            f.write('![x](data:image/png;base64,%s)\n'
+                    % base64.b64encode(png(2000, 1000)).decode('ascii'))
+        doc = open_file(md)
+        img, = iter_images(doc.textmodel.texel)
+        assert img.scale_x == img.scale_y == 1
+        assert check_export(md, doc) == []
 
 
-def test_FIT_8():
-    "FIT-8: images loaded from the web (bar) are fitted; one undo step"
+def test_FIT_5():
+    "FIT-5: images loaded from the web (bar): no undo step, scale kept"
     from ..ui.mainwindow import MainFrame
-    from ..images.images import Image, iter_images
+    from ..images.images import iter_images
     from .guitest import close
     app()
     url, data = 'https://example.org/big.png', png(2000, 1000)
@@ -943,12 +911,16 @@ def test_FIT_8():
     try:
         frame.load_external_images()
         img, = iter_images(doc.textmodel.texel)
-        assert img.scale_x == img.scale_y < 0.25
-        assert frame.editor.index == 0  # the cursor stays
-        frame.editor.undo()
-        img, = iter_images(doc.textmodel.texel)
-        assert img.scale_x == 1
+        assert img.scale_x == img.scale_y == 1
+        assert frame.editor.undocount() == 0
     finally:
         imageio.load_url = saved
         imageio.external.pop(url, None)
         close(frame)
+
+
+def test_FIT_6():
+    "FIT-6: resizing a limited image: the new scale is the shown size"
+    from ..images.image_controllers import scale_after_resize
+    old, new = ((0, 0), 400, 200), ((0, 0), 200, 100)  # half the size
+    assert scale_after_resize(old, new, 1 * 0.2, 1 * 0.2) == (0.1, 0.1)

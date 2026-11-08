@@ -117,6 +117,12 @@ class ImageController(BoxController):
     def get_cursor(self, handle_id):
         return self._CURSOR_MAP.get(handle_id, wx.CURSOR_SIZING)
 
+    def shown_scale(self):
+        """The scale the image is shown at: its own, limited to the page
+        (ImageBox.fit)."""
+        fit = self.box.fit
+        return self.texel.scale_x * fit, self.texel.scale_y * fit
+
     def draw_cursor(self, painter):
         # supress the drawing of a cursor!
         pass
@@ -172,11 +178,10 @@ class ImageSizeController(ImageController):
         gc.stroke()
         
     def commit(self):
-        new_scale_x, new_scale_y = scale_after_resize(
-            self.compute_state(), self.state,
-            self.texel.scale_x, self.texel.scale_y)
-        if abs(new_scale_x - self.texel.scale_x) > 1e-6 or \
-           abs(new_scale_y - self.texel.scale_y) > 1e-6:
+        old = self.compute_state()
+        if self.state != old:  # a click alone leaves the scale as it is
+            new_scale_x, new_scale_y = scale_after_resize(
+                old, self.state, *self.shown_scale())
             self.editor.set_texel_attributes(
                 self.i1, self.texel, scale_x=new_scale_x, scale_y=new_scale_y)
         self.state = self.compute_state()
@@ -212,14 +217,15 @@ class ImageCropController(ImageController):
             orig_cl, _, orig_ct, _ = self._drag_start_crop
         else:
             orig_cl, orig_ct = cl, ct
-        ox = (cl - orig_cl) * self.texel.scale_x
-        oy = (ct - orig_ct) * self.texel.scale_y
+        sx, sy = self.shown_scale()
+        ox = (cl - orig_cl) * sx
+        oy = (ct - orig_ct) * sy
         for name, (hx, hy) in self._handle_positions(self._preview_crop).items():
             yield name, ox + hx, oy + hy
 
     def _handle_positions(self, crop):
         """Return dict of handle_name → (x, y) in box-local coords."""
-        sx, sy = self.texel.scale_x, self.texel.scale_y
+        sx, sy = self.shown_scale()
         cl, cr, ct, cb = crop
         sw, sh = self._src_w, self._src_h
         cw = (sw - cl - cr) * sx
@@ -241,13 +247,13 @@ class ImageCropController(ImageController):
     def drag_handle(self, handle, dx, dy, shift, ctrl):
         self._preview_crop = drag_crop(
             self._drag_start_crop, handle, dx, dy,
-            (self.texel.scale_x, self.texel.scale_y),
+            self.shown_scale(),
             (self._src_w, self._src_h))
 
     def draw_overlay(self, gc):
         tb = self.box
         bx, by = self.box_origin
-        sx, sy = self.texel.scale_x, self.texel.scale_y
+        sx, sy = self.shown_scale()
         sw, sh = self._src_w, self._src_h
         zoom  = self.editor.canvas.zoom
         lw    = 1.5 / zoom
