@@ -932,6 +932,12 @@ class MainFrame(wx.Frame, ViewBase):
             builder.stop()
         _forget_menu(self._recent_menu)
 
+    def Destroy(self):
+        """Release first: the file history must not keep the menu of a
+        destroyed window (crash on the next recent file)."""
+        self.release()
+        return wx.Frame.Destroy(self)
+
     def formatting_marks(self):
         """View > Formatting marks: only redrawn, nothing is rebuilt."""
         show = self._mi_marks.IsChecked()

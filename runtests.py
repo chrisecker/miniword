@@ -65,6 +65,16 @@ import inspect
 
 
 
+def settle():
+    """Let wx destroy the windows a test closed: it does so only in idle
+    time, and a window left on screen makes the desktop report "not
+    responding" during the next long test."""
+    if 'wx' in sys.modules:
+        import wx
+        if wx.App.Get() is not None:
+            wx.Yield()
+
+
 def get_tb(skip=0):
     type, value, tb = sys.exc_info()
     entries = traceback.format_tb(tb)[skip:]
@@ -131,6 +141,7 @@ class Tester:
                 tb = get_tb(1)
             finally:
                 self.restore_io()
+        settle()
         sys.excepthook = sys.__excepthook__
         if ok and hooked:
             ok = False
