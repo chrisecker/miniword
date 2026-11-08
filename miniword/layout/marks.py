@@ -47,6 +47,8 @@ def draw_marks(dc, boxes):
     """Draw the marks of boxes ((j1, j2, x, y, box) as from
     layout.iter_boxes(flow)) in grey."""
     for j1, j2, x, y, box in boxes:
+        if not box.visible(x, y, dc):  # skip pages outside the view
+            continue
         for mx, my, mark, leaf in iter_marks(dc, box, x, y):
             device = leaf.device
             if mark == '¬':  # a thin bar between two letters: no width
