@@ -19,8 +19,8 @@ Download the installer for Windows (`.exe`), macOS (`.dmg`) or Linux (`.deb`, `.
 ## Command line
 
 ```
-miniword [-h] [--debug] [--install-desktop] [--uninstall-desktop]
-         [--version] [file]
+miniword [-h] [-o OUTFILE] [--debug] [--install-desktop]
+         [--uninstall-desktop] [--version] [file]
 ```
 
 (from a source folder without installation: `python miniword.py [options] [file]`)
@@ -28,6 +28,7 @@ miniword [-h] [--debug] [--install-desktop] [--uninstall-desktop]
 | Option | Meaning |
 |---|---|
 | `file` | Document to open: `.txl`, or a format a plugin imports, e.g. Markdown (`.md`). Without it, MiniWord starts with a new document. |
+| `-o`, `--output OUTFILE` | Write the document to `OUTFILE` and exit, without a window. The format follows the extension: `.pdf`, `.txl`, `.md`, `.txt`. Example: `miniword report.md -o report.pdf` |
 | `-h`, `--help` | Show the options and exit. |
 | `--version` | Show the version and exit. |
 | `--debug` | Print debug output of the page layout. |

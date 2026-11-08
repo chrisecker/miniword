@@ -96,6 +96,10 @@ def parse_args(argv):
         help="document to open (.txl, or a format a plugin imports, "
              "e.g. .md); without it a new document")
     parser.add_argument(
+        '-o', '--output', metavar='OUTFILE',
+        help="write the document to OUTFILE and exit, without a window; "
+             "the format follows the extension (.pdf, .txl, .md, .txt)")
+    parser.add_argument(
         '--debug', action='store_true',
         help="debug output of the page layout")
     parser.add_argument(
@@ -106,7 +110,42 @@ def parse_args(argv):
         help="Linux: undo --install-desktop")
     parser.add_argument(
         '--version', action='version', version='%(prog)s ' + __version__)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.output and not args.file:
+        parser.error("-o needs a document to read")
+    return args
+
+
+def convert(path, output):
+    """Command line -o: write the document at path to output, in the
+    format of its extension; returns the exit code. Losses (e.g. .txl to
+    .md) are only reported."""
+    import os
+    from .io import importexport
+    from .io.pdf import export_pdf
+
+    def report(text):
+        print('miniword: ' + text, file=sys.stderr)
+
+    try:
+        doc = importexport.open_file(path)
+        ext = os.path.splitext(output)[1].lower()
+        if ext == '.pdf':
+            export_pdf(doc, output)
+        elif ext == '.txl':
+            doc.save(output)
+        else:
+            fn = importexport.find_export_filter(output)
+            if fn is None:
+                report("no format for '%s'" % output)
+                return 1
+            for warning in importexport.check_export(output, doc):
+                report("'%s' loses: %s" % (output, warning))
+            fn(doc, output)
+    except Exception as e:
+        report(str(e))
+        return 1
+    return 0
 
 
 class App(wx.App):
@@ -162,7 +201,11 @@ def main():
     from .ui.mainwindow import load_plugins
     load_plugins()
 
-    from .core.fontfinder import _scan_needed
+    from .core.fontfinder import _scan_needed, run_preload_sync
+    if args.output:
+        if _scan_needed:
+            run_preload_sync()  # no dialog without a window
+        return convert(path, args.output)
     if _scan_needed:
         _run_font_preload_dialog()
 
@@ -183,4 +226,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

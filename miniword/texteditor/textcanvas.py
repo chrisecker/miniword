@@ -565,20 +565,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         return (x - ox) / scale, (y - oy) / scale
 
     def export_pdf(self, path):
-        import cairocffi as cairo
+        from ..io.pdf import write_pdf
         self.builder.assure_finished()
-        pages = self.layout.childs
-        if not pages:
-            return
-        device = self.builder.get_device()
-        w, h = pages[0].width, pages[0].height
-        surface = cairo.PDFSurface(path, w, h)
-        ctx = cairo.Context(surface)
-        for page in pages:
-            page.draw_background(0, 0, ctx)
-            page.draw_for_print(0, 0, ctx)
-            ctx.show_page()
-        surface.finish()
+        write_pdf(self.layout.childs, path)
 
     ### Drawing
 
