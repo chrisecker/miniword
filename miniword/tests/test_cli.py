@@ -52,8 +52,8 @@ def test_CLI_3():
 
 
 def test_CLI_4():
-    "CLI-4: --install-desktop (with --markdown), --uninstall-desktop"
-    args = parse_args(['--install-desktop', '--markdown'])
-    assert args.install_desktop and args.markdown
+    "CLI-4: --install-desktop, --uninstall-desktop"
+    args = parse_args(['--install-desktop'])
+    assert args.install_desktop
     assert not args.uninstall_desktop
     assert parse_args(['--uninstall-desktop']).uninstall_desktop

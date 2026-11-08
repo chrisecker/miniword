@@ -102,9 +102,6 @@ def parse_args(argv):
         '--install-desktop', action='store_true',
         help="Linux: add MiniWord to the menu and open .txl files with it")
     parser.add_argument(
-        '--markdown', action='store_true',
-        help="with --install-desktop: open .md files with MiniWord too")
-    parser.add_argument(
         '--uninstall-desktop', action='store_true',
         help="Linux: undo --install-desktop")
     parser.add_argument(
@@ -147,7 +144,7 @@ def main():
             return
         from . import desktop
         if args.install_desktop:
-            desktop.install(args.markdown)
+            desktop.install()
         else:
             desktop.uninstall()
         return

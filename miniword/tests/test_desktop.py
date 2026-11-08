@@ -15,12 +15,12 @@ import tempfile
 from .. import desktop
 
 
-def install(markdown=False):
+def install():
     """(data folder, commands run) of an install into a temporary
     folder; the folder is removed on exit of the generator."""
     commands = []
     with tempfile.TemporaryDirectory() as tmp:
-        desktop.install(markdown, data_dir=tmp, run=commands.append)
+        desktop.install(data_dir=tmp, run=commands.append)
         yield tmp, commands
 
 
@@ -46,15 +46,16 @@ def test_DSK_1():
                 os.path.join(tmp, 'applications')] in commands
         assert ['xdg-mime', 'default', 'miniword.desktop',
                 'application/x-miniword'] in commands
-        assert not any('text/markdown' in c for c in commands)
 
 
 def test_DSK_2():
-    "DSK-2: with markdown, .md is associated too"
-    for tmp, commands in install(markdown=True):
+    "DSK-2: .md and .txt are offered (Open with), not made the default"
+    for tmp, commands in install():
         entry = read(os.path.join(tmp, 'applications', 'miniword.desktop'))
-        assert ['xdg-mime', 'default', 'miniword.desktop',
-                'text/markdown'] in commands
+        assert 'text/markdown;' in entry and 'text/plain;' in entry
+        defaults = [c for c in commands if c[:2] == ['xdg-mime', 'default']]
+        assert defaults == [['xdg-mime', 'default', 'miniword.desktop',
+                             'application/x-miniword']]
 
 
 def test_DSK_3():

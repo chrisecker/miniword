@@ -2,11 +2,12 @@
 
 """
 Desktop integration on Linux (freedesktop): a menu entry, the file type
-of .txl documents and MiniWord as their default application - optionally
-also for Markdown. pip can't do this itself (it runs no code on install
-and installs relative to its environment), hence
+of .txl documents and MiniWord as their default application; for
+Markdown and plain text it is offered under "Open with". pip can't do
+this itself (it runs no code on install and installs relative to its
+environment), hence
 
-    miniword --install-desktop [--markdown]
+    miniword --install-desktop
     miniword --uninstall-desktop
 
 Everything goes into the user's data folder ($XDG_DATA_HOME, usually
@@ -72,13 +73,12 @@ def _update(data_dir, run):
     run(['update-desktop-database', os.path.join(data_dir, 'applications')])
 
 
-def install(markdown=False, data_dir=None, run=_run):
+def install(data_dir=None, run=_run):
     """Install the desktop entry, the .txl file type and the icon, and
-    make MiniWord the default for .txl (and with markdown for .md); for
-    .md and .txt it is offered under "Open with"."""
+    make MiniWord the default for .txl; for .md and .txt it is offered
+    under "Open with"."""
     data_dir = data_dir or data_home()
     entry, mime, icon = _files(data_dir)
-    defaults = [MIME_TYPE] + (['text/markdown'] if markdown else [])
     program = sys.executable
     if ' ' in program:
         program = '"%s"' % program
@@ -92,8 +92,7 @@ def install(markdown=False, data_dir=None, run=_run):
     shutil.copyfile(os.path.join(os.path.dirname(__file__), 'icons',
                                  'miniword.svg'), icon)
     _update(data_dir, run)
-    for mime_type in defaults:
-        run(['xdg-mime', 'default', 'miniword.desktop', mime_type])
+    run(['xdg-mime', 'default', 'miniword.desktop', MIME_TYPE])
 
 
 def uninstall(data_dir=None, run=_run):

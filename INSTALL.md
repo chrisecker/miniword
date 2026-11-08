@@ -89,7 +89,7 @@ The packages do this themselves. After an installation with pip, add MiniWord to
 miniword --install-desktop
 ```
 
-This writes a menu entry, the `.txl` file type and the icon into `~/.local/share` (no root rights needed; pip itself can't do this). MiniWord then opens `.txl` files and is offered for `.md` and `.txt` files; add `--markdown` to make it the default application for `.md` too. `miniword --uninstall-desktop` removes it again.
+This writes a menu entry, the `.txl` file type and the icon into `~/.local/share` (no root rights needed; pip itself can't do this). MiniWord then opens `.txl` files and is offered for `.md` and `.txt` files ("Open with"); to make it the default application for these, choose it in the file manager. `miniword --uninstall-desktop` removes it again.
 
 ## Running without installation
 

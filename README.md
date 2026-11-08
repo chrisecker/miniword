@@ -19,8 +19,8 @@ Download the installer for Windows (`.exe`), macOS (`.dmg`) or Linux (`.deb`, `.
 ## Command line
 
 ```
-miniword [-h] [--debug] [--install-desktop [--markdown]]
-         [--uninstall-desktop] [--version] [file]
+miniword [-h] [--debug] [--install-desktop] [--uninstall-desktop]
+         [--version] [file]
 ```
 
 (from a source folder without installation: `python miniword.py [options] [file]`)
@@ -32,7 +32,6 @@ miniword [-h] [--debug] [--install-desktop [--markdown]]
 | `--version` | Show the version and exit. |
 | `--debug` | Print debug output of the page layout. |
 | `--install-desktop` | Linux: add MiniWord to the desktop menu and open `.txl` files with it (see [INSTALL.md](INSTALL.md)). |
-| `--markdown` | With `--install-desktop`: open `.md` files with MiniWord too. |
 | `--uninstall-desktop` | Linux: undo `--install-desktop`. |
 
 ## Hacking
