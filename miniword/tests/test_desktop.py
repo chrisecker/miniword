@@ -20,7 +20,8 @@ def install():
     folder; the folder is removed on exit of the generator."""
     commands = []
     with tempfile.TemporaryDirectory() as tmp:
-        desktop.install(data_dir=tmp, run=commands.append)
+        desktop.install(data_dir=tmp, run=commands.append,
+                        argv0=sys.executable)
         yield tmp, commands
 
 
@@ -33,11 +34,13 @@ def test_DSK_1():
     "DSK-1: install writes desktop entry, file type and icon; sets .txl"
     for tmp, commands in install():
         entry = read(os.path.join(tmp, 'applications', 'miniword.desktop'))
-        assert sys.executable in entry and '-m miniword %f' in entry
+        assert 'Exec=' + sys.executable + ' %f\n' in entry
         assert 'MimeType=%s\n' % desktop.MIME_TYPES in entry
         mime = read(os.path.join(tmp, 'mime', 'packages', 'miniword.xml'))
         assert 'type="application/x-miniword"' in mime
         assert 'pattern="*.txl"' in mime
+        assert '<icon name="miniword"/>' in mime
+        assert '<generic-icon name="miniword"/>' in mime
         assert os.path.exists(os.path.join(
             tmp, 'icons', 'hicolor', 'scalable', 'apps', 'miniword.svg'))
         assert ['update-mime-database', os.path.join(tmp, 'mime')] \
@@ -67,3 +70,11 @@ def test_DSK_3():
                      ('icons', 'hicolor', 'scalable', 'apps',
                       'miniword.svg')):
             assert not os.path.exists(os.path.join(tmp, *path)), path
+
+
+def test_DSK_4():
+    "DSK-4: the launcher if started by one, else python -m miniword"
+    assert desktop.command(sys.executable) == sys.executable
+    main = os.path.join(os.path.dirname(desktop.__file__), '__main__.py')
+    assert desktop.command(main) == sys.executable + ' -m miniword'
+    assert desktop.command('-c') == sys.executable + ' -m miniword'

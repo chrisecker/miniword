@@ -1,8 +1,10 @@
 #!/bin/sh
 # Starts MiniWord from /usr/share/miniword (.deb/.rpm): not in the
 # site-packages of one Python version, so it survives Python updates.
+# sys.argv[0] is this script (for --install-desktop), not "-c".
 exec /usr/bin/python3 -c '
 import sys
+sys.argv.pop(0)
 sys.path.insert(0, "/usr/share/miniword")
 from miniword.__main__ import main
-sys.exit(main())' "$@"
+sys.exit(main())' "$0" "$@"

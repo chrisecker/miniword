@@ -23,11 +23,15 @@ MIME_TYPE = 'application/x-miniword'
 # in the menu entry: .txl, and "Open with" for Markdown and plain text
 MIME_TYPES = MIME_TYPE + ';text/markdown;text/plain;'
 
+# generic-icon too: GTK 4 searches theme by theme, so the default
+# application-x-generic (Adwaita) would win over miniword (hicolor)
 MIME_XML = '''\
 <?xml version="1.0" encoding="UTF-8"?>
 <mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
   <mime-type type="application/x-miniword">
     <comment>MiniWord document</comment>
+    <icon name="miniword"/>
+    <generic-icon name="miniword"/>
     <glob pattern="*.txl"/>
   </mime-type>
 </mime-info>
@@ -73,19 +77,33 @@ def _update(data_dir, run):
     run(['update-desktop-database', os.path.join(data_dir, 'applications')])
 
 
-def install(data_dir=None, run=_run):
+def command(argv0=None):
+    """The launcher MiniWord was started with (/usr/bin/miniword, pip's
+    script), else "python -m miniword" (fails for the .deb: its package
+    is not on the Python path)."""
+    argv0 = os.path.abspath(argv0 or sys.argv[0])
+    if os.path.basename(argv0) != '__main__.py' \
+            and os.access(argv0, os.X_OK):
+        return quote(argv0)
+    return quote(sys.executable) + ' -m miniword'
+
+
+def quote(path):
+    if ' ' in path:
+        return '"%s"' % path
+    return path
+
+
+def install(data_dir=None, run=_run, argv0=None):
     """Install the desktop entry, the .txl file type and the icon, and
     make MiniWord the default for .txl; for .md and .txt it is offered
     under "Open with"."""
     data_dir = data_dir or data_home()
     entry, mime, icon = _files(data_dir)
-    program = sys.executable
-    if ' ' in program:
-        program = '"%s"' % program
     for path in (entry, mime, icon):
         os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(entry, 'w', encoding='utf-8') as f:
-        f.write(ENTRY.format(exec=program + ' -m miniword',
+        f.write(ENTRY.format(exec=command(argv0),
                              mime_types=MIME_TYPES))
     with open(mime, 'w', encoding='utf-8') as f:
         f.write(MIME_XML)
