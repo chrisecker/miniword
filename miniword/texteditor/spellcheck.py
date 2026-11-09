@@ -5,7 +5,8 @@ relative to the page start; None: not checked. A rebuilt page is a new
 object and so unchecked, an unchanged page keeps its result. A word
 across a page boundary is checked by both pages (the word cache makes
 the second time cheap). The visible errors go to canvas.squiggles,
-except the word being typed.
+except the word being typed. Code is not checked: code blocks (Code
+containers) and text in a monospace font (inline code).
 
 Dictionary: enchant if installed (see develnotes/spellcheck_concept.md
 for the backends still to decide). Without one nothing is marked.
@@ -21,10 +22,14 @@ import time
 import wx
 from ..core.document import settings_default
 from ..textmodel.viewbase import ViewBase
+from ..textmodel.texeltree import EMPTYSTYLE, length
+from ..textmodel.utils import iter_leafes
 
 WORD = re.compile(r"\w+")  # words with digits or _ are skipped
 MARGIN = 50     # chars read beyond the page, for words across its edges
 DEBUG = False   # print the times of the idle steps
+MONO = {'courier', 'courier new', 'monospace', 'consolas', 'menlo',
+        'dejavu sans mono'}  # fonts of inline code
 
 
 def find_dictionary(language):
@@ -41,6 +46,25 @@ def find_dictionary(language):
         wanted = next((tag for tag in tags
                        if tag == lang or tag.startswith(lang + '_')), None)
     return enchant.Dict(wanted) if wanted else None
+
+
+def iter_code(texel, a, b, offset=0):
+    """(i1, i2) of the code in texel within [a, b): Code containers and
+    text in a monospace font, also in other containers (table cells)."""
+    for i1, i2, leaf in iter_leafes(texel, a - offset):
+        i1, i2 = i1 + offset, i2 + offset
+        if i1 >= b:
+            break
+        if getattr(leaf, 'txl_name', None) == 'code':
+            yield i1, i2
+        elif leaf.is_container:
+            j = i1
+            for child in leaf.childs:
+                yield from iter_code(child, max(a, j), b, j)
+                j += length(child)
+        elif getattr(leaf, 'style', EMPTYSTYLE).get(
+                'font_family', '').lower() in MONO:
+            yield i1, i2
 
 
 class SpellChecker(ViewBase):
@@ -77,12 +101,14 @@ class SpellChecker(ViewBase):
         a = max(0, j1 - MARGIN)
         b = min(len(model), j2 + MARGIN)
         text = model.get_text(a, b)
+        code = list(iter_code(model.get_xtexel(), a, b))
         errors = []
         for m in WORD.finditer(text):
             w1, w2 = a + m.start(), a + m.end()
             word = m.group()
             if w2 <= j1 or w1 >= j2 or len(word) < 2 or word.isupper() \
-                    or not word.isalpha():
+                    or not word.isalpha() \
+                    or any(c1 <= w1 < c2 for c1, c2 in code):
                 continue
             self.stats['words'] += 1
             if not self.correct(language, word):
@@ -265,6 +291,29 @@ def test_04():
     assert checker.canvas.squiggles[0] == [(0, 3), (13, 16)]
     checker.removed(None, 3, 'xx')           # [3, 5): touches (0, 3)
     assert checker.canvas.squiggles[0] == [(11, 14)]
+
+
+def test_05():
+    "not checked: code blocks, monospace text (also in a table)"
+    from ..textmodel.textmodel import TextModel
+    from ..textmodel.texeltree import Text, NL, grouped, EMPTYSTYLE
+    from ..textmodel.styles import Style
+    from ..mdelements.code import Code
+    from ..tables.tables import Table
+    checker = fake_checker()
+    mono = Style(font_family='Courier New')
+    model = TextModel('')
+    model.texel = grouped([
+        Text('teh '), Text('teh', mono), NL,
+        Code.from_text('teh teh'), NL,
+        Table((Text('teh', mono), EMPTYSTYLE), (Text('teh'), EMPTYSTYLE),
+              ncols=2), NL,
+        Text('teh'), NL])
+    text = model.get_text()
+    found = [text[i1:i2] for i1, i2 in
+             checker.check(model, 'en-us', 0, len(model))]
+    # the first, the plain cell, the last: at the right places
+    assert found == ['teh'] * 3, found
 
 
 def test_03():
