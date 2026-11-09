@@ -860,9 +860,9 @@ def picture_table(content):
     """A 1 x 2 table: an image (content) in the first cell, text in the
     second."""
     from ..tables.tables import Table
-    from ..textmodel.texeltree import T
-    return Table((grouped([image(content=content)]), {}), (T('x'), {}),
-                 ncols=2)
+    from ..textmodel.texeltree import T, EMPTYSTYLE
+    return Table((grouped([image(content=content)]), EMPTYSTYLE),
+                 (T('x'), EMPTYSTYLE), ncols=2)
 
 
 def test_FIT_3():

@@ -12,7 +12,7 @@ def get_moby_model():
     return TextModel(txt)
 
 def get_moby_styled():
-    # this is not propper, since we should use create_style:
+    # this is not propper, since we should use Style:
     s0 = dict(base='h0')
     s1 = dict(base='h1')
     

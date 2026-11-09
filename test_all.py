@@ -38,6 +38,7 @@ modules = [
     "miniword.tests.test_rowfactory",
     "miniword.tests.test_footnotes",
     "miniword.tests.test_images",
+    "miniword.tests.test_stylepool",
     "miniword.tests.test_tables",
     "miniword.tests.test_headerfooter",
     "miniword.tests.test_hyphenation",

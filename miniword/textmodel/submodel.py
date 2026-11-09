@@ -11,7 +11,7 @@ Submodels are needed for footnotes, floats and captions.
 
 from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import grouped, Single, G, T, NULL_TEXEL, get_text, \
-    ENDMARK, takeout, length
+    ENDMARK, takeout, length, as_style
 from ..textmodel.utils import transform_range
 from copy import copy as shallow_copy
 
@@ -68,7 +68,7 @@ class Footnote(Single):
     content   = NULL_TEXEL
     numbering = 'numbers'  # 'numbers' | 'letters' | 'roman'
     label     = None       # explicit label; if set, overrides auto-numbering
-    style     = {'vertical_position': 'superscript'}
+    style     = as_style({'vertical_position': 'superscript'})
 
     def __init__(self, content=ENDMARK):
         self.content = content

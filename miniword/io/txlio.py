@@ -26,6 +26,7 @@ import base64
 import os
 from ..core.document import Document
 from ..textmodel.textmodel import TextModel
+from ..textmodel.styles import Style
 from .texeltreeformat import serialize, parse, serialize_style, _Parser
 from ..core.styles import style_default, updated
 
@@ -394,8 +395,8 @@ def test_05():
 
     doc = Document()
     doc.textmodel.texel = Group([
-        Text('code'), NewLine().set_parstyle({'base': 'code',
-                                              'block_offset': 2})])
+        Text('code'), NewLine().set_parstyle(Style(base='code',
+                                                   block_offset=2))])
     doc.basestyles.set('code', dict(style_default, block_color='#eee',
                                     block_offset=4))
 
@@ -420,15 +421,14 @@ def test_05():
 def test_06():
     "clipboard: dumps/loads keep text, styles, paragraphs and images"
     from ..textmodel.texeltree import Group, Text, NewLine, get_text
-    from ..textmodel.styles import create_style
     from ..images import Image
     from ..images.images import iter_images
-    style = create_style(bold=True)
+    style = Style(bold=True)
     img = Image(b'\x89PNG data', alt='Photo', path='/tmp/a.png',
                 relative=True)
     model = TextModel()
     model.texel = Group([Text('ab', style), img,
-                         NewLine().set_parstyle({'base': 'h1'}),
+                         NewLine().set_parstyle(Style(base='h1')),
                          Text('cd')])
     model2 = loads(dumps(model))
     assert get_text(model2.texel) == get_text(model.texel)

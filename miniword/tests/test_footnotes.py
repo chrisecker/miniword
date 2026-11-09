@@ -16,7 +16,8 @@ footnotes.iter_footnotes).
 import wx
 
 from ..textmodel.textmodel import TextModel
-from ..textmodel.texeltree import T, G, grouped, ENDMARK, NewLine
+from ..textmodel.styles import Style
+from ..textmodel.texeltree import T, G, grouped, ENDMARK, NewLine, EMPTYSTYLE
 from ..textmodel.utils import iter_leafes
 from ..textmodel.submodel import Footnote, _get_text
 from ..texteditor.editor import TwoFlowEditor
@@ -210,8 +211,8 @@ def test_NFN_6():
     from ..tables.tables import Table as RealTable
     f2 = fnote('inner')
     f1 = fnote('outer ', f2)
-    table = RealTable((grouped([T('cell '), f1, T(' end')]), {}),
-                      (T('x'), {}), ncols=2)
+    table = RealTable((grouped([T('cell '), f1, T(' end')]), EMPTYSTYLE),
+                      (T('x'), EMPTYSTYLE), ncols=2)
     model = mk_model('ab', table, 'cd')
     assert offsets(model) == [0, 8]  # F1: 'outer ' + anchor + END
     editor = mk_editor(model)
@@ -252,8 +253,8 @@ def test_NFN_7():
     from ..textmodel.texeltree import ENDMARK as EM
     f3 = fnote('z')
     f2 = Footnote(grouped([T('y'), f3, NewLine(), T('second line'),
-                           EM.set_parstyle({'base': 'normal',
-                                            'alignment': 'right'})]))
+                           EM.set_parstyle(Style(base='normal',
+                                                 alignment='right'))]))
     f1 = fnote('x', f2.set_label('*')).set_numbering('roman')
     model = mk_model('ab', f1, 'cd', fnote('w'))
     loaded = save_load(model)

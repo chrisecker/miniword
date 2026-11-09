@@ -8,6 +8,7 @@ import io
 import keyword
 import token
 import tokenize
+from ..textmodel.styles import Style
 
 colorizers = {}  # language (lower case) -> colorize
 
@@ -24,10 +25,10 @@ def colorizer(lang):
 
 
 # GitHub's colors
-KEYWORD = {'color': '#cf222e'}
-STRING = {'color': '#0a3069'}
-COMMENT = {'color': '#6e7781'}
-NUMBER = {'color': '#0550ae'}
+KEYWORD = Style(color='#cf222e')
+STRING = Style(color='#0a3069')
+COMMENT = Style(color='#6e7781')
+NUMBER = Style(color='#0550ae')
 
 TOKEN_STYLES = {token.STRING: STRING, tokenize.COMMENT: COMMENT,
                 token.NUMBER: NUMBER}

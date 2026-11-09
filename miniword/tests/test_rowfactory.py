@@ -10,7 +10,9 @@ TESTDEVICE measures every character as 1 wide, every box as 1 high
 (depth 0) - all widths/heights below rely on that.
 """
 
-from ..textmodel.texeltree import Text, NewLine, Group, Tabulator, length
+from ..textmodel.texeltree import Text, NewLine, Group, Tabulator, length, \
+    EMPTYSTYLE
+from ..textmodel.styles import Style
 from ..textmodel.submodel import Footnote
 from ..textmodel.utils import iter_paragraphs
 from ..core.texels import BR
@@ -33,7 +35,7 @@ from ..tables.table_boxes import TableBox
 
 def ps(**kw):
     """A parstyle based on 'normal'."""
-    return dict(base='normal', **kw)
+    return Style(base='normal', **kw)
 
 
 def nl(endmark=False, **kw):
@@ -126,7 +128,7 @@ def Table(cells, ncols):
         last = leaves.pop()
         assert isinstance(last, NewLine)
         content = Group(leaves) if leaves else Group([])
-        entries.append((content, {}))
+        entries.append((content, EMPTYSTYLE))
     return RealTable(*entries, ncols=ncols)
 
 

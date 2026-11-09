@@ -9,6 +9,7 @@ Run with: python runtests.py miniword/tests/test_quotelevel.py
 """
 
 from ..core.styles import style_default
+from ..textmodel.styles import Style
 from ..layout.rowfactory import RowStack
 from .test_rowfactory import doc, par, generate, flat
 
@@ -181,7 +182,7 @@ def test_QL_9():
                    inspector.quote_bar_color, inspector.quote_color)
         assert inspector.quote_level.IsShown()
         assert not any(field.IsShown() for field in details)
-        model.set_parstyle(0, {'quote_level': 1})
+        model.set_parstyle(0, Style(quote_level=1))
         inspector.update()
         assert all(field.IsShown() for field in details)
 

@@ -3,6 +3,7 @@
 """TableBox rendering for Table texels."""
 
 from ..layout.boxes import Box, RowsBox, TextBox, EmptyTextBox, EMPTYSTYLE
+from ..textmodel.styles import Style
 from ..layout.testdevice import TESTDEVICE
 from .tables import from_strings
 
@@ -343,7 +344,7 @@ from ..textmodel.texeltree import Text, NewLine, Group
 
 
 def _nl(parstyle, endmark=False):
-    nl = NewLine().set_parstyle(parstyle)
+    nl = NewLine().set_parstyle(Style(**parstyle))
     if endmark:
         nl.is_endmark = 1
     return nl

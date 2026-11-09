@@ -18,6 +18,7 @@ import tempfile
 import wx
 
 from ..textmodel.textmodel import TextModel
+from ..textmodel.styles import Style
 from ..textmodel.texeltree import T, Group, grouped, NewLine, length, \
     iter_childs
 from ..textmodel.submodel import Footnote, _get_text
@@ -34,7 +35,7 @@ from ..tables.table_boxes import TableBox, CELL_HPAD, CELL_VPAD
 # Helpers
 
 def nl(**kw):
-    return NewLine().set_parstyle(dict(base='normal', **kw))
+    return NewLine().set_parstyle(Style(base='normal', **kw))
 
 
 def cell(*items):
@@ -57,7 +58,7 @@ def table(rows, styles=None, **kw):
         for c, content in enumerate(row):
             if isinstance(content, str):
                 content = cell(content)
-            style = (styles or {}).get((r, c), {})
+            style = Style(**(styles or {}).get((r, c), {}))
             entries.append((content, style))
     return Table(*entries, ncols=len(rows[0]), **kw)
 
@@ -262,7 +263,7 @@ def test_TBL_10():
     "TBL-10: list counters in cells don't flow back"
     numbered = dict(paragraph_type='numbered', fixed_indent=0)
     tbl = table([[cell('x', NewLine().set_parstyle(
-        dict(base='normal', **numbered)), 'y'), 'z']])
+        Style(base='normal', **numbered)), 'y'), 'z']])
     texel = grouped([T('a'), nl(**numbered), tbl, nl(),
                      T('b'), nl(**numbered)])
     paragraphs, state = generate(texel)

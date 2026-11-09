@@ -10,6 +10,7 @@ Run with: python runtests.py miniword/tests/test_inspector.py
 import wx
 
 from ..textmodel.textmodel import TextModel
+from ..textmodel.styles import Style
 from .guitest import style_inspector, settings_inspector, click, choose, \
     enter
 
@@ -31,8 +32,8 @@ PAR_CHECKBOXES = [
 def test_INS_1():
     "INS-1: get_parstyle gives the style of the paragraph at every index"
     m = TextModel("Eins\nZwei\ndrei")
-    m.set_parstyle(0, dict(x=1))  # "Eins\n"
-    m.set_parstyle(5, dict(x=2))  # "Zwei\n"
+    m.set_parstyle(0, Style(x=1))  # "Eins\n"
+    m.set_parstyle(5, Style(x=2))  # "Zwei\n"
     assert [m.get_parstyle(i)['x'] for i in range(7)] == [1] * 5 + [2] * 2
 
 
@@ -52,9 +53,9 @@ def test_INS_3():
     "INS-3: different values in the selection show as undetermined"
     for attr, key, default in PAR_CHECKBOXES:
         with style_inspector() as (inspector, model, editor):
-            model.set_parstyle(0, {key: not default})
+            model.set_parstyle(0, Style(**{key: not default}))
             # also different border sides (None in properties)
-            model.set_parstyle(5, dict(block_border_sides='tb'))
+            model.set_parstyle(5, Style(block_border_sides='tb'))
             editor.selection = (0, len(model))
             inspector.update()
             checkbox = getattr(inspector, attr)
@@ -80,7 +81,7 @@ def test_INS_4():
 def test_INS_5():
     "INS-5: a tab higher than the window scrolls, its rows aren't squeezed"
     with style_inspector(size=(330, 400)) as (inspector, model, editor):
-        model.set_parstyle(0, dict(paragraph_type='list'))
+        model.set_parstyle(0, Style(paragraph_type='list'))
         inspector.GetParent().Layout()
         inspector.update()
         page = inspector._structure_page  # Layout tab, list options shown
@@ -96,7 +97,7 @@ def test_INS_6():
     with style_inspector() as (inspector, model, editor):
         assert not inspector.list_indent.IsShown()
         for ptype in ('list', 'continued'):
-            model.set_parstyle(0, dict(paragraph_type=ptype))
+            model.set_parstyle(0, Style(paragraph_type=ptype))
             inspector.update()
             assert inspector.list_indent.IsShown(), ptype
         assert inspector.hyphenate.GetParent() is \
@@ -127,7 +128,7 @@ def test_INS_8():
         inspector.set_role('h1', 'h1')  # not unique: h0 keeps it
         assert sheet.get('h0')['role'] == sheet.get('h1')['role'] == 'h1'
 
-        model.set_parstyle(0, dict(base='normal'))
+        model.set_parstyle(0, Style(base='normal'))
         inspector.basestyle.DeleteStyle('normal')
         assert not sheet.contains('normal')
         assert 'base' not in model.get_parstyle(0)

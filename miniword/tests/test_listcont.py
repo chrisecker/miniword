@@ -9,6 +9,7 @@ Run with: python runtests.py miniword/tests/test_listcont.py
 """
 
 from .test_rowfactory import doc, par, generate, markers, numbered
+from ..textmodel.styles import Style
 
 
 def continued(level=0, **kw):
@@ -67,9 +68,9 @@ def test_LC_5():
     from ..textmodel.texeltree import Text, NL, grouped
     document = _load_mistune('')
     document.textmodel.texel = grouped([
-        Text('text'), NL.set_parstyle({'base': 'body'}),
-        Text('more'), NL.set_parstyle({'base': 'body',
-                                       'paragraph_type': 'continued'})])
+        Text('text'), NL.set_parstyle(Style(base='body')),
+        Text('more'), NL.set_parstyle(Style(base='body',
+                                            paragraph_type='continued'))])
     assert _doc_to_md(document) == 'text\n\nmore\n'
 
 
@@ -84,7 +85,7 @@ def test_LC_6():
     try:
         editor, model = frame.editor, frame.document.textmodel
         i = model.get_text().index('b')
-        model.set_parstyle(i, {'paragraph_type': 'numbered'})
+        model.set_parstyle(i, Style(paragraph_type='numbered'))
 
         def back():
             editor.set_index(i)
@@ -101,8 +102,8 @@ def test_LC_6():
         assert model.get_parstyle(i).get('paragraph_type') == 'continued'
         editor.undo()
         assert model.get_parstyle(i).get('paragraph_type') == 'numbered'
-        model.set_parstyle(i, {'paragraph_type': 'numbered',
-                               'counter': 'section'})  # a heading
+        model.set_parstyle(i, Style(paragraph_type='numbered',
+                                     counter='section'))  # a heading
         back()
         assert model.get_text().startswith('ab')  # joined at once
     finally:

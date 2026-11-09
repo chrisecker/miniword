@@ -6,7 +6,7 @@ Elements panel.
 """
 
 from ..core.utils import get_path
-from ..textmodel.texeltree import NL, grouped
+from ..textmodel.texeltree import NL, grouped, EMPTYSTYLE
 
 
 def texel_at(editor, j, cls):
@@ -34,7 +34,7 @@ def box_hit(controller, x, y):
     return box, bx, by
 
 
-def insert_par(editor, texel, parstyle={}):
+def insert_par(editor, texel, parstyle=EMPTYSTYLE):
     """Insert texel in a paragraph of its own (with parstyle); where it
     went."""
     with editor.atomic():

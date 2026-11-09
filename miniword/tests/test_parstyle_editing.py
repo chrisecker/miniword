@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 from ..texteditor.editor import Editor
 from ..textmodel.textmodel import TextModel
+from ..textmodel.styles import Style
 
 
 def doc(*paragraphs):
@@ -22,7 +23,7 @@ def doc(*paragraphs):
     model = TextModel(text)
     i = 0
     for t, base, *indent in paragraphs:
-        model.set_parstyle(i, dict(base=base))
+        model.set_parstyle(i, Style(base=base))
         model.set_indent(i, indent[0] if indent else 0)
         i += len(t.rstrip('$')) + 1
     return model, Editor(model)

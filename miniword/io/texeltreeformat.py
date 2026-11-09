@@ -52,6 +52,7 @@ from ..textmodel.texeltree import (
     as_style, grouped, join, length, depth,
     iter_childs, takeout
 )
+from ..textmodel.styles import Style
 from ..core.texels import BR
 from ..mdelements.rule import Rule
 from ..mdelements.checkbox import Checkbox
@@ -969,7 +970,7 @@ def test_08():
 def test_09():
     "footnotes: content, nesting, label, numbering, style, endmark"
     from ..textmodel.submodel import Footnote
-    em = ENDMARK.set_parstyle({'alignment': 'right'})
+    em = ENDMARK.set_parstyle(Style(alignment='right'))
     f2 = Footnote(grouped([Text('inner'), em])).set_label('*')
     f1 = Footnote(grouped([Text('outer '), f2, Text(' end'), NL,
                            Text('second'), ENDMARK]))
@@ -1014,8 +1015,8 @@ def test_11():
 def test_12():
     "Roundtrip: right indent and block properties"
     from ..textmodel.texeltree import NewLine
-    ps = dict(right_indent=20, block_color='red', block_offset=3,
-              block_border_width=1.5, block_border_color='blue',
+    ps = Style(right_indent=20, block_color='red', block_offset=3,
+               block_border_width=1.5, block_border_color='blue',
               block_border_sides='tb', widow_orphan_control=False)
     root, _, _ = parse(serialize(Group([Text('a'),
                                         NewLine().set_parstyle(ps)])))

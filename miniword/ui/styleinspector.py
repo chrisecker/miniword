@@ -9,7 +9,7 @@ from ..textmodel.textmodel import TextModel
 from ..textmodel.texeltree import EMPTYSTYLE, provides_childs, iter_childs, \
     NewLine, dump
 from ..textmodel.utils import iter_newlines
-from ..textmodel.styles import create_style
+from ..textmodel.styles import Style
 from ..layout.cairodevice import defaultstyle
 
 from .unitentry import LengthInput, FractionInput, EVT_UNIT_CHANGED

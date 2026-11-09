@@ -3,8 +3,7 @@
 from . import texeltree
 from .texeltree import G, T, length, grouped, provides_childs, iter_childs, \
     is_root_efficient, is_list_efficient, is_homogeneous, calc_length, \
-    get_pieces, fuse, EMPTYSTYLE, NL, NewLine, style_pool, hash_style, \
-    transform
+    get_pieces, fuse, EMPTYSTYLE, NL, NewLine, Style, transform
 
 
 debug = 0
@@ -31,20 +30,10 @@ class StyleIterator:
             self.finished = True
 
 
-def create_style(**kwds):
-    global style_pool
-    key = hash_style(kwds)
-    try:
-        return style_pool[key]
-    except KeyError:
-        style_pool[key] = kwds
-        return kwds
-
-
 def updated_style(style, properties):
     new = style.copy()
     new.update(properties)
-    return create_style(**new)
+    return Style(**new)
 
 
 def cleared_style(style, keys):
@@ -52,7 +41,7 @@ def cleared_style(style, keys):
     for key in keys:
         if key in new:
             del new[key]
-    return create_style(**new)
+    return Style(**new)
 
 
 def get_style(texel, i):
@@ -274,8 +263,8 @@ if debug: # enable contract checking
 
 def test_00():
     "get_style"
-    s10 = dict(size=10)
-    s12 = dict(size=12)
+    s10 = Style(size=10)
+    s12 = Style(size=12)
     g = G([T("01", s10), 
            T("23", s12), 
            T("4567890", s10)])
@@ -287,8 +276,8 @@ def test_00():
 
 def test_01():
     "get_styles"
-    s10 = dict(size=10)
-    s14 = dict(size=14)
+    s10 = Style(size=10)
+    s14 = Style(size=14)
     t = G([T("01234", s10), T("5678", s14)])
     #texeltree.dump(t)
     assert get_styles(t, 0, 2) == [(2, s10)]
@@ -301,9 +290,9 @@ def test_01():
 
 def test_10():
     "set_styles"
-    s10 = dict(size=10)
-    s12 = dict(size=12)
-    s14 = dict(size=14)
+    s10 = Style(size=10)
+    s12 = Style(size=12)
+    s14 = Style(size=14)
     t = T("0123456789", s10)
     styles = [(2, s12), (5, s14)]
     iterator = StyleIterator(iter(styles))
@@ -331,8 +320,8 @@ def test_10():
 
 def test_11():
     "set_properties"
-    s10 = dict(size=10)
-    s12 = dict(size=12)
+    s10 = Style(size=10)
+    s12 = Style(size=12)
     t = T("0123456789", s10)
     g = grouped(set_properties(t, 2, 4, dict(size=12)))
     #texeltree.dump(g)
@@ -342,7 +331,7 @@ def test_11():
 def test_12():
     "set_parstyles"
     t = grouped([T("0123456789"), NL, T("abcdef"), NL]) 
-    iterator = StyleIterator(iter([(10, {'bold':True})]))
+    iterator = StyleIterator(iter([(10, Style(bold=True))]))
     g = grouped(set_parstyles(t, 5, iterator))
     assert get_parstyles(g, 0, length(g)) == [(10, {}), (1, {'bold': True}), (7, {})]
 

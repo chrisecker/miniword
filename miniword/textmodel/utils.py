@@ -587,9 +587,9 @@ def test_13():
 
 def test_14():
     "transform_range keeps a container's childs (one texel per child)"
-    from .texeltree import T, G, NL, Fraction, get_text
+    from .texeltree import T, G, NL, Fraction, get_text, as_style
     def bold(texel):
-        return texel.set_style({'bold': True})
+        return texel.set_style(as_style({'bold': True}))
     # numerator is a Group, denominator a Text: both become several
     # texels when only partly in range - must not leak into the
     # container's childs

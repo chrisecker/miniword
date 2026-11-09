@@ -1,7 +1,8 @@
 from copy import copy
 
 from ..textmodel.texeltree import Text, Container, length, as_style, \
-    NULL_TEXEL, NL
+    NULL_TEXEL, NL, EMPTYSTYLE
+from ..textmodel.styles import Style
 
 """
 Terms:
@@ -267,7 +268,7 @@ def from_cells(cells, col_widths=None, row_heights=None, nheader=0, breaklevel=1
                  row_heights=row_heights, nheader=nheader, breaklevel=breaklevel)
 
 
-def from_strings(rows, parstyle={}):
+def from_strings(rows, parstyle=EMPTYSTYLE):
     """
     Creates a Table from a nested list of strings with a default parstyle.
     """
@@ -277,7 +278,7 @@ def from_strings(rows, parstyle={}):
 
 
 
-def empty_table(rows, cols, parstyle={}):
+def empty_table(rows, cols, parstyle=EMPTYSTYLE):
     """
     Initializes a new Table grid with empty content strings.
     """
@@ -452,8 +453,8 @@ def test_10():
     t = from_strings([["a", "b"], ["c", "d"]])
     m.texel = t
 
-    right = {'alignment':'right'}
-    center = {'alignment':'center'}
+    right = Style(alignment='right')
+    center = Style(alignment='center')
     m.set_parstyle(1, right) # right align "a"
     m.set_parstyle(3, center) # center "b"
     assert m.get_parstyle(1) == right

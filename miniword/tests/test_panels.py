@@ -11,6 +11,7 @@ from contextlib import contextmanager
 import wx
 
 from .guitest import app, click, close
+from ..textmodel.styles import Style
 
 
 @contextmanager
@@ -41,7 +42,7 @@ def test_UI_1():
         panel.update()
         assert panel.hint.IsShown()
         model = frame.document.textmodel
-        model.set_parstyle(0, dict(base='h1'))
+        model.set_parstyle(0, Style(base='h1'))
         from ..core.styles import style_default
         frame.document.basestyles.set('h1', dict(style_default, role='h1',
                                                  fixed_indent=0))

@@ -4,6 +4,7 @@ from ..textmodel.viewbase import overridable_property
 from ..textmodel.submodel import SubModel, Footnote
 from ..textmodel.modelbase import Model
 from ..textmodel.texeltree import length, EMPTYSTYLE
+from ..textmodel.styles import Style
 from ..textmodel.utils import iter_leafes, get_path
 from .undoredo import UndoRedo
 from .controller import NullController
@@ -327,7 +328,8 @@ class Editor(UndoRedo):
             self.add_undo(self._insert(self.flow, i, tmp))
             if at_end and self.role(parstyle) in HEADINGS:
                 body = self.role_key('normal')
-                self.keep_par(index + 1, (dict(base=body) if body else {}, 0))
+                self.keep_par(index + 1,
+                              (Style(base=body) if body else EMPTYSTYLE, 0))
 
     def role(self, parstyle):
         """The role of a paragraph style's base style, or None."""
@@ -870,7 +872,7 @@ def test_03c():
     assert editor.root.get_style(2).get('bold')
 
     editor.index = 3
-    editor.set_parstyle({'base': 'normal', 'alignment': 'right'})
+    editor.set_parstyle(Style(base='normal', alignment='right'))
     assert editor.root.get_parstyle(3).get('alignment') == 'right'
     editor.undo()
     assert editor.root.get_parstyle(3).get('alignment') != 'right'

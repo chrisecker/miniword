@@ -6,7 +6,7 @@ from .texeltree import (
     grouped, length, iter_childs, strip2list, EMPTYSTYLE, dump)
 
 from .styles import (
-    updated_style, create_style, get_styles, set_styles, get_style,
+    updated_style, Style, get_styles, set_styles, get_style,
     set_properties, get_parstyles, set_parstyles, set_parproperties,
     clear_properties, clear_parproperties, StyleIterator)
 
@@ -85,7 +85,7 @@ class TextModel(Model):
     - "properties changed" (arguments: i1, i2)
 
     """
-    defaultstyle = create_style()
+    defaultstyle = Style()
     texel = overridable_property('texel', "Root texel of this model")
     xtexel = overridable_property('xtexel', "Extended root (texel+endmark)")
 
@@ -658,7 +658,7 @@ def test_04():
 def test_05():
     "style"
     class TestModel(TextModel):
-        defaultstyle = create_style(textcolor='black', fontsize=10)
+        defaultstyle = Style(textcolor='black', fontsize=10)
 
     t1 = TestModel(text1)
     assert t1.get_text() == text1
@@ -792,7 +792,7 @@ def heavy_test():
 def test_14():
     "random insert/remove"
     class TestModel(TextModel):
-        defaultstyle = create_style(s=10)
+        defaultstyle = Style(s=10)
 
     model = TestModel(u'0123')
     from random import randrange, choice
@@ -821,7 +821,7 @@ def test_15():
     "get/set styles"
 
     s0 = TextModel.defaultstyle
-    s1 = create_style(bgcolor='red')
+    s1 = Style(bgcolor='red')
 
     t = Text(text1)
     assert get_styles(t, 0, length(t)) == [(length(t), s0)]
@@ -858,7 +858,7 @@ def test_15():
 def test_16():
     "undo properties"
     s0 = TextModel.defaultstyle
-    s1 = create_style(fontsize=3)
+    s1 = Style(fontsize=3)
 
     model = TextModel(text1)
     old = model.set_properties(2, 5, fontsize=3)
@@ -960,13 +960,13 @@ def test_23():
     "get_parstyle inside a container"
     from .texeltree import Fraction
     # Paragraph: [container] [NL with parstyle]
-    nl = NewLine({'color': 'red'})
-    nl = nl.set_parstyle({'alignment': 'left'})
+    nl = NewLine(Style(color='red'))
+    nl = nl.set_parstyle(Style(alignment='left'))
     nl.indent = 2
     
     container = Fraction(Text("a"), Text("b"))
-    sep1 = container.childs[2].set_parstyle({'alignment' : 'right'})
-    sep2 = container.childs[4].set_parstyle({'alignment' : 'center'})
+    sep1 = container.childs[2].set_parstyle(Style(alignment='right'))
+    sep2 = container.childs[4].set_parstyle(Style(alignment='center'))
 
     container.childs[2] = sep1
     container.childs[4] = sep2

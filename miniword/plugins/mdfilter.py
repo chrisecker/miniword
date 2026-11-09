@@ -12,6 +12,7 @@ import re
 
 from miniword.io.importexport import register_import, register_export, \
     register_paste_as
+from miniword.textmodel.styles import Style, updated_style
 
 _BR = re.compile(r'<br\s*/?>', re.I)
 
@@ -551,7 +552,7 @@ def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
         ps['paragraph_type'] = ptype
     if ps.get('quote_level') == 1 and base in ('quote',) + _ALERTS:
         del ps['quote_level']  # the style's
-    model.set_parstyle(nl_pos, ps)
+    model.set_parstyle(nl_pos, Style(**ps))
     if indent:
         model.set_indent(nl_pos, indent)
 
@@ -629,7 +630,7 @@ def _table(grid, nheader=1, aligns=()):
     from miniword.tables.tables import Table
     styles = [{'alignment': a} if a else {} for a in aligns] \
         or [{}] * len(grid[0])
-    table = Table(*[(_cell_texel(cell), dict(styles[c]))
+    table = Table(*[(_cell_texel(cell), Style(**styles[c]))
                     for row in grid for c, cell in enumerate(row)],
                   ncols=len(grid[0]))
     return table.set_nheader(nheader) if nheader else table
@@ -757,7 +758,8 @@ def _adopt_existing_styles(textmodel, doc):
                 continue
             base = nl.parstyle.get('base')
             if base in remap:
-                textmodel.set_parstyle(i2 - 1, dict(nl.parstyle, base=remap[base]))
+                textmodel.set_parstyle(
+                    i2 - 1, updated_style(nl.parstyle, dict(base=remap[base])))
 
     return {name for name, key in keys.items() if key}
 
@@ -1870,7 +1872,8 @@ def test_46():
     doc = _load_mistune('1. a\n2. b\n')
     model = doc.textmodel
     i = model.get_text().index('b')
-    model.set_parstyle(i, dict(model.get_parstyle(i), start_number=7))
+    model.set_parstyle(i, updated_style(model.get_parstyle(i),
+                                       dict(start_number=7)))
     assert any('restart' in w for w in _check_md(doc))
     md = '| a | b |\n|:-:|---|\n| 1 | 2 |\n'
     assert _check_md(_load_mistune(md)) == []
@@ -1925,7 +1928,7 @@ def test_49():
     from miniword.textmodel.texeltree import T, NL, grouped
     doc = _md_doc('')
     doc.textmodel.texel = grouped([
-        T('a ', dict(bold=True)), T('b '), T(' c', dict(italic=True)), NL])
+        T('a ', Style(bold=True)), T('b '), T(' c', Style(italic=True)), NL])
     assert _doc_to_md(doc) == '**a** b  *c*\n'
 
 

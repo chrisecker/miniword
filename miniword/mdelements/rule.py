@@ -1,6 +1,7 @@
 """The horizontal rule (Markdown ---): texel, box, insert command."""
 
-from ..textmodel.texeltree import Single
+from ..textmodel.texeltree import Single, EMPTYSTYLE
+from ..textmodel.styles import Style
 from ..layout.boxes import SingleBox
 from . import insert_par
 
@@ -34,4 +35,4 @@ def insert_rule(editor):
     """Insert a horizontal rule, in a paragraph of its own (style with
     the role 'rule', if there is one)."""
     key = editor.role_key('rule')
-    insert_par(editor, Rule(), {'base': key} if key else {})
+    insert_par(editor, Rule(), Style(base=key) if key else EMPTYSTYLE)

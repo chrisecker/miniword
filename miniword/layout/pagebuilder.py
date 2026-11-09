@@ -5,6 +5,7 @@
 
 
 from ..core.units import cm, mm
+from ..textmodel.styles import Style
 from ..core.styles import updated
 from . import boxes
 from .boxes import VBox, select_i_by_xy, select_i_by_y
@@ -711,7 +712,7 @@ def test_04():
     if wx.App.Get() is None:
         wx.App(False)
 
-    red = dict(base='normal', block_color='red', block_offset=2)
+    red = Style(base='normal', block_color='red', block_offset=2)
     model = TextModel('\n'.join('paragraph %d' % k for k in range(60)))
     builder = _small_builder(model)
 

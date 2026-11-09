@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from .documentnode import DocumentNode
-from ..textmodel.styles import create_style
+from ..textmodel.styles import Style
 from .styles import style_default, updated, normal, h0, h1, h2, h3
 
 
@@ -15,9 +15,9 @@ class StyleSheet(DocumentNode):
         self.data = OrderedDict()
 
     def set(self, key, value):
-        # create_style ist eigentlich nicht nötig. Zumindest wenn das
+        # Style ist eigentlich nicht nötig. Zumindest wenn das
         # Dict wirklich ein registrierter Style ist.
-        self.data[key] = create_style(**value)
+        self.data[key] = Style(**value)
         self.normal = self.role_key('normal')
         self.notify('style_changed', key)
 

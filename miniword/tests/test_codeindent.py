@@ -9,6 +9,7 @@ Run with: python runtests.py miniword/tests/test_codeindent.py
 """
 
 from ..textmodel.texeltree import Group, Text, NL
+from ..textmodel.styles import Style
 from .test_code import frame_with, code, codes
 from .guitest import close
 
@@ -75,7 +76,7 @@ def test_CODE_4():
         act(frame, 'indent')
         assert model.get_text().startswith('a\n')
         assert model.get_indent(0) == 1
-        model.set_parstyle(1, {'base': 'pre'})
+        model.set_parstyle(1, Style(base='pre'))
         frame.canvas.builder.assure_index(len(model), 0)
         act(frame, 'indent')
         assert model.get_text().startswith('a\n')
@@ -92,7 +93,7 @@ def test_CODE_5():
         editor, model = frame.editor, frame.document.textmodel
         editor.set_index(model.get_text().index('x') + 1)
         editor.insert_texel(Group([
-            Text('y'), NL.set_parstyle({'base': 'h1'}), Text('z')]))
+            Text('y'), NL.set_parstyle(Style(base='h1')), Text('z')]))
         editor.set_index(model.get_text().index('xy'))
         act(frame, 'indent')
         assert codes(model.texel) == [('code', '', '    xy\nz')]

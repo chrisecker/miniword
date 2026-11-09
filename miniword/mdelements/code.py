@@ -7,7 +7,8 @@ rawhtml.py).
 from copy import copy as shallow_copy
 from itertools import groupby
 from ..textmodel.texeltree import Container, Text, NewLine, NL, \
-    NULL_TEXEL, grouped, length, get_text
+    NULL_TEXEL, grouped, length, get_text, EMPTYSTYLE
+from ..textmodel.styles import Style
 from ..textmodel.utils import iter_leafes
 from ..core.utils import get_path
 from ..layout.boxes import Box
@@ -29,7 +30,7 @@ class Code(Container):
     def __init__(self, content=NULL_TEXEL, kind='code', lang=''):
         self.kind, self.lang = kind, lang
         # childs as a table cell's: SEP, content, SEP ending its last line
-        self.childs = [NL, content, NL.set_parstyle({'base': 'pre'})]
+        self.childs = [NL, content, NL.set_parstyle(Style(base='pre'))]
         self.compute_weights()
 
     @classmethod
@@ -37,7 +38,7 @@ class Code(Container):
         """A code block of text, its lines in the style 'pre'."""
         texels = []
         for line in text.split('\n'):
-            texels += [Text(line), NL.set_parstyle({'base': 'pre'})]
+            texels += [Text(line), NL.set_parstyle(Style(base='pre'))]
         return cls(grouped(texels[:-1]), kind, lang)  # the last NL: ours
 
     @property
@@ -114,7 +115,7 @@ class CodeBox(TableBox):
 def shown(content, parstyle, lang=''):
     """content as shown: the text in the colors of its language lang
     (else plain) instead of its styles, each line in parstyle."""
-    styles = [{}] * length(content)  # of each character
+    styles = [EMPTYSTYLE] * length(content)  # of each character
     colorize = colorizer(lang)
     if colorize:
         for i1, i2, style in colorize(get_text(content)):

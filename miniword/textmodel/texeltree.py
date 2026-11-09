@@ -20,21 +20,48 @@ def set_nmax(n):
     nmax = n
 
     
-EMPTYSTYLE = {}
-style_pool = {():EMPTYSTYLE}
+style_pool = {}  # hash_style(style) -> style; never shrinks
 
 def hash_style(style):
     return tuple(sorted(style.items()))
 
 
+class Style(dict):
+    """A style from the style pool, made as Style(**properties). Equal
+    styles are one object and never deleted, so id(style) identifies
+    it. A Style can't be changed: derive a new one, e.g. with
+    Style(**dict(style, bold=True)). Texels take Styles only, never
+    plain dicts."""
+    __slots__ = ()
+
+    def __new__(cls, **properties):
+        key = hash_style(properties)
+        try:
+            return style_pool[key]
+        except KeyError:
+            style = style_pool[key] = dict.__new__(cls)
+            dict.update(style, properties)
+            return style
+
+    def __init__(self, **properties):
+        pass  # filled by __new__
+
+    def __reduce__(self):  # pickle and copy: the pooled object
+        return as_style, (dict(self),)
+
+    def readonly(self, *args, **kwds):
+        raise TypeError("a Style can't be changed")
+
+    __setitem__ = __delitem__ = __ior__ = update = pop = popitem = \
+        clear = setdefault = readonly
+
+
 def as_style(d):
-    global style_pool
-    key = hash_style(d)
-    try:
-        return style_pool[key]
-    except KeyError:
-        style_pool[key] = d
-        return d
+    """d as a Style (d itself if it is one)."""
+    return d if isinstance(d, Style) else Style(**d)
+
+
+EMPTYSTYLE = Style()
 
 
 # ---- Tree objects ----
@@ -55,9 +82,11 @@ class Single(Texel):
 
     def __init__(self, style=None):
         if style:
+            assert isinstance(style, Style), style
             self.style = style
 
     def set_style(self, style):
+        assert isinstance(style, Style), style
         clone = shallow_copy(self)
         clone.style = style
         return clone
@@ -71,6 +100,7 @@ class Single(Texel):
 class Text(Texel):
     is_text = 1
     def __init__(self, text, style=EMPTYSTYLE):
+        assert isinstance(style, Style), style
         self.text = text
         self.style = style
         self.weights = (0, len(text), 0)
@@ -79,6 +109,7 @@ class Text(Texel):
         return "T(%s)" % repr(self.text)
 
     def set_style(self, style):
+        assert isinstance(style, Style), style
         clone = shallow_copy(self)
         clone.style = style
         return clone
@@ -152,6 +183,7 @@ class NewLine(Single):
         return 'NL'
 
     def set_parstyle(self, style):
+        assert isinstance(style, Style), style
         clone = shallow_copy(self)
         clone.parstyle = style
         return clone
@@ -1113,8 +1145,8 @@ def test_11():
 
 def test_12():
     "transform"
-    texel = G([T('1'), T('2', dict(color='red')), T('3')])
-    s = dict(size=13)
+    texel = G([T('1'), T('2', as_style(dict(color='red'))), T('3')])
+    s = as_style(dict(size=13))
     fun = lambda t: t.set_style(s)
     t = grouped(transform(texel, 1, 3, fun))
     assert str(t) == "G([T('1'), T('23')])"

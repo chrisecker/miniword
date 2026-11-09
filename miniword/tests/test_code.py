@@ -8,6 +8,7 @@ Run with: python runtests.py miniword/tests/test_code.py
 """
 
 from ..mdelements.code import Code
+from ..textmodel.styles import Style
 from ..textmodel.texeltree import Group, Text, NL, grouped, length
 from .test_rowfactory import doc, par, pages_from, small_memo
 
@@ -16,7 +17,7 @@ def code(*lines, **kw):
     """A Code texel of lines (its last newline is the closing SEP)."""
     texels = []
     for line in lines:
-        texels += [Text(line), NL.set_parstyle({'base': 'pre'})]
+        texels += [Text(line), NL.set_parstyle(Style(base='pre'))]
     return Code(grouped(texels[:-1]), **kw)
 
 
@@ -169,7 +170,7 @@ def test_CODE_10():
         model = frame.document.textmodel
         frame.editor.set_index(model.get_text().index('x'))
         frame.editor.insert_texel(Group([
-            Text('bold', dict(bold=True)), NL.set_parstyle({'base': 'h1'})]))
+            Text('bold', Style(bold=True)), NL.set_parstyle(Style(base='h1'))]))
         frame.editor.insert_text('line')
         (kind, lang, text), = codes(model.texel)
         assert text == 'bold\nlinex'
