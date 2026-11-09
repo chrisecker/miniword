@@ -11,7 +11,7 @@ Run with: python runtests.py miniword/tests/test_headerfooter.py
 from ..core.document import settings_default
 from ..core.utils import updated
 from ..layout.page import field_text, header_footer
-from ..layout.pagebuilder import Layout, same_continuation
+from ..layout.pagebuilder import Layout
 from ..layout.testdevice import TestDevice
 from .test_rowfactory import doc, par, lines, pages_from, small_memo, \
     page_starts
@@ -67,8 +67,10 @@ def test_HF_4():
 # ---------------------------------------------------------------------
 
 def heads(texel, height=5):
-    pages = pages_from(texel, small_memo(width=20, height=height))
-    return [(page.chapter, page.section) for page in pages]
+    layout = Layout([])  # its append_page sets the running heads
+    for page in pages_from(texel, small_memo(width=20, height=height)):
+        layout.append_page(page)
+    return [(page.chapter, page.section) for page in layout.childs]
 
 
 def h1(text):
@@ -112,25 +114,36 @@ def test_HF_7():
 
 
 def test_HF_8():
-    "HF-8: restarting from a page's memo gives the same running heads"
+    "HF-8: restarting from a page's memo gives the same headings"
     texel = doc(h1('A'), body('a', 6), h2('A1'), body('b', 6),
                 h1('B'), body('c', 6), h2('B1'), body('d', 6))
     pages = pages_from(texel, small_memo(width=20, height=5))
     starts = page_starts(pages)
-    expected = [(p.chapter, p.section) for p in pages]
+    expected = [p.headings for p in pages]
     for k in range(len(pages) - 1):
         again = pages_from(texel, pages[k].restartmemo, starts[k + 1])
-        assert [(p.chapter, p.section) for p in again] == expected[k + 1:]
+        assert [p.headings for p in again] == expected[k + 1:]
 
 
 def test_HF_9():
-    "HF-9: memos with different running heads don't continue the same way"
-    texel = doc(h1('A'), body('a', 6))
-    other = doc(h1('B'), body('a', 6))
-    old = pages_from(texel, small_memo(width=20, height=5))[0].restartmemo
-    new = pages_from(other, small_memo(width=20, height=5))[0].restartmemo
-    assert not same_continuation(old, new)
-    assert same_continuation(old, old.copy())
+    "HF-9: a changed heading sets only its page anew, later heads follow"
+    import wx
+    from ..textmodel.textmodel import TextModel
+    from ..textmodel.styles import Style
+    from ..layout.pagebuilder import _small_builder
+    if wx.App.Get() is None:
+        wx.App(False)
+    model = TextModel('Alpha\n' + '\n'.join('text %d' % k
+                                             for k in range(300)))
+    model.set_parstyle(0, Style(base='h0'))  # testsheet: role h1
+    builder = _small_builder(model)
+    pages = builder._layout.childs
+    assert len(pages) > 5 and pages[-1].chapter == 'Alpha'
+    model.insert_text(0, 'X')
+    builder.assure_finished()
+    assert sum(builder.get_updatestats()[:2]) <= 2  # the rest reused
+    assert [p.chapter for p in builder._layout.childs] \
+        == ['XAlpha'] * len(builder._layout.childs)
 
 
 def test_HF_10():

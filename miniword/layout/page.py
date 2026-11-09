@@ -71,16 +71,17 @@ class FootnoteBox(RowsBox):
 
 class Page(Box):
     pagenum       = 0
-    margin        = (2 * cm,) * 4  # XXX
-    page          = 0
+    margin        = (2 * cm,) * 4  # set by generate_pages, as settings
     height        = 0
     shadings      = ()
     borders       = ()
     restartmemo   = None
     settings      = settings_default
-    chapter       = ''  # running heads, see generate_pages
+    headings      = ()  # (role, text) of the h1/h2 on the page
+    chapter       = ''  # running heads, see adjust
     section       = ''
-    layout        = None  # set by Layout.append_page: the page count
+    heads_after   = ('', '')  # (chapter, section) in effect at the end
+    layout        = None  # set by Layout.append_page: for the page count
     header_style  = EMPTYSTYLE  # basestyles 'header'/'footer', see
     footer_style  = EMPTYSTYLE  # generate_pages
 
@@ -99,14 +100,25 @@ class Page(Box):
     def __len__(self):
         return self.length[0]
 
-    def adjust(self, pagenum):
-        """Update page properties that do not affect layout.
-
-        Currently used only for the page number. Could also be used
-        for section numbering and list numbering (as long as layout is
-        unaffected).
-        """
+    def adjust(self, pagenum, before=None):
+        """Update page properties that do not affect layout, from the
+        page before (None: the first): the page number and the running
+        heads. Chapter (h1) and section (h2): the first heading on the
+        page, else the one in effect before; a new h1 clears the
+        section."""
         self.pagenum = pagenum
+        old = before.heads_after if before is not None else ('', '')
+        chapter, section = old
+        first = {}
+        for role, text in self.headings:
+            first.setdefault(role, text)
+            if role == 'h1':
+                chapter, section = text, ''
+            else:
+                section = text
+        self.heads_after = chapter, section
+        self.chapter = first.get('h1', old[0])
+        self.section = first.get('h2', '' if 'h1' in first else old[1])
 
     def draw_background(self, x, y, gc):
         """Fill the page with its background color."""

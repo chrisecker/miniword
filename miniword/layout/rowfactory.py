@@ -150,8 +150,6 @@ class State:
         self.floats = []
         self.counters = {}
         self.footnote_counter = 0
-        self.chapter = ''  # the running heads in effect (role h1, h2)
-        self.section = ''
         self.settings = settings_default
 
     def copy(self):
@@ -864,26 +862,12 @@ def keep_with_next(placed, buffer):
         del placed[k:]
 
 
-def running_heads(placed, state):
-    """(chapter, section) of a page with the rows placed: the first
-    heading with role h1/h2 on it, else the one in effect before; a new
-    h1 clears the section. Updates state to the headings in effect at
-    the page's end."""
-    old_chapter, old_section = state.chapter, state.section
-    chapter = section = None
-    for y, record in placed:
-        role, text = getattr(record[0], 'heading', (None, None))
-        if role == 'h1':
-            if chapter is None:
-                chapter = text
-            state.chapter, state.section = text, ''
-        elif role == 'h2':
-            if section is None:
-                section = text
-            state.section = text
-    if section is None:
-        section = old_section if chapter is None else ''
-    return (old_chapter if chapter is None else chapter), section
+def page_headings(placed):
+    """The headings (role, text) with role h1/h2 among the rows placed
+    on a page, in order: its running heads, see Page.adjust."""
+    headings = [getattr(record[0], 'heading', (None, None))
+                for y, record in placed]
+    return tuple(h for h in headings if h[0] in ('h1', 'h2'))
 
 
 def generate_pages(texel, i1, memo, stylesheet, device):
@@ -954,7 +938,7 @@ def generate_pages(texel, i1, memo, stylesheet, device):
         page.settings = state.settings
         page.header_style = page_style(stylesheet, 'header')
         page.footer_style = page_style(stylesheet, 'footer')
-        page.chapter, page.section = running_heads(body.placed, state)
+        page.headings = page_headings(body.placed)
         page.restartmemo = state.copy()
         yield page
 
