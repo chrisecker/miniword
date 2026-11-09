@@ -46,6 +46,16 @@ def _iter_textboxes(dc, box, i1, i2, x, y):
             yield from _iter_textboxes(dc, child, i1 - j1, i2 - j1, x1, y1)
 
 
+def iter_marked(dc, boxes, i1, i2):
+    """_iter_textboxes for the boxes (j1, j2, x, y, box) of a layout,
+    which come in order: those outside [i1, i2) are not looked into."""
+    for j1, j2, x, y, box in boxes:
+        if j1 >= i2:
+            break
+        if j2 > i1:
+            yield from _iter_textboxes(dc, box, i1 - j1, i2 - j1, x, y)
+
+
 def highlight(dc, boxes, i1, i2, color='yellow'):
     """Draw a colored background behind all characters in [i1, i2].
 
@@ -60,13 +70,12 @@ def highlight(dc, boxes, i1, i2, color='yellow'):
         i1, i2: Index range to annotate (flow-relative positions).
         color:  Fill color accepted by device.fill_rect().
     """
-    for j1, j2, x, y, box in boxes:
-        for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1-j1, i2-j1, x, y):
-            hx1 = x1 + px1
-            hx2 = x1 + px2
-            if hx2 > hx1:
-                child.device.fill_rect(
-                    hx1, y1, hx2 - hx1, child.height + child.depth, color, dc)
+    for x1, y1, px1, px2, child in iter_marked(dc, boxes, i1, i2):
+        hx1 = x1 + px1
+        hx2 = x1 + px2
+        if hx2 > hx1:
+            child.device.fill_rect(
+                hx1, y1, hx2 - hx1, child.height + child.depth, color, dc)
 
 
 def squiggle(dc, boxes, i1, i2, color='red'):
@@ -79,13 +88,12 @@ def squiggle(dc, boxes, i1, i2, color='red'):
         i1, i2: Index range to annotate (flow-relative positions).
         color:  Color accepted by device.draw_squiggle().
     """
-    for j1, j2, x, y, box in boxes:
-        for x1, y1, px1, px2, child in _iter_textboxes(dc, box, i1-j1, i2-j1, x, y):
-            hx1 = x1 + px1
-            hx2 = x1 + px2
-            if hx2 > hx1:
-                child.device.draw_squiggle(
-                    hx1, y1+child.height+child.depth, hx2-hx1, color, dc)            
+    for x1, y1, px1, px2, child in iter_marked(dc, boxes, i1, i2):
+        hx1 = x1 + px1
+        hx2 = x1 + px2
+        if hx2 > hx1:
+            child.device.draw_squiggle(
+                hx1, y1 + child.height + child.depth, hx2 - hx1, color, dc)
 
 
 # --- Tests ---

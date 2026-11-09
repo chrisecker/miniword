@@ -132,7 +132,7 @@ class BuilderBase(ViewBase):
         self.rebuild_range(i, i, n)
 
     def removed(self, model, i, text):
-        self.rebuild_range(i, i, -len(text)) # XXX besser wäre i, i+len, -len
+        self.rebuild_range(i, i + len(text), -len(text))
 
     def properties_changed(self, model, i1, i2):
         self.rebuild_range(i1, i2, 0)
@@ -153,7 +153,10 @@ class BuilderBase(ViewBase):
         raise NotImplemented()
 
     def rebuild_range(self, i1, i2, delta):
-        raise NotImplemented()
+        """Rebuild after [i1, i2) (old positions) changed in length by
+        delta: inserting n at i is (i, i, n), removing n is
+        (i, i + n, -n)."""
+        raise NotImplementedError()
     
         
 

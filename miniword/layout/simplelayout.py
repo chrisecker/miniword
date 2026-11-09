@@ -150,10 +150,6 @@ class SimpleBuilder(BuilderBase, Factory):
         self._layout = SimpleLayout(l)
 
     def rebuild_range(self, i1, i2, delta):
-        """XXX" Achtung: der Bereich i1,i2 ist bisher inkonsistent"""
-        i2 -= delta # XXX bisher wird remove mit i1=i2 aufgerufen. Das
-                    # sollte geändert werden auf i1..i2 betroffener Bereich in den
-                    # alten Koordinaten.
         layout = self._layout
         j1, _, k1, _ = layout.find_paragraph(i1)
         _, j2, _, k2 = layout.find_paragraph(max(i1+1, i2))

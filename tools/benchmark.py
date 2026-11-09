@@ -24,9 +24,10 @@ FILE (-f) defaults to test/einstein.txl. The benchmarks (default all):
   save      writing the TXL file
   pdf       exporting a PDF (with its own layout)
 
-Editing benchmarks work on page N (--page, default 1) and are undone
-after each run. --set changes document settings as on the command line
-(e.g. hyphenation=yes, language=de-1996).
+The window shows page N (--page, default 1) with the cursor in its
+middle; editing benchmarks work there and are undone after each run.
+--set changes document settings as on the command line (e.g.
+hyphenation=yes, language=de-1996).
 
 Each run appends one line per benchmark to a CSV file (--log, default
 benchmarks.csv in the repository) and prints a summary that compares
@@ -37,6 +38,7 @@ measured steps (cProfile, by cumulative time).
 
 import argparse
 import cProfile
+import itertools
 import csv
 import datetime
 import os
@@ -80,33 +82,47 @@ class Context:
             self.document.set_setting(key, value)
 
     def window(self):
+        """The main window, showing page N with the cursor in its
+        middle."""
         if self.frame is None:
             from miniword.ui.mainwindow import MainFrame
-            self.frame = MainFrame(self.document)
-            self.frame.SetSize(1000, 900)
-            self.frame.Show()
-            for _ in range(5):
-                wx.GetApp().Yield()  # the window gets its size
-            self.frame.canvas.builder.assure_finished()
+            frame = self.frame = MainFrame(self.document)
+            frame.SetSize(1000, 900)
+            frame.Show()
+            yield_events()  # the window gets its size
+            canvas, editor = frame.canvas, frame.editor
+            canvas.builder.assure_finished()
+            pages = list(canvas.builder.layout.iter_childs())
+            j1, j2, page = pages[min(self.page, len(pages)) - 1]
+            i = self.document.textmodel.get_text().find(' ', (j1 + j2) // 2)
+            editor.index = i if 0 <= i < j2 else (j1 + j2) // 2
+            canvas.queued_update_scroll()  # the virtual size, else no scroll
+            canvas.adjust_viewport()
+            canvas.Refresh()
+            yield_events()  # shown on the screen too
         return self.frame
 
-    def editing(self):
-        """(canvas, editor) with the cursor in the middle of page N,
-        shown in the window."""
-        frame = self.window()
-        canvas, editor = frame.canvas, frame.editor
-        pages = list(canvas.builder.layout.iter_childs())
-        j1, j2, page = pages[min(self.page, len(pages)) - 1]
-        text = self.document.textmodel.get_text()
-        i = text.find(' ', (j1 + j2) // 2)
-        editor.index = i if 0 <= i < j2 else (j1 + j2) // 2
-        canvas.adjust_viewport()
-        return canvas, editor
+    def reset(self):
+        """After a benchmark: the layout finished, no squiggles left."""
+        if self.frame is not None:
+            self.frame.canvas.builder.assure_finished()
+            self.frame.canvas.squiggles = {}
 
     def close(self):
         if self.frame is not None:
             self.frame.release()
             self.frame.Destroy()
+
+
+def yield_events():
+    for _ in range(5):
+        wx.GetApp().Yield()
+
+
+def before_key(editor):
+    """What a key event does first: editor.controller sets the layout up
+    to the cursor."""
+    editor.controller
 
 
 def redraw_window(canvas):
@@ -174,18 +190,21 @@ def redraw_zoomed_out(context):
 
 
 def editing_benchmark(context, edit, runs=20):
-    """step: edit(editor) and the redraw; after it: undo and the rest of
-    the layout (as between keystrokes)."""
-    canvas, editor = context.editing()
-    builder = canvas.builder
+    """step: edit(editor) and the redraw; after it: undo. The rest of
+    the layout is left to the end of the benchmark: a new line moves all
+    pages behind it, which are set anew (in the program in the
+    background)."""
+    frame = context.window()
+    canvas, editor = frame.canvas, frame.editor
 
     def step():
+        before_key(editor)
         edit(editor)
         redraw_window(canvas)
 
     def after_step():
+        before_key(editor)
         editor.undo()
-        builder.assure_finished()
     return step, after_step, runs
 
 
@@ -223,7 +242,7 @@ def change_basestyle(context):
     key = sheet.normal_key()
     style = sheet.get(key)
     size = style.get('font_size', 12)
-    sizes = iter([size + 1, size] * 100)  # back and forth
+    sizes = itertools.cycle([size + 1, size])  # back and forth
 
     def step():
         sheet.set(key, Style(**dict(style, font_size=next(sizes))))
@@ -261,6 +280,7 @@ def measure(context, name, runs=None, profiler=None):
         if profiler is not None:
             profiler.disable()
         after_step()
+    context.reset()
     return times
 
 

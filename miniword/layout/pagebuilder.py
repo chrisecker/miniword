@@ -421,12 +421,7 @@ class PageBuilder(BuilderBase):
         self.dump_updatestats()
 
     def rebuild_range(self, i1, i2, delta):
-        """
-        XXX bisher haben wir bei remove i1=i2 und delta<0
-        gewählt. Logischer wäre aber i1, i2 alter Bereich, delta
-        Änderung (wie bisher). Hier scheint die Interpretation i2>i1
-        zu sein, passt also nicht zu der bisherigen Interpretation!
-        """
+        """See BuilderBase.rebuild_range."""
         layout = self._layout
         q1 = q2 = k1 = k2 = state = None
 
@@ -441,6 +436,12 @@ class PageBuilder(BuilderBase):
                 k2 = k
                 q2 = j1
                 break
+
+        if k1 is None and layout.childs:
+            # the change lies behind the pages built so far (an edit of
+            # several changes, e.g. insert and keep_par): discard none,
+            # continue after them
+            k1, q1 = len(layout.childs), len(layout)
 
         if k1 is None or k1 == 0:
             # empty layout, or first page is dirty: no pages_before,
@@ -464,15 +465,17 @@ class PageBuilder(BuilderBase):
                 state = state_from_settings(self.settings)
             pages_before = layout.childs[:k1]
 
-        if k2 is None:
-            i_rest, pages_rest, rest_memo = 0, [], None
-        elif layout.is_finished:
+        if layout.is_finished and k2 is not None:
+            # the old pages behind the change
             pages_rest = layout.childs[k2:]
             i_rest     = q2 + delta
             rest_memo  = layout.childs[k2 - 1].restartmemo
-        else:
+        elif not layout.is_finished and i2 < self.rest_memo[0]:
+            # the old pages still to come
             i_rest, pages_rest, rest_memo = self.rest_memo
             i_rest += delta
+        else:
+            i_rest, pages_rest, rest_memo = 0, [], None
 
         self._layout = self.layout_class(pages_before)
         self.start(state, i_rest, pages_rest, rest_memo)
@@ -512,8 +515,8 @@ class PageBuilder(BuilderBase):
 def show_pages(layout):
     """Dump all pages in the layout."""
     for i, (i1, i2, page) in enumerate(layout.iter_childs()):
-        print("Page", i + 1, "[%s, %s; %s]" %
-              (i1, i2, i1 + length_lines(page.restartmemo.lines)))
+        buffered = sum(len(r[0]) for r in page.restartmemo.rows)
+        print("Page", i + 1, "[%s, %s; %s]" % (i1, i2, i2 + buffered))
         show_page(page)
 
 
@@ -780,6 +783,37 @@ def test_05():
         change(other)
         assert not same_continuation(memo, other)
         assert not same_continuation(other, memo)
+
+
+def test_06():
+    "relayout: an edit of several changes far behind (paste, join)"
+    from ..textmodel.textmodel import TextModel
+    from ..textmodel.styles import Style
+    from ..texteditor.editor import Editor
+
+    if wx.App.Get() is None:
+        wx.App(False)
+    model = TextModel('\n'.join('paragraph number %d' % k
+                                 for k in range(400)))
+    # a style that keep_par has to keep (else it changes nothing)
+    model.set_parstyles(0, [(len(model), Style(base='h1'))])
+    builder = _small_builder(model)
+    editor = Editor(model)
+    n = len(builder._layout.childs)
+    assert n > 10
+    for pasted, at in (('a\nb', 'number 350'), ('', 'number 300')):
+        builder.assure_index(len(model))  # as before a key event
+        i = model.get_text().index(at)
+        if pasted:  # insert, then keep_par (the paragraph keeps its style)
+            editor.index = i
+            editor.insert_model(TextModel(pasted))
+        else:  # joining two paragraphs: remove, then keep_par
+            editor.selection = i, model.get_text().index('number 302')
+            editor.remove()
+        builder.assure_finished()
+        nbefore = builder.get_updatestats()[0]
+        assert nbefore > n // 2, nbefore  # not set anew from page 1
+        assert _page_sigs(builder) == _page_sigs(_small_builder(model))
 
 
 def demo_01():

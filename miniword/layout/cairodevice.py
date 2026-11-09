@@ -330,7 +330,7 @@ class CairoDevice:
         """Widths of text[:i] for i = 0..len(text) from one shaping; a
         cluster's advance (e.g. a ligature) is shared by its characters.
         Characters missing in the font: each prefix measured alone.
-        Cached like measure."""
+        Cached like measure: the list is shared, don't change it."""
         assert isinstance(style, Style), style
         key = text, id(style)
         try:
