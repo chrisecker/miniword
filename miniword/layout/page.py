@@ -84,6 +84,7 @@ class Page(Box):
     layout        = None  # set by Layout.append_page: for the page count
     header_style  = EMPTYSTYLE  # basestyles 'header'/'footer', see
     footer_style  = EMPTYSTYLE  # generate_pages
+    spelling      = None  # errors, see texteditor.spellcheck
 
     def __init__(self, rowdata, geometry, footnotebox=None, device=TESTDEVICE):
         if device is not None:

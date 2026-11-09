@@ -7,6 +7,7 @@ from .styleinspector import StyleInspector
 from .settingsinspector import SettingsInspector
 from ..texteditor.editor import TwoFlowEditor
 from ..texteditor.textcanvas import TextCanvas, CLIPBOARD_FORMAT
+from ..texteditor.spellcheck import SpellChecker
 from ..layout.pagebuilder import PageBuilder
 from ..layout.rowfactory import Factory
 from ..layout.cairodevice import CairoDevice
@@ -580,6 +581,8 @@ class MainFrame(wx.Frame, ViewBase):
         self._mi_marks = view_menu.AppendCheckItem(wx.ID_ANY,
                                                    "Formatting marks")
         self._mi_marks.Check(show_marks())
+        self._mi_spelling = view_menu.AppendCheckItem(wx.ID_ANY,
+                                                      "Check spelling")
         bar.Append(view_menu, "&View")
         self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(self.canvas.zoom_factor),       id=wx.ID_ZOOM_IN)
         self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(1 / self.canvas.zoom_factor),   id=wx.ID_ZOOM_OUT)
@@ -590,6 +593,8 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self.two_page(), self._mi_two_page)
         self.Bind(wx.EVT_MENU, lambda _: self.formatting_marks(),
                   self._mi_marks)
+        self.Bind(wx.EVT_MENU, lambda _: self.spelling.enable(
+            self._mi_spelling.IsChecked()), self._mi_spelling)
 
         help_menu = wx.Menu()
         help_menu.Append(wx.ID_ABOUT, "&About MiniWord…")
@@ -668,6 +673,9 @@ class MainFrame(wx.Frame, ViewBase):
             self._base, self.document.textmodel, builder, self.editor)
         self.editor.canvas = self.canvas
         self.canvas.show_marks = show_marks()
+        self.spelling = SpellChecker(self.canvas)
+        if hasattr(self, '_mi_spelling'):  # a replaced document
+            self.spelling.enable(self._mi_spelling.IsChecked())
         colours.set(self.canvas, 'BackgroundColour', 'CanvasBg')
         self.editor.add_view(self)
         self.document.add_view(self)

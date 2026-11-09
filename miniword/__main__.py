@@ -7,6 +7,7 @@ from .ui.mainwindow import MainFrame, new_document
 from .ui.unitentry import LengthInput, UnitPrefs
 from .ui.colours import set_appearance
 from .layout import pagebuilder
+from .texteditor import spellcheck
 
 
 def _enable_dpi_awareness():
@@ -113,7 +114,8 @@ def parse_args(argv):
              "repeatable")
     parser.add_argument(
         '--debug', action='store_true',
-        help="show debug output of the page layout and GTK warnings")
+        help="show debug output of the page layout, spell checking and GTK "
+             "warnings")
     parser.add_argument(
         '--install-desktop', action='store_true',
         help="Linux: add MiniWord to the menu and open .txl files with it")
@@ -289,6 +291,7 @@ def main():
             desktop.uninstall()
         return
     pagebuilder.DEBUG = args.debug
+    spellcheck.DEBUG = args.debug
     path = args.file
 
     _enable_dpi_awareness()
