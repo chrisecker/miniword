@@ -13,11 +13,12 @@ import wx
 from ..hyphenation import get_hyphenator
 from ..layout.boxes import TextBox
 from ..layout.cairodevice import CairoDevice
+from ..textmodel.texeltree import Style
 from ..layout.linewrap import simple_linewrap
 from ..layout.testdevice import TestDevice
 from .guitest import app
 
-STYLE = dict(font_family='Times New Roman', font_size=12)
+STYLE = Style(font_family='Times New Roman', font_size=12)
 
 
 class PrefixByPrefix(CairoDevice):

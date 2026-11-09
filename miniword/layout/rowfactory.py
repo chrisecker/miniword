@@ -45,7 +45,7 @@ import os
 from copy import copy as shallow_copy
 from itertools import groupby
 
-from ..textmodel.texeltree import length, NL, grouped
+from ..textmodel.texeltree import length, NL, grouped, Style, EMPTYSTYLE
 from ..textmodel.utils import iter_paragraphs
 from ..textmodel.textmodel import get_texel
 from ..core.styles import n_levels
@@ -224,7 +224,7 @@ class Factory:
     def Tag_handler(self, texel, parstyle):
         """Inline HTML: a chip with the tag's source (styles set in it
         are ignored, a line break is a space)."""
-        style = self.stylesheet.mk_style(parstyle, {'color': TagBox.color})
+        style = self.stylesheet.mk_style(parstyle, Style(color=TagBox.color))
         inner = texel.source[1:-1].replace('\n', ' ')
         parts = ['<'] + ([inner] if inner else []) + ['>']
         return TagBox([TextBox(part, style, self.device) for part in parts],
@@ -232,7 +232,7 @@ class Factory:
 
     def html_icon(self, parstyle):
         """The icon of an HTML block, as large as the text."""
-        size = self.stylesheet.mk_style(parstyle, {})['font_size']
+        size = self.stylesheet.mk_parstyle(parstyle)['font_size']
         return HTMLIconBox(size, self.device)
 
     def Rule_handler(self, texel, parstyle):
@@ -304,10 +304,10 @@ class RowFactory(Factory):
         """The full parstyle of the paragraph ended by newline, with its
         level: fixed_indent, or else the newline's (free) indent."""
         p = self.stylesheet.mk_parstyle(newline.parstyle)
-        fixed = p.get('fixed_indent')
-        p['level'] = fixed if fixed is not None \
-            else getattr(newline, 'indent', 0)
-        return p
+        level = p.get('fixed_indent')
+        if level is None:
+            level = getattr(newline, 'indent', 0)
+        return Style(**dict(p, level=level))
 
     def _process_paragraph(self, i1, i2, texels, p_prev, p, p_next):
         begins_block = not _is_same_block(p, p_prev)
@@ -481,8 +481,9 @@ class RowFactory(Factory):
         # and pull continuation rows back to just MIN_LABEL_INDENT (a
         # wide label only pushes its own first row's text, not every
         # line of the footnote).
-        outer_style = self.stylesheet.mk_style(parstyle, {})
-        label_style = {**outer_style, 'vertical_position': 'superscript'}
+        outer_style = self.stylesheet.mk_parstyle(parstyle)
+        label_style = Style(**dict(outer_style,
+                                   vertical_position='superscript'))
         label_w = self.device.measure(label, label_style)[0]
         indent = max(MIN_LABEL_INDENT, label_w + LABEL_GAP)
 
@@ -844,7 +845,7 @@ def adjust_page_break(placed, buffer):
 def page_style(stylesheet, role):
     """The style for headers or footers: the basestyle with this role
     ('header'/'footer'), else the normal style."""
-    return stylesheet.mk_parstyle({'base': stylesheet.role_key(role)})
+    return stylesheet.mk_parstyle(Style(base=stylesheet.role_key(role)))
 
 
 def keep_with_next(placed, buffer):

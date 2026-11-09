@@ -449,7 +449,7 @@ def test_04():
     "MatrixController.copy"
     from .tables import from_strings, Table
     from ..textmodel.textmodel import TextModel
-    from ..textmodel.texeltree import length as texel_length
+    from ..textmodel.texeltree import length as texel_length, EMPTYSTYLE
     from ..layout.rowfactory import RowFactory, State
     from ..core.stylesheet import testsheet
     from ..layout.testdevice import TESTDEVICE
@@ -459,7 +459,7 @@ def test_04():
     model = TextModel()
     model.texel = table
     factory = RowFactory(State(300), testsheet, TESTDEVICE)
-    box = factory.create_box(table, testsheet.mk_parstyle({}))
+    box = factory.create_box(table, testsheet.mk_parstyle(EMPTYSTYLE))
 
     copied_model = []
     class FakeLayout:
@@ -499,7 +499,7 @@ def test_04():
 def test_05():
     "MatrixController.selected returns absolute positions"
     from .tables import from_strings
-    from ..textmodel.texeltree import length as texel_length
+    from ..textmodel.texeltree import length as texel_length, EMPTYSTYLE
 
     texts = [['A', 'B'], ['C', 'D']]
     table = from_strings(texts)

@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from .documentnode import DocumentNode
-from ..textmodel.styles import Style
+from ..textmodel.styles import Style, EMPTYSTYLE
 from .styles import style_default, updated, normal, h0, h1, h2, h3
 
 
@@ -13,17 +13,21 @@ class StyleSheet(DocumentNode):
 
     def __init__(self):
         self.data = OrderedDict()
+        self.cache = {}  # (id(parstyle), id(style)) -> full style
+
 
     def set(self, key, value):
         # Style ist eigentlich nicht nötig. Zumindest wenn das
         # Dict wirklich ein registrierter Style ist.
         self.data[key] = Style(**value)
         self.normal = self.role_key('normal')
+        self.cache.clear()
         self.notify('style_changed', key)
 
     def delete(self, key):
         del self.data[key]
         self.normal = self.role_key('normal')
+        self.cache.clear()
         self.notify('style_removed', key)
 
     def role_key(self, role):
@@ -55,13 +59,21 @@ class StyleSheet(DocumentNode):
         return key in self.data
 
     def mk_style(self, parstyle, style):
-        # XXX implement caching
-        return updated(style_default, self.base_style(parstyle), parstyle,
-                       style)
+        """The full style (a Style) of style in a paragraph of parstyle:
+        defaults, base style, parstyle, style. Cached by the identity of
+        the (pooled, never deleted) Styles; set and delete clear it."""
+        assert isinstance(parstyle, Style) and isinstance(style, Style), \
+            (parstyle, style)
+        key = id(parstyle), id(style)
+        try:
+            return self.cache[key]
+        except KeyError:
+            result = self.cache[key] = Style(**updated(
+                style_default, self.base_style(parstyle), parstyle, style))
+            return result
 
     def mk_parstyle(self, parstyle):
-        # XXX implement caching
-        return updated(style_default, self.base_style(parstyle), parstyle)
+        return self.mk_style(parstyle, EMPTYSTYLE)
 
     
 

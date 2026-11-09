@@ -471,7 +471,7 @@ def test_CODE_23():
     from ..tables.table_boxes import TableBox
     document = _load_mistune('```\nx\n```\n\n| a |\n| - |\n| 1 |\n')
     sheet = document.basestyles
-    margin = sheet.mk_parstyle({'base': 'pre'})['block_margin']
+    margin = sheet.mk_parstyle(Style(base='pre'))['block_margin']
     assert margin > 0
     factory = RowFactory(State(300), sheet, TESTDEVICE)
     rows = [par[0][0] for par in factory.generate(document.textmodel.texel,

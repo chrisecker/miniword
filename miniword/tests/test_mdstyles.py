@@ -116,6 +116,7 @@ def test_MDS_9():
 # ---------------------------------------------------------------------
 
 from ..core.document import Document
+from ..textmodel.texeltree import Style
 from ..texteditor.editor import Editor
 from ..plugins.mdstyles import apply_preset, apply_feature, \
     document_state, read
@@ -319,6 +320,6 @@ def test_MDS_22():
         for key, number in (('h1', '10 '), ('h2', '9.10 '),
                             ('h3', '9.9.10 ')):
             style = styles[key]
-            width = device.measure(number, style)[0]
+            width = device.measure(number, Style(**style))[0]
             assert style['marker_pos'][0] == -style['list_indent']
             assert width <= style['list_indent'], (name, key, width)

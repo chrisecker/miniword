@@ -8,6 +8,7 @@ Run with: python runtests.py miniword/tests/test_hyphenation.py
 """
 
 from ..hyphenation import Hyphenator, hyphenate, system_language
+from ..textmodel.texeltree import EMPTYSTYLE
 
 
 def test_HY_1():
@@ -178,9 +179,10 @@ def test_HY_30():
         device = CairoDevice()
         if not harfbuzz:
             device._get_hb_font = lambda style: None
-        plain = device.measure('Silbentrennung', {})[0]
-        assert device.measure('Silben%strennung' % SHY, {})[0] == plain
-        parts = device.measure_parts('ab%sc' % SHY, {})
+        plain = device.measure('Silbentrennung', EMPTYSTYLE)[0]
+        assert device.measure('Silben%strennung' % SHY, EMPTYSTYLE)[0] \
+            == plain
+        parts = device.measure_parts('ab%sc' % SHY, EMPTYSTYLE)
         assert parts[2] == parts[1], harfbuzz
 
 

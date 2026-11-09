@@ -3,6 +3,7 @@ from .boxes import Box, VBox, RowsBox, NewlineBox, Row, select_i_by_y, \
 from .testdevice import TESTDEVICE
 from ..core.units import mm, cm, pt
 from ..core.document import settings_default
+from ..textmodel.texeltree import EMPTYSTYLE
 import datetime
 
 
@@ -80,8 +81,8 @@ class Page(Box):
     chapter       = ''  # running heads, see generate_pages
     section       = ''
     layout        = None  # set by Layout.append_page: the page count
-    header_style  = {}    # basestyles 'header'/'footer', see generate_pages
-    footer_style  = {}
+    header_style  = EMPTYSTYLE  # basestyles 'header'/'footer', see
+    footer_style  = EMPTYSTYLE  # generate_pages
 
     def __init__(self, rowdata, geometry, footnotebox=None, device=TESTDEVICE):
         if device is not None:

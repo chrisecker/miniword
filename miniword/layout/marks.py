@@ -8,6 +8,7 @@ Page.draw_for_print)."""
 from .boxes import _TextBoxBase, NewlineBox, TabulatorBox
 from .page import ForceBreakBox
 from .stretchable import StretchableText
+from ..textmodel.texeltree import Style, EMPTYSTYLE
 
 # marks for characters within the text
 MARKS = {'\u00a0': '°',   # protected space
@@ -56,13 +57,14 @@ def draw_marks(dc, boxes):
                 device.fill_rect(mx - 0.3, my + 0.3 * h, 0.6, 0.6 * h,
                                  COLOR, dc)
                 continue
-            style = dict(getattr(leaf, 'style', {}), color=COLOR,
-                         bgcolor='white', underline=False)
+            style = Style(**dict(getattr(leaf, 'style', EMPTYSTYLE),
+                                 color=COLOR, bgcolor='white',
+                                 underline=False))
             if mark == '→':  # centered in the tab, smaller if too wide
                 w = device.measure(mark, style)[0]
                 if w > leaf.width > 0:
-                    style['font_size'] = style.get('font_size', 12) \
-                        * leaf.width / w
+                    style = Style(**dict(style, font_size=style.get(
+                        'font_size', 12) * leaf.width / w))
                     w = leaf.width
                 mx += (leaf.width - w) / 2
             device.set_style(style, dc)

@@ -18,12 +18,13 @@ except ImportError:
 from ..core.units import mm, cm, pt, inch
 from ..core.fontfinder import resolve_font_path, find_fallback_info, init_preload
 from .cache import LRUCache
+from ..textmodel.texeltree import Style
 
 init_preload()
 
 
 # Minimal set of properties required for the device to function
-defaultstyle = dict(
+defaultstyle = Style(
     font_size=10, bgcolor='white', color='black',
     underline=False, font_family='Arial', italic=False, bold=False)
 
@@ -74,7 +75,8 @@ class CairoDevice:
     t0 = 0  # time since last movement
 
     def __init__(self):
-        self._cache = LRUCache(1000)
+        self._cache = LRUCache(10000)        # measure
+        self._prefix_cache = LRUCache(1000)  # prefix_widths
         self._temp_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 1, 1)
         self._temp_ctx = cairo.Context(self._temp_surface)
         self._temp_ctx.set_font_options(self._make_font_options())
@@ -96,6 +98,7 @@ class CairoDevice:
 
     def clear_caches(self):
         self._cache.clear()
+        self._prefix_cache.clear()
         self._font_metrics.clear()
         self._hb_fonts.clear()
         self._fallback_fonts.clear()
@@ -294,7 +297,8 @@ class CairoDevice:
         return max(line_h - descent, ascent), descent
 
     def measure(self, text, style):
-        key = (text, tuple(sorted(style.items())))
+        assert isinstance(style, Style), style  # pooled: id is a key
+        key = text, id(style)
         try:
             return self._cache.get(key)
         except KeyError:
@@ -325,25 +329,34 @@ class CairoDevice:
     def prefix_widths(self, text, style):
         """Widths of text[:i] for i = 0..len(text) from one shaping; a
         cluster's advance (e.g. a ligature) is shared by its characters.
-        Characters missing in the font: each prefix measured alone."""
+        Characters missing in the font: each prefix measured alone.
+        Cached like measure."""
+        assert isinstance(style, Style), style
+        key = text, id(style)
+        try:
+            return self._prefix_cache.get(key)
+        except KeyError:
+            pass
         _style = filled(style)
         hb_font = self._get_hb_font(_style)
         if hb_font is not None:
             infos, positions = self._shape(text, hb_font)
         if hb_font is None or any(info.codepoint == 0 for info in infos):
-            return [self.measure(text[:i], style)[0]
-                    for i in range(len(text) + 1)]
-        advance = {}  # cluster start -> advance
-        for info, pos in zip(infos, positions):
-            advance[info.cluster] = advance.get(info.cluster, 0) \
-                + pos.x_advance / 64
-        starts = sorted(advance) + [len(text)]
-        widths, w = [0.0], 0.0
-        for k, start in enumerate(starts[:-1]):
-            share = advance[start] / (starts[k + 1] - start)
-            for _ in range(start, starts[k + 1]):
-                w += share
-                widths.append(w)
+            widths = [self.measure(text[:i], style)[0]
+                      for i in range(len(text) + 1)]
+        else:
+            advance = {}  # cluster start -> advance
+            for info, pos in zip(infos, positions):
+                advance[info.cluster] = advance.get(info.cluster, 0) \
+                    + pos.x_advance / 64
+            starts = sorted(advance) + [len(text)]
+            widths, w = [0.0], 0.0
+            for k, start in enumerate(starts[:-1]):
+                share = advance[start] / (starts[k + 1] - start)
+                for _ in range(start, starts[k + 1]):
+                    w += share
+                    widths.append(w)
+        self._prefix_cache.set(key, widths)
         return widths
 
     def measure_parts(self, text, style):
@@ -660,7 +673,7 @@ def test_00b():
 def test_00c():
     "measure: metrics cached per font, results unchanged; drawing font kept"
     app = wx.App(False)
-    styles = [dict(defaultstyle, font_size=size, bold=bold)
+    styles = [Style(**dict(defaultstyle, font_size=size, bold=bold))
               for size in (10, 12) for bold in (False, True)]
     texts = ['Ag', 'Hello world', 'x']
     device = CairoDevice()
