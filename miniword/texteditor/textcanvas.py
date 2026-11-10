@@ -1,5 +1,5 @@
 from ..textmodel import TextModel
-from ..textmodel.styles import updated_style
+from ..textmodel.styles import Style, updated_style
 from ..textmodel.viewbase import overridable_property, ViewBase
 
 from ..layout.cairodevice import CairoDevice, defaultstyle
@@ -598,9 +598,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         if not self.has_focus():
             return
         editor = self.editor
-        style = {} # XXX self.get_filled_style(self.index).copy()
-        current = editor.get_current_style()
-        style.update(current)
+        style = Style(**editor.get_current_style())  # a dict
         i = editor.abs_idx(editor.index)
         self.layout.draw_cursor(i, editor.flow, painter, style)
 

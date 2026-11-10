@@ -886,7 +886,7 @@ def test_03():
 def test_05():
     "get_cursorrect"
     t = TextBox('0123456789')
-    r = t.get_cursorrect(0, 0, 0, {})
+    r = t.get_cursorrect(0, 0, 0, EMPTYSTYLE)
     assert r.items() == (0, 0, 1, 1)
 
     from .cairodevice import CairoDevice
@@ -894,7 +894,7 @@ def test_05():
     app = wx.App()
     device = CairoDevice()
     t = TextBox('0123456789', device=device)
-    r = t.get_cursorrect(1, 0, 0, {})
+    r = t.get_cursorrect(1, 0, 0, EMPTYSTYLE)
     x1, y1, x2, y2 = r.items()
     # the cursor covers the box: its height above the baseline and its
     # depth below
