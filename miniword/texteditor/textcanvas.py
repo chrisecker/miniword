@@ -219,6 +219,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     def to_clipboard(self, textmodel):
         text = textmodel.get_text()
         dump = txlio.dumps(textmodel).encode('utf-8')
+        html = self.copy_html(textmodel)
         def make_data():
             plain = wx.TextDataObject()
             plain.SetText(text)
@@ -226,9 +227,25 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             txl.SetData(dump)
             data = wx.DataObjectComposite()
             data.Add(txl, preferred=True)
+            if html:
+                data.Add(wx.HTMLDataObject(html))
             data.Add(plain)
             return data
         self.set_clipboard(make_data)
+
+    def copy_html(self, textmodel):
+        """textmodel as HTML for the clipboard (by a plugin, see
+        register_copy), or None. A failing export does not stop the
+        copy."""
+        from ..io.importexport import copy_handlers
+        for flavor, handler in copy_handlers():
+            if flavor == 'html':
+                try:
+                    return handler(textmodel, self.builder.stylesheet)
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+        return None
 
     def text_to_clipboard(self, text):
         """Only plain text, e.g. 'Copy as Markdown'."""

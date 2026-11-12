@@ -24,6 +24,7 @@ def register_export(name, extensions, fn, lossless=False, check_fn=None):
 _paste_handlers = []    # (flavor, handler)
 _paste_as_handlers = []  # (menu label, handler)
 _copy_as_handlers = []   # (menu label, handler)
+_copy_handlers = []      # (flavor, handler)
 
 
 def register_paste(flavor, handler):
@@ -42,6 +43,16 @@ def register_copy_as(label, handler):
     """An explicit 'Copy as ...' (Edit menu) of the selection as plain
     text: handler(textmodel, document) gives the text."""
     _copy_as_handlers.append((label, handler))
+
+
+def register_copy(flavor, handler):
+    """Copy (Ctrl+C) also as a clipboard flavor, e.g. 'html' (for mail
+    programs): handler(textmodel, basestyles) gives the text."""
+    _copy_handlers.append((flavor, handler))
+
+
+def copy_handlers():
+    return list(_copy_handlers)
 
 
 def paste_handlers():
