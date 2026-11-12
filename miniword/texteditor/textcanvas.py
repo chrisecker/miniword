@@ -217,20 +217,35 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     # --- clipboard ---
     
     def to_clipboard(self, textmodel):
+        text = textmodel.get_text()
+        dump = txlio.dumps(textmodel).encode('utf-8')
+        def make_data():
+            plain = wx.TextDataObject()
+            plain.SetText(text)
+            txl = wx.CustomDataObject(CLIPBOARD_FORMAT)
+            txl.SetData(dump)
+            data = wx.DataObjectComposite()
+            data.Add(txl, preferred=True)
+            data.Add(plain)
+            return data
+        self.set_clipboard(make_data)
+
+    def text_to_clipboard(self, text):
+        """Only plain text, e.g. 'Copy as Markdown'."""
+        def make_data():
+            plain = wx.TextDataObject()
+            plain.SetText(text)
+            return plain
+        self.set_clipboard(make_data)
+
+    def set_clipboard(self, make_data):
         # repeated Open/SetData/Close is a hack to make the clipboard work
         # reliably under linux; on other platforms a single pass suffices,
         # and repeating it there has been observed to wedge the clipboard
         # (Open() then never succeeds again for the rest of the process)
         repeats = 2 if sys.platform.startswith('linux') else 1
         for i in range(repeats):
-            text = textmodel.get_text()
-            plain = wx.TextDataObject()
-            plain.SetText(text)
-            txl = wx.CustomDataObject(CLIPBOARD_FORMAT)
-            txl.SetData(txlio.dumps(textmodel).encode('utf-8'))
-            data = wx.DataObjectComposite()
-            data.Add(txl, preferred=True)
-            data.Add(plain)
+            data = make_data()  # new each time: SetData takes it
             if not wx.TheClipboard.Open():
                 continue
             try:

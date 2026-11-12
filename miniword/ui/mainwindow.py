@@ -406,9 +406,15 @@ class MainFrame(wx.Frame, ViewBase):
         self._register_plugin_menus()
 
     def _register_plugin_menus(self):
-        from ..io.importexport import paste_as_handlers
+        from ..io.importexport import paste_as_handlers, copy_as_handlers
         bar = self.GetMenuBar()
         edit = bar.GetMenu(bar.FindMenu('Edit'))
+        k = [i.GetId() for i in edit.GetMenuItems()].index(wx.ID_COPY) + 1
+        for label, handler in copy_as_handlers():  # 'Copy as ...'
+            item = edit.Insert(k, wx.ID_ANY, label)
+            self.Bind(wx.EVT_MENU, lambda e, h=handler: self.copy_as(h),
+                      item)
+            k += 1
         k = [i.GetId() for i in edit.GetMenuItems()].index(wx.ID_PASTE) + 1
         for label, handler in paste_as_handlers():  # 'Paste from ...'
             item = edit.Insert(k, wx.ID_ANY, label)
@@ -1055,6 +1061,15 @@ class MainFrame(wx.Frame, ViewBase):
             if image:
                 return self._insert_fragment(grouped([Image(image)]))
         self.editor.controller.handle_action('paste', False)
+
+    def copy_as(self, handler):
+        """'Copy as ...': the selection as the text handler makes of it,
+        e.g. Markdown (see register_copy_as)."""
+        editor = self.editor
+        if editor.has_selection():
+            s1, s2 = editor.selected_ranges()[0]
+            editor.canvas.text_to_clipboard(
+                handler(editor.target[s1:s2], self.document))
 
     def paste_as(self, handler):
         """'Paste from ...': the clipboard's plain text, e.g. as Markdown

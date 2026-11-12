@@ -1,5 +1,4 @@
 import os
-import tempfile
 import wx
 from .colours import colours
 from .icons import app_icon_bundle
@@ -49,19 +48,9 @@ class MarkdownPreviewFrame(wx.Frame):
 
 
 def document_to_markdown(document):
-    """Render document to a Markdown string via the export filter."""
-    from ..io import importexport
-    fn = importexport.find_export_filter("preview.md")
-    if fn is None:
-        return ""
-    fd, path = tempfile.mkstemp(suffix=".md")
-    os.close(fd)
-    try:
-        fn(document, path)
-        with open(path, encoding="utf-8") as f:
-            return f.read()
-    finally:
-        os.unlink(path)
+    """document as Markdown, embedded images shortened."""
+    from ..plugins.mdfilter import fragment_to_md
+    return fragment_to_md(document.textmodel, document, 'short')
 
 
 def _tesla_txl_path():

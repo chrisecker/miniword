@@ -11,7 +11,7 @@ import os
 import re
 
 from miniword.io.importexport import register_import, register_export, \
-    register_paste_as
+    register_paste_as, register_copy_as
 from miniword.textmodel.styles import Style, updated_style
 
 _BR = re.compile(r'<br\s*/?>', re.I)
@@ -22,6 +22,9 @@ _BR = re.compile(r'<br\s*/?>', re.I)
 # ---------------------------------------------------------------------------
 
 _folder = ''  # folder of the file read or written (relative image paths)
+images = 'data'  # images: 'data' embedded (a file stays one file); 'link'
+                 # by path or URL if they have one; 'short' the same, the
+                 # data shortened (to look at)
 
 
 def _save(doc, path):
@@ -268,14 +271,13 @@ def _code_span(text):
 
 def _elems_to_inline(elems, footnotes=None, plain=False):
     """Convert a list of leaf texels (excluding the NL) to Markdown inline;
-    plain: text only, unescaped (code blocks). Images are embedded as data
-    URIs - a document stays one file.
+    plain: text only, unescaped (code blocks). Images: see image_md.
 
     Formatting is nested over pieces, as Markdown does: a mark stays open
     while the next pieces have it too (bold over code and text, a forced
     line break); spaces at its edges go outside it."""
     from miniword.textmodel.texeltree import get_text
-    from miniword.images.images import Image as ImageTexel, image_mime
+    from miniword.images.images import Image as ImageTexel
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
     from miniword.core.texels import BR
     from miniword.mdelements.checkbox import Checkbox
@@ -297,15 +299,10 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
                     m for m in marks
                     if m[0] not in ('superscript', 'subscript')]))
         elif isinstance(elem, ImageTexel):
-            data = elem.content
-            if data:
-                b64  = base64.b64encode(data).decode('ascii')
-                pieces.append(('![%s](data:%s;base64,%s)' % (
-                    _escape(elem.alt), image_mime(data), b64), marks))
-            elif elem.path:  # linked
-                from miniword.images.images import file_path
-                pieces.append(('![%s](%s)' % (
-                    _escape(elem.alt), file_path(elem, _folder)), marks))
+            src = image_src(elem)
+            if src:
+                pieces.append(('![%s](%s)' % (_escape(elem.alt), src),
+                               marks))
         elif plain:
             pieces.append((get_text(elem), None))
         else:
@@ -785,6 +782,35 @@ def md_text_to_fragment(text, target_doc):
     return shim.textmodel.texel
 
 
+def image_src(image):
+    """The URL of image in Markdown, by images: its data embedded (a
+    data URL) or its path / URL (file paths relative to _folder); ''
+    if it has neither."""
+    from miniword.images.images import file_path, image_mime
+    data = image.content
+    if image.path and (images != 'data' or not data):
+        return file_path(image, _folder)
+    if not data:
+        return ''
+    src = 'data:%s;base64,' % image_mime(data)
+    if images == 'short':
+        return src + '…'
+    return src + base64.b64encode(data).decode('ascii')
+
+
+def fragment_to_md(textmodel, doc, mode='link'):
+    """Markdown of textmodel - copied (Copy as Markdown) or the whole
+    document - with the styles of doc; images by mode (see images)."""
+    from types import SimpleNamespace
+    global images
+    images = mode
+    try:
+        return _doc_to_md(SimpleNamespace(textmodel=textmodel,
+                                          basestyles=doc.basestyles))
+    finally:
+        images = 'data'
+
+
 def get_menus(doc):
     """Return plugin menus for doc. Only adds a Markdown menu for MD documents."""
     from miniword.plugins.mdstyles import menu_items
@@ -1037,6 +1063,7 @@ def _check_md(doc):
 
 register_import("Markdown", ["md", "markdown"], _load, lossless=False)
 register_paste_as("Paste from &Markdown", md_text_to_fragment)
+register_copy_as("Copy as &Markdown", fragment_to_md)
 register_export("Markdown", ["md", "markdown"], _save,
                 lossless=False, check_fn=_check_md)
 
@@ -1946,3 +1973,36 @@ def test_50():
     finally:
         _folder = ''
     assert _check_md(doc) == []
+
+
+def test_51():
+    "fragment_to_md: a copied part as Markdown, with the document's styles"
+    doc = _load_mistune("# Title\n\nSome **bold** text.\n\n- item\n")
+    model = doc.textmodel
+    i = model.get_text().index('Some')
+    assert fragment_to_md(model[i:len(model)], doc) == \
+        "Some **bold** text.\n\n- item\n"
+    assert fragment_to_md(model[0:6], doc) == "# Title\n"
+
+
+def test_52():
+    "images: embedded in a file, by path or URL when copied or shown"
+    from types import SimpleNamespace
+    from miniword.images.images import Image as ImageTexel
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.textmodel.texeltree import grouped, NL
+    png = b'\x89PNG\r\n\x1a\nxx'
+    doc = _load_mistune("x\n")
+    model = TextModel('')
+    model.texel = grouped([ImageTexel(png, alt='a', path='http://x/a.png'),
+                           ImageTexel(png, alt='b'), NL])
+    b64 = base64.b64encode(png).decode('ascii')
+    assert _doc_to_md(SimpleNamespace(textmodel=model,
+                                      basestyles=doc.basestyles)) == \
+        '![a](data:image/png;base64,%s)![b](data:image/png;base64,%s)\n' \
+        % (b64, b64)
+    assert fragment_to_md(model, doc) == \
+        '![a](http://x/a.png)![b](data:image/png;base64,%s)\n' % b64
+    assert fragment_to_md(model, doc, 'short') == \
+        '![a](http://x/a.png)![b](data:image/png;base64,\u2026)\n'
+
