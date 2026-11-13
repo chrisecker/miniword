@@ -19,6 +19,12 @@ class LayoutBase:
     def __len__(self):
         return self.length[0]
 
+    def dump_boxes(self, i, x, y, indent=0):
+        """Print out a graphical representation of the tree (flow 0)."""
+        print(" "*indent, "[%i:%i]" % (i, i+len(self)), self.__class__.__name__)
+        for j1, j2, x1, y1, child in self.iter_boxes(0):
+            child.dump_boxes(i+j1, x+x1, y+y1, indent+4)
+
     def iter_childs(self):
         j1 = 0
         for child in self.childs:

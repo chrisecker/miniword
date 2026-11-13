@@ -1276,11 +1276,9 @@ class MainFrame(wx.Frame, ViewBase):
         r = self._get_debug_range()
         if r:
             i1, i2 = r
-            def _dump(box, i=0, x=0, y=0, indent=0):
-                for j1, j2, x1, y1, child in box.iter_boxes(i, x, y):
-                    if j2 > i1 and j1 < i2:
-                        child.dump_boxes(j1, x1, y1, indent)
-            _dump(layout)
+            for j1, j2, x1, y1, child in layout.iter_boxes(0):
+                if j2 > i1 and j1 < i2:
+                    child.dump_boxes(j1, x1, y1)
         else:
             layout.dump_boxes(0, 0, 0)
 
