@@ -21,6 +21,9 @@ FILE (-f) defaults to test/einstein.txl. The benchmarks (default all):
   paste     pasting three paragraphs, with layout and redraw
   restyle   changing the font size of the normal style (all pages are
             set anew; measured: up to the redraw of the visible ones)
+  spell     spell checking the visible pages (the word cache filled
+            by the first run, as when typing)
+  squiggles redraw with the spelling errors marked
   save      writing the TXL file
   pdf       exporting a PDF (with its own layout)
 
@@ -248,6 +251,31 @@ def change_basestyle(context):
         sheet.set(key, Style(**dict(style, font_size=next(sizes))))
         redraw_window(canvas)
     return step, canvas.builder.assure_finished, 6
+
+
+def check_visible(context):
+    """Spell check the visible pages: (checker, those pages)."""
+    from miniword.core.document import settings_default
+    checker = context.window().spelling
+    language = context.document.settings.get(
+        'language', settings_default['language'])
+    pages = checker.visible_pages()
+    for j1, j2, page in pages:
+        page.spelling = None
+    checker.check_pages(context.document.textmodel, language, pages)
+    return checker, pages
+
+
+@benchmark('spell')
+def check_spelling(context):
+    return (lambda: check_visible(context)), nothing, 20
+
+
+@benchmark('squiggles')
+def redraw_squiggles(context):
+    checker, pages = check_visible(context)
+    checker.show(checker.squiggles(pages))
+    return (lambda: redraw_window(context.frame.canvas)), nothing, 20
 
 
 @benchmark('save')

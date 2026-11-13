@@ -18,6 +18,7 @@ modules = [
     "miniword.texteditor.boxcontroller",
     "miniword.texteditor.textcanvas",
     "miniword.texteditor.undoredo",
+    "miniword.texteditor.spellcheck",
 
     # core
     "miniword.core.stylesheet",
