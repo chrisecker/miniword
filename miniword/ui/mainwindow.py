@@ -583,6 +583,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._mi_marks.Check(show_marks())
         self._mi_spelling = view_menu.AppendCheckItem(wx.ID_ANY,
                                                       "Check spelling")
+        mi_words = view_menu.Append(wx.ID_ANY, "Spelling words…")
         bar.Append(view_menu, "&View")
         self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(self.canvas.zoom_factor),       id=wx.ID_ZOOM_IN)
         self.Bind(wx.EVT_MENU, lambda _: self.canvas.step_zoom(1 / self.canvas.zoom_factor),   id=wx.ID_ZOOM_OUT)
@@ -595,6 +596,7 @@ class MainFrame(wx.Frame, ViewBase):
                   self._mi_marks)
         self.Bind(wx.EVT_MENU, lambda _: self.spelling.enable(
             self._mi_spelling.IsChecked()), self._mi_spelling)
+        self.Bind(wx.EVT_MENU, lambda _: self.spelling_words(), mi_words)
 
         help_menu = wx.Menu()
         help_menu.Append(wx.ID_ABOUT, "&About MiniWord…")
@@ -673,7 +675,7 @@ class MainFrame(wx.Frame, ViewBase):
             self._base, self.document.textmodel, builder, self.editor)
         self.editor.canvas = self.canvas
         self.canvas.show_marks = show_marks()
-        self.spelling = SpellChecker(self.canvas)
+        self.spelling = SpellChecker(self.canvas, self.document)
         if hasattr(self, '_mi_spelling'):  # a replaced document
             self.spelling.enable(self._mi_spelling.IsChecked())
         colours.set(self.canvas, 'BackgroundColour', 'CanvasBg')
@@ -906,7 +908,19 @@ class MainFrame(wx.Frame, ViewBase):
         """Paper, margins, header/footer...: the pages are built anew
         (their restart memos hold the settings)."""
         self.canvas.builder.settings = document.settings
+        if name == 'words':  # only the spell check, not the layout
+            return self.spelling.reset()
         self._rebuild()
+
+    def spelling_words(self):
+        """The window with the words of the document and the user
+        dictionary."""
+        from .spellwords import WordsDialog
+        spelling = self.spelling
+        dialog = WordsDialog(self, spelling.document_words, spelling.users())
+        if dialog.ShowModal() == wx.ID_OK:
+            spelling.set_words(*dialog.words())
+        dialog.Destroy()
 
     def _restore_geometry(self):
         """Size and position as last time, else most of the screen."""

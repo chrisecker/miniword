@@ -98,6 +98,7 @@ modules = [
     "miniword.ui.unitentry",
     "miniword.ui.searchtool",
     "miniword.ui.markdownpreview",
+    "miniword.ui.spellwords",
 
     # io: formats
     "miniword.io.mdfilter",

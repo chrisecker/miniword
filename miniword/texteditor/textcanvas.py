@@ -626,7 +626,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             for i1, i2, *color in items:
                 annotation.squiggle(painter, layout.iter_boxes(flow), i1, i2, *color)
         if self.show_spelling:
-            for item, i1, i2 in spellcheck.squiggles(self):
+            for flow, item, i1, i2 in spellcheck.squiggles(self):
                 annotation.squiggle(painter, [item], i1, i2)
         if self.show_marks:  # screen only: print and PDF don't come here
             for flow in (0, 1):

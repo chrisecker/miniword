@@ -12,8 +12,15 @@ being typed; a rebuilt page has none until the next idle check. Code
 is not checked: code blocks (Code containers) and text in a monospace
 font (inline code).
 
-Dictionary: enchant if installed (see develnotes/spellcheck_concept.md
-for the backends still to decide). Without one nothing is marked.
+Dictionary: enchant if installed, for now (to come: the system's
+checkers, see develnotes/spellcheck_concept.md). Without one nothing is
+marked.
+
+Words not marked: those of the document (setting 'words', with undo)
+and of the user dictionary (USER_WORDS, one word per line, for all
+languages). Context menu (right click on a marked word): suggestions,
+"Add to dictionary", "Add to document". Both lists are edited in a
+window (ui/spellwords.py).
 
 Measuring: DEBUG prints the times of each idle step that checked
 something; measure(path) checks all pages of a document without window:
@@ -24,7 +31,8 @@ something; measure(path) checks all pages of a document without window:
 import re
 import time
 import wx
-from ..core.document import settings_default
+from pathlib import Path
+from ..core.document import settings_default, undo_setting
 from ..textmodel.texeltree import EMPTYSTYLE, length
 from ..textmodel.utils import iter_leafes
 
@@ -33,6 +41,8 @@ MARGIN = 50     # chars read beyond the page, for words across its edges
 DEBUG = False   # print the times of the idle steps
 MONO = {'courier', 'courier new', 'monospace', 'consolas', 'menlo',
         'dejavu sans mono'}  # fonts of inline code
+USER_WORDS = Path.home() / '.config' / 'miniword' / 'words.txt'
+SUGGESTIONS = 6  # at most in the context menu
 
 
 def find_dictionary(language):
@@ -92,10 +102,10 @@ def visible_pages(canvas):
 
 
 def squiggles(canvas):
-    """(item, i1, i2): the errors of the visible checked pages, absolute
-    in their flow, with the item (page or footnote box, see page_items)
-    they are drawn in; not the word being typed (the cursor at its end).
-    A page draws only its part of an error."""
+    """(flow, item, i1, i2): the errors of the visible checked pages,
+    absolute in their flow, with the item (page or footnote box, see
+    page_items) they are drawn in; not the word being typed (the cursor
+    at its end). A page draws only its part of an error."""
     editor = canvas.editor
     cursor = None
     if editor is not None:
@@ -105,7 +115,42 @@ def squiggles(canvas):
             j1 = items[flow][0]
             for i1, i2 in errors:
                 if (flow, j1 + i2) != cursor:
-                    yield items[flow], j1 + i1, j1 + i2
+                    yield flow, items[flow], j1 + i1, j1 + i2
+
+
+def error_at(canvas, flow, i):
+    """(i1, i2) of the marked word at index i of flow, or None."""
+    for f, item, i1, i2 in squiggles(canvas):
+        if f == flow and i1 <= i <= i2:
+            return i1, i2
+    return None
+
+
+def replace_word(editor, flow, i1, i2, word):
+    """Replace [i1, i2) of flow by word, in the style of its start."""
+    editor.switch_target(flow, i1)
+    j1, j2 = editor.local_idxs(i1, i2)
+    style = dict(editor.target.get_style(j1))
+    with editor.atomic():
+        editor.selection = j1, j2
+        editor.remove()
+        editor.index = j1
+        editor.current_style = style
+        editor.insert_text(word)
+
+
+def load_words(path):
+    """The words of a user dictionary file, one per line."""
+    try:
+        return set(path.read_text(encoding='utf-8').split())
+    except OSError:
+        return set()
+
+
+def save_words(path, words):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    words = sorted(words, key=str.lower)
+    path.write_text(''.join(word + '\n' for word in words), encoding='utf-8')
 
 
 def footnote_flow(model):
@@ -125,27 +170,65 @@ def footnote_flow(model):
 class SpellChecker:
     budget = 0.005  # s of checking per idle step
 
-    def __init__(self, canvas=None):
+    def __init__(self, canvas=None, document=None):
         self.canvas = canvas
+        self.document = document
         self.words = {}         # (language, word) -> correct?
         self.dictionaries = {}  # language -> dictionary or None
         self.footnotes = None, None  # (texel, its footnote_flow)
+        self.user_words = None  # read from USER_WORDS when first needed
+        self.document_words = self.read_document_words()
         self.stats = dict(pages=0, words=0, lookups=0, check=0.0)
         if canvas is not None:
             canvas.Bind(wx.EVT_IDLE, self.on_idle)
+            canvas.Bind(wx.EVT_CONTEXT_MENU, self.on_context_menu)
 
     def dictionary(self, language):
         if language not in self.dictionaries:
             self.dictionaries[language] = find_dictionary(language)
         return self.dictionaries[language]
 
+    def read_document_words(self):
+        if self.document is None:
+            return frozenset()
+        return frozenset(self.document.settings.get('words', ()))
+
+    def users(self):
+        """The words of the user dictionary."""
+        if self.user_words is None:
+            self.user_words = load_words(USER_WORDS)
+        return self.user_words
+
     def correct(self, language, word):
+        if word in self.document_words:
+            return True
         key = language, word
         if key not in self.words:
             d = self.dictionary(language)
-            self.words[key] = d is None or d.check(word)
+            self.words[key] = d is None or word in self.users() \
+                or d.check(word)
             self.stats['lookups'] += 1
         return self.words[key]
+
+    def suggest(self, language, word):
+        d = self.dictionary(language)
+        if d is None:
+            return []
+        return d.suggest(word)[:SUGGESTIONS]
+
+    def set_words(self, document_words, user_words):
+        """New word lists: the user dictionary saved at once, the
+        document's as setting with undo (MainFrame.setting_changed then
+        calls reset)."""
+        if user_words != self.users():
+            self.user_words = set(user_words)
+            save_words(USER_WORDS, user_words)
+            self.words.clear()
+            self.reset()
+        if document_words != self.document_words:
+            self.canvas.editor.add_undo(undo_setting(
+                self.document, 'words',
+                tuple(sorted(document_words, key=str.lower))))
 
     def check(self, model, language, j1, j2):
         """The errors [(i1, i2)] of the words touching [j1, j2),
@@ -197,9 +280,25 @@ class SpellChecker:
 
     # --- the canvas
 
+    def reset(self):
+        """After a change of the word lists (also by undo): check anew,
+        the visible pages at once."""
+        canvas = self.canvas
+        self.document_words = self.read_document_words()
+        for item in canvas.layout.iter_pages():
+            item[4].spelling = None
+        if canvas.show_spelling:
+            self.check_pages(canvas.model, self.language(),
+                             visible_pages(canvas))
+            canvas.refresh()
+
     def enable(self, enabled):
         self.canvas.show_spelling = enabled
         self.canvas.refresh()
+
+    def language(self):
+        return self.canvas.builder.settings.get(
+            'language', settings_default['language'])
 
     def on_idle(self, event):
         event.Skip()
@@ -208,8 +307,7 @@ class SpellChecker:
             return  # the layout first
         t0 = time.perf_counter()
         checked = self.stats['pages']
-        language = canvas.builder.settings.get(
-            'language', settings_default['language'])
+        language = self.language()
         done, found = self.check_pages(canvas.model, language,
                                        visible_pages(canvas),
                                        t0 + self.budget)
@@ -221,6 +319,45 @@ class SpellChecker:
             print("spell: %d pages checked in %.2f ms"
                   % (self.stats['pages'] - checked,
                      (time.perf_counter() - t0) * 1000))
+
+    def on_context_menu(self, event):
+        """The menu for a marked word: under the mouse, or at the cursor
+        (menu key)."""
+        canvas, editor = self.canvas, self.canvas.editor
+        pos = event.GetPosition()
+        if pos == wx.DefaultPosition:
+            flow, i = editor.flow, editor.abs_idx(editor.index)
+        else:
+            pos = canvas.ScreenToClient(pos)
+            x, y = canvas.window_to_content(pos)
+            flow = canvas.layout.get_flow(x, y)
+            i = canvas.layout.get_index(x, y, flow)
+        found = None
+        if canvas.show_spelling and i is not None:
+            found = error_at(canvas, flow, i)
+        if found is None:
+            return event.Skip()
+        i1, i2 = found
+        model = canvas.model
+        if flow == 1:
+            model = self.footnote_flow(model)
+        word = model.get_text(i1, i2)
+        menu = wx.Menu()
+        suggestions = self.suggest(self.language(), word)
+        for k, suggestion in enumerate(suggestions):
+            menu.Append(k + 1, suggestion)
+        if not suggestions:
+            menu.Append(wx.ID_ANY, "(no suggestions)").Enable(False)
+        menu.AppendSeparator()
+        user = menu.Append(wx.ID_ANY, "Add to dictionary").GetId()
+        document = menu.Append(wx.ID_ANY, "Add to document").GetId()
+        choice = canvas.GetPopupMenuSelectionFromUser(menu, pos)
+        if 1 <= choice <= len(suggestions):
+            replace_word(editor, flow, i1, i2, suggestions[choice - 1])
+        elif choice == user:
+            self.set_words(self.document_words, self.users() | {word})
+        elif choice == document:
+            self.set_words(self.document_words | {word}, self.users())
 
 
 def measure(path):
@@ -260,10 +397,14 @@ class FakeDictionary:
     def check(self, word):
         return word.lower() != 'teh'
 
+    def suggest(self, word):
+        return ['the', 'tea', 'ten', 'tech', 'Ted', 'tel', 'teg']
+
 
 def fake_checker():
     checker = SpellChecker()
     checker.dictionaries['en-us'] = FakeDictionary()
+    checker.user_words = set()  # not the real one
     return checker
 
 
@@ -316,12 +457,17 @@ def test_04():
                     (j1, j2, 0, k * 100, page)
                     for k, (j1, j2, page) in enumerate(pages)]))
     # page 4 not visible, page 3 unchecked, (18, 22) is being typed
-    found = [(item[:4], i1, i2) for item, i1, i2 in squiggles(canvas)]
+    found = [(item[:4], i1, i2) for flow, item, i1, i2 in squiggles(canvas)]
     assert found == [((0, 10, 0, 0), -1, 2), ((0, 10, 0, 0), 5, 8),
                      ((10, 20, 0, 100), -1, 2),
                      ((0, 10, 5, 180), 0, 3)], found  # in the footnotes
     editor.flow, editor.index = 1, 3  # typed in the footnote
     assert len(list(squiggles(canvas))) == 4
+    # the marked word at an index: in its flow, from its start to its end
+    editor.flow, editor.index = 0, 22
+    assert error_at(canvas, 0, 5) == error_at(canvas, 0, 8) == (5, 8)
+    assert error_at(canvas, 1, 2) == (0, 3)
+    assert error_at(canvas, 0, 4) is None
 
 
 def test_05():
@@ -380,6 +526,27 @@ def test_06():
     assert checker.check_pages(model, 'en-us', pages) == (True, True)
     assert one.spelling == {0: [], 1: [(2, 5)]}
     assert two.spelling == {0: [], 1: [(0, 3)]}
+
+
+def test_07():
+    "user and document words, suggestions; replacing a word"
+    from ..textmodel.textmodel import TextModel
+    from .editor import Editor
+    checker = fake_checker()
+    checker.user_words = {'Teh'}
+    model = TextModel('teh Teh tehh')
+    assert checker.check(model, 'en-us', 0, len(model)) == [(0, 3)]
+    assert checker.suggest('en-us', 'teh') == ['the', 'tea', 'ten', 'tech',
+                                               'Ted', 'tel']
+    checker.document_words = {'teh'}
+    assert checker.check(model, 'en-us', 0, len(model)) == []
+    model = TextModel('a teh b')
+    model.set_properties(2, 5, bold=True)
+    editor = Editor(model)
+    replace_word(editor, 0, 2, 5, 'the')
+    assert model.get_text() == 'a the b'
+    assert model.get_style(2).get('bold') and model.get_style(4).get('bold')
+    assert not model.get_style(5).get('bold')
 
 
 if __name__ == '__main__':

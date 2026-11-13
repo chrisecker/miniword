@@ -27,6 +27,7 @@ settings_default = {
     "language":      "en-US",     # BCP 47, see core.language
     "header_footer_first_page": True,   # also on the first page
     "header_footer_mirror":     False,  # swap left/right on even pages
+    "words":         (),          # not marked by the spell check
 }
 
 
