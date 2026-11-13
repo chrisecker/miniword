@@ -94,6 +94,7 @@ modules = [
     # plugins
     "miniword.plugins.mdfilter",
     "miniword.plugins.htmlfilter",
+    "miniword.plugins.htmlexport",
 ]
 
 total_n = 0
