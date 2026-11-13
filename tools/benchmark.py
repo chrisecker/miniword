@@ -106,10 +106,10 @@ class Context:
         return self.frame
 
     def reset(self):
-        """After a benchmark: the layout finished, no squiggles left."""
+        """After a benchmark: the layout finished, no squiggles shown."""
         if self.frame is not None:
             self.frame.canvas.builder.assure_finished()
-            self.frame.canvas.squiggles = {}
+            self.frame.canvas.show_spelling = False
 
     def close(self):
         if self.frame is not None:
@@ -256,12 +256,13 @@ def change_basestyle(context):
 def check_visible(context):
     """Spell check the visible pages: (checker, those pages)."""
     from miniword.core.document import settings_default
+    from miniword.texteditor.spellcheck import visible_pages
     checker = context.window().spelling
     language = context.document.settings.get(
         'language', settings_default['language'])
-    pages = checker.visible_pages()
-    for j1, j2, page in pages:
-        page.spelling = None
+    pages = visible_pages(context.frame.canvas)
+    for item, footnotes in pages:
+        item[4].spelling = None
     checker.check_pages(context.document.textmodel, language, pages)
     return checker, pages
 
@@ -274,7 +275,7 @@ def check_spelling(context):
 @benchmark('squiggles')
 def redraw_squiggles(context):
     checker, pages = check_visible(context)
-    checker.show(checker.squiggles(pages))
+    context.frame.canvas.show_spelling = True
     return (lambda: redraw_window(context.frame.canvas)), nothing, 20
 
 

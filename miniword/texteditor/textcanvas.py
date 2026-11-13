@@ -8,6 +8,7 @@ from ..layout.simplelayout import SimpleBuilder
 from ..layout.rect import Rect
 from ..layout import annotation
 from ..layout import marks
+from . import spellcheck
 
 import io
 import wx
@@ -608,6 +609,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     ### Drawing
 
     show_marks = True  # formatting marks, see layout.marks
+    show_spelling = False  # page.spelling, see texteditor.spellcheck
 
     def draw_background(self, painter):
         self.layout.draw_background(painter)
@@ -623,6 +625,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         for flow, items in self.squiggles.items():
             for i1, i2, *color in items:
                 annotation.squiggle(painter, layout.iter_boxes(flow), i1, i2, *color)
+        if self.show_spelling:
+            for item, i1, i2 in spellcheck.squiggles(self):
+                annotation.squiggle(painter, [item], i1, i2)
         if self.show_marks:  # screen only: print and PDF don't come here
             for flow in (0, 1):
                 marks.draw_marks(painter, layout.iter_boxes(flow))
