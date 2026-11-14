@@ -81,7 +81,7 @@ def test_MEAS_3():
     "MEAS-3: the same with hyphenation"
     app()
     fast, reference = CairoDevice(), PrefixByPrefix()
-    hyphenate = get_hyphenator('en-us').hyphenate
+    hyphenate = get_hyphenator('en-US').hyphenate
     for text in paragraphs(30):
         assert rows(text, fast, 300, hyphenate) == \
             rows(text, reference, 300, hyphenate), text[:40]

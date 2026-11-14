@@ -10,10 +10,14 @@ from ..core.styles import updated
 
 from ..core.papersizes import PAPER_SIZES
 from ..hyphenation import has_patterns
+from ..core.language import normalize
 PAPER_CHOICES = list(PAPER_SIZES) + ['custom']
 
-# hyphenation languages (see miniword.hyphenation.LANGUAGES)
-LANGUAGE_CHOICES = [('English (US)', 'en-us'), ('German', 'de-1996')]
+# languages with hyphenation patterns (see miniword.hyphenation)
+LANGUAGE_CHOICES = [('English (US)', 'en-US'), ('English (UK)', 'en-GB'),
+                    ('German (Germany)', 'de-DE'),
+                    ('German (Austria)', 'de-AT'),
+                    ('German (Switzerland)', 'de-CH')]
 
 # header/footer fields: pulldown label and kind (see layout.page.field_text)
 FIELD_KINDS = [
@@ -194,9 +198,12 @@ class SettingsInspector(SidePanel):
             inp.SetValue(props[key])
         self._show_custom(paper == 'custom')
         languages = [code for _, code in LANGUAGE_CHOICES]
+        try:
+            language = normalize(props['language'])
+        except ValueError:
+            language = None
         self.choice_language.SetSelection(  # -1: not in the list
-            languages.index(props['language'])
-            if props['language'] in languages else -1)
+            languages.index(language) if language in languages else -1)
         self.chk_hyphenation.SetValue(props['hyphenation'])
         # without patterns for the language, hyphenation can't work
         patterns = has_patterns(props['language'])

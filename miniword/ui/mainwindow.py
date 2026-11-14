@@ -1558,9 +1558,9 @@ def test_09():
     from ..core.document import settings_default
     from ..core.utils import updated
     doc = new_document('de_DE')
-    assert doc.settings['language'] == 'de-1996'
+    assert doc.settings['language'] == 'de-DE'
     doc = new_document('fr_FR')
-    assert updated(settings_default, doc.settings)['language'] == 'en-us'
+    assert updated(settings_default, doc.settings)['language'] == 'en-US'
     assert doc.settings.get('hyphenation') is None  # stays off
 
 

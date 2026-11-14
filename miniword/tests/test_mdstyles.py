@@ -181,10 +181,10 @@ def test_MDS_14():
     "MDS-14: a preset keeps the document's other settings (language ...)"
     document = Document()
     editor = Editor(document.textmodel)
-    document.set_setting('language', 'de-1996')
+    document.set_setting('language', 'de-DE')
     document.set_setting('title', 'Bericht')
     apply_preset(editor, document, 'report')
-    assert document.settings['language'] == 'de-1996'
+    assert document.settings['language'] == 'de-DE'
     assert document.settings['title'] == 'Bericht'
     assert document.settings['header_left'] == ('title', '')
 

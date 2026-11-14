@@ -38,7 +38,7 @@ ENDMARK
 | `header_left/center/right`      | Tuple  | `("none", "")` | Header field `(kind, text)`   |
 | `footer_left/center/right`      | Tuple  | `("none", "")` | Footer field; `footer_center` defaults to `("page", "")` |
 | `hyphenation`                   | Bool   | `False` | Automatic hyphenation                |
-| `language`                      | String | `"en-us"` | Hyphenation patterns: `"en-us"`, `"de-1996"` |
+| `language`                      | String | `"en-US"` | BCP 47 code, e.g. `"de-DE"`, `"en-US"`, `"de"`; older files: `"en-us"`, `"de-1996"` |
 | `header_footer_first_page`      | Bool   | `True`  | Header and footer also on page 1     |
 | `header_footer_mirror`          | Bool   | `False` | Swap left and right on even pages    |
 

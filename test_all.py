@@ -20,6 +20,7 @@ modules = [
 
     # core
     "miniword.core.stylesheet",
+    "miniword.core.language",
     "miniword.core.styles",
     "miniword.core.document",
     "miniword.core.utils",

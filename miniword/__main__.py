@@ -139,6 +139,7 @@ def parse_setting(text):
     from argparse import ArgumentTypeError
     from .core.document import settings_default
     from .core.units import parse_length
+    from .core.language import normalize
     from .ui.settingsinspector import FIELD_KINDS
     key, sep, value = text.partition('=')
     if not sep or key not in settings_default:
@@ -148,6 +149,8 @@ def parse_setting(text):
     try:
         if key == 'paper':
             return paper_settings(value)
+        if key == 'language':
+            return [(key, normalize(value))]
         if isinstance(default, bool):
             return [(key, BOOLS[value.lower()])]
         if isinstance(default, float):
@@ -158,6 +161,9 @@ def parse_setting(text):
                 raise ValueError
             return [(key, (kind, field))]
     except (KeyError, ValueError):
+        if key == 'language':
+            raise ArgumentTypeError(
+                "%r: language is a code such as de, de-DE, en-US" % text)
         raise ArgumentTypeError("%r: invalid value for %s" % (text, key))
     return [(key, value)]
 
@@ -206,6 +212,9 @@ def convert(path, output, template=None, settings=()):
     import os
     from .io import importexport
     from .io.pdf import export_pdf
+    from .core.document import settings_default
+    from .core.utils import updated
+    from .hyphenation import has_patterns
 
     def report(text):
         print('miniword: ' + text, file=sys.stderr)
@@ -216,6 +225,10 @@ def convert(path, output, template=None, settings=()):
             apply_template(doc, importexport.open_file(template))
         for key, value in settings:
             doc.set_setting(key, value)
+        props = updated(settings_default, doc.settings)
+        if props['hyphenation'] and not has_patterns(props['language']):
+            report("no hyphenation patterns for '%s'; text is not "
+                   "hyphenated" % props['language'])
         ext = os.path.splitext(output)[1].lower()
         if ext == '.pdf':
             export_pdf(doc, output)

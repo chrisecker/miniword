@@ -211,11 +211,11 @@ def test_SET_6():
         assert inspector.choice_language.GetStringSelection() == \
             'English (US)'
         assert not inspector.chk_hyphenation.GetValue()
-        choose(inspector.choice_language, 'German')
+        choose(inspector.choice_language, 'German (Germany)')
         click(inspector.chk_hyphenation, True)
-        assert document.settings['language'] == 'de-1996'
+        assert document.settings['language'] == 'de-DE'
         assert document.settings['hyphenation'] is True
-        document.set_setting('language', 'en-us')
+        document.set_setting('language', 'en-us')  # an older file
         inspector.update()
         assert inspector.choice_language.GetStringSelection() == \
             'English (US)'
@@ -229,7 +229,7 @@ def test_SET_7():
         inspector.update()
         assert inspector.choice_language.GetSelection() == -1
         assert not inspector.chk_hyphenation.IsEnabled()
-        choose(inspector.choice_language, 'German')
+        choose(inspector.choice_language, 'German (Austria)')
         inspector.update()
         assert inspector.chk_hyphenation.IsEnabled()
 

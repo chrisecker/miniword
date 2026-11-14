@@ -3,19 +3,21 @@ Hyphenation with Frank Liang's algorithm (as in TeX), after Ned
 Batchelder's hyphenate.py (public domain). The patterns come from the
 TeX hyph-utf8 files in patterns/ (sources and licences: LICENSES.md).
 
-    >>> hyphenate('Silbentrennung', 'de-1996')
+    >>> hyphenate('Silbentrennung', 'de-DE')
     ['Sil', 'ben', 'tren', 'nung']
 """
 
 import os
 import re
 import sys
+from ..core.language import normalize, lookup
 
 PATTERN_DIR = os.path.join(os.path.dirname(__file__), 'patterns')
 
-# languages with pattern files: minimum characters before and after a
-# break (TeX's lefthyphenmin/righthyphenmin)
-LANGUAGES = {'de-1996': (2, 2), 'en-us': (2, 3)}
+# languages with pattern files: the file's name, minimum characters
+# before and after a break (TeX's lefthyphenmin/righthyphenmin); found
+# by lookup (de-AT: de)
+LANGUAGES = {'de': ('de-1996', 2, 2), 'en': ('en-us', 2, 3)}
 
 
 class Hyphenator:
@@ -79,37 +81,38 @@ class Hyphenator:
 _hyphenators = {}  # {language: Hyphenator or None}, loaded on first use
 
 
-def _path(language, ext):
-    return os.path.join(PATTERN_DIR, 'hyph-%s.%s.txt' % (language, ext))
+def _path(name, ext):
+    return os.path.join(PATTERN_DIR, 'hyph-%s.%s.txt' % (name, ext))
 
 
 def has_patterns(language):
-    """Is there a pattern file for language?"""
-    return language in LANGUAGES and os.path.exists(_path(language, 'pat'))
+    """Is there a pattern file for language (a code, see core.language)?"""
+    key = lookup(language, LANGUAGES)
+    return key is not None and os.path.exists(_path(LANGUAGES[key][0], 'pat'))
 
 
 def get_hyphenator(language):
     """The Hyphenator for language, None for a language without
     patterns. A missing pattern file of a known language (a packaging
     error) is reported once on stderr."""
-    if language not in LANGUAGES:
+    key = lookup(language, LANGUAGES)
+    if key is None:
         return None
-    if language not in _hyphenators:
-        if not has_patterns(language):
+    if key not in _hyphenators:
+        name, left, right = LANGUAGES[key]
+        if not has_patterns(key):
             print('Hyphenation patterns for %s not found: %s'
-                  % (language, _path(language, 'pat')), file=sys.stderr)
-            _hyphenators[language] = None
+                  % (key, _path(name, 'pat')), file=sys.stderr)
+            _hyphenators[key] = None
             return None
 
         def read(ext):
-            if not os.path.exists(_path(language, ext)):
+            if not os.path.exists(_path(name, ext)):
                 return ''  # exceptions are optional
-            with open(_path(language, ext), encoding='utf-8') as f:
+            with open(_path(name, ext), encoding='utf-8') as f:
                 return f.read()
-        left, right = LANGUAGES[language]
-        _hyphenators[language] = Hyphenator(read('pat'), read('hyp'),
-                                            left, right)
-    return _hyphenators[language]
+        _hyphenators[key] = Hyphenator(read('pat'), read('hyp'), left, right)
+    return _hyphenators[key]
 
 
 def hyphenate(word, language):
@@ -119,8 +122,9 @@ def hyphenate(word, language):
 
 
 def system_language(locale_name):
-    """Hyphenation language for new documents from a locale name such as
-    'de_DE.UTF-8': German for German locales, else American English."""
-    if locale_name and locale_name.lower().startswith('de'):
-        return 'de-1996'
-    return 'en-us'
+    """The language for new documents from a locale name such as
+    'de_DE.UTF-8': its code if there are patterns for it, else
+    American English."""
+    if locale_name and has_patterns(locale_name):
+        return normalize(locale_name)
+    return 'en-US'

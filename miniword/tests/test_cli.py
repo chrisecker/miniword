@@ -116,6 +116,44 @@ def test_CLI_7():
         assert code == 2 and '--set' in output, setting
 
 
+def test_CLI_11():
+    "CLI-11: --set language= takes a code in any common form"
+    for value, code in (('de', 'de'), ('de_DE', 'de-DE'), ('en-us', 'en-US'),
+                        ('de_AT.UTF-8', 'de-AT'), ('de-1996', 'de-DE')):
+        args = parse_args(['a.md', '-o', 'a.pdf', '--set',
+                           'language=' + value])
+        assert args.set == [[('language', code)]], value
+    code, output = run('a.md', '-o', 'a.pdf', '--set', 'language=Deutsch')
+    assert code == 2 and 'such as de, de-DE' in output
+
+
+def test_CLI_12():
+    "CLI-12: hyphenation without patterns for the language: a warning"
+    import contextlib
+    import io
+    import os
+    import tempfile
+    import wx
+    from ..__main__ import convert
+    from ..plugins import mdfilter  # registers Markdown
+    if wx.App.Get() is None:
+        wx.App(False)
+    with tempfile.TemporaryDirectory() as folder:
+        md = os.path.join(folder, 'a.md')
+        with open(md, 'w', encoding='utf-8') as f:
+            f.write('Text.\n')
+        txl = os.path.join(folder, 'a.txl')
+        for settings, warned in (
+                ([('language', 'fr'), ('hyphenation', True)], True),
+                ([('language', 'fr')], False),
+                ([('language', 'de-AT'), ('hyphenation', True)], False)):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                assert convert(md, txl, settings=settings) == 0
+            assert ("no hyphenation patterns for 'fr'" in err.getvalue()) \
+                == warned, settings
+
+
 def test_CLI_8():
     "CLI-8: --template and --set need -o"
     assert parse_args(['a.md', '-o', 'a.pdf', '--template', 't.txl'])\

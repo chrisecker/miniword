@@ -13,30 +13,30 @@ from ..textmodel.texeltree import EMPTYSTYLE
 
 def test_HY_1():
     "HY-1: German words are split at their syllables"
-    assert hyphenate('Silbentrennung', 'de-1996') == \
+    assert hyphenate('Silbentrennung', 'de-DE') == \
         ['Sil', 'ben', 'tren', 'nung']
-    assert hyphenate('Rechtschreibung', 'de-1996') == \
+    assert hyphenate('Rechtschreibung', 'de-DE') == \
         ['Recht', 'schrei', 'bung']
 
 
 def test_HY_2():
     "HY-2: umlauts and ß are handled"
-    assert hyphenate('Häuser', 'de-1996') == ['Häu', 'ser']
-    assert hyphenate('Straße', 'de-1996') == ['Stra', 'ße']
+    assert hyphenate('Häuser', 'de-DE') == ['Häu', 'ser']
+    assert hyphenate('Straße', 'de-DE') == ['Stra', 'ße']
 
 
 def test_HY_3():
     "HY-3: English words, and the exceptions file"
-    assert hyphenate('hyphenation', 'en-us') == ['hy', 'phen', 'ation']
-    assert hyphenate('table', 'en-us') == ['ta', 'ble']    # exception
-    assert hyphenate('project', 'en-us') == ['project']   # exception
+    assert hyphenate('hyphenation', 'en-US') == ['hy', 'phen', 'ation']
+    assert hyphenate('table', 'en-US') == ['ta', 'ble']    # exception
+    assert hyphenate('project', 'en-US') == ['project']   # exception
 
 
 def test_HY_4():
     "HY-4: the case of the word is kept; it doesn't change the breaks"
-    assert hyphenate('SILBENTRENNUNG', 'de-1996') == \
+    assert hyphenate('SILBENTRENNUNG', 'de-DE') == \
         ['SIL', 'BEN', 'TREN', 'NUNG']
-    assert hyphenate('silbentrennung', 'de-1996') == \
+    assert hyphenate('silbentrennung', 'de-DE') == \
         ['sil', 'ben', 'tren', 'nung']
 
 
@@ -58,18 +58,24 @@ def test_HY_6():
 
 def test_HY_7():
     "HY-7: words with other characters and unknown languages stay whole"
-    assert hyphenate('Trennung2', 'de-1996') == ['Trennung2']
+    assert hyphenate('Trennung2', 'de') == ['Trennung2']
     assert hyphenate('Silbentrennung', 'fr') == ['Silbentrennung']
-    assert hyphenate('', 'de-1996') == ['']
+    assert hyphenate('Silbentrennung', 'Deutsch') == ['Silbentrennung']
+    assert hyphenate('', 'de') == ['']
+    # any form of the code, also of older files
+    for language in ('de', 'de-DE', 'de-AT', 'de_DE', 'de-1996'):
+        assert hyphenate('Silbentrennung', language) == \
+            ['Sil', 'ben', 'tren', 'nung'], language
 
 
 def test_HY_8():
     "HY-8: the system language for new documents"
-    assert system_language('de_DE.UTF-8') == 'de-1996'
-    assert system_language('de_AT') == 'de-1996'
-    assert system_language('en_GB.UTF-8') == 'en-us'
-    assert system_language('fr_FR') == 'en-us'
-    assert system_language(None) == 'en-us'
+    assert system_language('de_DE.UTF-8') == 'de-DE'
+    assert system_language('de_AT') == 'de-AT'
+    assert system_language('en_GB.UTF-8') == 'en-GB'
+    assert system_language('fr_FR') == 'en-US'
+    assert system_language('C.UTF-8') == 'en-US'
+    assert system_language(None) == 'en-US'
 
 
 # ---------------------------------------------------------------------
@@ -82,7 +88,7 @@ from ..layout.testdevice import TESTDEVICE
 
 
 def german(word):
-    return hyphenate(word, 'de-1996')
+    return hyphenate(word, 'de-DE')
 
 
 def wrap(text, width, **kw):
@@ -200,7 +206,7 @@ from .test_rowfactory import generate, doc, par, flat
 TEXT = 'Die Silbentrennung ist gut und trennt viele Wörter'
 
 
-def rows_of(width=12, hyphenation=True, language='de-1996', **parstyle):
+def rows_of(width=12, hyphenation=True, language='de-DE', **parstyle):
     state = State(width)
     state.settings = updated(settings_default, dict(
         hyphenation=hyphenation, language=language))
@@ -262,9 +268,9 @@ def test_HY_18():
     "HY-18: every language has its pattern file in the package"
     import os
     from .. import hyphenation
-    for language in hyphenation.LANGUAGES:
+    for language, (name, left, right) in hyphenation.LANGUAGES.items():
         path = os.path.join(hyphenation.PATTERN_DIR,
-                            'hyph-%s.pat.txt' % language)
+                            'hyph-%s.pat.txt' % name)
         assert os.path.exists(path), path
         assert hyphenation.has_patterns(language)
 
@@ -280,11 +286,11 @@ def test_HY_19():
     try:
         err = io.StringIO()
         with redirect_stderr(err):
-            assert not hyphenation.has_patterns('de-1996')
-            assert hyphenation.get_hyphenator('de-1996') is None
-            assert hyphenate('Silbentrennung', 'de-1996') == \
+            assert not hyphenation.has_patterns('de-DE')
+            assert hyphenation.get_hyphenator('de-DE') is None
+            assert hyphenate('Silbentrennung', 'de-DE') == \
                 ['Silbentrennung']
-            hyphenation.get_hyphenator('de-1996')
+            hyphenation.get_hyphenator('de-AT')
         lines = err.getvalue().splitlines()
         assert len(lines) == 1 and 'de-1996' in lines[0]  # warned once
         assert hyphenation.get_hyphenator('xx') is None  # unknown: silent

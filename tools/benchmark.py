@@ -27,7 +27,7 @@ FILE (-f) defaults to test/einstein.txl. The benchmarks (default all):
 The window shows page N (--page, default 1) with the cursor in its
 middle; editing benchmarks work there and are undone after each run.
 --set changes document settings as on the command line (e.g.
-hyphenation=yes, language=de-1996).
+hyphenation=yes, language=de).
 
 Each run appends one line per benchmark to a CSV file (--log, default
 benchmarks.csv in the repository) and prints a summary that compares
