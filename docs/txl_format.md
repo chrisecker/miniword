@@ -386,11 +386,13 @@ all cell attributes are at their defaults.
 | `border_right`  | `"thin"` | Right border                                     |
 | `border_top`    | `"thin"` | Top border                                       |
 | `border_bottom` | `"thin"` | Bottom border                                    |
-| `cell_halign`   | `None`   | Horizontal alignment (`left`/`center`/`right`/`justify`); `None` = from paragraph style |
-| `cell_valign`   | `"top"`  | Vertical alignment (`top`/`middle`/`bottom`)     |
+| `valign`        | `"top"`  | Vertical alignment (`top`/`middle`/`bottom`)     |
 | `cell_bgcolor`  | `None`   | Background colour; `None` = transparent          |
 
 Border values are strings: `"none"`, `"thin"`, `"thick"`, `"double"`.
+
+The horizontal alignment is the paragraph's (`alignment`): the dict also
+holds the style of the cell's last paragraph, e.g. `{alignment="center"}`.
 
 Example — 2×1 table, first cell with a thick bottom border:
 

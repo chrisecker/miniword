@@ -176,7 +176,7 @@ def cell_css(styles, r, c):
     and lines as the table draws them - between two cells the right or
     lower one's, so a cell has its top and left line only at the edge."""
     style = styles[r][c]
-    css = ['padding:2pt 4pt', 'vertical-align:top']
+    css = ['padding:2pt 4pt', 'vertical-align:' + style.get('valign', 'top')]
     if r == 0:
         css.append('border-top:' + border(style, 'border_top'))
     if c + 1 < len(styles[r]):
@@ -401,12 +401,13 @@ def test_02():
 
 
 def test_03():
-    "Table cells: lines as drawn (none set: thin), header rows th"
+    "Table cells: lines as drawn (none set: thin), valign, header rows th"
     from miniword.textmodel import TextModel
     from miniword.textmodel.styles import Style
     from miniword.textmodel.texeltree import Text, grouped
     from miniword.tables import Table
-    table = Table(*[(Text(t), Style()) for t in 'abcd'], ncols=2, nheader=1)
+    table = Table(*[(Text(t), Style()) for t in 'abc'],
+                  (Text('d'), Style(valign='middle')), ncols=2, nheader=1)
     model = TextModel()
     model.set_texel(grouped([table]))
     html = html_of(model)
@@ -414,6 +415,8 @@ def test_03():
     assert 'border-top:1px solid black' in html
     # inner lines once: a cell's right and bottom ones
     assert html.count('border-left') == 2, html
+    assert html.count('vertical-align:top') == 3, html
+    assert 'vertical-align:middle' in html, html
 
 
 def test_04():

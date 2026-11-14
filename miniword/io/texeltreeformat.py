@@ -231,10 +231,10 @@ def _serialize_slot(content, slot_style, indent):
 
 
 _CELL_ATTRS = ('border_left', 'border_right', 'border_top', 'border_bottom',
-               'cell_halign', 'cell_valign', 'cell_bgcolor')
+               'valign', 'cell_bgcolor')
 _CELL_DEFAULTS = {'border_left': 'thin', 'border_right': 'thin',
                   'border_top': 'thin', 'border_bottom': 'thin',
-                  'cell_halign': None, 'cell_valign': 'top', 'cell_bgcolor': None}
+                  'valign': 'top', 'cell_bgcolor': None}
 
 
 def _sep_slot_style(sep):
