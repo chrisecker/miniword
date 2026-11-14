@@ -135,21 +135,15 @@ def next_newline(texel, i):
             return j2 - 1
         return n
     if texel.is_group:
-        if texel.weights[2] == 0:
-            return n
         for j1, j2, child in iter_childs(texel):
             if j2 <= i:
                 continue
-            if j1 < i and child.is_container:
+            # descend into the child holding i (it may contain a
+            # container with i inside) or into one holding a NewLine
+            if j1 < i or child.weights[2]:
                 result = next_newline(child, i - j1)
                 if result < length(child):
                     return result + j1
-                continue
-            if child.weights[2] == 0:
-                continue
-            result = next_newline(child, i - j1)
-            if result < length(child):
-                return result + j1
     return n
 
 
@@ -178,21 +172,15 @@ def prev_newline(texel, i):
             return j1 - 1
         return -1
     if texel.is_group:
-        if texel.weights[2] == 0:
-            return -1
         for j1, j2, child in reversed(list(iter_childs(texel))):
             if j1 >= i:
                 continue
-            if child.is_container and j2 > i:
+            # descend into the child holding i (it may contain a
+            # container with i inside) or into one holding a NewLine
+            if j2 > i or child.weights[2]:
                 result = prev_newline(child, i - j1)
                 if result != -1:
                     return result + j1
-                continue
-            if child.weights[2] == 0:
-                continue
-            result = prev_newline(child, i - j1)
-            if result != -1:
-                return result + j1
     return -1
 
 
@@ -605,3 +593,16 @@ def test_14():
         assert len(fractions) == 1
         assert len(fractions[0].childs) == len(f.childs), (i1, i2)
 
+
+def test_15():
+    "prev/next_newline find a NewLine inside a container in a group"
+    from .texeltree import T, G, NL, Fraction
+    # The group has no line weight (containers shield their NewLines),
+    # but the search must still descend into the container holding i.
+    texel = G([Fraction(G([T('ab'), NL, T('cd')]), T('x')),
+               Fraction(T('y'), T('z'))])
+    assert texel.weights[2] == 0
+    # positions: 0 sep, 1 a, 2 b, 3 NL, 4 c, 5 d, 6 sep, ...
+    assert prev_newline(texel, 5) == 3
+    assert next_newline(texel, 1) == 3
+    assert prev_newline(texel, 2) == 0  # the opening separator
