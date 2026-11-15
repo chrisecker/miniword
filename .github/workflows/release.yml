@@ -4,8 +4,9 @@ on:
   push:
     tags:
       - 'v*'
-  # manual start (Actions tab, "Run workflow"): only the job "linux" runs,
-  # its packages go to the run as a download instead of a release
+  # manual start (Actions tab, "Run workflow"): only the jobs "windows" and
+  # "linux" run, their packages go to the run as a download instead of a
+  # release
   workflow_dispatch:
 
 permissions:
@@ -13,7 +14,6 @@ permissions:
 
 jobs:
   windows:
-    if: github.event_name == 'push'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,9 +36,15 @@ jobs:
         run: choco install innosetup -y
       - name: Build installer
         run: ISCC /DMyAppVersion=${{ github.ref_name }} installer/miniword.iss
-      - uses: softprops/action-gh-release@v2
+      - if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
         with:
           files: installer/Output/*.exe
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: installer/Output/*.exe
 
   macos:
     needs: windows
