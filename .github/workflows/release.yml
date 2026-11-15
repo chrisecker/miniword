@@ -16,8 +16,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - run: pip install ".[full]" pyinstaller
@@ -37,11 +37,11 @@ jobs:
       - name: Build installer
         run: ISCC /DMyAppVersion=${{ github.ref_name }} installer/miniword.iss
       - if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: installer/Output/*.exe
       - if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: installer/Output/*.exe
@@ -51,8 +51,8 @@ jobs:
     if: github.event_name == 'push'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - run: pip install ".[full]" pyinstaller
@@ -89,7 +89,7 @@ jobs:
           mkdir -p dist/dmg
           cp -R dist/MiniWord.app dist/dmg/
           hdiutil create -volname MiniWord -srcfolder dist/dmg -ov -format UDZO dist/MiniWord-${{ github.ref_name }}.dmg
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/MiniWord-*.dmg
 
@@ -100,8 +100,8 @@ jobs:
     env:
       NFPM_VERSION: 2.41.1
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Desktop entry and file type (from miniword/desktop.py)
@@ -149,13 +149,13 @@ jobs:
             "dnf install -y -q /src/dist/*.x86_64.rpm &&
              python3 /src/packaging/linux/smoke_test.py"
       - if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             dist/*.deb
             dist/*.rpm
       - if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-packages
           path: |
@@ -169,8 +169,8 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Check pyproject.toml version matches tag
