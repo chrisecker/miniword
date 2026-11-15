@@ -167,8 +167,6 @@ def _doc_to_md(doc):
             above = (markers + ['  '] * indent)[:indent]  # a gap: '- '
             markers = above + [marker]
             prefix = ' ' * sum(map(len, above)) + marker
-            if ptype == 'list':  # task list "[ ] "/"[x] " stays as is
-                inline = re.sub(r'^\\\[([ xX])\\\] ', r'[\1] ', inline)
             parts.append(prefix + inline)
         else:
             parts.append(inline)
@@ -246,13 +244,20 @@ def _cell_md(cell):
         .replace('|', '\\|').replace('\\\n', '<br>')
 
 
-_SPECIAL = re.compile(r'([\\`*\[\]<>~^]|(?<!\w)_|_(?!\w))')  # not a_b
+_SPECIAL = re.compile(r'([\\`*<>~^]|(?<!\w)_|_(?!\w))')  # not a_b
 _ENTITY  = re.compile(r'&(?=#?\w+;)')
+_LINK_END = re.compile(r'\](?=[(\[:])')  # ](url) [ref] [label]: url
 
 
-def _escape(text):
-    """text with the Markdown characters escaped."""
-    return _ENTITY.sub(r'\\&', _SPECIAL.sub(r'\\\1', text))
+def _escape(text, after='', link=False):
+    """text with the Markdown characters escaped; ']' only where it would
+    make a link, before '(', '[' or ':' (after: the next character), so
+    that pandoc citations [@doe] stay. link: all brackets."""
+    text = _ENTITY.sub(r'\\&', _SPECIAL.sub(r'\\\1', text))
+    if link:
+        return re.sub(r'([\[\]])', r'\\\1', text)
+    escaped = _LINK_END.sub(r'\\]', text + after)
+    return escaped[:len(escaped) - len(after)]
 
 
 def _escape_start(line):
@@ -284,7 +289,7 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
     from miniword.mdelements.rawhtml import RawHTML
     from miniword.mdelements.tag import Tag
     pieces = []  # (Markdown, its marks; None: keep the open ones)
-    for elem in elems:
+    for i, elem in enumerate(elems):
         marks = None if plain else _marks(getattr(elem, 'style', {}))
         if isinstance(elem, Checkbox):  # a task list item's
             pieces.append(('[x] ' if elem.checked else '[ ] ', None))
@@ -301,17 +306,23 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
         elif isinstance(elem, ImageTexel):
             src = image_src(elem)
             if src:
-                pieces.append(('![%s](%s)' % (_escape(elem.alt), src),
-                               marks))
+                alt = _escape(elem.alt, link=True)
+                pieces.append(('![%s](%s)' % (alt, src), marks))
         elif plain:
             pieces.append((get_text(elem), None))
         else:
             style = getattr(elem, 'style', {})
-            code = style.get('font_family', '').lower() in (
-                'courier', 'courier new', 'monospace', 'consolas')
             text = get_text(elem)
-            pieces.append((_code_span(text) if code else _escape(text),
-                           _marks(style)))
+            if style.get('font_family', '').lower() in (
+                    'courier', 'courier new', 'monospace', 'consolas'):
+                text = _code_span(text)
+            else:
+                after = ''  # the next character; not text: maybe '['
+                if i + 1 < len(elems):
+                    nxt = elems[i + 1]
+                    after = nxt.text[:1] if nxt.is_text else '['
+                text = _escape(text, after, link='href' in style)
+            pieces.append((text, marks))
 
     md, open_marks = '', []
 
@@ -2006,3 +2017,18 @@ def test_52():
     assert fragment_to_md(model, doc, 'short') == \
         '![a](http://x/a.png)![b](data:image/png;base64,\u2026)\n'
 
+
+def test_53():
+    "pandoc citations and wiki links are exported unchanged"
+    for text in ('a [@doe2020, S. 5] b', '[@doe2020; @roe21]', '@smith21',
+                 '[[Notiz]]', 'x [-@doe] y', '[@doe]'):
+        assert _doc_to_md(_md_doc(text + '\n')) == text + '\n', text
+
+
+def test_54():
+    "brackets that would make a link are escaped, also in links and images"
+    for text in ('[a](b)', '[a][b]', '[a]: b', '[a]'):
+        doc = _mistune_roundtrip(_md_doc(text + '\n'))
+        assert doc.textmodel.get_text() == text + '\n', text
+    md = '[x\\]y](http://a) ![a\\]b](http://b/c.png)\n'
+    assert _doc_to_md(_load_mistune(md)) == md

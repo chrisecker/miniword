@@ -8,7 +8,7 @@ Plain text with **bold**, *italic*, ***bold italic***, ~~struck~~, `code`, ``a `
 
 **Bold over `code` and text**, a [link](https://example.org) and a [link with **bold** part](https://example.org/b).
 
-Escaped characters: \*not italic\*, \[no link\], snake_case and \_x\_ and a # hash.
+Escaped characters: \*not italic\*, [no link], snake_case and \_x\_ and a # hash.
 
 Special characters: & © ®, and a hard line break here:\
 the next line of the same paragraph.
