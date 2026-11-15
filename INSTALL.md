@@ -66,11 +66,15 @@ pip only adds what the distribution doesn't provide. `--break-system-packages` i
 pip install "miniword[full]"
 ```
 
-wxPython bundled `libcairo-2.dll` up through 4.2.1, so this alone was enough for `cairocffi` to bind to it. wxPython >= 4.2.2 dropped the bundled DLL (an upstream regression, reported at wxWidgets/Phoenix), so on those versions install a Cairo runtime yourself first, e.g. the [GTK3 runtime for Windows](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer).
+`cairocffi` needs a working `libcairo-2.dll`. wxPython 4.2.2 - 4.2.5 ship none; wxPython 4.2.1 and 4.3.x ship cairo 1.15.12, which displays fine but cannot write PDF files (export and printing fail with `CAIRO_STATUS_NO_MEMORY`). So in both cases put a current cairo into the `wx` package folder (e.g. `site-packages\wx\`), replacing any DLL there:
 
-(Advanced: alternatively, download just `libcairo-2.dll` from [wxWidgets/Phoenix's packaging assets](https://github.com/wxWidgets/Phoenix/blob/wxPython-4.2.1/packaging/msw-cairo/x64/bin/libcairo-2.dll) and drop it into your installed `wx` package folder, e.g. `site-packages/wx/`.)
+```
+powershell -File installer\bundle_cairo_windows.ps1 <site-packages>
+```
 
-If you skip this and see an error mentioning a missing `libcairo-2.dll`, install a Cairo runtime as described above (or downgrade to `wxPython<4.2.2`).
+(from a MiniWord source checkout; `<site-packages>` is printed by `python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"`). By hand: take `bin/cairo.dll` from [apotocki/cairo-win 1.18.4](https://github.com/apotocki/cairo-win/releases/tag/1.18.4.0) and save it as `site-packages\wx\libcairo-2.dll`.
+
+Without wxPython's DLL, a system-wide Cairo runtime such as the [GTK3 runtime for Windows](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer) works as well.
 
 ### macOS
 
