@@ -71,17 +71,20 @@ MiniWord is extensible via Python plugins. To install a plugin, copy the `.py` f
 
 Example plugins are provided in the `examples/` directory:
 
-| File            | Description                           |
-| --------------- | ------------------------------------- |
-| `wordcount.py`  | Shows a live word count               |
-| `txtfilter.py`  | Filter for importing plain text files |
+| File                  | Description                           |
+| --------------------- | ------------------------------------- |
+| `wordcount.py`        | Word count of document and selection  |
+| `wordcount_dialog.py` | The same in a dialog that stays open  |
+| `txtfilter.py`        | Filter for importing plain text files |
 
-To install all example plugins on Linux:
+For example, to install the word count dialog on Linux:
 
 ```
 mkdir -p ~/.config/miniword/plugins
-cp examples/*.py ~/.config/miniword/plugins
+cp examples/wordcount_dialog.py ~/.config/miniword/plugins
 ```
+
+It then appears in the Tools menu as "Word Count…".
 
 ## License
 
