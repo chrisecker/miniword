@@ -9,6 +9,7 @@ modules = [
     "miniword.textmodel.styles",
     "miniword.textmodel.weights",
     "miniword.textmodel.textmodel",
+    "miniword.textmodel.submodel",
 
     # texteditor
     "miniword.texteditor.actions",
@@ -24,6 +25,7 @@ modules = [
     "miniword.core.styles",
     "miniword.core.document",
     "miniword.core.utils",
+    "miniword.core.units",
 
     # layout
     "miniword.layout.stretchable",
@@ -35,6 +37,7 @@ modules = [
     "miniword.layout.page",
     "miniword.layout.pagebuilder",
     "miniword.layout.builderbase",
+    "miniword.layout.layoutbase",
     "miniword.layout.rowfactory",
     "miniword.tests.test_rowfactory",
     "miniword.tests.test_footnotes",
@@ -76,6 +79,7 @@ modules = [
     "miniword.io.texeltreeformat",
     "miniword.io.txlio",
     "miniword.io.importexport",
+    "miniword.io.pdf",
 
     # tables
     "miniword.tables.tables",
@@ -85,6 +89,9 @@ modules = [
 
     # images
     "miniword.images.images",
+
+    # footnotes
+    "miniword.footnotes.footnotes",
 
     # ui
     "miniword.ui.stylemenu",
