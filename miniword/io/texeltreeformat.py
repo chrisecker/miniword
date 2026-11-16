@@ -45,6 +45,7 @@ Document format:
 """
 
 import ast
+import json
 import re
 from ..textmodel.texeltree import (
     Text, Single, Group, Container, NewLine, Tabulator,
@@ -74,8 +75,8 @@ def serialize_style(style, indent=0):
     for k, v in sorted(style.items()):
         if v is True:
             parts.append(k)
-        elif isinstance(v, str):
-            parts.append('%s="%s"' % (k, v))
+        elif isinstance(v, str):  # a Python literal, in double quotes
+            parts.append('%s=%s' % (k, json.dumps(v, ensure_ascii=False)))
         elif isinstance(v, dict):
             parts.append('%s=%s' % (k, serialize_style(v)))
         else:
@@ -743,7 +744,7 @@ class _Parser:
                 items.append(float(val) if '.' in val else int(val))
             elif kind == 'STRING':
                 self.tok.consume()
-                items.append(val[1:-1])
+                items.append(ast.literal_eval(val))
             elif kind == 'IDENT':
                 self.tok.consume()
                 # None/True/False are written as bare words (e.g. an
@@ -768,7 +769,7 @@ class _Parser:
                 v_kind, v_val = self.tok.peek()
                 if v_kind == 'STRING':
                     self.tok.consume()
-                    d[k_val] = v_val[1:-1]  # strip quotes
+                    d[k_val] = ast.literal_eval(v_val)
                 elif v_kind == 'NUMBER':
                     self.tok.consume()
                     d[k_val] = float(v_val) if '.' in v_val else int(v_val)
@@ -1047,3 +1048,17 @@ def test_14():
     kinds = [type(t) for t in root.childs if t.is_container]
     assert kinds == [Table, Code]
     assert 'C("table",' in serialize(root)
+
+
+def test_15():
+    "Strings in styles, PROPS and tuples: quotes, backslashes, line breaks"
+    values = ['Ein "Zitat"', "it's", 'C:\\temp\\new', 'a\nb', 'ä €']
+    for v in values:
+        props = {'title': v, 'header_left': ('text', v)}
+        text = serialize(Group([Text('x', Style(href=v))]), properties=props)
+        root, _, props2 = parse(text)
+        assert props2 == props, (v, props2)
+        assert list(_flatten(root))[0].style['href'] == v, v
+        assert serialize(root, properties=props2) == text, v
+    assert serialize(Group([Text('x', Style(font_family='Arial'))])) == \
+        'T(\'x\', {font_family="Arial"})'  # plain values as before
