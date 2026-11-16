@@ -241,7 +241,8 @@ class FakeClipboard:
         canvas.read_clipboard_data = self.data.get
         canvas.read_clipboard_image = lambda: self.image
         canvas.read_clipboard_text = lambda: self.text
-        canvas.read_clipboard = lambda: self.text and TextModel(self.text)
+        canvas.read_clipboard = \
+            lambda: self.text and (TextModel(self.text), {})
 
 
 def clear(frame):

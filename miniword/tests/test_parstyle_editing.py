@@ -100,10 +100,13 @@ def test_PAR_5():
     assert styles(model)[:2] == [('ab', 'h1', 0), ('cd', 'body', 0)]
 
 
-def paste(editor, model, index, fragment):
-    """Paste fragment (a TextModel) at index."""
+def paste(editor, model, index, fragment, styles=None, sheet=None):
+    """Paste fragment (a TextModel; styles: its base styles) at index,
+    into a document with the base styles sheet."""
     editor.canvas = SimpleNamespace(
-        read_clipboard=lambda: fragment, reset_blink=lambda: None,
+        read_clipboard=lambda: (fragment, styles or {}),
+        reset_blink=lambda: None,
+        builder=SimpleNamespace(stylesheet=sheet),
         adjust_viewport=lambda: None, refresh=lambda: None)
     editor.index = index
     editor.selection = index, index
@@ -175,3 +178,20 @@ def test_PAR_9():
     with_sheet(editor, dict(Kapitel='h2'))
     enter(editor, 5)
     assert styles(model)[1][1] is None
+
+
+def test_PAR_10():
+    "PAR-10: a base style the target lacks comes with the paste; one undo"
+    from ..core.stylesheet import StyleSheet
+    model, editor = doc(('ab', 'body'))
+    sheet = StyleSheet()
+    sheet.set('body', dict(role='normal'))
+    paste(editor, model, 0, fragment(), {'quote': dict(color='red')}, sheet)
+    assert styles(model)[0] == ('chrift-A', 'quote', 2)
+    assert sheet.get('quote') == {'color': 'red'}
+    editor.undo()
+    assert styles(model)[0] == ('ab', 'body', 0)
+    assert not sheet.contains('quote')
+    editor.redo()
+    assert styles(model)[0] == ('chrift-A', 'quote', 2)
+    assert sheet.get('quote') == {'color': 'red'}

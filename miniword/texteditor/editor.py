@@ -6,6 +6,7 @@ from ..textmodel.modelbase import Model
 from ..textmodel.texeltree import length, EMPTYSTYLE
 from ..textmodel.styles import Style
 from ..textmodel.utils import iter_leafes, get_path
+from ..core.stylesheet import adopt_styles, undo_basestyle_change
 from .undoredo import UndoRedo
 from .controller import NullController
 from .actions import default_handler
@@ -358,10 +359,20 @@ class Editor(UndoRedo):
         self._to_clipboard(part)
 
     def paste(self):
+        """Insert the clipboard; base styles the document lacks are added
+        (see adopt_styles), in the same undo step."""
         if self.canvas is None:
             return
-        new = self.canvas.read_clipboard()
-        if new is not None:
+        pasted = self.canvas.read_clipboard()
+        if pasted is None:
+            return
+        new, styles = pasted
+        sheet = self.stylesheet()
+        with self.atomic():
+            if sheet is not None:
+                for key in adopt_styles(new, styles, sheet):
+                    self.add_undo((undo_basestyle_change, sheet, key,
+                                   None, sheet.get(key)))
             self.insert_model(new)
 
     def cut(self):

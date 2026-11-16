@@ -691,7 +691,7 @@ def test_PASTE_1():
     from ..io import txlio
     data = png(4, 2)
     a = mk_doc('x', image(content=data, alt='Photo'), 'y')
-    clip = txlio.loads(txlio.dumps(a.textmodel.copy(1, 2)))
+    clip, _ = txlio.loads(txlio.dumps(a.textmodel.copy(1, 2)))
     b = mk_doc('abc')
     b.textmodel.insert(1, clip)
     img, = images_in(b.textmodel.texel)

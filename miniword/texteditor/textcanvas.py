@@ -218,7 +218,7 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     
     def to_clipboard(self, textmodel):
         text = textmodel.get_text()
-        dump = txlio.dumps(textmodel).encode('utf-8')
+        dump = txlio.dumps(textmodel, self.builder.stylesheet).encode('utf-8')
         html = self.copy_html(textmodel)
         def make_data():
             plain = wx.TextDataObject()
@@ -273,6 +273,8 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
                 wx.TheClipboard.Close()
 
     def read_clipboard(self):
+        """(TextModel, {key: base style}) of the clipboard (ours: TXL,
+        else plain text), or None."""
         if wx.TheClipboard.IsOpened():
             return None
         if not wx.TheClipboard.Open():
@@ -280,18 +282,16 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         try:
             txl = wx.CustomDataObject(CLIPBOARD_FORMAT)
             plain = wx.TextDataObject()
-            textmodel = None
             if wx.TheClipboard.GetData(txl):
                 try:
-                    text = bytes(txl.GetData()).decode('utf-8')
-                    textmodel = txlio.loads(text)
+                    return txlio.loads(bytes(txl.GetData()).decode('utf-8'))
                 except (ValueError, ParseError):
                     pass  # not ours after all: plain text
-            if textmodel is None and wx.TheClipboard.GetData(plain):
-                textmodel = TextModel(plain.GetText())
+            if wx.TheClipboard.GetData(plain):
+                return TextModel(plain.GetText()), {}
         finally:
             wx.TheClipboard.Close()
-        return textmodel
+        return None
 
     def read_clipboard_data(self, flavor):
         """The clipboard's data in flavor ('html', or a format name such

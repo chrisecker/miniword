@@ -78,6 +78,35 @@ class StyleSheet(DocumentNode):
     
 
 
+def adopt_styles(model, styles, sheet):
+    """Make the paragraphs of model (pasted; styles: {key: base style}
+    of where it was copied from) use the base styles of sheet: a key
+    sheet has keeps sheet's style, a style with a role sheet has takes
+    sheet's key for it, any other is added to sheet; a base defined
+    nowhere is dropped. The keys added (for undo)."""
+    from ..textmodel.utils import iter_newlines
+    from ..textmodel.styles import updated_style, cleared_style
+    rename, added = {}, []
+    for key, style in styles.items():
+        if sheet.contains(key):
+            continue
+        role = style.get('role')
+        other = sheet.role_key(role) if role else None
+        if other:
+            rename[key] = other
+        else:
+            sheet.set(key, style)
+            added.append(key)
+    for i, _, nl in list(iter_newlines(model.get_xtexel(), 0, True)):
+        base = nl.parstyle.get('base')
+        if base in rename:
+            model.set_parstyle(
+                i, updated_style(nl.parstyle, dict(base=rename[base])))
+        elif base and not sheet.contains(base):
+            model.set_parstyle(i, cleared_style(nl.parstyle, ['base']))
+    return added
+
+
 def undo_basestyle_change(basestyles, name, old_style, new_style):
     """Undo/redo helper for basestyle edits (see Editor.add_undo)."""
     if old_style is None:
@@ -112,6 +141,31 @@ def test_01():
     assert ss.base_style({'base': 'gone'})['font_size'] == 11
     ss.delete('body')
     assert ss.normal_key() is None
+
+
+def test_02():
+    "adopt_styles: pasted paragraphs use the styles of the target"
+    from ..io.txlio import loads
+    from ..textmodel.utils import iter_newlines
+    model, _ = loads('''[document]
+T('a') NL({base="h1"}) T('b') NL({base="style0"})
+T('c') NL({base="mine", alignment="center"}) T('d') NL({base="gone"})
+C("table", {ncols=1}, [T('e'), {base="h1"}])
+''')
+    styles = {'h1': dict(role='h1', font_size=20), 'style0': dict(color='red'),
+              'mine': dict(color='blue')}
+    sheet = StyleSheet()
+    sheet.set('normal', dict(role='normal'))
+    sheet.set('heading', dict(role='h1', font_size=18))
+    sheet.set('mine', dict(color='green'))
+    assert adopt_styles(model, styles, sheet) == ['style0']
+    assert [dict(nl.parstyle) for *_, nl in
+            iter_newlines(model.get_xtexel(), 0, True)][:6] == [
+        {'base': 'heading'}, {'base': 'style0'},
+        {'base': 'mine', 'alignment': 'center'}, {}, {}, {'base': 'heading'}]
+    assert sheet.keys() == ['normal', 'heading', 'mine', 'style0']
+    assert sheet.get('mine') == {'color': 'green'}  # the target's wins
+    assert sheet.get('style0') == {'color': 'red'}
 
 
     

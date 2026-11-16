@@ -72,16 +72,7 @@ def _extend_tuples(style):
 
 
 def save(doc, path):
-    parts = []
-
-    # basestyles section — only written when non-empty
-    items = doc.basestyles.items()
-    if items:
-        parts.append('[basestyles]')
-        for key, style in items:
-            diff = _style_diff(style)
-            parts.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
-        parts.append('')
+    parts = basestyles_section(doc.basestyles.items())
 
     # Document section — always written
     parts.append('[document]')
@@ -96,6 +87,18 @@ def save(doc, path):
 
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(parts) + '\n')
+
+
+def basestyles_section(items):
+    """Lines of the [basestyles] section for items (key, style), [] if
+    there are none."""
+    if not items:
+        return []
+    lines = ['[basestyles]']
+    for key, style in items:
+        diff = _style_diff(style)
+        lines.append('"%s" = %s' % (key, serialize_style(diff) or '{}'))
+    return lines + ['']
 
 
 def blobs_section(texel):
@@ -116,11 +119,20 @@ def blobs_section(texel):
     return lines
 
 
-def dumps(model):
+def dumps(model, basestyles=None):
     """A copied part of a text (a TextModel) as TXL text, for the
-    clipboard: [document] without ENDMARK and settings, then [blobs].
-    Image paths stay absolute."""
-    parts = ['[document]', serialize(model.texel)]
+    clipboard: [basestyles] with those of basestyles (a StyleSheet) its
+    paragraphs use, [document] without ENDMARK and settings, then
+    [blobs]. Image paths stay absolute."""
+    from ..textmodel.utils import iter_newlines
+    parts = []
+    if basestyles is not None:
+        used = {nl.parstyle.get('base')
+                for *_, nl in iter_newlines(model.texel, 0, True)}
+        parts = basestyles_section(
+            [(key, style) for key, style in basestyles.items()
+             if key in used])
+    parts += ['[document]', serialize(model.texel)]
     blobs = blobs_section(model.texel)
     if blobs:
         parts += [''] + blobs
@@ -128,18 +140,22 @@ def dumps(model):
 
 
 def loads(text):
-    """The TextModel of TXL text from dumps. Raises ParseError (or
-    ValueError) for anything else."""
+    """(TextModel, {key: base style}) of TXL text from dumps. Raises
+    ParseError (or ValueError) for anything else."""
     sections = _split_sections(text)
     if 'document' not in sections:
         raise ValueError("Missing [document] section")
+    styles = {}
+    if 'basestyles' in sections:
+        styles = {key: updated(style_default, style) for key, style
+                  in _parse_stylesheet(sections['basestyles']).items()}
     blobs = {}
     if 'blobs' in sections:
         blobs = _parse_blobs(sections['blobs'])
     root, endmark, settings = parse(sections['document'], blobs)
     model = TextModel()
     model.texel = root
-    return model
+    return model, styles
 
 
 def load(path):
@@ -430,7 +446,8 @@ def test_11():
     model.texel = Group([Text('ab', style), img,
                          NewLine().set_parstyle(Style(base='h1')),
                          Text('cd')])
-    model2 = loads(dumps(model))
+    model2, styles = loads(dumps(model))
+    assert styles == {}
     assert get_text(model2.texel) == get_text(model.texel)
     assert model2.texel.childs[0].style is style
     assert model2.get_parstyle(0)['base'] == 'h1'
@@ -472,3 +489,19 @@ def test_08():
         for p in (path, old):
             img, = iter_images(load(p).textmodel.texel)
             assert img.content == b'\x89PNG data'
+
+
+def test_09():
+    "clipboard: dumps writes the base styles the part uses, loads reads them"
+    from ..core.stylesheet import StyleSheet
+    sheet = StyleSheet()
+    sheet.set('h1', updated(style_default, dict(role='h1', font_size=18)))
+    sheet.set('h2', updated(style_default, dict(role='h2')))
+    model = TextModel('ab\ncd')
+    model.set_parstyle(0, Style(base='h1'))
+    text = dumps(model, sheet)
+    assert '"h1"' in text and '"h2"' not in text
+    model2, styles = loads(text)
+    assert styles == {'h1': sheet.get('h1')}
+    assert model2.get_parstyle(0)['base'] == 'h1'
+
