@@ -306,6 +306,7 @@ Single, not a Container).
 | `crop_w`, `crop_h` | — | Display size in pt when cropping; also serves as explicit size override |
 | `alt` | `""` | Alternative text |
 | `path` | — | File the image came from, relative to the document |
+| `style` | `{}` | Character style of the image, e.g. `{href="…"}` for a linked image |
 
 ```
 IMG("photo.jpg")                                    # natural size
@@ -409,12 +410,12 @@ At shared cell edges both neighbours may define the same border. The
 
 ### `C("code", …)` — Code block
 
-A code block (Markdown fenced code) or HTML block: one slot with the lines,
-separated by `NL`.
+A code block (Markdown fenced code), HTML block or YAML header: one slot
+with the lines, separated by `NL`.
 
 | Parameter | Default  | Description |
 | --------- | -------- | ----------- |
-| `kind`    | `"code"` | `"code"` or `"html"` (HTML block) |
+| `kind`    | `"code"` | `"code"`, `"html"` (HTML block) or `"yaml"` (YAML header) |
 | `lang`    | `""`     | Language of the code, e.g. `"python"` |
 
 ```

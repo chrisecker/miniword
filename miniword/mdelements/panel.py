@@ -34,7 +34,7 @@ def element_at(editor, j):
     """The key of the element at the cursor j (see ELEMENTS), or None."""
     code = code_at(editor, j)
     if code:
-        return 'code' if code[1].kind == 'code' else 'html'
+        return 'html' if code[1].kind == 'html' else 'code'
     if html_at(editor, j):
         return 'html'
     if any(isinstance(node, Tag) and i1 < j < i2

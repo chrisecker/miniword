@@ -248,10 +248,11 @@ class _HTMLBlockBuilder(HTMLParser):
             self._append(' ')
         elif tag == 'input' and attrs.get('type') == 'checkbox':
             self._runs_here().append(('', {'_checkbox': 'checked' in attrs}))
-        elif tag == 'img' and attrs.get('src'):
+        elif tag == 'img' and attrs.get('src'):  # in a link: with its href
             size = _length(attrs.get('width')), _length(attrs.get('height'))
-            self._runs_here().append(image_run(
-                attrs.get('alt') or '', attrs['src'], size, self.load))
+            text, image = image_run(
+                attrs.get('alt') or '', attrs['src'], size, self.load)
+            self._runs_here().append((text, dict(self._props, **image)))
 
     def handle_endtag(self, tag):
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
@@ -603,3 +604,15 @@ def test_17():
     assert bases['Title'] == 'MyHeading'
     assert bases['Body text.'] == 'normal'
     assert not doc.basestyles.contains('h1')
+
+
+def test_18():
+    "an image in a link keeps its link"
+    from miniword.core.document import Document
+    from miniword.images.images import Image
+    from miniword.textmodel.utils import iter_leafes
+    texel = html_text_to_fragment(
+        '<p><a href="http://x/ci"><img src="http://x/b.png" alt="b"></a></p>',
+        Document())
+    images = [t for *_, t in iter_leafes(texel, 0) if isinstance(t, Image)]
+    assert [image.style.get('href') for image in images] == ['http://x/ci']

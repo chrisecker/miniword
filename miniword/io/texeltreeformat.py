@@ -161,6 +161,8 @@ def serialize_texel(texel, indent=0):
                     parts['path'] = file_path(texel, _folder)
                     if texel.relative and not _folder:  # clipboard
                         parts['relative'] = True
+                if texel.style:  # e.g. the href of a linked image
+                    parts['style'] = dict(texel.style)
                 s = serialize_style(parts) if parts else ''
                 # The data itself goes to the [blobs] section (txlio),
                 # the texel refers to it by its key ('' for no data).
@@ -607,8 +609,9 @@ class _Parser:
         path, relative = memory_path(path, self.folder)
         if d.get('relative'):  # clipboard: absolute, relative in files
             relative = True
-        return Image(self.blobs.get(key), scale_x, scale_y, proportional,
-                     crop, alt, path, relative)
+        image = Image(self.blobs.get(key), scale_x, scale_y, proportional,
+                      crop, alt, path, relative)
+        return image.set_style(as_style(d.get('style', {})))
 
     def parse_container(self):
         self.tok.consume('IDENT')  # C
@@ -1062,3 +1065,12 @@ def test_15():
         assert serialize(root, properties=props2) == text, v
     assert serialize(Group([Text('x', Style(font_family='Arial'))])) == \
         'T(\'x\', {font_family="Arial"})'  # plain values as before
+
+
+def test_16():
+    "Roundtrip: an image's style (the href of a linked image)"
+    from ..images.images import Image
+    image = Image(alt='b').set_style(Style(href='http://x/ci'))
+    root, _, _ = parse(serialize(Group([image, Text('t')])))
+    loaded = [t for t in _flatten(root) if isinstance(t, Image)]
+    assert [dict(t.style) for t in loaded] == [{'href': 'http://x/ci'}]

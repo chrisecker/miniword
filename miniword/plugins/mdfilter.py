@@ -375,7 +375,7 @@ def _marks(style):
 
 def _load(path):
     global _folder
-    with open(path, encoding='utf-8') as f:
+    with open(path, encoding='utf-8-sig') as f:  # also with a BOM
         text = f.read()
     _folder = os.path.dirname(os.path.abspath(path))
     try:
@@ -432,6 +432,8 @@ def _scale(size, pixels):
 #   ('code', lines, lang[, ptype, indent[, ps]])
 #                               a code block (container Code), in a list
 #                               item: ptype 'continued'
+#   ('yaml', lines, '')         a YAML header with its --- lines (Code of
+#                               kind 'yaml')
 #   ('table', grid[, nheader[, aligns]])
 #                               grid: rows of cells (runs or strings);
 #                               aligns: per column 'left', 'center',
@@ -467,10 +469,10 @@ def _build_blocks(doc, blocks):
             pars.append((size, 'normal', 0))  # its paragraph: body
             add('\n')  # the table's own NL
             continue
-        if block[0] == 'code':
+        if block[0] in ('code', 'yaml'):
             _, lines, lang, *par = block
             ptype, indent, *ps = par or ('normal', 0)
-            marks.append((size, code_block(lines, lang)))
+            marks.append((size, code_block(lines, lang, kind=block[0])))
             pars.append((size, ptype, indent, *ps))
             add('\n')  # the code block's own NL
             continue
@@ -504,15 +506,16 @@ def _build_blocks(doc, blocks):
 
 def _special(props):
     """The texel of a special run (see _build_blocks), or None."""
-    from miniword.textmodel.texeltree import T, ENDMARK, grouped
+    from miniword.textmodel.texeltree import T, ENDMARK, grouped, Style
     from miniword.footnotes.footnotes import Footnote
     from miniword.core.texels import BR
     from miniword.mdelements.rule import Rule
     from miniword.mdelements.checkbox import Checkbox
     from miniword.mdelements.rawhtml import RawHTML
     from miniword.mdelements.tag import Tag
-    if props.get('_image'):
-        return _image(*props['_image'])
+    if props.get('_image'):  # with the formatting around it (a link)
+        style = {k: v for k, v in props.items() if not k.startswith('_')}
+        return _image(*props['_image']).set_style(Style(**style))
     if props.get('_footnote'):
         return Footnote(grouped([T(props['_footnote']), ENDMARK]))
     if props.get('_br'):
@@ -615,17 +618,17 @@ def block_md(block):
     return _table_to_md(block)
 
 
-def code_block(lines, lang=''):
+def code_block(lines, lang='', kind='code'):
     """A Code texel of lines (strings)."""
     from miniword.mdelements.code import Code
-    return Code.from_text('\n'.join(lines), lang=lang)
+    return Code.from_text('\n'.join(lines), kind, lang)
 
 
 def code_md(code):
     """The Markdown lines of a Code texel: fenced (longer than any
-    backticks in it), an HTML block as it is."""
+    backticks in it), an HTML block or a YAML header as it is."""
     lines = code.source.split('\n')
-    if code.kind == 'html':
+    if code.kind in ('html', 'yaml'):
         return lines
     ticks = max(map(len, re.findall('`+', '\n'.join(lines))), default=0)
     fence = '`' * max(3, ticks + 1)
@@ -671,9 +674,10 @@ def _inline_runs(nodes, props={}, notes={}):
         elif t == 'codespan':
             runs.append((node.get('raw', ''),
                          dict(props, font_family='Courier New')))
-        elif t == 'image':
+        elif t == 'image':  # in a link: with its href
             alt = ''.join(text for text, _ in _inline_runs(children))
-            runs.append(image_run(alt, node['attrs'].get('url', '')))
+            text, image = image_run(alt, node['attrs'].get('url', ''))
+            runs.append((text, dict(props, **image)))
         elif t == 'link':
             runs += _inline_runs(children,
                                  dict(props, href=node['attrs'].get('url')),
@@ -842,15 +846,25 @@ def _load_mistune(text):
     return doc
 
 
+# a YAML header (pandoc, Obsidian, Hugo): at the start, ends with --- or ...
+_YAML = re.compile(r'---[ \t]*\n(?![ \t]*\n).*?\n(?:---|\.\.\.)[ \t]*$',
+                   re.S | re.M)
+
+
 def _build_mistune(doc, text):
     """Parse text as Markdown and build it into doc.textmodel; doc only
     needs that attribute (paste: a stand-in, see md_text_to_fragment)."""
     import mistune
+    header = []
+    m = _YAML.match(text)
+    if m:
+        header = [('yaml', m.group().split('\n'), '')]
+        text = text[m.end():]
     nodes = mistune.create_markdown(
         renderer='ast',
         plugins=['footnotes', 'strikethrough', 'table',
                  'superscript', 'subscript', 'task_lists'])(text)
-    _build_blocks(doc, _md_blocks(nodes))
+    _build_blocks(doc, header + _md_blocks(nodes))
 
 
 def _md_blocks(nodes):
@@ -2031,4 +2045,25 @@ def test_54():
         doc = _mistune_roundtrip(_md_doc(text + '\n'))
         assert doc.textmodel.get_text() == text + '\n', text
     md = '[x\\]y](http://a) ![a\\]b](http://b/c.png)\n'
+    assert _doc_to_md(_load_mistune(md)) == md
+
+
+def test_55():
+    "a YAML header becomes a code block of kind 'yaml'; saved unchanged"
+    from miniword.plugins.htmlexport import html_of
+    header = '---\ntitle: Test\nauthor: CE\n---'
+    md = header + '\n\n# Heading\n\ntext\n'
+    doc = _load_mistune(md)
+    assert code_texts(doc.textmodel.texel) == [('', header)]
+    assert _doc_to_md(doc) == md  # kind 'yaml': not fenced
+    assert 'author: CE' not in html_of(doc.textmodel)
+    md = '--- \na: 1\n... \n\nx\n'  # ended by ..., spaces: kept
+    assert _doc_to_md(_load_mistune(md)) == md
+    # a blank line after ---: a rule, no header
+    assert _doc_to_md(_load_mistune('---\n\nx\n')) == '---\n\nx\n'
+
+
+def test_56():
+    "an image in a link (a badge) keeps its link"
+    md = '[![Build](http://x/b.svg)](http://x/ci) text\n'
     assert _doc_to_md(_load_mistune(md)) == md

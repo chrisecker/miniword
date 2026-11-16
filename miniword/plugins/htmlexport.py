@@ -224,6 +224,8 @@ def block_html(block, basestyles, notes):
         return '<hr>'
     if isinstance(block, Code) and block.kind == 'code':  # 'pre' lines
         return blocks_html(paragraphs(block.childs[1:]), basestyles, notes)
+    if isinstance(block, Code) and block.kind == 'yaml':  # metadata
+        return ''
     return block.source  # raw HTML, an HTML block: as it is
 
 
