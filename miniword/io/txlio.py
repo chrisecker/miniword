@@ -388,7 +388,7 @@ def test_06():
     assert 'base="normal"' in serialize(root)
 
 
-def test_05():
+def test_10():
     "old files: block_padding in basestyles and paragraphs -> block_offset"
     import tempfile, os
     from ..textmodel.texeltree import Group, Text, NewLine
@@ -418,7 +418,7 @@ def test_05():
         os.unlink(path)
 
 
-def test_06():
+def test_11():
     "clipboard: dumps/loads keep text, styles, paragraphs and images"
     from ..textmodel.texeltree import Group, Text, NewLine, get_text
     from ..images import Image
