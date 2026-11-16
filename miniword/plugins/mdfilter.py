@@ -2105,3 +2105,21 @@ def test_57():
     doc.textmodel.set_properties(6, 7, vertical_position='subscript')
     assert _doc_to_md(doc) == 'a\\^^2^ b\\~~3~\n'
     assert _mistune_roundtrip(doc).textmodel.get_text() == 'a^2 b~3\n'
+
+
+def test_58():
+    "test/md_corpus (files of other tools): saved again, nothing changes"
+    global _folder  # what is lost: python tools/md_roundtrip.py
+    import glob
+    folder = os.path.join(os.path.dirname(__file__), '..', '..', 'test',
+                          'md_corpus')
+    paths = sorted(glob.glob(os.path.join(folder, '*.md')))
+    assert paths
+    for path in paths:
+        doc = _load(path)
+        _folder = os.path.abspath(folder)  # as _save sets it
+        try:
+            saved = _doc_to_md(doc)
+            assert _doc_to_md(_load_mistune(saved)) == saved, path
+        finally:
+            _folder = ''
