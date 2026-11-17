@@ -3,8 +3,8 @@
 """
 The Elements panel (develnotes/panels_concept.md): a palette inserting
 the Markdown constructs that have no panel of their own; below, the
-element at the cursor, named, and its settings (a code block's
-language, expanding and collapsing an HTML block); elsewhere a hint.
+element at the cursor, named, and its settings (the language of a code
+block or Raw, expanding and collapsing Raw); elsewhere a hint.
 """
 
 import wx
@@ -18,7 +18,7 @@ from . import texel_at
 from .rule import Rule, insert_rule
 from .checkbox import Checkbox, insert_checkbox
 from .code import code_at, insert_code
-from .rawhtml import html_at, toggle_html, insert_html
+from .raw import NAMES, any_raw_at, toggle_raw, insert_raw, raw_at
 from .tag import Tag, insert_tag
 from .colorize import colorizers
 
@@ -27,16 +27,15 @@ ELEMENTS = {'rule': ("Rule", "Horizontal rule", insert_rule),
             'checkbox': ("Task", "Checkbox", insert_checkbox),
             'code': ("Code", "Code block", insert_code),
             'tag': ("Tag", "HTML tag", insert_tag),
-            'html': ("HTML", "HTML block", insert_html)}
+            'raw': ("Raw", "Raw HTML", insert_raw)}
 
 
 def element_at(editor, j):
     """The key of the element at the cursor j (see ELEMENTS), or None."""
-    code = code_at(editor, j)
-    if code:
-        return 'html' if code[1].kind == 'html' else 'code'
-    if html_at(editor, j):
-        return 'html'
+    if any_raw_at(editor, j):
+        return 'raw'
+    if code_at(editor, j):
+        return 'code'
     if any(isinstance(node, Tag) and i1 < j < i2
            for i1, i2, node in get_path(editor.target.texel, j)):
         return 'tag'
@@ -126,22 +125,30 @@ class ElementsPanel(SidePanel):
     def update(self):
         editor = self.editor
         key = element_at(editor, editor.index)
+        # Raw or a code block: with a language
+        found = any_raw_at(editor, editor.index) \
+            or code_at(editor, editor.index)
         if key:
             self.current.SetLabel(ELEMENTS[key][1])
             self.icon.SetBitmap(themed_icon('element_%s.svg' % key,
                                             colours.get('IconGrey')))
         else:
             self.current.SetLabel("\u2013")
+        if key == 'raw':  # named by its language
+            lang = found[1].lang
+            self.current.SetLabel("Raw " + NAMES.get(lang, lang))
         self.icon.Show(bool(key))
-        code = code_at(editor, editor.index)
-        self.code_section.ShowItems(key == 'code')
-        if key == 'code':
+        self.code_section.ShowItems(key in ('code', 'raw'))
+        if key in ('code', 'raw'):
             names = sorted(colorizers)  # plugins may add some
+            if key == 'raw':
+                names = list(NAMES)
             if self.language.GetStrings() != names:
                 self.language.Set(names)
-            self.language.ChangeValue(code[1].lang)
-        self.toggle.Show(key == 'html')
-        self.toggle.label = "Collapse" if code else "Expand"
+            self.language.ChangeValue(found[1].lang)
+        self.toggle.Show(key == 'raw')
+        expanded = raw_at(editor, editor.index) is None
+        self.toggle.label = "Collapse" if expanded else "Expand"
         self.toggle.Refresh()
         self.no_settings.Show(key in ('rule', 'checkbox', 'tag'))
         self.hint.Show(key is None)
@@ -152,7 +159,7 @@ class ElementsPanel(SidePanel):
         event.Skip()
         editor = self.editor
         index = editor.index
-        found = code_at(editor, index)
+        found = any_raw_at(editor, index) or code_at(editor, index)
         lang = self.language.GetValue().strip()
         if found and found[1].lang != lang:
             i, code = found
@@ -160,4 +167,4 @@ class ElementsPanel(SidePanel):
             editor.set_index(index)  # the cursor stays in the code
 
     def on_toggle(self, event):
-        toggle_html(self.editor, self.editor.index)
+        toggle_raw(self.editor, self.editor.index)

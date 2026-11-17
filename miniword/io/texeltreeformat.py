@@ -57,7 +57,7 @@ from ..textmodel.styles import Style
 from ..core.texels import BR
 from ..mdelements.rule import Rule
 from ..mdelements.checkbox import Checkbox
-from ..mdelements.rawhtml import RawHTML
+from ..mdelements.raw import Raw, RawIcon
 from ..mdelements.tag import Tag
 from ..mdelements.code import Code
 from ..textmodel.submodel import Footnote
@@ -124,8 +124,11 @@ def serialize_texel(texel, indent=0):
                 return '%sTAB(%s)' % (pad, s)
             return '%sTAB' % pad
 
-        elif isinstance(texel, RawHTML):
-            s = serialize_style(texel.style) if texel.style else ''
+        elif isinstance(texel, RawIcon):
+            props = dict(texel.style or {})
+            if texel.lang != RawIcon.lang:
+                props['lang'] = texel.lang
+            s = serialize_style(props)
             return '%sRAW(%r%s)' % (pad, texel.source, s and ', ' + s)
 
         elif isinstance(texel, (BR, Rule, Checkbox)):
@@ -263,14 +266,13 @@ def serialize_container(texel, indent=0):
 
     ctype = texel.__class__.__name__
 
-    # Code: C("code", {kind=..., lang=...}, [line, NL, line ...])
+    # Code, Raw: C("code" or "raw", {lang=...}, [line, NL, line ...])
     if isinstance(texel, Code):
-        props = {}  # without the defaults
-        if texel.kind != Code.kind:
-            props['kind'] = texel.kind
-        if texel.lang:
+        cls = type(texel)
+        props = {}  # without the default
+        if texel.lang != cls.lang:
             props['lang'] = texel.lang
-        head = '%sC("%s",' % (pad, Code.txl_name)
+        head = '%sC("%s",' % (pad, cls.txl_name)
         if props:
             head += ' %s,' % serialize_style(props)
         slot = _serialize_slot(texel.childs[1], None, indent + 1)
@@ -489,8 +491,10 @@ class _Parser:
         if value == 'T':
             return self.parse_text()
         elif value == 'RAW':
-            text = self.parse_text()  # the same form: RAW("...", {style})
-            return RawHTML(text.text, text.style or None)
+            text = self.parse_text()  # the same form: RAW("...", {...})
+            style = dict(text.style)
+            lang = style.pop('lang', None)
+            return RawIcon(text.text, lang, as_style(style) or None)
         elif value == 'TAG':
             return Tag(self.parse_text().text)
         elif value == 'NL':
@@ -654,11 +658,10 @@ class _Parser:
         self.tok.consume('RPAREN')
 
         ctype = OLD_TYPE_NAMES.get(ctype, ctype)
-        if ctype == Code.txl_name:
-            d = dict(sep0_style or {})
+        if ctype in (Code.txl_name, Raw.txl_name):
+            cls = Raw if ctype == Raw.txl_name else Code
             content = slots[0][1] if slots else Group([])
-            return Code(content, d.get('kind', Code.kind),
-                        d.get('lang', Code.lang))
+            return cls(content, dict(sep0_style or {}).get('lang'))
 
         from ..tables import Table
         if ctype == Table.txl_name and has_ncols:

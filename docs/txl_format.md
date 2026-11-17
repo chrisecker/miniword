@@ -12,7 +12,7 @@ Empty sections may be omitted. Comments start with `#`.
 
 Strings are Python string literals in single or double quotes: `T('it\'s')`,
 `T("say \"hi\"")`, `T('a\\b')`. Element names (`T`, `NL`, `FN`, …) and container
-types (`"table"`, `"code"`) are case-sensitive. Rule of thumb: keywords of the syntax
+types (`"table"`, `"code"`, `"raw"`) are case-sensitive. Rule of thumb: keywords of the syntax
 are upper case, all names and values in quotes are lower case.
 
 ---
@@ -280,10 +280,12 @@ Forced line break (Shift+Enter): ends the line, not the paragraph.
 Checkbox, e.g. at the start of a task list item (Markdown `- [ ]`,
 `- [x]`); `checked` is left out when false.
 
-**`RAW("source")`** / **`RAW("source", {prop=val, ...})`**
+**`RAW("source")`** / **`RAW("source", {lang="markdown", prop=val, ...})`**
 
-Raw HTML from Markdown, kept as its source: shown, never rendered,
-written back unchanged.
+Raw, collapsed (shown as an icon): source for a target format, its language
+`lang` (default `"html"`; e.g. `"markdown"` for a YAML header). Never rendered;
+written back unchanged by the export of that format, left out by the others.
+Expanded see `C("raw", …)`.
 
 **`HR`** / **`HR({prop=val, ...})`**
 
@@ -356,7 +358,7 @@ unchanged.
 
 Container (e.g. table). The property block and slots are all optional.
 
-- The type is lower case: `"table"`, `"code"`. Files written before 2026-11 use
+- The type is lower case: `"table"`, `"code"`, `"raw"`. Files written before 2026-11 use
   `"Table"` and `"Code"`; they are still read.
 - The `{…}` block carries both style properties and structural parameters.
 - Each slot is enclosed in `[…]` and contains a sequence of elements.
@@ -410,12 +412,10 @@ At shared cell edges both neighbours may define the same border. The
 
 ### `C("code", …)` — Code block
 
-A code block (Markdown fenced code), HTML block or YAML header: one slot
-with the lines, separated by `NL`.
+A code block (Markdown fenced code): one slot with the lines, separated by `NL`.
 
 | Parameter | Default  | Description |
 | --------- | -------- | ----------- |
-| `kind`    | `"code"` | `"code"`, `"html"` (HTML block) or `"yaml"` (YAML header) |
 | `lang`    | `""`     | Language of the code, e.g. `"python"` |
 
 ```
@@ -423,6 +423,21 @@ C("code", {lang="python"},
   [T("x = 1")
    NL
    T("print(x)")]
+)
+```
+
+### `C("raw", …)` — Raw, expanded
+
+Raw (see `RAW`) shown as its source: one slot with the lines, separated by `NL`,
+like a code block.
+
+| Parameter | Default  | Description |
+| --------- | -------- | ----------- |
+| `lang`    | `"html"` | Its language, e.g. `"markdown"` |
+
+```
+C("raw", {lang="markdown"},
+  [T("---") NL T("title: Notes") NL T("---")]
 )
 ```
 

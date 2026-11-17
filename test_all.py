@@ -63,7 +63,7 @@ modules = [
     "miniword.tests.test_clip",
     "miniword.tests.test_rule",
     "miniword.tests.test_checkbox",
-    "miniword.tests.test_rawhtml",
+    "miniword.tests.test_raw",
     "miniword.tests.test_code",
     "miniword.tests.test_colorize",
     "miniword.tests.test_tag",

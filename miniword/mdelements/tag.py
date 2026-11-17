@@ -2,7 +2,7 @@
 Inline HTML (Markdown: a tag in the text, e.g. <kbd>): texel, box,
 insert command. A tag is a container [<, content, >]: its source is
 edited in the text, between the brackets. Shown as a chip, never
-rendered, written back unchanged. HTML blocks see rawhtml.py.
+rendered, written back unchanged. HTML blocks: Raw, see raw.py.
 """
 
 from ..textmodel.texeltree import NewLine, Container, Text, \

@@ -1,7 +1,6 @@
 """
 The code block (Markdown ```, develnotes/code_block_concept.md): texel,
-box, insert command. An HTML block expanded is one of kind 'html' (see
-rawhtml.py).
+box, insert command. Raw (raw.py), expanded, shares texel and box.
 """
 
 from copy import copy as shallow_copy
@@ -20,27 +19,26 @@ from . import insert_par
 
 
 class Code(Container):
-    """A code block (kind 'code', in a language lang), HTML block (kind
-    'html') or YAML header of a Markdown file (kind 'yaml'): a container
-    like a table with one cell, followed by a newline of its own
+    """A code block in a language lang: a container like a table with
+    one cell, followed by a newline of its own
     (develnotes/code_block_concept.md)."""
     txl_name = 'code'  # the type in TXL files: C("code", ...)
-    kind = 'code'
     lang = ''
 
-    def __init__(self, content=NULL_TEXEL, kind='code', lang=''):
-        self.kind, self.lang = kind, lang
+    def __init__(self, content=NULL_TEXEL, lang=None):
+        if lang is not None:
+            self.lang = lang
         # childs as a table cell's: SEP, content, SEP ending its last line
         self.childs = [NL, content, NL.set_parstyle(Style(base='pre'))]
         self.compute_weights()
 
     @classmethod
-    def from_text(cls, text, kind='code', lang=''):
-        """A code block of text, its lines in the style 'pre'."""
+    def from_text(cls, text, lang=None):
+        """A block of text, its lines in the style 'pre'."""
         texels = []
         for line in text.split('\n'):
             texels += [Text(line), NL.set_parstyle(Style(base='pre'))]
-        return cls(grouped(texels[:-1]), kind, lang)  # the last NL: ours
+        return cls(grouped(texels[:-1]), lang)  # the last NL: ours
 
     @property
     def source(self):
@@ -56,19 +54,19 @@ class Code(Container):
 class CodeBox(TableBox):
     """A code block: a table box of one cell, set from row records (the
     lines), without cell lines (the 'pre' style draws ground and frame);
-    an HTML block (icon: a TextBox) gets a thin frame and the icon at
+    Raw (framed, icon: a RawIconBox) gets a thin frame and the icon at
     the top right. Split at a page break into parts of whole lines; a
     continuation has no leading SEP and no icon."""
     pad = 2
 
-    def __init__(self, records, width, kind, device=None, icon=None,
-                 is_continuation=False):
+    def __init__(self, records, width, framed=False, device=None,
+                 icon=None, is_continuation=False):
         cell = create_cell(records, width, device)
         cell.length = sum(len(record[0]) for record in records)
         TableBox.__init__(self, [[cell]], [cell.width],
                           [cell.height + cell.depth], break_level=1,
                           device=device, is_continuation=is_continuation)
-        self.records, self.kind, self.icon = records, kind, icon
+        self.records, self.framed, self.icon = records, framed, icon
         self.is_continuation = is_continuation
 
     def split(self, height):
@@ -81,9 +79,9 @@ class CodeBox(TableBox):
         if not rest:
             return None
         first = [record for _, record in stack.placed]
-        return (CodeBox(first, self.width, self.kind, self.device,
+        return (CodeBox(first, self.width, self.framed, self.device,
                         self.icon, self.is_continuation),
-                CodeBox(rest, self.width, self.kind, self.device,
+                CodeBox(rest, self.width, self.framed, self.device,
                         is_continuation=True))
 
     def icon_rect(self):
@@ -101,12 +99,12 @@ class CodeBox(TableBox):
             return None
         ix, iy, iw, ih = rect
         if ix <= x < ix + iw and iy <= y < iy + ih:
-            return 'hand'  # a double click collapses the HTML block
+            return 'hand'  # a double click collapses Raw
         return None
 
     def draw(self, x, y, dc):
         Box.draw(self, x, y, dc)
-        if self.kind == 'html':
+        if self.framed:
             self.device.draw_rect(x, y, self.width, self.height, dc)
         if self.icon is not None:
             ix, iy, iw, ih = self.icon_rect()
@@ -137,7 +135,8 @@ def shown(content, parstyle, lang=''):
 
 
 def code_at(editor, j):
-    """(index, texel) of the code block (Code) j is in, or None."""
+    """(index, texel) of the code block (Code, also Raw) j is in, or
+    None."""
     for i1, i2, node in get_path(editor.target.texel, j):
         if isinstance(node, Code) and i1 < j < i2:
             return i1, node
@@ -165,7 +164,7 @@ class CodeController(ElementController):
         return cls(editor, texel, i, i + length(texel), len(path) - 1)
 
     def handle_action(self, action, shift):
-        # an HTMLController at inline HTML has no Code
+        # a RawController at a collapsed Raw (RawIcon) has no Code
         if action not in ('indent', 'dedent') \
                 or not isinstance(self.texel, Code):
             return super().handle_action(action, shift)

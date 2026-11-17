@@ -1,6 +1,6 @@
 """
 The Markdown elements that have no package of their own - rule,
-checkbox, code and HTML block: each module holds texel, box, controller
+checkbox, code block, Raw and tag: each module holds texel, box, controller
 and the insert command (like tables/ and images/); panel.py the
 Elements panel.
 """

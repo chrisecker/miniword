@@ -36,9 +36,9 @@ def test_CODE_1():
 
 
 def test_CODE_2():
-    "CODE-2: kind and language are kept; a copy keeps them"
-    texel = code('x', kind='html', lang='')
-    assert (texel.kind, texel.lang) == ('html', '')
+    "CODE-2: the language is kept; a copy keeps it; Raw: html by default"
+    from ..mdelements.raw import Raw
+    assert (Code().lang, Raw().lang) == ('', 'html')
     texel = code('x', lang='python')
     assert texel.set_childs(texel.childs).lang == 'python'
 
@@ -90,21 +90,25 @@ def test_CODE_4():
 
 
 def codes(texel):
-    """(kind, lang, text) of each code block in texel."""
+    """(type, lang, text) of each code block and expanded Raw in texel;
+    type: 'code' or 'raw'."""
     from ..textmodel.texeltree import get_text
     if isinstance(texel, Code):
-        return [(texel.kind, texel.lang, get_text(texel.childs[1]))]
+        return [(texel.txl_name, texel.lang, get_text(texel.childs[1]))]
     return [c for child in getattr(texel, 'childs', ()) for c in codes(child)]
 
 
 def test_CODE_5():
-    "CODE-5: the file format keeps a code block, its kind and language"
+    "CODE-5: the file format keeps a code block and Raw, their language"
     from ..io.texeltreeformat import serialize, parse
+    from ..mdelements.raw import Raw
     texel = Group([code('x = 1', '', 'y', lang='python'), NL,
-                   code('<b>', kind='html'), NL])
+                   Raw.from_text('<b>'), NL,
+                   Raw.from_text('a: 1', 'markdown'), NL])
     root, _, _ = parse(serialize(texel))
     assert codes(root) == codes(texel) == [
-        ('code', 'python', 'x = 1\n\ny'), ('html', '', '<b>')]
+        ('code', 'python', 'x = 1\n\ny'), ('raw', 'html', '<b>'),
+        ('raw', 'markdown', 'a: 1')]
 
 
 def test_CODE_6():
@@ -172,7 +176,7 @@ def test_CODE_10():
         frame.editor.insert_texel(Group([
             Text('bold', Style(bold=True)), NL.set_parstyle(Style(base='h1'))]))
         frame.editor.insert_text('line')
-        (kind, lang, text), = codes(model.texel)
+        (_, lang, text), = codes(model.texel)
         assert text == 'bold\nlinex'
         j = model.get_text().index('bold')
         assert model.get_style(j).get('bold')
@@ -204,60 +208,65 @@ HTML = '<div>\n  <b>x</b>\n</div>'
 
 
 def test_CODE_12():
-    "CODE-12: an HTML block collapses (RawHTML) and expands (Code)"
-    from ..mdelements.rawhtml import RawHTML
-    from ..mdelements.rawhtml import toggle_html
+    "CODE-12: Raw collapses (RawIcon) and expands (Raw), its language kept"
+    from ..mdelements.raw import RawIcon, toggle_raw
     from .guitest import close
-    frame = frame_with(RawHTML(HTML))
+    frame = frame_with(RawIcon(HTML))
     try:
         editor, model = frame.editor, frame.document.textmodel
-        i = model.get_text().index(RawHTML.text)
-        assert toggle_html(editor, i)  # expand
-        assert codes(model.texel) == [('html', '', HTML)]
+        i = model.get_text().index(RawIcon.text)
+        assert toggle_raw(editor, i)  # expand
+        assert codes(model.texel) == [('raw', 'html', HTML)]
         editor.set_index(i + 3)  # in the code
-        assert toggle_html(editor, editor.index)  # collapse
+        assert toggle_raw(editor, editor.index)  # collapse
         assert codes(model.texel) == []
-        assert RawHTML.text in model.get_text()
+        assert RawIcon.text in model.get_text()
         editor.undo()
-        assert codes(model.texel) == [('html', '', HTML)]
-        assert not toggle_html(editor, 0)  # nothing there
+        assert codes(model.texel) == [('raw', 'html', HTML)]
+        assert not toggle_raw(editor, 0)  # nothing there
     finally:
         close(frame)
 
 
 def test_CODE_13():
-    "CODE-13: an HTML block collapsed is only its icon, in a row of its "
-    "own (also with text beside it); expanded the icon is at the top right"
-    from ..mdelements.rawhtml import RawHTML, HTMLIconBox
-    page = pages_from(doc(par(RawHTML(HTML)), par('a', RawHTML(HTML), 'b'),
-                          par(Code.from_text(HTML, kind='html'))),
+    "CODE-13: Raw collapsed is only its icon, in a row of its own (also "
+    "with text beside it); expanded the icon is at the top right"
+    from ..mdelements.raw import RawIcon, RawIconBox, Raw
+    page = pages_from(doc(par(RawIcon(HTML)), par('a', RawIcon(HTML), 'b'),
+                          par(Raw.from_text(HTML))),
                       small_memo(width=400, height=400))[0]
     rows = [row.childs for _, _, row in page.rows]
     icons = [boxes for boxes in rows
-             if any(isinstance(box, HTMLIconBox) for box in boxes)]
+             if any(isinstance(box, RawIconBox) for box in boxes)]
     assert len(icons) == 2  # (in a row with the paragraph's end only)
     assert all(len(boxes) == 1 or len(boxes[1]) == 1 for boxes in icons)
     expanded, = code_parts([page])
-    assert isinstance(expanded.icon, HTMLIconBox)
+    assert isinstance(expanded.icon, RawIconBox)
+    assert expanded.icon.label is None  # html: </>
+    page = pages_from(doc(par(RawIcon('a: 1', 'markdown'))),
+                      small_memo(width=400, height=400))[0]
+    icon, = [box for _, _, row in page.rows for box in row.childs
+             if isinstance(box, RawIconBox)]
+    assert icon.label.text == 'MD'
 
 
 def test_CODE_14():
     "CODE-14: a double click on the icon toggles, collapsed and expanded"
-    from ..mdelements.rawhtml import RawHTML, HTMLIconBox
+    from ..mdelements.raw import RawIcon, RawIconBox
     from ..layout.boxes import find_box_at
     from ..mdelements.code import CodeBox
     from .guitest import close, double_click
-    frame = frame_with(RawHTML(HTML))
+    frame = frame_with(RawIcon(HTML))
     try:
         canvas, model = frame.canvas, frame.document.textmodel
         build = lambda: canvas.builder.assure_index(len(model), 0)
-        i = model.get_text().index(RawHTML.text)
-        _, (x, y), box = find_box_at(canvas.layout, i, HTMLIconBox)
+        i = model.get_text().index(RawIcon.text)
+        _, (x, y), box = find_box_at(canvas.layout, i, RawIconBox)
         assert box.pointer_at(2, 2) == 'hand'
         double_click(canvas, x + box.width + 5, y + 2)  # beside it
         assert codes(model.texel) == []
         double_click(canvas, x + 2, y + 2)  # on the icon
-        assert codes(model.texel) == [('html', '', HTML)]
+        assert codes(model.texel) == [('raw', 'html', HTML)]
         build()
         _, (x, y), box = find_box_at(canvas.layout, i + 1, CodeBox)
         double_click(canvas, x + box.width - 3, y + 3)
@@ -268,7 +277,7 @@ def test_CODE_14():
 
 def test_CODE_15():
     "CODE-15: the Elements panel: language, expand/collapse, insert"
-    from ..mdelements.rawhtml import RawHTML
+    from ..mdelements.raw import RawIcon
     from .guitest import close, click_button, enter
     frame = frame_with(code('x = 1'))
     try:
@@ -287,15 +296,15 @@ def test_CODE_15():
         assert Rule.text in model.get_text()
     finally:
         close(frame)
-    frame = frame_with(RawHTML(HTML))
+    frame = frame_with(RawIcon(HTML))
     try:
         panel, editor = frame.elements_panel, frame.editor
         model = frame.document.textmodel
-        editor.set_index(model.get_text().index(RawHTML.text))
+        editor.set_index(model.get_text().index(RawIcon.text))
         panel.update()
         assert panel.toggle.IsShown() and panel.toggle.label == 'Expand'
         click_button(panel.toggle)
-        assert codes(model.texel) == [('html', '', HTML)]
+        assert codes(model.texel) == [('raw', 'html', HTML)]
         panel.update()
         assert panel.toggle.label == 'Collapse'
     finally:
@@ -410,12 +419,12 @@ def test_CODE_21():
     "CODE-21: Markdown: text beside a block in one paragraph is written "
     "as paragraphs of their own, the block intact"
     from ..plugins.mdfilter import _load_mistune, _doc_to_md
-    from ..mdelements.rawhtml import RawHTML
+    from ..mdelements.raw import RawIcon
     from ..tables.tables import from_strings
     for block, md in (
             (Code.from_text('x = 1', lang='python'),
              '```python\nx = 1\n```'),
-            (RawHTML('<div>\n</div>'), '<div>\n</div>'),
+            (RawIcon('<div>\n</div>'), '<div>\n</div>'),
             (from_strings([['a']]), '|     |\n| --- |\n| a   |')):
         document = _load_mistune('')
         document.textmodel.texel = grouped([Text('left'), block,
@@ -428,13 +437,13 @@ def test_CODE_22():
     "its elements) and shows its settings, or 'No settings.'; elsewhere "
     "'-' and a hint; the focus stays where it is"
     import wx
-    from ..mdelements.rawhtml import RawHTML
+    from ..mdelements.raw import RawIcon
     from ..mdelements.checkbox import Checkbox
     from ..mdelements.tag import Tag
     from .guitest import close
     frame = frame_with(Group([code('x = 1'), NL, Text('text'), NL,
                               Checkbox(), Text('todo '), Tag('<kbd>'), NL,
-                              RawHTML(HTML)]))
+                              RawIcon(HTML)]))
     try:
         panel, editor = frame.elements_panel, frame.editor
         text = frame.document.textmodel.get_text()
@@ -449,8 +458,8 @@ def test_CODE_22():
         assert at(text.index('x') + 1) == 'Code block'
         assert panel.language.IsShown() and not panel.toggle.IsShown()
         assert not panel.hint.IsShown() and not panel.no_settings.IsShown()
-        assert at(text.index(RawHTML.text)) == 'HTML block'
-        assert panel.toggle.IsShown() and not panel.language.IsShown()
+        assert at(text.index(RawIcon.text)) == 'Raw HTML'
+        assert panel.toggle.IsShown() and panel.language.IsShown()
         assert at(text.index('todo')) == 'Checkbox'
         assert panel.no_settings.IsShown() and not panel.toggle.IsShown()
         assert at(text.index('<kbd>') + 2) == 'HTML tag'

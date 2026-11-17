@@ -44,8 +44,8 @@ def _doc_to_md(doc):
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
     from miniword.mdelements.rule import Rule
-    from miniword.mdelements.rawhtml import RawHTML
-    from miniword.mdelements.code import Code
+    from miniword.mdelements.raw import RawIcon
+    from miniword.mdelements.code import Code  # also Raw
 
     texel          = doc.textmodel.get_xtexel()
     parts          = []
@@ -80,7 +80,7 @@ def _doc_to_md(doc):
             parts.append('```')
             in_pre = False
 
-    blocks = (TableTexel, Rule, RawHTML, Code)
+    blocks = (TableTexel, Rule, RawIcon, Code)
 
     def paragraphs():  # text beside a block: paragraphs of their own
         for *_, elems in iter_paragraphs(texel, 0):
@@ -305,15 +305,17 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
     from miniword.core.texels import BR
     from miniword.mdelements.checkbox import Checkbox
-    from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.raw import RawIcon
     from miniword.mdelements.tag import Tag
     pieces = []  # (Markdown, its marks; None: keep the open ones)
     for i, elem in enumerate(elems):
         marks = None if plain else _marks(getattr(elem, 'style', {}))
         if isinstance(elem, Checkbox):  # a task list item's
             pieces.append(('[x] ' if elem.checked else '[ ] ', None))
-        elif isinstance(elem, (Tag, RawHTML)):  # as it is
+        elif isinstance(elem, Tag):  # as it is
             pieces.append((elem.source, None))
+        elif isinstance(elem, RawIcon):
+            pieces.append(('\n'.join(raw_md(elem)), None))
         elif isinstance(elem, BR):
             pieces.append(('\n' if plain else '\\\n', None))
         elif isinstance(elem, FootnoteTexel):
@@ -454,8 +456,8 @@ def _scale(size, pixels):
 #   ('code', lines, lang[, ptype, indent[, ps]])
 #                               a code block (container Code), in a list
 #                               item: ptype 'continued'
-#   ('yaml', lines, '')         a YAML header with its --- lines (Code of
-#                               kind 'yaml')
+#   ('raw', lines, lang)        Raw in lang, e.g. a YAML header with its
+#                               --- lines (Raw Markdown)
 #   ('table', grid[, nheader[, aligns]])
 #                               grid: rows of cells (runs or strings);
 #                               aligns: per column 'left', 'center',
@@ -491,10 +493,10 @@ def _build_blocks(doc, blocks):
             pars.append((size, 'normal', 0))  # its paragraph: body
             add('\n')  # the table's own NL
             continue
-        if block[0] in ('code', 'yaml'):
+        if block[0] in ('code', 'raw'):
             _, lines, lang, *par = block
             ptype, indent, *ps = par or ('normal', 0)
-            marks.append((size, code_block(lines, lang, kind=block[0])))
+            marks.append((size, code_block(lines, lang, block[0] == 'raw')))
             pars.append((size, ptype, indent, *ps))
             add('\n')  # the code block's own NL
             continue
@@ -533,7 +535,7 @@ def _special(props):
     from miniword.core.texels import BR
     from miniword.mdelements.rule import Rule
     from miniword.mdelements.checkbox import Checkbox
-    from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.raw import RawIcon
     from miniword.mdelements.tag import Tag
     if props.get('_image'):  # with the formatting around it (a link)
         style = {k: v for k, v in props.items() if not k.startswith('_')}
@@ -547,7 +549,7 @@ def _special(props):
     if '_checkbox' in props:
         return Checkbox().set_checked(props['_checkbox'])
     if '_html' in props:
-        return RawHTML(props['_html'])
+        return RawIcon(props['_html'])
     if '_tag' in props:
         return Tag(props['_tag'])
     return None
@@ -626,32 +628,44 @@ def beside_blocks(elems, blocks):
 
 
 def block_md(block):
-    """The Markdown lines of a paragraph that is one block: a rule, raw
-    HTML, a code block or a table."""
+    """The Markdown lines of a paragraph that is one block: a rule, Raw,
+    a code block or a table."""
     from miniword.mdelements.rule import Rule
-    from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.raw import Raw, RawIcon
     from miniword.mdelements.code import Code
     if isinstance(block, Rule):
         return ['---']
-    if isinstance(block, RawHTML):
-        return [block.source]
+    if isinstance(block, (Raw, RawIcon)):
+        return raw_md(block)
     if isinstance(block, Code):
         return code_md(block)
     return _table_to_md(block)
 
 
-def code_block(lines, lang='', kind='code'):
-    """A Code texel of lines (strings)."""
+def code_block(lines, lang='', raw=False):
+    """A Code texel of lines (strings); raw: a Raw in lang."""
     from miniword.mdelements.code import Code
-    return Code.from_text('\n'.join(lines), kind, lang)
+    from miniword.mdelements.raw import Raw
+    cls = Raw if raw else Code
+    return cls.from_text('\n'.join(lines), lang)
+
+
+# the languages of Raw that Markdown writes as they are (else: left out)
+RAW_LANGS = ('html', 'markdown')
+
+
+def raw_md(raw):
+    """The Markdown lines of Raw (Raw, RawIcon): its source if Markdown
+    writes its language (RAW_LANGS), else none."""
+    if raw.lang in RAW_LANGS:
+        return raw.source.split('\n')
+    return []
 
 
 def code_md(code):
-    """The Markdown lines of a Code texel: fenced (longer than any
-    backticks in it), an HTML block or a YAML header as it is."""
+    """The Markdown lines of a code block: fenced (longer than any
+    backticks in it)."""
     lines = code.source.split('\n')
-    if code.kind in ('html', 'yaml'):
-        return lines
     ticks = max(map(len, re.findall('`+', '\n'.join(lines))), default=0)
     fence = '`' * max(3, ticks + 1)
     return [fence + code.lang] + lines + [fence]
@@ -880,7 +894,7 @@ def _build_mistune(doc, text):
     header = []
     m = _YAML.match(text)
     if m:
-        header = [('yaml', m.group().split('\n'), '')]
+        header = [('raw', m.group().split('\n'), 'markdown')]
         text = text[m.end():]
     nodes = mistune.create_markdown(
         renderer='ast',
@@ -1843,7 +1857,7 @@ def test_37():
 
 
 def test_38():
-    "an HTML block is kept as it is (RawHTML), also its entities"
+    "an HTML block is kept as it is (RawIcon), also its entities"
     md = '<div>x <b>y</b> &amp; z</div>\n\nb\n'
     assert _doc_to_md(_load_mistune(md)) == md
 
@@ -2071,13 +2085,13 @@ def test_54():
 
 
 def test_55():
-    "a YAML header becomes a code block of kind 'yaml'; saved unchanged"
+    "a YAML header becomes Raw Markdown; saved unchanged"
     from miniword.plugins.htmlexport import html_of
     header = '---\ntitle: Test\nauthor: CE\n---'
     md = header + '\n\n# Heading\n\ntext\n'
     doc = _load_mistune(md)
-    assert code_texts(doc.textmodel.texel) == [('', header)]
-    assert _doc_to_md(doc) == md  # kind 'yaml': not fenced
+    assert code_texts(doc.textmodel.texel) == [('markdown', header)]
+    assert _doc_to_md(doc) == md  # raw: not fenced
     assert 'author: CE' not in html_of(doc.textmodel)
     md = '--- \na: 1\n... \n\nx\n'  # ended by ..., spaces: kept
     assert _doc_to_md(_load_mistune(md)) == md

@@ -96,10 +96,10 @@ def test_TAG_4():
 
 def test_TAG_5():
     "TAG-5: Insert > HTML Tag: an empty tag <> at the cursor, the cursor "
-    "between the brackets; Insert > HTML Block: an empty expanded block"
+    "between the brackets; Insert > Raw HTML: an empty expanded Raw"
     from ..core.document import Document
     from ..mdelements.tag import insert_tag
-    from ..mdelements.rawhtml import insert_html
+    from ..mdelements.raw import insert_raw
     from ..ui.mainwindow import MainFrame
     from .guitest import app, close
     from .test_code import codes
@@ -115,8 +115,8 @@ def test_TAG_5():
         editor.insert_text('b')
         assert tags(model.texel) == ['<b>']
         editor.set_index(len(model))
-        insert_html(editor)
+        insert_raw(editor)
         editor.insert_text('<div>')
-        assert codes(model.texel) == [('html', '', '<div>')]
+        assert codes(model.texel) == [('raw', 'html', '<div>')]
     finally:
         close(frame)

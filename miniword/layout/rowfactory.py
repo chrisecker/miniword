@@ -57,7 +57,7 @@ from .boxes import TextBox, NewlineBox, EndBox, TabulatorBox, Row, RowsBox
 from ..mdelements.rule import RuleBox
 from ..mdelements.checkbox import CheckboxBox
 from ..mdelements.code import CodeBox, shown
-from ..mdelements.rawhtml import HTMLIconBox
+from ..mdelements.raw import Raw, RawIconBox, LABELS
 from ..mdelements.tag import TagBox
 from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
@@ -215,9 +215,9 @@ class Factory:
         style = self.stylesheet.mk_style(parstyle, texel.style)
         return CheckboxBox(texel.checked, style['font_size'], self.device)
 
-    def RawHTML_handler(self, texel, parstyle):
-        """An HTML block, collapsed: only its icon."""
-        return self.html_icon(parstyle)
+    def RawIcon_handler(self, texel, parstyle):
+        """Raw, collapsed: only its icon."""
+        return self.raw_icon(texel.lang, parstyle)
 
     def Tag_handler(self, texel, parstyle):
         """Inline HTML: a chip with the tag's source (styles set in it
@@ -228,10 +228,15 @@ class Factory:
         return TagBox([TextBox(part, style, self.device) for part in parts],
                       self.device)
 
-    def html_icon(self, parstyle):
-        """The icon of an HTML block, as large as the text."""
+    def raw_icon(self, lang, parstyle):
+        """The icon of Raw in lang, as large as the text."""
         size = self.stylesheet.mk_parstyle(parstyle)['font_size']
-        return HTMLIconBox(size, self.device)
+        label = None
+        if lang != 'html':
+            style = self.stylesheet.mk_style(parstyle, Style(
+                font_size=0.6 * size, bold=True, color=RawIconBox.color))
+            label = TextBox(LABELS.get(lang, lang), style, self.device)
+        return RawIconBox(size, label, self.device)
 
     def Rule_handler(self, texel, parstyle):
         """A rule as wide as the paragraph's (first) line."""
@@ -518,12 +523,14 @@ class RowFactory(Factory):
         records = [record for par in child.generate(lines, 0)
                    for record in par]
         self.update_from_child(child)
-        icon = None
-        if texel.kind == 'html':
-            icon = self.html_icon(parstyle)
-        box = CodeBox(records, width, texel.kind, self.device, icon)
+        icon, raw = None, isinstance(texel, Raw)
+        if raw:
+            icon = self.raw_icon(texel.lang, parstyle)
+        box = CodeBox(records, width, raw, self.device, icon)
         box.margin = self.stylesheet.mk_parstyle(sep.parstyle)['block_margin']
         return box
+
+    Raw_handler = Code_handler  # with its icon and a frame
 
     def Table_handler(self, texel, parstyle):
         """A TableBox for a Table texel: childs are [SEP, content, SEP,

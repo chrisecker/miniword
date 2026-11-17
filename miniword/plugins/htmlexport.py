@@ -133,7 +133,7 @@ def inline_html(elems, nl, basestyles, notes):
     from miniword.textmodel.submodel import Footnote
     from miniword.core.texels import BR
     from miniword.mdelements.checkbox import Checkbox
-    from miniword.mdelements.rawhtml import RawHTML
+    from miniword.mdelements.raw import RawIcon
     from miniword.mdelements.tag import Tag
     runs = []  # (html, style)
     for elem in elems:
@@ -147,8 +147,10 @@ def inline_html(elems, nl, basestyles, notes):
             runs.append(('<br>', style))
         elif isinstance(elem, Checkbox):
             runs.append((elem.text + ' ', style))
-        elif isinstance(elem, (Tag, RawHTML)):
+        elif isinstance(elem, Tag):
             runs.append((elem.source, EMPTYSTYLE))
+        elif isinstance(elem, RawIcon):
+            runs.append((raw_html(elem), EMPTYSTYLE))
         else:
             text = escape(get_text(elem), quote=False)
             runs.append((text.replace('\t', ' '), style))
@@ -217,16 +219,23 @@ def table_html(table, basestyles, notes):
 
 def block_html(block, basestyles, notes):
     """HTML of a block (see blocks)."""
-    Table, Rule, RawHTML, Code = blocks()
+    from miniword.mdelements.raw import Raw
+    Table, Rule, RawIcon, Code = blocks()
     if isinstance(block, Table):
         return table_html(block, basestyles, notes)
     if isinstance(block, Rule):
         return '<hr>'
-    if isinstance(block, Code) and block.kind == 'code':  # 'pre' lines
-        return blocks_html(paragraphs(block.childs[1:]), basestyles, notes)
-    if isinstance(block, Code) and block.kind == 'yaml':  # metadata
-        return ''
-    return block.source  # raw HTML, an HTML block: as it is
+    if isinstance(block, (Raw, RawIcon)):
+        return raw_html(block)
+    return blocks_html(paragraphs(block.childs[1:]), basestyles, notes)
+
+
+def raw_html(raw):
+    """Raw (Raw, RawIcon) in HTML: as it is if its language is HTML,
+    else nothing."""
+    if raw.lang == 'html':
+        return raw.source
+    return ''
 
 
 def frames_of(ps, nl, stack):
@@ -321,9 +330,9 @@ def blocks():
     """The texels set as blocks of their own, also with text beside."""
     from miniword.tables import Table
     from miniword.mdelements.rule import Rule
-    from miniword.mdelements.rawhtml import RawHTML
-    from miniword.mdelements.code import Code
-    return Table, Rule, RawHTML, Code
+    from miniword.mdelements.raw import RawIcon
+    from miniword.mdelements.code import Code  # also Raw
+    return Table, Rule, RawIcon, Code
 
 
 def fragment_to_html(textmodel, basestyles):
