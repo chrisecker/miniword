@@ -58,7 +58,6 @@ from ..mdelements.rule import RuleBox
 from ..mdelements.checkbox import CheckboxBox
 from ..mdelements.code import CodeBox, shown
 from ..mdelements.raw import Raw, RawIconBox, LABELS
-from ..mdelements.tag import TagBox
 from .page import ForceBreakBox, Page, FootnoteBox
 from .testdevice import TESTDEVICE
 from .counters import set_counter, inc_counter, format_number, copy_counters
@@ -218,15 +217,6 @@ class Factory:
     def RawIcon_handler(self, texel, parstyle):
         """Raw, collapsed: only its icon."""
         return self.raw_icon(texel.lang, parstyle)
-
-    def Tag_handler(self, texel, parstyle):
-        """Inline HTML: a chip with the tag's source (styles set in it
-        are ignored, a line break is a space)."""
-        style = self.stylesheet.mk_style(parstyle, Style(color=TagBox.color))
-        inner = texel.source[1:-1].replace('\n', ' ')
-        parts = ['<'] + ([inner] if inner else []) + ['>']
-        return TagBox([TextBox(part, style, self.device) for part in parts],
-                      self.device)
 
     def raw_icon(self, lang, parstyle):
         """The icon of Raw in lang, as large as the text."""

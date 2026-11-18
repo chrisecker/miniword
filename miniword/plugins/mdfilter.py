@@ -305,16 +305,13 @@ def _elems_to_inline(elems, footnotes=None, plain=False):
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
     from miniword.core.texels import BR
     from miniword.mdelements.checkbox import Checkbox
-    from miniword.mdelements.raw import RawIcon
-    from miniword.mdelements.tag import Tag
+    from miniword.mdelements.raw import Raw, RawIcon
     pieces = []  # (Markdown, its marks; None: keep the open ones)
     for i, elem in enumerate(elems):
         marks = None if plain else _marks(getattr(elem, 'style', {}))
         if isinstance(elem, Checkbox):  # a task list item's
             pieces.append(('[x] ' if elem.checked else '[ ] ', None))
-        elif isinstance(elem, Tag):  # as it is
-            pieces.append((elem.source, None))
-        elif isinstance(elem, RawIcon):
+        elif isinstance(elem, (Raw, RawIcon)):  # in the text: inline
             pieces.append(('\n'.join(raw_md(elem)), None))
         elif isinstance(elem, BR):
             pieces.append(('\n' if plain else '\\\n', None))
@@ -465,9 +462,9 @@ def _scale(size, pixels):
 #
 # runs: (text, props); special runs carry '_image' (see image_run),
 # '_footnote' (its text), '_br' (forced line break), '_rule' (in a
-# paragraph of ptype 'rule'), '_checkbox' (checked or not), '_html' (an
-# HTML block's source) or '_tag' (an inline tag's) instead of text - see
-# _special.
+# paragraph of ptype 'rule'), '_checkbox' (checked or not) or '_html'
+# (the source of an HTML block or inline tag: Raw HTML) instead of text -
+# see _special.
 
 def _build_blocks(doc, blocks):
     """Build blocks into a new doc.textmodel (the space around tables and
@@ -536,7 +533,6 @@ def _special(props):
     from miniword.mdelements.rule import Rule
     from miniword.mdelements.checkbox import Checkbox
     from miniword.mdelements.raw import RawIcon
-    from miniword.mdelements.tag import Tag
     if props.get('_image'):  # with the formatting around it (a link)
         style = {k: v for k, v in props.items() if not k.startswith('_')}
         return _image(*props['_image']).set_style(Style(**style))
@@ -550,8 +546,6 @@ def _special(props):
         return Checkbox().set_checked(props['_checkbox'])
     if '_html' in props:
         return RawIcon(props['_html'])
-    if '_tag' in props:
-        return Tag(props['_tag'])
     return None
 
 
@@ -611,11 +605,13 @@ def quoted_lines(lines, levels):
 def beside_blocks(elems, blocks):
     """A paragraph's elems in parts, each ending with its newline: a
     block (of the classes blocks, e.g. a table) with text beside it is a
-    part of its own, so is the text before and after it."""
+    part of its own, so is the text before and after it. Raw (also
+    expanded) stays in the text: a block only alone in its paragraph."""
+    from miniword.mdelements.raw import Raw, RawIcon
     *content, nl = elems
     parts, current = [], []
     for elem in content:
-        if isinstance(elem, blocks):
+        if isinstance(elem, blocks) and not isinstance(elem, (Raw, RawIcon)):
             if current:
                 parts.append(current + [nl])
                 current = []
@@ -703,7 +699,7 @@ def _inline_runs(nodes, props={}, notes={}):
                 and _BR.fullmatch(node.get('raw', '')):
             runs.append(('', {'_br': True}))
         elif t == 'inline_html':
-            runs.append(('', {'_tag': node.get('raw', '')}))
+            runs.append(('', {'_html': node.get('raw', '')}))
         elif t == 'footnote_ref':
             key = node.get('raw')
             runs.append(('', {'_footnote': notes.get(key, key)}))
@@ -1042,6 +1038,7 @@ def _check_md(doc):
     from miniword.footnotes.footnotes import Footnote as FootnoteTexel
     from miniword.mdelements.rule import Rule
     from miniword.mdelements.checkbox import Checkbox
+    from miniword.mdelements.raw import Raw, RawIcon
 
     _OK_BASES  = set(_ALERTS) | {
         'normal', 'body', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
@@ -1090,6 +1087,11 @@ def _check_md(doc):
             if isinstance(elem, Rule):
                 if len(elems) != 2:  # not alone in its paragraph
                     issues.add("horizontal rule within text")
+                continue
+            if isinstance(elem, (Raw, RawIcon)):
+                # in the text a blank line ends the paragraph
+                if len(elems) != 2 and re.search(r'\n\s*\n', elem.source):
+                    issues.add("raw with a blank line within text")
                 continue
             if isinstance(elem, Checkbox):
                 at_start = elem is elems[0] and ptype in ('list', 'numbered')

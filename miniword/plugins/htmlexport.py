@@ -133,8 +133,7 @@ def inline_html(elems, nl, basestyles, notes):
     from miniword.textmodel.submodel import Footnote
     from miniword.core.texels import BR
     from miniword.mdelements.checkbox import Checkbox
-    from miniword.mdelements.raw import RawIcon
-    from miniword.mdelements.tag import Tag
+    from miniword.mdelements.raw import Raw, RawIcon
     runs = []  # (html, style)
     for elem in elems:
         style = getattr(elem, 'style', EMPTYSTYLE)
@@ -147,9 +146,7 @@ def inline_html(elems, nl, basestyles, notes):
             runs.append(('<br>', style))
         elif isinstance(elem, Checkbox):
             runs.append((elem.text + ' ', style))
-        elif isinstance(elem, Tag):
-            runs.append((elem.source, EMPTYSTYLE))
-        elif isinstance(elem, RawIcon):
+        elif isinstance(elem, (Raw, RawIcon)):  # in the text
             runs.append((raw_html(elem), EMPTYSTYLE))
         else:
             text = escape(get_text(elem), quote=False)
@@ -327,7 +324,8 @@ def blocks_html(pars, basestyles, notes):
 
 
 def blocks():
-    """The texels set as blocks of their own, also with text beside."""
+    """The texels set as blocks of their own, also with text beside (Raw
+    only alone in its paragraph, see beside_blocks)."""
     from miniword.tables import Table
     from miniword.mdelements.rule import Rule
     from miniword.mdelements.raw import RawIcon

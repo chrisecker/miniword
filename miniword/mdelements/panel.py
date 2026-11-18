@@ -8,7 +8,6 @@ block or Raw, expanding and collapsing Raw); elsewhere a hint.
 """
 
 import wx
-from ..core.utils import get_path
 from ..ui.sidepanel import SidePanel
 from ..ui.design import make_panel, add_section, flat_button, Card
 from ..ui.flatbutton import FlatButton
@@ -19,14 +18,12 @@ from .rule import Rule, insert_rule
 from .checkbox import Checkbox, insert_checkbox
 from .code import code_at, insert_code
 from .raw import NAMES, any_raw_at, toggle_raw, insert_raw, raw_at
-from .tag import Tag, insert_tag
 from .colorize import colorizers
 
 # key (icons/element_<key>.svg): caption, name, insert command
 ELEMENTS = {'rule': ("Rule", "Horizontal rule", insert_rule),
             'checkbox': ("Task", "Checkbox", insert_checkbox),
             'code': ("Code", "Code block", insert_code),
-            'tag': ("Tag", "HTML tag", insert_tag),
             'raw': ("Raw", "Raw HTML", insert_raw)}
 
 
@@ -36,9 +33,6 @@ def element_at(editor, j):
         return 'raw'
     if code_at(editor, j):
         return 'code'
-    if any(isinstance(node, Tag) and i1 < j < i2
-           for i1, i2, node in get_path(editor.target.texel, j)):
-        return 'tag'
     if texel_at(editor, j, Checkbox):
         return 'checkbox'
     if texel_at(editor, j, Rule):
@@ -150,7 +144,7 @@ class ElementsPanel(SidePanel):
         expanded = raw_at(editor, editor.index) is None
         self.toggle.label = "Collapse" if expanded else "Expand"
         self.toggle.Refresh()
-        self.no_settings.Show(key in ('rule', 'checkbox', 'tag'))
+        self.no_settings.Show(key in ('rule', 'checkbox'))
         self.hint.Show(key is None)
         self.card.Layout()
         self.Layout()

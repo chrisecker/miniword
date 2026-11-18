@@ -2,10 +2,11 @@
 Raw (develnotes/markdown_concept.md, "Das Element Raw"): source for a
 target format, its language (html, markdown ...), never rendered (a
 passive document), written back unchanged by the export of that format
-and left out by the others. Collapsed (RawIcon) it is only its icon, in
-a row of its own; expanded (Raw) the source, the icon at its top right;
-a double click on the icon toggles it. Texels, box, controller, insert
-command. Inline HTML see tag.py.
+and left out by the others. It stands in a paragraph, alone or in the
+text (an HTML block or inline HTML in Markdown). Collapsed (RawIcon) it
+is only its icon, in the text; expanded (Raw) the source, a block in a
+row of its own, the icon at its top right; a double click on the icon
+toggles it. Texels, box, controller, insert command.
 """
 
 from copy import copy as shallow_copy
@@ -13,7 +14,7 @@ from ..textmodel.texeltree import Single, length
 from ..layout.boxes import SingleBox
 from ..texteditor.editor import Editor
 from .code import Code, CodeController, code_at
-from . import texel_at, box_hit, insert_par
+from . import texel_at, box_hit
 
 
 class Raw(Code):
@@ -55,9 +56,8 @@ LABELS = {'markdown': 'MD', 'tex': 'TeX'}
 
 class RawIconBox(SingleBox):
     """The icon of Raw, as large as the text: a chip with </> in lines
-    (html) or its label (a TextBox, see LABELS). Collapsed it is Raw,
-    expanded at its top right; a double click toggles."""
-    standalone = True
+    (html) or its label (a TextBox, see LABELS). Collapsed it is Raw, in
+    the text; expanded at its top right; a double click toggles."""
     color = '#0969da'
     ground = '#ddf4ff'
     strokes = (((.32, .3), (.2, .5)), ((.2, .5), (.32, .7)),  # <
@@ -132,9 +132,12 @@ def toggle_raw(editor, j):
 
 
 def insert_raw(editor):
-    """Insert an empty Raw HTML, expanded, in a paragraph of its own;
-    the cursor goes into it."""
-    i = insert_par(editor, Raw())
+    """Insert an empty Raw HTML, expanded, at the cursor (it replaces the
+    selection); the cursor goes into it."""
+    with editor.atomic():
+        editor.remove()
+        i = editor.index
+        editor.insert_texel(Raw())
     editor.set_index(i + 1)
 
 

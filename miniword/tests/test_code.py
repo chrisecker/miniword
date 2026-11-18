@@ -229,8 +229,8 @@ def test_CODE_12():
 
 
 def test_CODE_13():
-    "CODE-13: Raw collapsed is only its icon, in a row of its own (also "
-    "with text beside it); expanded the icon is at the top right"
+    "CODE-13: Raw collapsed is only its icon, in the text; expanded a "
+    "block, the icon at the top right"
     from ..mdelements.raw import RawIcon, RawIconBox, Raw
     page = pages_from(doc(par(RawIcon(HTML)), par('a', RawIcon(HTML), 'b'),
                           par(Raw.from_text(HTML))),
@@ -238,8 +238,8 @@ def test_CODE_13():
     rows = [row.childs for _, _, row in page.rows]
     icons = [boxes for boxes in rows
              if any(isinstance(box, RawIconBox) for box in boxes)]
-    assert len(icons) == 2  # (in a row with the paragraph's end only)
-    assert all(len(boxes) == 1 or len(boxes[1]) == 1 for boxes in icons)
+    assert len(icons) == 2
+    assert len(icons[1]) > 2  # with the text beside it
     expanded, = code_parts([page])
     assert isinstance(expanded.icon, RawIconBox)
     assert expanded.icon.label is None  # html: </>
@@ -417,14 +417,12 @@ def test_CODE_20():
 
 def test_CODE_21():
     "CODE-21: Markdown: text beside a block in one paragraph is written "
-    "as paragraphs of their own, the block intact"
+    "as paragraphs of their own, the block intact (Raw: see HTML-6)"
     from ..plugins.mdfilter import _load_mistune, _doc_to_md
-    from ..mdelements.raw import RawIcon
     from ..tables.tables import from_strings
     for block, md in (
             (Code.from_text('x = 1', lang='python'),
              '```python\nx = 1\n```'),
-            (RawIcon('<div>\n</div>'), '<div>\n</div>'),
             (from_strings([['a']]), '|     |\n| --- |\n| a   |')):
         document = _load_mistune('')
         document.textmodel.texel = grouped([Text('left'), block,
@@ -439,10 +437,9 @@ def test_CODE_22():
     import wx
     from ..mdelements.raw import RawIcon
     from ..mdelements.checkbox import Checkbox
-    from ..mdelements.tag import Tag
     from .guitest import close
     frame = frame_with(Group([code('x = 1'), NL, Text('text'), NL,
-                              Checkbox(), Text('todo '), Tag('<kbd>'), NL,
+                              Checkbox(), Text('todo '), NL,
                               RawIcon(HTML)]))
     try:
         panel, editor = frame.elements_panel, frame.editor
@@ -462,7 +459,6 @@ def test_CODE_22():
         assert panel.toggle.IsShown() and panel.language.IsShown()
         assert at(text.index('todo')) == 'Checkbox'
         assert panel.no_settings.IsShown() and not panel.toggle.IsShown()
-        assert at(text.index('<kbd>') + 2) == 'HTML tag'
         assert at(text.index('text') + 1) == '\u2013'
         assert panel.hint.IsShown() and not panel.no_settings.IsShown()
         assert wx.Window.FindFocus() is focus

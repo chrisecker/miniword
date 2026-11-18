@@ -282,10 +282,11 @@ Checkbox, e.g. at the start of a task list item (Markdown `- [ ]`,
 
 **`RAW("source")`** / **`RAW("source", {lang="markdown", prop=val, ...})`**
 
-Raw, collapsed (shown as an icon): source for a target format, its language
-`lang` (default `"html"`; e.g. `"markdown"` for a YAML header). Never rendered;
-written back unchanged by the export of that format, left out by the others.
-Expanded see `C("raw", …)`.
+Raw, collapsed (shown as an icon in the text): source for a target format, its
+language `lang` (default `"html"`; e.g. `"markdown"` for a YAML header). Never
+rendered; written back unchanged by the export of that format, left out by the
+others. Alone in its paragraph or in the text (Markdown: an HTML block or inline
+HTML, e.g. `<kbd>`). Expanded see `C("raw", …)`.
 
 **`HR`** / **`HR({prop=val, ...})`**
 
@@ -346,11 +347,6 @@ NL({base="body"})
 **`S("c")`** / **`S("c", {prop=val, ...})`**
 
 A single character as an atomic element (a Single).
-
-**`TAG("<kbd>")`**
-
-Inline HTML tag from Markdown, kept as its source: shown, never rendered, written back
-unchanged.
 
 ---
 
@@ -429,7 +425,7 @@ C("code", {lang="python"},
 ### `C("raw", …)` — Raw, expanded
 
 Raw (see `RAW`) shown as its source: one slot with the lines, separated by `NL`,
-like a code block.
+like a code block. It stays where it is in the paragraph, also in the text.
 
 | Parameter | Default  | Description |
 | --------- | -------- | ----------- |
