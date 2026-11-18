@@ -97,3 +97,21 @@ colours.define('IconGrey',             lambda: mix(
     wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOWTEXT),
     wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE), 0.65))
 colours.define('CanvasBg',             lambda: wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE).ChangeLightness(93))
+
+
+APPEARANCES = ('system', 'light', 'dark')  # config 'appearance'
+# wxPython 4.3 (wxWidgets 3.3) and later
+APPEARANCE_SUPPORTED = hasattr(wx.App, 'SetAppearance')
+
+
+def set_appearance(name):
+    """Use the system's theme, or light or dark (one of APPEARANCES);
+    whether it took effect now (Windows: only before the first window,
+    else after a restart; without it, Windows shows no dark mode). Older
+    wx: nothing (False)."""
+    if not APPEARANCE_SUPPORTED:
+        return False
+    appearance = getattr(wx.App.Appearance, name.capitalize(),
+                         wx.App.Appearance.System)
+    result = wx.GetApp().SetAppearance(appearance)
+    return result == wx.App.AppearanceResult.Ok

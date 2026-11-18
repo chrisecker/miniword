@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 
 _path = Path.home() / ".config" / "miniword" / "config.json"
-_defaults = {"layout_unit": "mm", "typographic_unit": "mm"}
+_defaults = {"layout_unit": "mm", "typographic_unit": "mm",
+             "appearance": "system"}
 
 _instance = None
 

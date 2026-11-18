@@ -5,6 +5,7 @@ from .core.document import Document
 from .core.config import get_config
 from .ui.mainwindow import MainFrame, new_document
 from .ui.unitentry import LengthInput, UnitPrefs
+from .ui.colours import set_appearance
 from .layout import pagebuilder
 
 
@@ -298,6 +299,7 @@ def main():
     )
     app = App(redirect=False)
     app.SetAppName("miniword")
+    set_appearance(config.get("appearance"))  # before the first window
     from .ui.mainwindow import load_plugins
     load_plugins()
 

@@ -12,7 +12,8 @@ from ..layout.rowfactory import Factory
 from ..layout.cairodevice import CairoDevice
 from ..tables.table_panel import TablePanel
 from .sidepanel import RightStrip, STRIP_W, PANEL_W
-from .colours import colours
+from .colours import colours, APPEARANCES, APPEARANCE_SUPPORTED, \
+    set_appearance
 from .messagebar import MessageBar
 from .icons import ICONS_DIR, app_icon_bundle
 from .outlinepanel import OutlinePanel
@@ -267,6 +268,20 @@ class _PreferencesDialog(wx.Dialog):
             grid.Add(ch, 0, wx.EXPAND)
             self._choices[category] = ch
 
+        # light or dark: as the system, or chosen
+        grid.Add(wx.StaticText(self, label="Appearance"), 0,
+                 wx.ALIGN_CENTER_VERTICAL)
+        self.appearance = wx.Choice(
+            self, choices=[name.capitalize() for name in APPEARANCES])
+        self.appearance.SetSelection(0)  # system
+        current = config.get('appearance')
+        if current in APPEARANCES:
+            self.appearance.SetSelection(APPEARANCES.index(current))
+        if not APPEARANCE_SUPPORTED:
+            self.appearance.Disable()
+            self.appearance.SetToolTip("Needs wxPython 4.3 or later.")
+        grid.Add(self.appearance, 0, wx.EXPAND)
+
         btn_sizer = self.CreateButtonSizer(wx.OK | wx.CANCEL)
         self.Bind(wx.EVT_BUTTON, self.on_ok, id=wx.ID_OK)
 
@@ -281,6 +296,13 @@ class _PreferencesDialog(wx.Dialog):
             unit = _UNIT_CHOICES[ch.GetSelection()]
             self._prefs.set_unit(category, unit)
             self._config.set(f"{category}_unit", unit)
+        appearance = APPEARANCES[self.appearance.GetSelection()]
+        if appearance != self._config.get('appearance'):
+            self._config.set('appearance', appearance)
+            if not set_appearance(appearance):
+                wx.MessageBox("The appearance changes when MiniWord is "
+                              "started again.", "Preferences",
+                              wx.OK | wx.ICON_INFORMATION, self)
         event.Skip()
 
 

@@ -246,3 +246,35 @@ def test_UI_13():
         editor.set_properties(href='https://b.org')
         panel.update()
         assert panel.url_ctrl.GetValue() == 'https://b.org'
+
+
+def test_UI_14():
+    "UI-14: preferences: the appearance (system, light, dark) is shown "
+    "and saved; greyed out with a wx too old for it"
+    from ..ui import mainwindow
+    from ..ui.mainwindow import _PreferencesDialog
+    from ..ui.colours import set_appearance
+    from ..ui.unitentry import UnitPrefs
+
+    class Config(dict):  # not the user's
+        def set(self, key, value):
+            self[key] = value
+
+    config = Config(appearance='system')
+    with main_frame() as frame:
+        dialog = _PreferencesDialog(frame, UnitPrefs(), config)
+        try:
+            assert dialog.appearance.GetStringSelection() == 'System'
+            dialog.appearance.SetStringSelection('Light')
+            dialog.on_ok(wx.CommandEvent())
+            assert config['appearance'] == 'light'
+        finally:
+            dialog.Destroy()
+            set_appearance('system')
+        mainwindow.APPEARANCE_SUPPORTED = False
+        try:
+            dialog = _PreferencesDialog(frame, UnitPrefs(), config)
+            assert not dialog.appearance.IsEnabled()
+            dialog.Destroy()
+        finally:
+            mainwindow.APPEARANCE_SUPPORTED = True
