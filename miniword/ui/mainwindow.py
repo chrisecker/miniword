@@ -789,6 +789,7 @@ class MainFrame(wx.Frame, ViewBase):
         builder.layout_class = TwoPageLayout if self._mi_two_page.IsChecked() else Layout
         builder._layout = builder.layout_class(pages)
         builder._layout.is_finished = was_finished
+        self.canvas.queued_update_scroll()  # now: the width changed
         self.canvas.refresh()
 
     def find(self):
