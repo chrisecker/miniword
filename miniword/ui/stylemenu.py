@@ -469,12 +469,19 @@ class StyleSelector(wx.Control, ViewBase):
     # Style operations
     # ------------------------------------------------------------------
 
-    def CreateNewStyle(self, name: str):
-        label = self.GetItemLabel(name)
+    def style_from_selection(self, name: str):
+        """A copy of style name with the selection's formatting - not its
+        name and role: they are the style's own."""
         new_style = self.stylesheet.get(name).copy()
         for key, value in self.properties.items():
-            if key in new_style and value is not None and key not in PARAGRAPH_ONLY_KEYS:
+            if key in new_style and value is not None \
+                    and key not in PARAGRAPH_ONLY_KEYS | {'name', 'role'}:
                 new_style[key] = value
+        return new_style
+
+    def CreateNewStyle(self, name: str):
+        label = self.GetItemLabel(name)
+        new_style = self.style_from_selection(name)
 
         # Pick an unused internal key.
         i = 0
@@ -498,10 +505,7 @@ class StyleSelector(wx.Control, ViewBase):
         self.SetSelection(len(self.stylesheet.keys()) - 1)
 
     def UpdateStyle(self, name: str):
-        new_style = self.stylesheet.get(name).copy()
-        for key, value in self.properties.items():
-            if key in new_style and value is not None and key not in PARAGRAPH_ONLY_KEYS:
-                new_style[key] = value
+        new_style = self.style_from_selection(name)
 
         if self.on_redefine_style:
             # Delegate stylesheet.set() to the callback so it can wrap both
@@ -678,6 +682,26 @@ def test_03():
     dropdown.set_properties("h1", {"font_size": 1}, {})
     dropdown.UpdateStyle("h1")
     assert stylesheet.get("h1")["font_size"] == 1
+
+
+def test_06():
+    "UpdateStyle takes the selection's formatting, not its style's name "
+    "and role (the cursor in another style's paragraph)"
+    app = wx.App(False)
+    frame = wx.Frame(None)
+    dropdown = BasestyleSelector(frame)
+    from ..core.stylesheet import StyleSheet, testsheet
+    stylesheet = StyleSheet()
+    for key, style in testsheet.items():
+        stylesheet.set(key, style)
+    dropdown.set_stylesheet(stylesheet)
+    h1 = stylesheet.get('h1')
+    dropdown.set_properties('normal', dict(stylesheet.get('normal'),
+                                           font_size=30), set())
+    dropdown.UpdateStyle('h1')
+    new = stylesheet.get('h1')
+    assert new['font_size'] == 30
+    assert (new['name'], new['role']) == (h1['name'], h1['role'])
 
 
 # ---------------------------------------------------------------------------
