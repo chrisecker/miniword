@@ -20,6 +20,8 @@ from .outlinepanel import OutlinePanel
 from .searchtool import SearchPanel
 from .linkpanel import LinksPanel
 from ..mdelements.panel import ElementsPanel
+from .charpanel import CharPanel, BUILTIN, DISPLAY, ENTRIES, \
+    user_shortcuts, keys_of
 from ..mdelements import rule, checkbox, code, raw
 from ..images import ImageInspector
 from ..core.config import get_config
@@ -434,6 +436,7 @@ class MainFrame(wx.Frame, ViewBase):
         wx.Frame.__init__(self, None, title="MiniWord")
         ViewBase.__init__(self)
         self.Bind(wx.EVT_CHAR_HOOK, self.on_secret_key)
+        self.Bind(wx.EVT_CHAR_HOOK, self.on_char_shortcut)  # first
 
         self.SetMinSize(self.FromDIP(wx.Size(800, 480)))
         self.SetIcons(app_icon_bundle())
@@ -556,13 +559,17 @@ class MainFrame(wx.Frame, ViewBase):
         bar.Append(edit_menu, "&Edit")
 
         insert_menu = wx.Menu()
-        for label, char in (
-                ("Non-breaking &space\tCtrl+Shift+Space", '\u00a0'),
-                ("Non-breaking &hyphen\tCtrl+Shift+-", '\u2011'),
-                ("Soft h&yphen\tCtrl+Alt+-", '\u00ad')):
+        for char, label in BUILTIN:
             item = insert_menu.Append(wx.ID_ANY, label)
             self.Bind(wx.EVT_MENU, lambda _, c=char: self.insert_char(c),
                       item)
+        # the characters given shortcuts (Characters panel)
+        self._chars_menu = wx.Menu()
+        insert_menu.AppendSubMenu(self._chars_menu, "Characters")
+        self.fill_chars_menu()
+        item = insert_menu.Append(wx.ID_ANY, "S&pecial Characters\u2026")
+        self.Bind(wx.EVT_MENU,
+                  lambda _: self.show_right_panel("characters"), item)
         insert_menu.AppendSeparator()
         for label, insert in (
                 ("Horizontal &Rule", rule.insert_rule),
@@ -645,6 +652,18 @@ class MainFrame(wx.Frame, ViewBase):
         self.Bind(wx.EVT_MENU, lambda _: self.debug_boxes(),   id=self._id_debug_boxes)
         self._debug_menu = debug_menu
 
+    def on_char_shortcut(self, event):
+        """A character's shortcut (Characters panel), typed in the text:
+        the character. Recognized here, not by menu accelerators, see
+        charpanel."""
+        if wx.Window.FindFocus() is self.canvas:
+            keys = keys_of(event)
+            for c, k in user_shortcuts().items():
+                if k == keys:
+                    self.insert_char(c)
+                    return
+        event.Skip()
+
     def on_secret_key(self, event):
         """Hidden 'ESC debug ESC' key-code enables the Debug menu at runtime."""
         code = event.GetKeyCode()
@@ -698,6 +717,7 @@ class MainFrame(wx.Frame, ViewBase):
         self._outline_panel = OutlinePanel(self._inspector_book, self.document, self.editor)
         self._links_panel = LinksPanel(self._inspector_book, self.editor, self.document)
         self.elements_panel = ElementsPanel(self._inspector_book, self)
+        self.char_panel = CharPanel(self._inspector_book, self)
         self.panels = [
             ("style",    self.inspector),
             ("settings", self.document_settings),
@@ -707,6 +727,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("outline",  self._outline_panel),
             ("links",    self._links_panel),
             ("elements", self.elements_panel),
+            ("characters", self.char_panel),
         ]
         for key, panel in self.panels:
             idx = self._inspector_book.GetPageCount()
@@ -876,6 +897,7 @@ class MainFrame(wx.Frame, ViewBase):
             ("image",    "Image"),
             ("links",    "Links"),
             ("elements", "Elements"),
+            ("characters", "Characters"),
             ("outline",  "Outline"),   # navigate
             ("search",   "Search"),
             ("settings", "Settings"),  # the document
@@ -972,6 +994,27 @@ class MainFrame(wx.Frame, ViewBase):
         self.canvas.show_marks = show
         get_config().set('show_formatting_marks', show)
         self.canvas.refresh()
+
+    def fill_chars_menu(self):
+        """Insert > Characters: the characters with a shortcut."""
+        menu = self._chars_menu
+        for item in menu.GetMenuItems():
+            menu.Delete(item)
+        for c, keys in sorted(user_shortcuts().items(), key=lambda ck: ck[1]):
+            name = ENTRIES.get(c, ('', ''))[0]
+            # the keys shown, not an accelerator (see on_char_shortcut)
+            item = menu.Append(wx.ID_ANY, "%s   %s      %s" % (
+                DISPLAY.get(c, c), name.replace('&', '&&'), keys))
+            self.Bind(wx.EVT_MENU, lambda _, c=c: self.insert_char(c), item)
+        if not menu.GetMenuItemCount():
+            menu.Append(wx.ID_ANY, "None: right click a character in "
+                        "the Characters panel").Enable(False)
+
+    def characters_changed(self):
+        """A character's shortcut changed: the menu, the panel."""
+        self.fill_chars_menu()
+        if hasattr(self, 'char_panel'):
+            self.char_panel.fill()
 
     def insert_char(self, char):
         """Type char: it replaces the selection."""
