@@ -1064,6 +1064,8 @@ def _check_md(doc):
             pass  # more of an item: the list goes on
         elif ptype not in ('list', 'numbered'):
             numbered = set()  # the list ends
+            if nl.indent:  # only list levels are indented in Markdown
+                issues.add("indented paragraph")
         else:
             numbered = {k for k in numbered if k <= nl.indent}
             if ps.get('start_number') is not None \
@@ -2139,3 +2141,12 @@ def test_58():
             assert _doc_to_md(_load_mistune(saved)) == saved, path
         finally:
             _folder = ''
+
+
+def test_59():
+    "check_md: an indented paragraph is reported (Markdown indents only "
+    "list levels), list levels and continued items are not"
+    doc = _load_mistune('normal\n\n- a\n  - b\n\n    more b\n')
+    assert _check_md(doc) == []
+    doc.textmodel.set_indent(0, 1)  # 'normal'
+    assert "indented paragraph" in _check_md(doc)
