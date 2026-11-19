@@ -49,8 +49,8 @@ def ask_link(parent, folder):
     def on_browse(event):
         with wx.FileDialog(
                 dlg, "Link to image", defaultDir=folder,
-                wildcard="Images (*.png;*.jpg;*.jpeg;*.gif)"
-                         "|*.png;*.jpg;*.jpeg;*.gif",
+                wildcard="Images (*.png;*.jpg;*.jpeg;*.gif;*.svg)"
+                         "|*.png;*.jpg;*.jpeg;*.gif;*.svg",
                 style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST) as files:
             if files.ShowModal() == wx.ID_OK:
                 text.SetValue(files.GetPath())
@@ -390,7 +390,8 @@ class ImageInspector(SidePanel):
         with wx.FileDialog(
             self, "Choose image",
             defaultDir=self._last_image_dir,
-            wildcard="Images (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",
+            wildcard="Images (*.png;*.jpg;*.jpeg;*.svg)"
+                     "|*.png;*.jpg;*.jpeg;*.svg",
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
         ) as dlg:
             if dlg.ShowModal() != wx.ID_OK:

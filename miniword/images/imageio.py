@@ -10,7 +10,11 @@ log = logging.getLogger(__name__)
 def decode(blob_data):
     """Decode image bytes → ImageData. Returns None on failure."""
     from .images import ImageData
+    from .svg import is_svg, decode_svg
     import cairocffi as cairo
+    if is_svg(blob_data):
+        result = decode_svg(blob_data)
+        return result and ImageData(*result)
     try:
         surface = cairo.ImageSurface.create_from_png(io.BytesIO(blob_data))
         return ImageData(surface, surface.get_width(), surface.get_height())
@@ -135,9 +139,14 @@ def load_urls(texel):
 
 
 def crop_surface(surface, cx, cy, cw, ch):
-    """Return a new ImageSurface containing only the (cx, cy, cw, ch) region."""
+    """Return a new surface of the same kind (ImageSurface, or
+    RecordingSurface: SVG) containing only the (cx, cy, cw, ch) region."""
     import cairocffi as cairo
-    dst = cairo.ImageSurface(cairo.FORMAT_ARGB32, cw, ch)
+    if isinstance(surface, cairo.RecordingSurface):
+        dst = cairo.RecordingSurface(cairo.CONTENT_COLOR_ALPHA,
+                                     (0, 0, cw, ch))
+    else:
+        dst = cairo.ImageSurface(cairo.FORMAT_ARGB32, cw, ch)
     ctx = cairo.Context(dst)
     ctx.set_source_surface(surface, -cx, -cy)
     ctx.paint()

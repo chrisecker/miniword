@@ -578,7 +578,7 @@ class MainFrame(wx.Frame, ViewBase):
         view_menu.Append(self._id_zoom_fit_w, "Fit to &Text Width\tCtrl+1")
         view_menu.Append(self._id_zoom_fit_p, "Fit to &Page\tCtrl+2")
         view_menu.AppendSeparator()
-        self._mi_panel     = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector\tCtrl+I")
+        self._mi_panel     = view_menu.AppendCheckItem(wx.ID_ANY, "Inspector")
         self._mi_two_page  = view_menu.AppendCheckItem(wx.ID_ANY, "Two-page view")
         self._mi_marks = view_menu.AppendCheckItem(wx.ID_ANY,
                                                    "Formatting marks")

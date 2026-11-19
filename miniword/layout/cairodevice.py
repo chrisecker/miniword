@@ -624,11 +624,15 @@ class CairoDevice:
                 pass
 
     def draw_bitmap(self, bitmap, x, y, width, height, ctx):
-        """Draw a cairo.ImageSurface scaled to (width, height) at (x, y)."""
+        """Draw a cairo.ImageSurface or RecordingSurface (SVG) scaled to
+        (width, height) at (x, y)."""
         if bitmap is None:
             return
-        src_w = bitmap.get_width()
-        src_h = bitmap.get_height()
+        if isinstance(bitmap, cairo.RecordingSurface):
+            *_, src_w, src_h = bitmap.get_extents()
+        else:
+            src_w = bitmap.get_width()
+            src_h = bitmap.get_height()
         if src_w == 0 or src_h == 0:
             return
         ctx.save()

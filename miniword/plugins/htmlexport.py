@@ -101,6 +101,7 @@ def image_html(image):
     from miniword.images.images import image_mime
     from miniword.images.imageio import decode_cached, content_of, \
         crop_surface
+    from miniword.images.svg import is_svg, raster
     data = content_of(image)
     decoded = decode_cached(data) if data else None
     size = ''
@@ -110,7 +111,10 @@ def image_html(image):
             cl, cr, ct, cb = image.crop
             w, h = w - cl - cr, h - ct - cb
             stream = io.BytesIO()
-            crop_surface(decoded.bitmap, cl, ct, w, h).write_to_png(stream)
+            cropped = crop_surface(decoded.bitmap, cl, ct, w, h)
+            if is_svg(data):
+                cropped = raster(cropped, 2)  # 2 px per pt: sharp enough
+            cropped.write_to_png(stream)
             data = stream.getvalue()
         size = ' width="%d" height="%d"' % (  # 1 px is drawn as 1 pt
             round(w * image.scale_x), round(h * image.scale_y))

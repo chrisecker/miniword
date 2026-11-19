@@ -44,7 +44,11 @@ def test_LC_3():
     from ..plugins.mdfilter import _load_mistune
     from ..textmodel.utils import iter_paragraphs
     document = _load_mistune(MD)
-    found = [(elems[-1].parstyle.get('paragraph_type'), elems[-1].indent,
+
+    def ptype(parstyle):  # the style's, unless the paragraph has one
+        base = document.basestyles.base_style(parstyle) or {}
+        return parstyle.get('paragraph_type', base.get('paragraph_type'))
+    found = [(ptype(elems[-1].parstyle), elems[-1].indent,
               type(elems[0]).__name__)
              for *_, elems in iter_paragraphs(document.textmodel.texel, 0)]
     assert found == [('numbered', 0, 'Text'), ('continued', 0, 'Text'),

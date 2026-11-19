@@ -28,6 +28,7 @@ from copy import copy
 from ..textmodel.texeltree import Single, EMPTYSTYLE, NL, iter_childs
 from ..layout.boxes import Box
 from ..layout.testdevice import TESTDEVICE
+from .svg import is_svg
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +124,7 @@ _MAGIC = [
 ]
 
 _MIME = {'.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif',
-         '.bin': 'application/octet-stream'}
+         '.svg': 'image/svg+xml', '.bin': 'application/octet-stream'}
 
 
 def image_extension(content):
@@ -132,6 +133,8 @@ def image_extension(content):
     for magic, ext in _MAGIC:
         if content.startswith(magic):
             return ext
+    if is_svg(content):
+        return '.svg'
     return '.bin'
 
 
