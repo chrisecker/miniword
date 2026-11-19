@@ -44,7 +44,7 @@ This is a one-time step per installed version.
 
 ## Installing with pip
 
-You need Python >= 3.9 and wxPython >= 4.0. pip also installs `cairocffi`, `mistune` (Markdown) and `uharfbuzz` (ligatures, non-Latin scripts, font fallback). `fonttools`, needed for non-Latin scripts on Windows only, comes with the `full` extra.
+You need Python >= 3.9 and wxPython >= 4.2. pip also installs `cairocffi`, `mistune` (Markdown) and `uharfbuzz` (ligatures, non-Latin scripts, font fallback). `fonttools`, needed for non-Latin scripts on Windows only, comes with the `full` extra.
 
 The commands install the latest release from PyPI; to install from a source folder instead, replace `miniword` by `.`.
 

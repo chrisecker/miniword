@@ -113,7 +113,7 @@ def parse_args(argv):
              "repeatable")
     parser.add_argument(
         '--debug', action='store_true',
-        help="debug output of the page layout")
+        help="show debug output of the page layout and GTK warnings")
     parser.add_argument(
         '--install-desktop', action='store_true',
         help="Linux: add MiniWord to the menu and open .txl files with it")
@@ -298,6 +298,8 @@ def main():
         typographic=config.get("typographic_unit"),
     )
     app = App(redirect=False)
+    if not args.debug and hasattr(app, 'GTKSuppressDiagnostics'):
+        app.GTKSuppressDiagnostics()  # GTK warnings: only with --debug
     app.SetAppName("miniword")
     set_appearance(config.get("appearance"))  # before the first window
     from .ui.mainwindow import load_plugins
