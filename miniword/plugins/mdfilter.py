@@ -13,6 +13,7 @@ import re
 from miniword.io.importexport import register_import, register_export, \
     register_paste_as, register_copy_as
 from miniword.textmodel.styles import Style, updated_style
+from mistune.plugins.math import BLOCK_MATH_PATTERN, INLINE_MATH_PATTERN
 
 _BR = re.compile(r'<br\s*/?>', re.I)
 
@@ -248,13 +249,20 @@ def _cell_md(cell):
 _SPECIAL = re.compile(r'([\\`*]|<(?=[A-Za-z/!?]|$)|(?<!\w)_|_(?!\w))')
 _ENTITY  = re.compile(r'&(?=#?\w+;)')
 _LINK_END = re.compile(r'\](?=[(\[:])')  # ](url) [ref] [label]: url
+_MATH = re.compile(INLINE_MATH_PATTERN)
 
 
 def _escape(text, before='', after='', link=False):
     """text with the Markdown characters escaped; ']' only where it would
     make a link, before '(', '[' or ':', so that pandoc citations [@doe]
-    stay; '^' and '~' only where they could pair (see escape_pairs).
-    before, after: the characters around text. link: all brackets."""
+    stay; '^' and '~' only where they could pair (see escape_pairs); a
+    formula ($...$, see math_as_text) as it is. before, after: the characters
+    around text. link: all brackets."""
+    m = None if link else _MATH.search(text)
+    if m:
+        i, j = m.span()
+        return _escape(text[:i], before, '$') + m.group() \
+            + _escape(text[j:], '$', after)
     text = escape_pairs(_ENTITY.sub(r'\\&', _SPECIAL.sub(r'\\\1', text)),
                         before, after)
     if link:
@@ -695,6 +703,8 @@ def _inline_runs(nodes, props={}, notes={}):
             runs.append((html.unescape(node.get('raw', '')), props))
         elif t == 'softbreak':
             runs.append((' ', props))
+        elif t == 'inline_math':  # a line break in it: as a softbreak
+            runs.append((node['raw'].replace('\n', ' '), props))
         elif t == 'linebreak' or t == 'inline_html' \
                 and _BR.fullmatch(node.get('raw', '')):
             runs.append(('', {'_br': True}))
@@ -895,8 +905,24 @@ def _build_mistune(doc, text):
     nodes = mistune.create_markdown(
         renderer='ast',
         plugins=['footnotes', 'strikethrough', 'table',
-                 'superscript', 'subscript', 'task_lists'])(text)
+                 'superscript', 'subscript', 'task_lists',
+                 math_as_text])(text)
     _build_blocks(doc, header + _md_blocks(nodes))
+
+
+def math_as_text(md):
+    """mistune plugin: math ($...$, $$...$$) as tokens with their whole
+    source - Miniword has no formulas yet, they stay text (a block: Raw
+    Markdown)."""
+    def parser(kind):
+        def parse(_parser, m, state):
+            state.append_token({'type': kind, 'raw': m.group()})
+            return m.end()
+        return parse
+    md.block.register('block_math', BLOCK_MATH_PATTERN,
+                      parser('block_math'), before='list')
+    md.inline.register('inline_math', INLINE_MATH_PATTERN,
+                       parser('inline_math'), before='codespan')
 
 
 def _md_blocks(nodes):
@@ -940,6 +966,9 @@ def _md_blocks(nodes):
             blocks[n:] = map(quoted, blocks[n:])  # one level deeper
         elif t == 'thematic_break':
             blocks.append(_RULE)
+        elif t == 'block_math':
+            lines = node['raw'].rstrip('\n').split('\n')
+            blocks.append(('raw', lines, 'markdown'))
         elif t == 'block_html':
             source = node.get('raw', '').rstrip('\n')
             blocks.append(('normal', 0, [('', {'_html': source})]))
@@ -998,7 +1027,7 @@ def _plain_text(nodes):
         t = node.get('type')
         if t in ('text', 'raw_text'):
             parts.append(html.unescape(node.get('raw', '')))
-        elif t == 'codespan':
+        elif t in ('codespan', 'inline_math'):
             parts.append(node.get('raw', ''))
         elif t in ('softbreak', 'linebreak'):
             parts.append(' ')
@@ -2150,3 +2179,32 @@ def test_59():
     assert _check_md(doc) == []
     doc.textmodel.set_indent(0, 1)  # 'normal'
     assert "indented paragraph" in _check_md(doc)
+
+
+def test_60():
+    "formulas stay text until Miniword has them: inline as it is, a "
+    "block as Raw Markdown (saved unchanged: test_61, test/formulas.md)"
+    from miniword.mdelements.raw import Raw
+    from miniword.textmodel.utils import iter_leafes
+    doc = _load_mistune('$$\nx_1 \\\\\n$$\n\nInline $a^2+b_i^2$.\n')
+    raws = [t for _, _, t in iter_leafes(doc.textmodel.texel, 0)
+            if isinstance(t, Raw)]
+    assert [r.source for r in raws] == ['$$\nx_1 \\\\\n$$']
+    assert 'Inline $a^2+b_i^2$.' in doc.textmodel.get_text()
+
+
+def test_61():
+    "test files loaded and saved come back exactly (test_58 only checks "
+    "that saving again changes nothing)"
+    global _folder
+    folder = os.path.join(os.path.dirname(__file__), '..', '..', 'test')
+    for name in ('formulas.md', 'markdown_all.md'):
+        path = os.path.join(folder, name)
+        with open(path, encoding='utf-8') as f:
+            source = f.read()
+        doc = _load(path)
+        _folder = os.path.abspath(folder)  # as _save sets it
+        try:
+            assert _doc_to_md(doc) == source, path
+        finally:
+            _folder = ''
