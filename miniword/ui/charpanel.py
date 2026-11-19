@@ -6,7 +6,9 @@ dev_charpanel/). One scrolling list in sections - similar characters
 (quotes, dashes, spaces) as rows with a name and their shortcut, the
 others as a grid -; a pulldown jumps to a section. A search finds
 characters by what they look like ("->", "<=", '"', "a", "1/2"), by
-German and English words and by their Unicode name.
+words and by their Unicode name. Labels and words are English, to be
+localized with the rest of Miniword (the German ones of the first
+version: develnotes/charpanel_german.md).
 
 The characters are shown in the font at the cursor; those it lacks are
 grey (Miniword takes them from a fallback font, named in the info line).
@@ -30,159 +32,168 @@ from ..core.fontfinder import resolve_font_path, find_fallback_info
 NBSP, NNBSP, THIN, SHY, NBHY = ' ', ' ', ' ', '­', '‑'
 ENSP, EMSP, FIGSP, ZWSP, WJ = ' ', ' ', ' ', '​', '⁠'
 
-# (title, kind, entries); entry: (char, label, search words - among
-# them what it looks like on the keyboard); a label '': the Unicode
-# name is enough (info line)
+# (title, kind, entries); entry: (char, label, look, words) - label and
+# words in English, to be translated (a translation gives words of its
+# own language, searched as well); look: what the character looks like
+# on the keyboard, never translated. A label '': the Unicode name in
+# the info line is enough.
 GROUPS = [
     ('Quotation marks', 'list', [
-        ('„', 'German opening', '" ,, anfuehrungszeichen unten deutsch polnisch'),
-        ('“', 'German closing, English opening', '" anfuehrungszeichen oben'),
-        ('‚', 'German single opening', "' , einfach"),
-        ('‘', 'German single closing', "' einfach"),
-        ('»', 'guillemet » (German books)', '" >> guillemets chevrons'),
-        ('«', 'guillemet « (French)', '" << guillemets chevrons'),
-        ('›', 'single guillemet ›', "' > guillemet"),
-        ('‹', 'single guillemet ‹', "' < guillemet"),
-        ('”', 'English, Polish, Swedish closing', '" quote schwedisch'),
-        ('’', 'English single closing, apostrophe', "' apostroph apostrophe"),
-        ('"', 'straight (typewriter)', '" gerade'),
-        ("'", 'straight single (typewriter)', "' gerade"),
+        ('„', 'German opening', '" ,,', 'quotation mark low'),
+        ('“', 'German closing, English opening', '"', 'quotation mark'),
+        ('‚', 'German single opening', "' ,", 'quotation mark single low'),
+        ('‘', 'German single closing, English single opening', "'", 'quotation mark single'),
+        ('»', 'guillemet', '" >>', 'quotation mark guillemet chevron'),
+        ('«', 'guillemet', '" <<', 'quotation mark guillemet chevron'),
+        ('›', 'single guillemet', "' >", 'quotation mark guillemet single'),
+        ('‹', 'single guillemet', "' <", 'quotation mark guillemet single'),
+        ('”', 'English, Polish, Swedish closing', '"', 'quotation mark'),
+        ('’', 'English single closing, apostrophe', "'", 'quotation mark apostrophe'),
+        ('"', 'straight (typewriter)', '"', 'quotation mark straight typewriter'),
+        ("'", 'straight single (typewriter)', "'", 'quotation mark straight typewriter'),
     ]),
     ('Dashes & spaces', 'list', [
-        ('–', 'en dash: Gedankenstrich', '- -- gedankenstrich halbgeviert bis'),
-        ('—', 'em dash: Geviertstrich', '- --- geviertstrich'),
-        ('‒', 'figure dash: in numbers', '- ziffernstrich telefon'),
-        (NBHY, 'non-breaking hyphen', '- geschuetzt bindestrich'),
-        (SHY, 'soft hyphen (invisible)', '- weich trennstrich shy'),
-        ('−', 'minus sign', '- minus'),
-        (NBSP, 'non-breaking space', 'geschuetzt leerzeichen nbsp space'),
-        (NNBSP, 'narrow non-breaking: z. B.', 'schmal leerzeichen space'),
-        (THIN, 'thin space', 'schmal leerzeichen space'),
-        (FIGSP, 'figure space: as wide as a digit', 'ziffer leerzeichen space'),
-        (ENSP, 'en space', 'halbgeviert leerzeichen space'),
-        (EMSP, 'em space', 'geviert leerzeichen space'),
-        (ZWSP, 'zero width space: may break here', 'null breite umbruch space'),
-        (WJ, 'word joiner: no break here', 'verbinder kein umbruch'),
-        ('·', 'middle dot', '. punkt mitte'),
-        ('…', 'ellipsis: Auslassungspunkte', '... punkte'),
+        ('–', 'en dash', '- --', 'dash range'),
+        ('—', 'em dash', '- ---', 'dash'),
+        ('‒', 'figure dash: in numbers', '-', 'dash figure number telephone'),
+        (NBHY, 'non-breaking hyphen', '-', 'hyphen non-breaking'),
+        (SHY, 'soft hyphen (invisible)', '-', 'hyphen soft shy'),
+        ('−', 'minus sign', '-', 'minus'),
+        (NBSP, 'non-breaking space', '', 'space non-breaking nbsp'),
+        (NNBSP, 'narrow non-breaking space', '', 'space narrow non-breaking'),
+        (THIN, 'thin space', '', 'space thin narrow'),
+        (FIGSP, 'figure space: as wide as a digit', '', 'space figure digit'),
+        (ENSP, 'en space', '', 'space'),
+        (EMSP, 'em space', '', 'space'),
+        (ZWSP, 'zero width space: may break here', '', 'space zero width break'),
+        (WJ, 'word joiner: no break here', '', 'joiner no break'),
+        ('·', 'middle dot', '.', 'dot middle'),
+        ('…', 'ellipsis', '...', 'ellipsis dots'),
     ]),
     ('Punctuation', 'grid', [
-        ('¡', 'Spanish opening !', '! spanisch'), ('¿', 'Spanish opening ?', '? spanisch'),
-        ('‽', 'interrobang', '?! !? interrobang'),
-        ('′', 'prime: minutes, feet', "' minuten fuss strich"),
-        ('″', 'double prime: seconds, inches', '" sekunden zoll'),
-        ('‴', 'triple prime', "''' strich"),
-        ('‖', 'double vertical line', '|| doppelstrich'), ('¦', 'broken bar', '| unterbrochen'),
-        ('⁂', 'asterism', '*** sternchen'), ('※', 'reference mark', '* hinweis'),
+        ('¡', 'inverted exclamation mark', '!', 'spanish exclamation'),
+        ('¿', 'inverted question mark', '?', 'spanish question'),
+        ('‽', 'interrobang', '?! !?', 'interrobang'),
+        ('′', 'prime: minutes, feet', "'", 'prime minutes feet'),
+        ('″', 'double prime: seconds, inches', '"', 'prime seconds inches'),
+        ('‴', 'triple prime', "'''", 'prime'),
+        ('‖', 'double vertical line', '||', 'line double vertical'),
+        ('¦', 'broken bar', '|', 'bar broken'),
+        ('⁂', 'asterism', '***', 'asterism stars'),
+        ('※', 'reference mark', '*', 'reference mark'),
     ]),
     ('Symbols', 'grid', [
-        ('§', 'section: Paragraf', 'paragraf paragraph section'),
-        ('¶', 'pilcrow: Absatzmarke', 'absatz pilcrow'),
-        ('©', 'copyright', '(c) copyright'),
-        ('®', 'registered', '(r) registered'),
-        ('™', 'trade mark', 'tm trademark marke'),
-        ('℗', 'sound recording copyright', '(p) phonogramm'),
-        ('°', 'degree: Grad', 'o grad degree'),
-        ('†', 'dagger: Kreuz, gestorben', '+ kreuz dagger'),
-        ('‡', 'double dagger', '++ dagger'),
-        ('★', 'star: Stern', '* stern star'), ('☆', 'white star', '* stern star'),
-        ('♥', 'heart: Herz', '<3 herz heart'), ('♦', 'diamond: Karo', 'karo'),
-        ('♣', 'club: Kreuz', 'kreuz'), ('♠', 'spade: Pik', 'pik'),
-        ('☞', 'pointing hand', 'hand zeiger'), ('✎', 'pencil', 'stift bleistift'),
-        ('✉', 'envelope', 'brief mail'), ('☎', 'telephone', 'telefon'),
-        ('⚠', 'warning', '! warnung achtung'),
+        ('§', 'section sign', '', 'section paragraph law'),
+        ('¶', 'pilcrow', '', 'pilcrow paragraph'),
+        ('©', 'copyright', '(c)', 'copyright'),
+        ('®', 'registered', '(r)', 'registered'),
+        ('™', 'trade mark', 'tm', 'trademark'),
+        ('℗', 'sound recording copyright', '(p)', 'phonogram copyright'),
+        ('°', 'degree', 'o', 'degree'),
+        ('†', 'dagger: died', '+', 'dagger cross died'),
+        ('‡', 'double dagger', '++', 'dagger'),
+        ('★', 'star', '*', 'star'), ('☆', 'white star', '*', 'star'),
+        ('♥', 'heart', '<3', 'heart love'), ('♦', 'diamond', '', 'diamond cards'),
+        ('♣', 'club', '', 'club cards'), ('♠', 'spade', '', 'spade cards'),
+        ('☞', 'pointing hand', '', 'hand pointing'), ('✎', 'pencil', '', 'pencil write'),
+        ('✉', 'envelope', '', 'envelope mail letter'), ('☎', 'telephone', '', 'telephone phone'),
+        ('⚠', 'warning', '!', 'warning caution'),
     ]),
     ('Bullets & boxes', 'grid', [
-        ('•', 'bullet: Aufzählungspunkt', '* punkt bullet'),
-        ('◦', 'white bullet', 'o punkt bullet'), ('‣', 'triangular bullet', '> punkt'),
-        ('⁃', 'hyphen bullet', '- punkt'), ('▪', 'small black square', 'quadrat'),
-        ('▫', 'small white square', 'quadrat'), ('▸', 'small triangle', '> dreieck'),
-        ('■', 'black square', 'quadrat'), ('□', 'white square', 'quadrat'),
-        ('●', 'black circle', 'kreis'), ('○', 'white circle', 'o kreis'),
-        ('◆', 'black diamond', 'raute'), ('◇', 'white diamond', 'raute'),
-        ('☐', 'ballot box: Kästchen', '[] kaestchen checkbox'),
-        ('☑', 'ballot box with check', '[x] kaestchen checkbox haken'),
-        ('☒', 'ballot box with x', '[x] kaestchen checkbox kreuz'),
-        ('✓', 'check mark: Haken', 'v haken check ok'),
-        ('✗', 'ballot x: Kreuz', 'x kreuz falsch'),
+        ('•', 'bullet', '*', 'bullet dot'),
+        ('◦', 'white bullet', 'o', 'bullet'), ('‣', 'triangular bullet', '>', 'bullet triangle'),
+        ('⁃', 'hyphen bullet', '-', 'bullet'), ('▪', 'small black square', '', 'square'),
+        ('▫', 'small white square', '', 'square'), ('▸', 'small triangle', '>', 'triangle'),
+        ('■', 'black square', '', 'square'), ('□', 'white square', '', 'square'),
+        ('●', 'black circle', '', 'circle'), ('○', 'white circle', 'o', 'circle'),
+        ('◆', 'black diamond', '', 'diamond'), ('◇', 'white diamond', '', 'diamond'),
+        ('☐', 'ballot box', '[]', 'box checkbox'),
+        ('☑', 'ballot box with check', '[x]', 'box checkbox check'),
+        ('☒', 'ballot box with x', '[x]', 'box checkbox cross'),
+        ('✓', 'check mark', 'v', 'check ok'),
+        ('✗', 'ballot x', 'x', 'cross wrong'),
     ]),
     ('Currency', 'grid', [
-        ('€', 'euro', 'e euro'), ('£', 'pound: Pfund', 'l pfund pound'),
-        ('¥', 'yen', 'y yen'), ('¢', 'cent', 'c cent'),
-        ('$', 'dollar', 's dollar'), ('₹', 'rupee', 'rupie rupee'),
-        ('₽', 'ruble', 'rubel ruble'), ('₺', 'Turkish lira', 'lira tuerkisch'),
-        ('₴', 'hryvnia', 'hrywnja ukraine'), ('₩', 'won', 'won korea'),
-        ('₪', 'shekel', 'schekel israel'), ('₿', 'bitcoin', 'b bitcoin'),
+        ('€', 'euro', 'e', 'euro'), ('£', 'pound', 'l', 'pound sterling'),
+        ('¥', 'yen', 'y', 'yen yuan'), ('¢', 'cent', 'c', 'cent'),
+        ('$', 'dollar', 's', 'dollar'), ('₹', 'rupee', '', 'rupee india'),
+        ('₽', 'ruble', '', 'ruble russia'), ('₺', 'Turkish lira', '', 'lira turkey'),
+        ('₴', 'hryvnia', '', 'hryvnia ukraine'), ('₩', 'won', '', 'won korea'),
+        ('₪', 'shekel', '', 'shekel israel'), ('₿', 'bitcoin', 'b', 'bitcoin'),
     ]),
     ('Arrows', 'grid', [
-        ('→', 'arrow right', '-> pfeil rechts'), ('←', 'arrow left', '<- pfeil links'),
-        ('↑', 'arrow up', '^ pfeil oben'), ('↓', 'arrow down', 'v pfeil unten'),
-        ('↔', 'arrow left-right', '<-> pfeil'), ('↕', 'arrow up-down', 'pfeil'),
-        ('⇒', 'double arrow right: daraus folgt', '=> pfeil folgt'),
-        ('⇐', 'double arrow left', '<= pfeil'),
-        ('⇔', 'double arrow left-right: genau dann', '<=> pfeil'),
-        ('⟶', 'long arrow right', '--> pfeil lang'), ('⟹', 'long double arrow right', '==> pfeil lang'),
-        ('↦', 'maps to', '|-> pfeil abbildung'), ('↗', 'arrow up right', '/ pfeil'),
-        ('↘', 'arrow down right', '\\ pfeil'), ('↩', 'arrow back', 'pfeil zurueck'),
-        ('↪', 'arrow hook right', 'pfeil'), ('⇄', 'arrows right and left', 'pfeil'),
-        ('⇅', 'arrows up and down', 'pfeil'),
+        ('→', 'arrow right', '->', 'arrow right'), ('←', 'arrow left', '<-', 'arrow left'),
+        ('↑', 'arrow up', '^', 'arrow up'), ('↓', 'arrow down', 'v', 'arrow down'),
+        ('↔', 'arrow left-right', '<->', 'arrow'), ('↕', 'arrow up-down', '', 'arrow'),
+        ('⇒', 'double arrow right: implies', '=>', 'arrow double implies'),
+        ('⇐', 'double arrow left', '<=', 'arrow double'),
+        ('⇔', 'double arrow left-right: if and only if', '<=>', 'arrow double iff'),
+        ('⟶', 'long arrow right', '-->', 'arrow long'),
+        ('⟹', 'long double arrow right', '==>', 'arrow long double'),
+        ('↦', 'maps to', '|->', 'arrow maps'), ('↗', 'arrow up right', '/', 'arrow'),
+        ('↘', 'arrow down right', '\\', 'arrow'), ('↩', 'arrow back', '', 'arrow back return'),
+        ('↪', 'arrow hook right', '', 'arrow hook'), ('⇄', 'arrows right and left', '', 'arrows'),
+        ('⇅', 'arrows up and down', '', 'arrows'),
     ]),
     ('Mathematics', 'grid', [
-        ('×', 'times: mal', 'x * mal'), ('÷', 'divided by: geteilt', '/ : geteilt'),
-        ('⋅', 'dot operator: mal', '. * mal punkt'),
-        ('±', 'plus-minus', '+- plusminus'), ('∓', 'minus-plus', '-+ minusplus'),
-        ('≤', 'less or equal', '<= kleiner gleich'),
-        ('≥', 'greater or equal', '>= groesser gleich'),
-        ('≪', 'much less', '<< viel kleiner'), ('≫', 'much greater', '>> viel groesser'),
-        ('≠', 'not equal: ungleich', '!= /= ungleich'),
-        ('≈', 'almost equal: ungefähr', '~ ~= ungefaehr'),
-        ('≡', 'identical', '=== identisch'), ('≅', 'congruent', '~= kongruent'),
-        ('∝', 'proportional', '~ proportional'),
-        ('∞', 'infinity: unendlich', 'oo unendlich'),
-        ('√', 'square root: Wurzel', 'sqrt wurzel'), ('∑', 'sum: Summe', 'summe sum'),
-        ('∫', 'integral', 'integral'), ('∂', 'partial', 'd partiell'),
-        ('∇', 'nabla', 'nabla'), ('∆', 'increment: Delta', 'delta differenz'),
-        ('∀', 'for all', 'A fuer alle'), ('∃', 'there exists', 'E existiert'),
-        ('∈', 'element of', 'in element'), ('∉', 'not element of', '!in element'),
-        ('∅', 'empty set', '{} leere menge'), ('∩', 'intersection', 'schnitt'),
-        ('∪', 'union', 'vereinigung'), ('⊂', 'subset', 'teilmenge'),
-        ('⊆', 'subset or equal', 'teilmenge'), ('∧', 'and', '/\\ und'),
-        ('∨', 'or', '\\/ oder'), ('¬', 'not', '! nicht'),
-        ('⌊', 'floor left', 'abrunden'), ('⌋', 'floor right', 'abrunden'),
-        ('⌈', 'ceiling left', 'aufrunden'), ('⌉', 'ceiling right', 'aufrunden'),
-        ('ℕ', 'natural numbers', 'N natuerlich'), ('ℤ', 'integers', 'Z ganz'),
-        ('ℚ', 'rationals', 'Q rational'), ('ℝ', 'reals', 'R reell'),
-        ('ℂ', 'complex numbers', 'C komplex'), ('µ', 'micro: mikro', 'u mikro micro'),
+        ('×', 'multiplication sign', 'x *', 'times multiply'),
+        ('÷', 'division sign', '/ :', 'divide'),
+        ('⋅', 'dot operator', '. *', 'times dot multiply'),
+        ('±', 'plus-minus', '+-', 'plus minus'), ('∓', 'minus-plus', '-+', 'minus plus'),
+        ('≤', 'less or equal', '<=', 'less equal'),
+        ('≥', 'greater or equal', '>=', 'greater equal'),
+        ('≪', 'much less', '<<', 'less much'), ('≫', 'much greater', '>>', 'greater much'),
+        ('≠', 'not equal', '!= /=', 'not equal'),
+        ('≈', 'almost equal', '~ ~=', 'almost equal approximately'),
+        ('≡', 'identical', '===', 'identical'), ('≅', 'congruent', '~=', 'congruent'),
+        ('∝', 'proportional', '~', 'proportional'),
+        ('∞', 'infinity', 'oo', 'infinity'),
+        ('√', 'square root', '', 'root square sqrt'), ('∑', 'sum', '', 'sum sigma'),
+        ('∫', 'integral', '', 'integral'), ('∂', 'partial', 'd', 'partial'),
+        ('∇', 'nabla', '', 'nabla'), ('∆', 'increment', '', 'delta increment'),
+        ('∀', 'for all', '', 'all for'), ('∃', 'there exists', '', 'exists'),
+        ('∈', 'element of', '', 'element in'), ('∉', 'not element of', '', 'element not'),
+        ('∅', 'empty set', '{}', 'empty set'), ('∩', 'intersection', '', 'intersection'),
+        ('∪', 'union', '', 'union'), ('⊂', 'subset', '', 'subset'),
+        ('⊆', 'subset or equal', '', 'subset'), ('∧', 'and', '/\\', 'and logical'),
+        ('∨', 'or', '\\/', 'or logical'), ('¬', 'not', '!', 'not logical'),
+        ('⌊', 'left floor', '', 'floor'), ('⌋', 'right floor', '', 'floor'),
+        ('⌈', 'left ceiling', '', 'ceiling'), ('⌉', 'right ceiling', '', 'ceiling'),
+        ('ℕ', 'natural numbers', 'N', 'natural numbers'), ('ℤ', 'integers', 'Z', 'integers'),
+        ('ℚ', 'rational numbers', 'Q', 'rational'), ('ℝ', 'real numbers', 'R', 'real'),
+        ('ℂ', 'complex numbers', 'C', 'complex'), ('µ', 'micro', 'u', 'micro'),
     ]),
     ('Superscript, subscript & fractions', 'grid',
-     [(c, '', '^%s hoch' % n) for c, n in zip('⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ',
-                                               '0123456789+-=()n')]
-     + [(c, '', '_%s tief' % n) for c, n in zip('₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎',
-                                                 '0123456789+-=()')]
-     + [(c, '', 'bruch') for c in '½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞']),
+     [(c, '', '^' + n, 'superscript') for c, n in zip('⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ',
+                                                       '0123456789+-=()n')]
+     + [(c, '', '_' + n, 'subscript') for c, n in zip('₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎',
+                                                       '0123456789+-=()')]
+     + [(c, '', '', 'fraction') for c in '½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞']),
     ('Units & keys', 'grid', [
-        ('℃', 'degree Celsius', 'grad celsius c'), ('℉', 'degree Fahrenheit', 'grad fahrenheit f'),
-        ('‰', 'per mille: Promille', '%o promille'),
-        ('‱', 'per ten thousand', '%oo promille'), ('⌀', 'diameter: Durchmesser', 'o/ durchmesser'),
-        ('№', 'numero', 'no nummer'), ('ℓ', 'litre', 'l liter'),
-        ('⌘', 'command key (Mac)', 'cmd befehl mac taste'),
-        ('⌥', 'option key (Mac)', 'opt alt mac taste'),
-        ('⇧', 'shift key', 'shift umschalt taste'),
-        ('⌫', 'backspace key', 'backspace loeschen taste'),
-        ('⏎', 'return key', 'return enter eingabe taste'),
-        ('↵', 'enter key', 'enter eingabe taste'),
-        ('⇥', 'tab key', 'tab tabulator taste'), ('⎋', 'escape key', 'esc escape taste'),
+        ('℃', 'degree Celsius', 'c', 'degree celsius'),
+        ('℉', 'degree Fahrenheit', 'f', 'degree fahrenheit'),
+        ('‰', 'per mille', '%o', 'per mille'),
+        ('‱', 'per ten thousand', '%oo', 'per'),
+        ('⌀', 'diameter', 'o/', 'diameter'),
+        ('№', 'numero', 'no', 'number'), ('ℓ', 'litre', 'l', 'litre liter'),
+        ('⌘', 'command key (Mac)', '', 'cmd command key mac'),
+        ('⌥', 'option key (Mac)', '', 'option alt key mac'),
+        ('⇧', 'shift key', '', 'shift key'),
+        ('⌫', 'backspace key', '', 'backspace delete key'),
+        ('⏎', 'return key', '', 'return enter key'),
+        ('↵', 'enter key', '', 'enter return key'),
+        ('⇥', 'tab key', '', 'tab key'), ('⎋', 'escape key', '', 'esc escape key'),
     ]),
-    ('Greek', 'grid', [(c, '', '') for c in 'αβγδεζηθικλμνξοπρστυφχψω'
-                                             'ΓΔΘΛΞΠΣΦΨΩ']),
-    ('Accented letters', 'grid', [(c, '', '')
+    ('Greek', 'grid', [(c, '', '', 'greek') for c in 'αβγδεζηθικλμνξοπρστυφχψω'
+                                                     'ΓΔΘΛΞΠΣΦΨΩ']),
+    ('Accented letters', 'grid', [(c, '', '', '')
                                   for c in 'àáâãäåæçèéêëìíîïñòóôõöøœùúûüýÿß'
                                            'ąćčďęěłńňřśšťůźżž'
                                            'ÀÁÂÄÅÆÇÉÈÊËÑÖØŒÜ']),
 ]
 
-ENTRIES = {c: (label, words) for _, _, entries in GROUPS
-           for c, label, words in entries}
+ENTRIES = {c: (label, look, words) for _, _, entries in GROUPS
+           for c, label, look, words in entries}
 
 # the Insert menu's characters with fixed shortcuts: (char, menu label)
 BUILTIN = [(NBSP, "Non-breaking &space\tCtrl+Shift+Space"),
@@ -195,33 +206,34 @@ DISPLAY = {NBSP: 'NBSP', NNBSP: 'NNBSP', THIN: 'THIN', SHY: 'SHY',
            WJ: 'WJ'}
 
 RECENT = 7  # characters in the Recent row
+ITEM_H = 28  # the height of rows and grid cells (DIP)
 
 
-def base_letters(c):
-    """c without accents, lower case (é -> e, ß -> ss, ½ -> 1/2)."""
-    s = unicodedata.normalize('NFKD', c)
-    s = ''.join(x for x in s if not unicodedata.combining(x))
-    s = s.replace('⁄', '/')  # fraction slash
-    return {'ß': 'ss', 'æ': 'ae', 'œ': 'oe', 'ø': 'o', 'ł': 'l'}.get(
-        c.lower(), s.lower())
+def simple(text):
+    """text in lower case without accents (é -> e, ß -> ss, ½ -> 1/2):
+    search words and the search compared alike, in any language."""
+    text = unicodedata.normalize('NFKD', text.casefold())
+    text = ''.join(x for x in text if not unicodedata.combining(x))
+    return text.replace('\u2044', '/')  # fraction slash
 
 
 def search(query):
-    """Characters matching query, the best first: what it looks like or
-    a search word exactly, then a search word's start, then the label
-    or the Unicode name."""
-    q = query.strip().lower()
+    """Characters matching query, the best first: the character, what it
+    looks like or a word exactly, then the start of a word, then a part
+    of its label or Unicode name. Words: the English ones (later also
+    those of a translation)."""
+    q = simple(query.strip())
     if not q:
         return []
     ranked = []
-    for c, (label, words) in ENTRIES.items():
-        tokens = words.lower().split()
-        if q == c or q in tokens or q == base_letters(c):
+    for c, (label, look, words) in ENTRIES.items():
+        tokens = look.lower().split() + simple(words).split()
+        if q in (c, simple(c)) or q in tokens:
             rank = 0
         elif len(q) >= 2 and any(t.startswith(q) for t in tokens):
             rank = 1
-        elif len(q) >= 3 and (q in label.lower()
-                              or q in unicodedata.name(c, '').lower()):
+        elif len(q) >= 3 and (q in simple(label)
+                              or q in simple(unicodedata.name(c, ''))):
             rank = 2
         else:
             continue
@@ -346,7 +358,7 @@ class ShortcutDialog(wx.Dialog):
         self.c, self.taken, self.result = c, taken, None
         dip = self.FromDIP
         sizer = wx.BoxSizer(wx.VERTICAL)
-        name = ENTRIES.get(c, ('', ''))[0] or unicodedata.name(c, '')
+        name = ENTRIES.get(c, ('',))[0] or unicodedata.name(c, '')
         text = wx.StaticText(self)
         text.SetLabelText("Press the keys for  %s  (%s)." % (
             DISPLAY.get(c, c), name))
@@ -413,7 +425,11 @@ class CharPanel(SidePanel):
         dip = self.FromDIP
         content = make_panel(self, "CHARACTERS")
         self.search = wx.SearchCtrl(self)
-        self.search.SetDescriptiveText('Search: "  ->  <=  a  1/2  euro')
+        self.search.SetDescriptiveText("Word or look-alike, e.g. arrow or ->")
+        self.search.SetToolTip(
+            "Type a word (arrow, euro, dash) or what the character looks "
+            "like on the keyboard: -> for →, <= for ≤, 1/2 for ½, \" for "
+            "quotation marks, a for à á ä.")
         self.search.Bind(wx.EVT_TEXT, self.on_search)
         content.Add(self.search, 0, wx.EXPAND)
 
@@ -487,6 +503,9 @@ class CharPanel(SidePanel):
         shortcut. Colours by name (colours): light and dark."""
         dip = self.FromDIP
         item = wx.Panel(parent)
+        # one height for all: small labels of invisible characters and
+        # glyphs from fallback fonts would make rows lower or higher
+        item.SetMinSize((-1 if keys is not None else dip(32), dip(ITEM_H)))
         colours.set(item, 'BackgroundColour', ground)
         glyph = wx.StaticText(item, label=DISPLAY.get(c, c),
                               size=(dip(32), -1),
@@ -498,11 +517,10 @@ class CharPanel(SidePanel):
         if c in missing(self.family):
             colours.set(glyph, 'ForegroundColour', 'GRAYTEXT')
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(glyph, 0, wx.ALIGN_CENTRE_VERTICAL | wx.TOP | wx.BOTTOM,
-                  dip(3))
+        sizer.Add(glyph, 0, wx.ALIGN_CENTRE_VERTICAL)
         widgets = [item, glyph]
         if keys is not None:
-            text = wx.StaticText(item, label=ENTRIES.get(c, ('', ''))[0],
+            text = wx.StaticText(item, label=ENTRIES.get(c, ('',))[0],
                                  style=wx.ST_ELLIPSIZE_END)
             text.SetMinSize((dip(20), -1))  # gives way to the shortcut
             sizer.Add(text, 1, wx.ALIGN_CENTRE_VERTICAL | wx.LEFT, dip(4))
@@ -511,8 +529,8 @@ class CharPanel(SidePanel):
                 shortcut = wx.StaticText(item, label=keys)
                 shortcut.SetFont(shortcut.GetFont().Scaled(0.85))
                 colours.set(shortcut, 'ForegroundColour', 'GRAYTEXT')
-                sizer.Add(shortcut, 0, wx.ALIGN_CENTRE_VERTICAL | wx.RIGHT,
-                          dip(6))
+                sizer.Add(shortcut, 0, wx.ALIGN_CENTRE_VERTICAL
+                          | wx.LEFT | wx.RIGHT, dip(6))
                 widgets.append(shortcut)
         item.SetSizer(sizer)
 
@@ -563,7 +581,7 @@ class CharPanel(SidePanel):
     # --- actions ---
 
     def show_info(self, c):
-        label = ENTRIES.get(c, ('', ''))[0]
+        label = ENTRIES.get(c, ('',))[0]
         lines = ['%s   U+%04X   %s' % (DISPLAY.get(c, c), ord(c),
                                      unicodedata.name(c, '?').lower()),
                  label]
@@ -651,8 +669,17 @@ def test_00():
     assert search('1/2')[0] == '½'
     assert search('(c)') == ['©']
     assert search('euro')[0] == '€'
-    assert '–' in search('gedankenstrich')
+    assert '–' in search('dash') and '→' in search('ARROW')
     assert search('') == []
+
+
+def test_00b():
+    "simple: words and search compared without case and accents, in any "
+    "language; decomposed (½ -> 1/2)"
+    assert simple('Größer') == 'grosser'
+    assert simple('Anführungszeichen') == simple('anfuhrungszeichen')
+    assert simple('Ça') == 'ca'
+    assert simple('½') == '1/2' and simple('¹') == '1'
 
 
 def test_01():
