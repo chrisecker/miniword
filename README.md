@@ -1,90 +1,36 @@
 # MiniWord
 
-A small word processor. In development but already great.
+**Real pages. Plain files.**
 
-![Screenshot](https://codeberg.org/chrisecker/miniword/raw/branch/main/screenshots/miniword.png)
+A small desktop word processor that typesets real pages and stores your documents as readable text: diff them, script them, extend MiniWord in Python.
 
-## Key Aspects
+**[⬇ Download for Windows, macOS and Linux](https://github.com/chrisecker/miniword/releases)**
 
-- Real WYSIWYG editing (no HTML layer, no embedded browser)
-- Lightweight and fast startup
-- Clean, simple file format (human-readable, diff-friendly, git-friendly, AI-friendly)
-- Good Markdown support
-- Extensible via Python-plugins
+<!-- hero.png is exported from screenshots/hero/hero.svg (Inkscape) -->
+![MiniWord editing a page with a photo, footnote and table; the inspector shows the local formatting of the selected words](https://codeberg.org/chrisecker/miniword/raw/branch/readme/screenshots/hero/hero.png)
+
+## Why MiniWord
+
+- **Real page layout:** headers and footers, footnotes, tables, images and hyphenation, typeset by MiniWord itself, so the page looks the same every time.
+- **Your files stay readable:** a simple plain text format that works with git, diff, scripts and AI tools.
+- **Markdown in, PDF out:** open Markdown files and export PDFs with selectable text and embedded fonts.
+- **Native and fast:** a desktop app that starts in a blink. No browser, no account, no cloud.
+- **Hackable:** Python plugins add menu commands and import, export and paste filters.
+
+## Status
+
+MiniWord is young but already usable. Please keep backups of important documents. Found a bug or missing something? [Open an issue](https://codeberg.org/chrisecker/miniword/issues).
 
 ## Install
 
 Download the installer for Windows (`.exe`), macOS (`.dmg`) or Linux (`.deb`, `.rpm`) from the [Releases page](https://github.com/chrisecker/miniword/releases). On Linux, MiniWord can also be installed with pip. Details and other systems: see [INSTALL.md](INSTALL.md).
 
-## Command line
+## Documentation
 
-```
-miniword [-h] [-o OUTFILE] [--template TEMPLATE] [--set KEY=VALUE]
-         [--debug] [--install-desktop] [--uninstall-desktop]
-         [--version] [file]
-```
-
-(from a source folder without installation: `python miniword.py [options] [file]`)
-
-| Option | Meaning |
-|---|---|
-| `file` | Document to open: `.txl`, or a format a plugin imports, e.g. Markdown (`.md`). Without it, MiniWord starts with a new document. |
-| `-o`, `--output OUTFILE` | Write the document to `OUTFILE` and exit, without a window. The format follows the extension: `.pdf`, `.txl`, `.md`, `.txt`. Example: `miniword report.md -o report.pdf` |
-| `--template TEMPLATE` | With `-o`: take the page setup (paper, margins, header and footer, …; not title and author) from the document `TEMPLATE` (`.txl`), and for each style with a role (normal, heading 1, list, …) the values of the template's style with the same role. Example: `miniword report.md -o report.pdf --template letter.txl` |
-| `--set KEY=VALUE` | With `-o`, repeatable: a document setting, applied after `--template`. Keys: `paper` (`A4`, `A5`, `Letter`, … or `170x240mm`), `margin_top`/`_right`/`_bottom`/`_left` (`2cm`, `20mm`, `1in`, `12pt`), `title`, `author`, `language`, `hyphenation` (`yes`/`no`), `header_left`/`_center`/`_right` and `footer_…` (`page`, `page_pages`, `title`, `author`, `date`, `chapter`, `section`, `none`, `text:Your text`), `header_footer_first_page`, `header_footer_mirror`. Example: `--set paper=A5 --set margin_left=2cm` |
-| `-h`, `--help` | Show the options and exit. |
-| `--version` | Show the version and exit. |
-| `--debug` | Print debug output of the page layout. |
-| `--install-desktop` | Linux: add MiniWord to the desktop menu and open `.txl` files with it (see [INSTALL.md](INSTALL.md)). |
-| `--uninstall-desktop` | Linux: undo `--install-desktop`. |
-
-## Hacking
-
-Run the full test suite:
-
-```
-python test_all.py
-```
-
-Run tests for a single module:
-
-```
-python runtests.py miniword/layout/pagegen.py
-```
-
-Run a specific test or demo:
-
-```
-python runtests.py miniword/ui/searchtool.py test_00
-python runtests.py miniword/texteditor/textcanvas.py demo_00
-```
-
-## Plugins
-
-MiniWord is extensible via Python plugins. To install a plugin, copy the `.py` file into the plugins directory for your platform:
-
-| Platform | Plugins directory                                 |
-| -------- | ------------------------------------------------- |
-| Linux    | `~/.config/miniword/plugins/`                     |
-| macOS    | `~/Library/Application Support/miniword/plugins/` |
-| Windows  | `%APPDATA%\miniword\plugins\`                     |
-
-Example plugins are provided in the `examples/` directory:
-
-| File                  | Description                           |
-| --------------------- | ------------------------------------- |
-| `wordcount.py`        | Word count of document and selection  |
-| `wordcount_dialog.py` | The same in a dialog that stays open  |
-| `txtfilter.py`        | Filter for importing plain text files |
-
-For example, to install the word count dialog on Linux:
-
-```
-mkdir -p ~/.config/miniword/plugins
-cp examples/wordcount_dialog.py ~/.config/miniword/plugins
-```
-
-It then appears in the Tools menu as "Word Count…".
+- [Command line](docs/commandline.md): convert documents without a window, e.g. `miniword report.md -o report.pdf`
+- [Plugins](docs/plugins.md): install Python plugins, with examples
+- [File format](docs/txl_format.md): the `.txl` format
+- [Hacking](docs/hacking.md): run the tests and demos
 
 ## License
 

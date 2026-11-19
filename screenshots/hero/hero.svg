@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hero image for README.md. Edit in Inkscape, then export the whole
+     page as hero.png at 96 dpi (File, Export).
+     The screenshot is linked (miniword_window.png), not embedded.
+     Screenshot offset: x+300, y+7 (window coordinates to canvas). -->
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+     width="1660" height="1000" viewBox="0 0 1660 1000">
+  <defs>
+    <style>
+      .label { font-family: 'Noto Sans', 'DejaVu Sans', sans-serif;
+               font-size: 27px; font-weight: bold; fill: #2b2b2b; }
+      .sub   { font-family: 'Noto Sans', 'DejaVu Sans', sans-serif;
+               font-size: 21px; fill: #5a5a5a; }
+      .lead  { fill: none; stroke: #e95420; stroke-width: 2.5;
+               stroke-linecap: round; stroke-linejoin: round; }
+      .dot   { fill: #e95420; }
+      .frame { fill: none; stroke: #e95420; stroke-width: 2.5; }
+    </style>
+  </defs>
+
+  <g inkscape:groupmode="layer" inkscape:label="Background" id="layer-background">
+    <rect x="0" y="0" width="1660" height="1000" rx="24" fill="#f4f1ec"/>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="Screenshot" id="layer-screenshot">
+    <image xlink:href="miniword_window.png" x="300" y="7"
+           width="1057" height="986"/>
+  </g>
+
+  <g inkscape:groupmode="layer" inkscape:label="Annotations" id="layer-annotations">
+
+    <!-- 1: header -->
+    <g id="note-header">
+      <text class="label" x="280" y="132" text-anchor="end">Headers and</text>
+      <text class="label" x="280" y="166" text-anchor="end">footers</text>
+      <path class="lead" d="M 292,142 H 806"/>
+      <circle class="dot" cx="812" cy="142" r="5"/>
+    </g>
+
+    <!-- 2: justified text with hyphenation (line runs in the gap
+         between photo and paragraph, then down to the hyphen) -->
+    <g id="note-hyphenation">
+      <text class="label" x="280" y="415" text-anchor="end">Justified, with</text>
+      <text class="label" x="280" y="449" text-anchor="end">hyphenation</text>
+      <path class="lead" d="M 292,425 H 890 V 438"/>
+      <circle class="dot" cx="890" cy="445" r="5"/>
+    </g>
+
+    <!-- 3: footnote at the foot of the page -->
+    <g id="note-footnote">
+      <text class="label" x="280" y="859" text-anchor="end">Footnotes at the</text>
+      <text class="label" x="280" y="893" text-anchor="end">foot of the page</text>
+      <path class="lead" d="M 292,869 H 404"/>
+      <circle class="dot" cx="410" cy="869" r="5"/>
+    </g>
+
+    <!-- 4: local formatting in the inspector, the x reset buttons -->
+    <g id="note-overrides">
+      <rect class="frame" x="1233" y="228" width="30" height="400" rx="8"/>
+      <path class="lead" d="M 1248,628 V 660 H 1372"/>
+      <text class="label" x="1380" y="668">Styles plus</text>
+      <text class="label" x="1380" y="702">direct formatting</text>
+      <text class="sub" x="1380" y="740">Each × resets one</text>
+      <text class="sub" x="1380" y="768">property to the style</text>
+    </g>
+
+  </g>
+</svg>
