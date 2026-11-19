@@ -577,7 +577,7 @@ def _apply_parstyle(model, nl_pos, ptype, indent, more={}):
     # 'continued' (more of a list item)
     base = 'body' if ptype in ('normal', 'continued') else ptype
     ps = dict(more, base=base)
-    if ptype in ('list', 'numbered', 'continued'):
+    if ptype == 'continued':  # list and numbered: the style's
         ps['paragraph_type'] = ptype
     if ps.get('quote_level') == 1 and base in ('quote',) + _ALERTS:
         del ps['quote_level']  # the style's
