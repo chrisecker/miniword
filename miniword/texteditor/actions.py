@@ -115,10 +115,9 @@ def step_back(editor, model, index):
     new = STEPS_BACK.get(parstyle.get('paragraph_type', 'normal'))
     if new is None or parstyle.get('counter') == 'section':
         return False  # (counter 'section': a numbered heading, no item)
-    saved = editor.selection
-    editor.selection = model.expand_lines(index, index)
-    editor.set_parproperties(paragraph_type=new)
-    editor.selection = saved
+    editor.apply_to_ranges(
+        [model.expand_lines(index, index)],
+        lambda: editor.set_parproperties(paragraph_type=new))
     return True
 
 
@@ -127,11 +126,9 @@ def cycle_parproperty(editor, model, ctx, key, values, reverse=False):
     current = model.get_parstyle(ctx.index).get(key, values[0])
     idx = values.index(current) if current in values else 0
     delta = -1 if reverse else 1
-    ps1, ps2 = model.expand_lines(ctx.s1, ctx.s2)
-    saved = editor.selection
-    editor.selection = ps1, ps2
-    editor.set_parproperties(**{key: values[(idx + delta) % len(values)]})
-    editor.selection = saved
+    value = values[(idx + delta) % len(values)]
+    editor.apply_to_ranges(editor.par_ranges(),
+                           lambda: editor.set_parproperties(**{key: value}))
 
 
 def default_handler(action, shift, ctx):

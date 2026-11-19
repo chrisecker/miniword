@@ -68,22 +68,6 @@ class AlignBar(ButtonBar):
             self.add(name, svg)
 
 
-def paragraph_ranges(model, ranges):
-    """ranges, each extended to cover complete lines. A range that already
-    does (e.g. a table cell from MatrixController.selected: its content
-    plus the separator, which ends the cell's last paragraph) is kept as
-    it is - expand_lines would widen a range across a cell's content and
-    separator to the whole table."""
-    result = []
-    for i1, i2 in ranges:
-        if i2 > i1 and model.linestart(i1) == i1 \
-                and model.lineend(i2 - 1) == i2 - 1:
-            result.append((i1, i2))
-        else:
-            result.append(model.expand_lines(i1, i2))
-    return result
-
-
 class IndentBar(ButtonBar):
     def __init__(self, parent):
         ButtonBar.__init__(self, parent, exclusive=False)
@@ -565,10 +549,12 @@ class StyleInspector(SidePanel):
         self.set_parproperties(alignment=variant)
         
     def on_indent(self, event):
-        self._apply_to_ranges(self.get_parrange(), self.editor.indent)
+        editor = self.editor
+        editor.apply_to_ranges(editor.par_ranges(), editor.indent)
 
     def on_dedent(self, event):
-        self._apply_to_ranges(self.get_parrange(), self.editor.dedent)
+        editor = self.editor
+        editor.apply_to_ranges(editor.par_ranges(), editor.dedent)
 
     def on_policy(self, event):
         if self.policy.GetValue():
@@ -679,16 +665,6 @@ class StyleInspector(SidePanel):
 
 
 
-    def _apply_to_ranges(self, ranges, action):
-        """Run action() once per range, with editor.selection set to that range."""
-        editor = self.editor
-        saved = editor.selection
-        with editor.atomic():
-            for i1, i2 in ranges:
-                editor.selection = (i1, i2)
-                action()
-        editor.selection = saved
-
     def on_superscript(self, event=None):
         if self.superscript.GetValue():
             self.subscript.SetValue(False)
@@ -704,41 +680,25 @@ class StyleInspector(SidePanel):
             self.set_char_properties(vertical_position='normal')
 
     def clear_properties(self, *keys):
-        self._apply_to_ranges(self.get_range(),
-            lambda: self.editor.clear_properties(*keys))
+        editor = self.editor
+        editor.apply_to_ranges(editor.char_ranges(),
+                               lambda: editor.clear_properties(*keys))
 
     def set_char_properties(self, **properties):
-        """Apply character properties: to the selection, or to the input
-        style when there is no selection."""
-        ranges = self.get_range()
-        if ranges == [(self.editor.index, self.editor.index)]:
-            editor = self.editor
-            editor.current_style = dict(editor.current_style, **properties)
-        else:
-            self._apply_to_ranges(ranges,
-                lambda: self.editor.set_properties(**properties))
+        self.editor.set_char_properties(**properties)
 
     def clear_char_properties(self, *keys):
-        """Clear character properties: from the selection, or from the
-        input style when there is no selection."""
-        ranges = self.get_range()
-        if ranges == [(self.editor.index, self.editor.index)]:
-            editor = self.editor
-            style = dict(editor.current_style)
-            for key in keys:
-                style.pop(key, None)
-            editor.current_style = style
-        else:
-            self._apply_to_ranges(ranges,
-                lambda: self.editor.clear_properties(*keys))
+        self.editor.clear_char_properties(*keys)
 
     def set_parproperties(self, **properties):
-        self._apply_to_ranges(self.get_parrange(),
-            lambda: self.editor.set_parproperties(**properties))
+        editor = self.editor
+        editor.apply_to_ranges(editor.par_ranges(),
+                               lambda: editor.set_parproperties(**properties))
 
     def clear_parproperties(self, *keys):
-        self._apply_to_ranges(self.get_parrange(),
-            lambda: self.editor.clear_parproperties(*keys))
+        editor = self.editor
+        editor.apply_to_ranges(editor.par_ranges(),
+                               lambda: editor.clear_parproperties(*keys))
 
     def on_size(self, event=None):
         try:
@@ -811,7 +771,7 @@ class StyleInspector(SidePanel):
             # Undo entry: delete the new style (restore_to=None means delete).
             editor.add_undo((undo_basestyle_change, self.basestyles, new_name, None, new_style))
             self.basestyles.set(new_name, new_style)
-            self._apply_to_ranges(self.get_parrange(),
+            editor.apply_to_ranges(editor.par_ranges(),
                 lambda: editor.set_parproperties(base=new_name))
             self._clear_overrides(overrides - {'base'})
 
@@ -862,7 +822,7 @@ class StyleInspector(SidePanel):
         ranges = [(j1, j2) for j1, j2, _ in iter_newlines(texel, 0)
                   if textmodel.get_parstyle(j1).get('base') == name]
         with editor.atomic():
-            self._apply_to_ranges(ranges,
+            editor.apply_to_ranges(ranges,
                 lambda: editor.clear_parproperties('base'))
             # Add stylesheet undo last so it's applied first when undoing,
             # ensuring the style exists before paragraph bases are restored.
@@ -881,28 +841,6 @@ class StyleInspector(SidePanel):
         if not r.get('base'):
             r['base'] = stylesheet.normal_key()
         return r
-
-    def get_range(self):
-        """Return list of (i1, i2) ranges for the current selection.
-
-        Without a selection the word at the cursor, else [(index, index)]
-        (the cursor only: the next input).
-        """
-        selected = self.editor.selected_ranges()
-        if not selected:
-            i = self.editor.index
-            return [self.editor.word_at(i) or (i, i)]
-        return selected
-
-    def get_parrange(self):
-        """Return list of (i1, i2) ranges extended to cover complete lines."""
-        editor = self.editor
-        selected = editor.selected_ranges()
-        target = editor.target
-        if selected:
-            return paragraph_ranges(target, selected)
-        i = editor.index
-        return [target.expand_lines(i, i)]
 
     _stylenames = ()
 

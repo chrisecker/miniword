@@ -400,23 +400,66 @@ class Editor(UndoRedo):
         info = self._set_styles, self.flow, i1, styles
         self.add_undo(info)
 
-    def toggle_property(self, key):
-        """Switch a character property (e.g. 'italic') on or off: for the
-        selection - on unless its first character has it -, else for the
-        word at the cursor, else for the next input."""
-        selection = self.selection
-        if not self.has_selection():
+    def apply_to_ranges(self, ranges, action):
+        """Run action() once per range, with the selection set to that
+        range, as one undo step."""
+        saved = self.selection
+        with self.atomic():
+            for i1, i2 in ranges:
+                self.selection = (i1, i2)
+                action()
+        self.selection = saved
+
+    def char_ranges(self):
+        """Ranges for character properties: the selected ones (see
+        selected_ranges), else the word at the cursor, else none (then
+        they are for the next input)."""
+        ranges = self.selected_ranges()
+        if not ranges:
             word = self.word_at(self.index)
-            if word is None:
-                style = self.get_current_style()
-                self.current_style = dict(style, **{key: not style.get(key)})
-                return
-            self.selection = word  # silently, as in Word and Pages
-        try:
-            on = not self.target.get_style(min(self.selection)).get(key)
-            self.set_properties(**{key: on})
-        finally:
-            self.selection = selection
+            if word is not None:
+                ranges = [word]
+        return ranges
+
+    def par_ranges(self):
+        """Ranges for paragraph properties: the selected table cells
+        (complete paragraphs already), else the selection or the cursor,
+        extended to complete paragraphs."""
+        s1, s2 = self.selected_range()
+        if s1 < s2:
+            cells = self.controller.selected(s1, s2)
+            if cells:
+                return cells
+        return [self.target.expand_lines(s1, s2)]
+
+    def set_char_properties(self, **properties):
+        """Set character properties, see char_ranges."""
+        ranges = self.char_ranges()
+        if ranges:
+            self.apply_to_ranges(
+                ranges, lambda: self.set_properties(**properties))
+        else:
+            self.current_style = dict(self.current_style, **properties)
+
+    def clear_char_properties(self, *keys):
+        """Clear character properties, see char_ranges."""
+        ranges = self.char_ranges()
+        if ranges:
+            self.apply_to_ranges(ranges, lambda: self.clear_properties(*keys))
+        else:
+            self.current_style = {key: value for key, value
+                                  in self.current_style.items()
+                                  if key not in keys}
+
+    def toggle_property(self, key):
+        """Switch a character property (e.g. 'italic'): on unless the first
+        character has it, see char_ranges."""
+        ranges = self.char_ranges()
+        if ranges:
+            on = not self.target.get_style(ranges[0][0]).get(key)
+        else:
+            on = not self.current_style.get(key)
+        self.set_char_properties(**{key: on})
 
     def word_at(self, j):
         """(j1, j2) of the word that j lies within (not at its start or
@@ -887,6 +930,22 @@ def test_03c():
     assert editor.root.get_parstyle(3).get('alignment') == 'right'
     editor.undo()
     assert editor.root.get_parstyle(3).get('alignment') != 'right'
+
+
+def test_03d():
+    "toggle_property (Ctrl+B) with a backward selection (cursor before "
+    "the anchor), with undo"
+    editor = Editor()
+    editor.insert_text('Hello\nWorld End')
+    editor.index = 10
+    editor.set_index(6, extend=True)
+    assert editor.selection == (10, 6)
+    editor.toggle_property('bold')
+    assert [bool(editor.root.get_style(i).get('bold'))
+            for i in range(5, 11)] == [False] + 4 * [True] + [False]
+    assert editor.selection == (10, 6)
+    editor.undo()
+    assert not editor.root.get_style(6).get('bold')
 
 
 def test_04():

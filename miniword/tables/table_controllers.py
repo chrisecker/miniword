@@ -373,6 +373,8 @@ class MatrixController(TableControllerBase):
         self.editor.canvas.to_clipboard(result)
 
     def handle_action(self, action, shift):
+        if action in ('bold', 'italic', 'underline'):  # the selected cells
+            return super().handle_action(action, shift)
         ctx = create_ctx(self.editor)
         i = ctx.index
         texel = self.texel

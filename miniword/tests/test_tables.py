@@ -421,7 +421,6 @@ def test_EDIT_1():
 
 def test_EDIT_2():
     "EDIT-2: paragraph properties of selected cells change only those cells"
-    from ..ui.styleinspector import paragraph_ranges
     from ..textmodel.utils import iter_leafes
     tbl = from_strings([['aa', 'bb'], ['cc', 'dd']])
     model = TextModel()
@@ -442,9 +441,10 @@ def test_EDIT_2():
         model.texel = doc_texel('x', None,
                                 from_strings([['aa', 'bb'], ['cc', 'dd']]),
                                 None, 'y')
-        # MatrixController.selected: content plus separator per cell
+        # MatrixController.selected: content plus separator per cell,
+        # complete paragraphs (Editor.par_ranges takes them as they are)
         cells = [(t0 + a, t0 + b) for a, b in tbl.get_cell_ranges(*rect)]
-        for i1, i2 in paragraph_ranges(model, cells):
+        for i1, i2 in cells:
             model.set_parproperties(i1, i2, alignment='right')
         assert alignments() == (expected, [None, None]), rect
 
@@ -452,9 +452,28 @@ def test_EDIT_2():
     model.texel = doc_texel('x', None,
                             from_strings([['aa', 'bb'], ['cc', 'dd']]),
                             None, 'y')
-    (i1, i2), = paragraph_ranges(model, [(t0 + 10, t0 + 11)])  # in 'dd'
+    i1, i2 = model.expand_lines(t0 + 10, t0 + 11)  # in 'dd'
     model.set_parproperties(i1, i2, alignment='center')
     assert alignments() == ([None, None, None, 'center'], [None, None])
+
+
+def test_EDIT_3():
+    "EDIT-3: Editor.par_ranges: a selection from outside into a table "
+    "covers the whole table and its paragraph; inside a cell just the "
+    "cell's paragraph"
+    from ..texteditor.editor import Editor
+    model = TextModel()
+    model.texel = doc_texel('x', None, from_strings([['aa', 'bb'],
+                                                     ['cc', 'dd']]),
+                            None, 'y')
+    editor = Editor(model)
+    editor.selection = (4, 0)  # from 'aa' backward to 'x'
+    assert editor.par_ranges() == [(0, 16)]
+    editor.selection = (4, 5)  # in 'aa'
+    assert editor.par_ranges() == [(3, 6)]
+    editor.selection = None
+    editor.index = 16  # 'y', no selection
+    assert editor.par_ranges() == [(16, 18)]
 
 
 # FILE - saving and loading

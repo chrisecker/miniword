@@ -176,15 +176,12 @@ class LinksPanel(SidePanel):
         ranges = self.link_ranges()
         if not ranges:
             return
-        with editor.atomic():
-            saved = editor.selection
-            for i1, i2 in ranges:
-                editor.selection = (i1, i2)
-                if url:
-                    editor.set_properties(href=url, underline=True)
-                else:
-                    editor.clear_properties('href', 'underline')
-            editor.selection = saved
+        if url:
+            editor.apply_to_ranges(ranges, lambda: editor.set_properties(
+                href=url, underline=True))
+        else:
+            editor.apply_to_ranges(
+                ranges, lambda: editor.clear_properties('href', 'underline'))
         self.reset_url.set_x(bool(url))
 
     def clear_href(self):
