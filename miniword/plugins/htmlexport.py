@@ -97,11 +97,8 @@ def paragraphs(texels):
 def image_html(image):
     """An img element of image as shown: its data embedded (cropped: as
     PNG), else its path; its size as drawn."""
-    import io
     from miniword.images.images import image_mime
-    from miniword.images.imageio import decode_cached, content_of, \
-        crop_surface
-    from miniword.images.svg import is_svg, raster
+    from miniword.images.imageio import decode_cached, content_of, png_of
     data = content_of(image)
     decoded = decode_cached(data) if data else None
     size = ''
@@ -110,12 +107,7 @@ def image_html(image):
         if image.crop:
             cl, cr, ct, cb = image.crop
             w, h = w - cl - cr, h - ct - cb
-            stream = io.BytesIO()
-            cropped = crop_surface(decoded.bitmap, cl, ct, w, h)
-            if is_svg(data):
-                cropped = raster(cropped, 2)  # 2 px per pt: sharp enough
-            cropped.write_to_png(stream)
-            data = stream.getvalue()
+            data = png_of(image)
         size = ' width="%d" height="%d"' % (  # 1 px is drawn as 1 pt
             round(w * image.scale_x), round(h * image.scale_y))
     if data:

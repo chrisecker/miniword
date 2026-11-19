@@ -217,9 +217,14 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
     # --- clipboard ---
     
     def to_clipboard(self, textmodel):
+        from ..images.images import Image
+        from ..images.imageio import png_of
         text = textmodel.get_text()
         dump = txlio.dumps(textmodel, self.builder.stylesheet).encode('utf-8')
         html = self.copy_html(textmodel)
+        png = None  # a single image also as a bitmap, for other programs
+        if isinstance(textmodel.texel, Image):
+            png = png_of(textmodel.texel)
         def make_data():
             plain = wx.TextDataObject()
             plain.SetText(text)
@@ -229,6 +234,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             data.Add(txl, preferred=True)
             if html:
                 data.Add(wx.HTMLDataObject(html))
+            if png:
+                image = wx.Image(io.BytesIO(png), wx.BITMAP_TYPE_PNG)
+                data.Add(wx.BitmapDataObject(wx.Bitmap(image)))
             data.Add(plain)
             return data
         self.set_clipboard(make_data)

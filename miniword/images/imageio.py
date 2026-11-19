@@ -138,6 +138,26 @@ def load_urls(texel):
     return sum(not load_url(url) for url in unloaded_urls(texel))
 
 
+def png_of(image):
+    """PNG data of an Image texel as shown: cropped, SVG rasterized (2 px
+    per pt); None without data that can be decoded."""
+    import cairocffi as cairo
+    from .svg import raster
+    data = decode_cached(content_of(image))
+    if data is None:
+        return None
+    surface = data.bitmap
+    if image.crop:
+        cl, cr, ct, cb = image.crop
+        surface = crop_surface(surface, cl, ct, data.width_px - cl - cr,
+                               data.height_px - ct - cb)
+    if isinstance(surface, cairo.RecordingSurface):
+        surface = raster(surface, 2)
+    stream = io.BytesIO()
+    surface.write_to_png(stream)
+    return stream.getvalue()
+
+
 def crop_surface(surface, cx, cy, cw, ch):
     """Return a new surface of the same kind (ImageSurface, or
     RecordingSurface: SVG) containing only the (cx, cy, cw, ch) region."""
