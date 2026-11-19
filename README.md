@@ -1,21 +1,22 @@
 # MiniWord
 
-**Real pages. Plain files.**
+**Between word processor and Markdown.**
 
-A small desktop word processor that typesets real pages and stores your documents as readable text: diff them, script them, extend MiniWord in Python.
+A small desktop word processor with page layout and a readable plain text file format. Opens and saves Markdown, extensible in Python.
 
 **[⬇ Download for Windows, macOS and Linux](https://github.com/chrisecker/miniword/releases)**
 
 <!-- hero.png is exported from screenshots/hero/hero.svg (Inkscape) -->
 ![MiniWord editing a page with a photo, footnote and table; the inspector shows the local formatting of the selected words](https://codeberg.org/chrisecker/miniword/raw/branch/main/screenshots/hero/hero.png)
 
-## Why MiniWord
+## Features
 
-- **Real page layout:** headers and footers, footnotes, tables, images and hyphenation, typeset by MiniWord itself, so the page looks the same every time.
-- **Your files stay readable:** a simple plain text format that works with git, diff, scripts and AI tools.
-- **Markdown in, PDF out:** open Markdown files and export PDFs with selectable text and embedded fonts.
-- **Native and fast:** a desktop app that starts in a blink. No browser, no account, no cloud.
-- **Hackable:** Python plugins add menu commands and import, export and paste filters.
+- **Page layout:** headers and footers, footnotes, tables, images, hyphenation.
+- **Readable file format:** plain text, so documents work with git and diff.
+- **Markdown:** opens and saves Markdown files.
+- **PDF export:** with selectable text and embedded fonts.
+- **Desktop application:** runs locally, no account needed.
+- **Plugins:** written in Python, for menu commands and import, export and paste filters.
 
 ## Status
 
