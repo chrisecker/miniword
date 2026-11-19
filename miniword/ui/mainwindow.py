@@ -146,6 +146,28 @@ def note_file(path):
     remember_dir(path)
 
 
+def moved_index(old, new, index):
+    """index in the text old, moved to the text new (e.g. a file changed
+    outside, reloaded): in the same paragraph - found by comparing the
+    paragraphs -, at the same position, at most its end."""
+    import difflib
+    old_pars, new_pars = old.split('\n'), new.split('\n')
+    k = old.count('\n', 0, index)  # the paragraph of index
+    offset = index - (old.rfind('\n', 0, index) + 1)
+    matcher = difflib.SequenceMatcher(None, old_pars, new_pars,
+                                      autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if i1 <= k < i2:
+            break
+    if j2 > j1:  # equal or changed
+        k = j1 + min(k - i1, j2 - j1 - 1)
+    else:  # the paragraph is gone: the next one, at its start
+        k, offset = j1, 0
+    k = min(k, len(new_pars) - 1)
+    start = sum(len(p) + 1 for p in new_pars[:k])
+    return start + min(offset, len(new_pars[k]))
+
+
 def _miniword_dir():
     if sys.platform == 'win32':
         base = os.environ.get('APPDATA', os.path.expanduser('~'))
@@ -1191,12 +1213,27 @@ class MainFrame(wx.Frame, ViewBase):
             wx.MessageBox("Document has been modified. Please save your changes first.",
                           "Reload", wx.OK | wx.ICON_WARNING, self)
             return
-        index = self.editor.index
+        editor = self.editor
+        old = editor.root.get_text()
+        index = editor.index if editor.flow == 0 else 0  # footnote: the start
         from ..core.document import Document
         doc = Document.load(self._current_path)
         self.replace_document(doc)
-        self.editor.index = min(index, len(self.editor.root))
+        self.editor.index = moved_index(old, self.editor.root.get_text(),
+                                        index)
         self._update_title()
+        wx.CallAfter(self.show_cursor)  # after the menu: it takes the focus
+
+    def show_cursor(self):
+        """Scroll to the cursor and give the text area the focus (the
+        layout as far as the cursor first: a new canvas has none)."""
+        if not self:  # closed meanwhile
+            return
+        canvas = self.canvas
+        canvas.builder.assure_index(self.editor.index)
+        canvas.queued_update_scroll()
+        canvas.adjust_viewport()
+        canvas.SetFocus()
 
     def print_document(self):
         import tempfile, subprocess
@@ -1596,7 +1633,8 @@ def test_10():
             frame.GetMenuBar().FindMenu('Insert'))
         expected = {'Ctrl+Shift+Space': '\u00a0', 'Ctrl+Shift+-': '\u2011',
                     'Ctrl+Alt+-': '\u00ad'}
-        items = menu.GetMenuItems()
+        items = [item for item in menu.GetMenuItems()  # with a shortcut
+                 if '\t' in item.GetItemLabel()]
         accels = [item.GetItemLabel().split('\t')[1] for item in items]
         assert sorted(accels) == sorted(expected)
         for item, accel in zip(items, accels):
@@ -1650,3 +1688,17 @@ def test_11():
         get_config = saved_get_config
         frame.Destroy()
         app.Yield()
+
+
+def test_moved_index():
+    "moved_index: the cursor stays in its paragraph when paragraphs are "
+    "inserted, removed or changed (reload)"
+    old = 'one\ntwo three\nfour\n'
+    i = old.index('three')
+    for new, expected in (('one\nNEW\ntwo three\nfour\n', 'three'),
+                          ('two three\nfour\n', 'three'),
+                          ('one\nTWO three!\nfour\n', 'three!'),
+                          ('one\nfour\n', 'four')):  # gone: the next one
+        j = moved_index(old, new, i)
+        assert new[j:].startswith(expected), (new, j)
+    assert moved_index(old, '', len(old)) == 0
