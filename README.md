@@ -7,7 +7,7 @@ A small desktop word processor that typesets real pages and stores your document
 **[⬇ Download for Windows, macOS and Linux](https://github.com/chrisecker/miniword/releases)**
 
 <!-- hero.png is exported from screenshots/hero/hero.svg (Inkscape) -->
-![MiniWord editing a page with a photo, footnote and table; the inspector shows the local formatting of the selected words](https://codeberg.org/chrisecker/miniword/raw/branch/readme/screenshots/hero/hero.png)
+![MiniWord editing a page with a photo, footnote and table; the inspector shows the local formatting of the selected words](https://codeberg.org/chrisecker/miniword/raw/branch/main/screenshots/hero/hero.png)
 
 ## Why MiniWord
 
@@ -23,14 +23,14 @@ MiniWord is young but already usable. Please keep backups of important documents
 
 ## Install
 
-Download the installer for Windows (`.exe`), macOS (`.dmg`) or Linux (`.deb`, `.rpm`) from the [Releases page](https://github.com/chrisecker/miniword/releases). On Linux, MiniWord can also be installed with pip. Details and other systems: see [INSTALL.md](INSTALL.md).
+Download the installer for Windows (`.exe`), macOS (`.dmg`) or Linux (`.deb`, `.rpm`) from the [Releases page](https://github.com/chrisecker/miniword/releases). On Linux, MiniWord can also be installed with pip. Details and other systems: see [INSTALL.md](https://codeberg.org/chrisecker/miniword/src/branch/main/INSTALL.md).
 
 ## Documentation
 
-- [Command line](docs/commandline.md): convert documents without a window, e.g. `miniword report.md -o report.pdf`
-- [Plugins](docs/plugins.md): install Python plugins, with examples
-- [File format](docs/txl_format.md): the `.txl` format
-- [Hacking](docs/hacking.md): run the tests and demos
+- [Command line](https://codeberg.org/chrisecker/miniword/src/branch/main/docs/commandline.md): convert documents without a window, e.g. `miniword report.md -o report.pdf`
+- [Plugins](https://codeberg.org/chrisecker/miniword/src/branch/main/docs/plugins.md): install Python plugins, with examples
+- [File format](https://codeberg.org/chrisecker/miniword/src/branch/main/docs/txl_format.md): the `.txl` format
+- [Hacking](https://codeberg.org/chrisecker/miniword/src/branch/main/docs/hacking.md): run the tests and demos
 
 ## License
 

@@ -10,9 +10,9 @@
   <defs>
     <style>
       .label { font-family: 'Noto Sans', 'DejaVu Sans', sans-serif;
-               font-size: 27px; font-weight: bold; fill: #2b2b2b; }
+               font-size: 27px; font-weight: bold; fill: #e95420; }
       .sub   { font-family: 'Noto Sans', 'DejaVu Sans', sans-serif;
-               font-size: 21px; fill: #5a5a5a; }
+               font-size: 21px; fill: #8c8c8c; }
       .lead  { fill: none; stroke: #e95420; stroke-width: 2.5;
                stroke-linecap: round; stroke-linejoin: round; }
       .dot   { fill: #e95420; }
@@ -20,7 +20,7 @@
     </style>
   </defs>
 
-  <g inkscape:groupmode="layer" inkscape:label="Background" id="layer-background">
+  <g inkscape:groupmode="layer" inkscape:label="Background" id="layer-background" style="display:none">
     <rect x="0" y="0" width="1660" height="1000" rx="24" fill="#f4f1ec"/>
   </g>
 
