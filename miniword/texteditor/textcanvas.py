@@ -14,7 +14,7 @@ import wx
 import string
 import sys
 from math import ceil
-from ..footnotes.footnotes import footnote_anchored_at
+from ..footnotes.footnotes import footnote_anchored_at, FootnoteAnchorBox
 from ..io import txlio
 from ..io.texeltreeformat import ParseError
 
@@ -401,9 +401,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
         flow  = self.layout.get_flow(x, y)
         i     = self.layout.get_index(x, y, flow)
         if i is not None and event.ControlDown():
-            # the anchor just before i (nested ones in the footnote flow)
-            fn_offset = footnote_anchored_at(editor.root.texel, flow, i - 1)
-            if fn_offset is not None:
+            found = self.box_under(x, y)
+            if found and isinstance(found[2], FootnoteAnchorBox):
+                fn_offset = footnote_anchored_at(editor.root.texel, *found[:2])
                 editor.switch_target(1, fn_offset)
                 editor.set_index(editor.local_idx(fn_offset))
                 wx.CallAfter(self.adjust_viewport)
@@ -436,13 +436,9 @@ class TextCanvas(wx.ScrolledWindow, ViewBase):
             flow    = self.layout.get_flow(x, y)
             i       = self.layout.get_index(x, y, flow)
             is_link = False
-            if i is not None:
-                if footnote_anchored_at(editor.root.texel, flow, i - 1) \
-                        is not None:
-                    is_link = True
-                elif flow == 0:
-                    style = editor.root.get_style(max(0, i - 1))
-                    is_link = bool(style.get('href', ''))
+            if i is not None and flow == 0:
+                style = editor.root.get_style(max(0, i - 1))
+                is_link = bool(style.get('href', ''))
             found = self.box_under(x, y)
             if found and found[2].pointer_at(*found[3]) == 'hand':
                 is_link = True  # a click does something

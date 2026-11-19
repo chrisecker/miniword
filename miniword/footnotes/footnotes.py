@@ -101,6 +101,9 @@ class FootnoteAnchorBox(NewlineBox):
     def __repr__(self):
         return 'FNA(%s)' % self.display
 
+    def pointer_at(self, x, y):
+        return 'hand'  # Ctrl+click: to the footnote
+
     def draw(self, x, y, dc):
         self.device.set_style(self.style, dc)
         self.device.draw_text(self.display, x, y, dc)
