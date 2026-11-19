@@ -451,25 +451,9 @@ class TablePanel(SidePanel):
         r2, c2 = table.get_coord(max(i1, i2))
         return min(r1, r2), min(c1, c2), max(r1, r2), max(c1, c2)
 
-    def _replace_table(self, offset, table, new_table):
-        """Replace table at offset with new_table, as one undo-able edit."""
-        view = self._view
-        new = view.target.create_textmodel()
-        new.texel = new_table
-        i = view.abs_idx(offset)
-        n = length(table)
-        with view.atomic():
-            view.add_undo(view._remove(view.flow, i, i+n))
-            view.add_undo(view._insert(view.flow, i, new))
-
     def _on_header(self, event):
-        table, offset = self._find_table_texel()
-        if table is None:
-            return
-        new_table = table.set_nheader(1 if event.IsChecked() else 0)
-        if new_table is table:
-            return
-        self._replace_table(offset, table, new_table)
+        nheader = 1 if event.IsChecked() else 0
+        self._apply_to_table(lambda table, *_: table.set_nheader(nheader))
 
     def _apply_to_table(self, fn):
         """Find table, apply fn(table, r1, c1, r2, c2) → new_table, commit via undo."""
@@ -480,7 +464,7 @@ class TablePanel(SidePanel):
         new_table = fn(table, r1, c1, r2, c2)
         if new_table is table:
             return
-        self._replace_table(offset, table, new_table)
+        self._view.replace_texel(self._view.abs_idx(offset), table, new_table)
 
     # --- border preset ---
 

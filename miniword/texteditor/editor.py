@@ -301,16 +301,22 @@ class Editor(UndoRedo):
         self.replace_texel(i1, texel, new_texel)
 
     def replace_texel(self, i1, texel, new_texel):
-        """Replace the texel at i1 by new_texel (one undo step)."""
+        """Replace the texel at i1 by new_texel (one undo step). Cursor and
+        selection in it stay if its length does, else the cursor goes to
+        its start."""
         new = self.target.create_textmodel()
         new.texel = new_texel
         j = self.local_idx(i1)
+        n = length(texel)
+        index, selection = self.index, self.selection
         with self.atomic():
-            self.add_undo(self._remove(self.flow, i1, i1+length(texel)))
+            self.add_undo(self._remove(self.flow, i1, i1+n))
             self.add_undo(self._insert(self.flow, i1, new))
-        # keep the cursor on the (replaced) texel, so a click-installed
-        # controller (e.g. ImageSizeController) stays installed
-        self.index = j
+        if length(new_texel) == n and j <= index <= j+n:
+            self.index = index
+            self.selection = selection
+        else:
+            self.index = j
 
     def insert_newline(self):
         """Enter: split the paragraph, both parts keep its style - at the
