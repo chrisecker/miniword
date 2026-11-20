@@ -24,7 +24,9 @@ from .colorize import colorizers
 ELEMENTS = {'rule': ("Rule", "Horizontal rule", insert_rule),
             'checkbox': ("Task", "Checkbox", insert_checkbox),
             'code': ("Code", "Code block", insert_code),
-            'raw': ("Raw", "Raw HTML", insert_raw)}
+            'raw': ("Raw",
+                    "Embedded code in a language such as HTML, Markdown or TeX",
+                    insert_raw)}
 
 
 def element_at(editor, j):
