@@ -79,6 +79,18 @@ _BLOCK_TAGS = ({'p', 'blockquote', 'pre', 'li', 'table',
                 'tr', 'th', 'td'} | set(_HEADINGS))
 
 
+def drop_last_br(runs):
+    """Drop a <br> at the end of a block (as a browser does): it gives an
+    empty block its height, e.g. <p><br></p>, and breaks no line."""
+    for i in range(len(runs) - 1, -1, -1):
+        text, props = runs[i]
+        if props.get('_br'):
+            del runs[i]
+            return
+        if text.strip() or any(k.startswith('_') for k in props):
+            return  # text, an image, ... after it
+
+
 class _HTMLBlockBuilder(HTMLParser):
     """Walks HTML and produces a block list: (ptype, indent, runs) or
     ('table', grid) tuples, fed into mdfilter._build_blocks()."""
@@ -110,6 +122,7 @@ class _HTMLBlockBuilder(HTMLParser):
         return self._props_stack[-1]
 
     def _flush_block(self):
+        drop_last_br(self._runs)
         # whitespace only (e.g. around a browser's fragment): no block
         if any(t.strip() or p.get('_image') for t, p in self._runs):
             ptype, indent = self._block_stack[-1]
@@ -252,8 +265,10 @@ class _HTMLBlockBuilder(HTMLParser):
             self._props_stack.append(props)
         elif tag == 'a' and attrs.get('href'):
             self._props_stack.append(dict(self._props, href=attrs['href']))
-        elif tag == 'br':
-            self._append(' ')
+        elif tag == 'br' and self._in_pre:
+            self._append('\n')
+        elif tag == 'br':  # a line break in the paragraph
+            self._runs_here().append(('', {'_br': True}))
         elif tag == 'input' and attrs.get('type') == 'checkbox':
             self._runs_here().append(('', {'_checkbox': 'checked' in attrs}))
         elif tag == 'img' and attrs.get('src'):  # in a link: with its href
@@ -284,6 +299,7 @@ class _HTMLBlockBuilder(HTMLParser):
                 self._list_stack.pop()
         elif tag in ('td', 'th'):
             text = self._cell_text  # its runs
+            drop_last_br(text)
             self._cell_text = None
             colspan, rowspan = self._cell_span
             for i in range(colspan):
@@ -638,3 +654,24 @@ def test_19():
     assert styles['b'].get('vertical_position') == 'superscript', pars
     assert styles['d'].get('vertical_position') == 'subscript', pars
     assert 'vertical_position' not in styles['O a'], pars
+
+
+def test_20():
+    "<br> breaks the line in a paragraph, a cell and code; not at the end"
+    from miniword.core.document import Document
+    from miniword.core.texels import BR
+    from miniword.io.mdfilter import code_texts
+    from miniword.textmodel.utils import iter_leafes
+    texel = html_text_to_fragment(
+        '<p>Roses are red,<br>violets blue.<br> </p><p><br></p><p>End</p>',
+        Document())
+    brs = [t for *_, t in iter_leafes(texel, 0) if isinstance(t, BR)]
+    assert len(brs) == 1, brs  # not the one at the end
+    assert len(_parse('<p>a<br>b</p><p><br></p><p>End</p>')) == 2  # as before
+    builder = _HTMLBlockBuilder()
+    builder.feed('<table><tr><td>a<br>b<br></td></tr></table>')
+    builder.close()
+    cell = builder.blocks[0][1][0][0]
+    assert cell == [('a', {}), ('', {'_br': True}), ('b', {})], cell
+    assert code_texts(html_text_to_fragment('<pre>x<br>y</pre>',
+                                            Document())) == [('', 'x\ny')]
