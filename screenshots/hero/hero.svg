@@ -56,14 +56,24 @@
       <circle class="dot" cx="410" cy="869" r="5"/>
     </g>
 
-    <!-- 4: local formatting in the inspector, the x reset buttons -->
+    <!-- 4: styles, the style dropdown (line through the menu bar) -->
+    <g id="note-styles">
+      <rect class="frame" x="981" y="95" width="296" height="46" rx="8"/>
+      <path class="lead" d="M 1129,95 V 78 H 1372"/>
+      <text class="label" x="1380" y="88">Styles</text>
+      <text class="sub" x="1380" y="124">Named, saved with</text>
+      <text class="sub" x="1380" y="152">the document</text>
+    </g>
+
+    <!-- 5: direct formatting, the inspector's properties with their
+         x reset buttons -->
     <g id="note-overrides">
-      <rect class="frame" x="1233" y="228" width="30" height="400" rx="8"/>
-      <path class="lead" d="M 1248,628 V 660 H 1372"/>
-      <text class="label" x="1380" y="668">Styles plus</text>
-      <text class="label" x="1380" y="702">direct formatting</text>
-      <text class="sub" x="1380" y="740">Each × resets one</text>
-      <text class="sub" x="1380" y="768">property to the style</text>
+      <rect class="frame" x="988" y="198" width="280" height="484" rx="8"/>
+      <path class="lead" d="M 1248,682 V 700 H 1372"/>
+      <text class="label" x="1380" y="708">plus direct</text>
+      <text class="label" x="1380" y="742">formatting</text>
+      <text class="sub" x="1380" y="780">Each × resets one</text>
+      <text class="sub" x="1380" y="808">property to the style</text>
     </g>
 
   </g>
