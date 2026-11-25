@@ -15,6 +15,7 @@ Example plugins are provided in the `examples/` directory:
 | `wordcount.py`        | Word count of document and selection  |
 | `wordcount_dialog.py` | The same in a dialog that stays open  |
 | `txtfilter.py`        | Filter for importing plain text files |
+| `epubfilter.py`       | Import of EPUB e-books (without DRM)  |
 
 For example, to install the word count dialog on Linux:
 
