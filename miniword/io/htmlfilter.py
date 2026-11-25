@@ -8,7 +8,8 @@
 # actually produce -- paragraphs, headings, bold/italic, lists (incl.
 # nesting), blockquote, pre/code, tables, links, strike, sup/sub,
 # bold/italic/strike/sup/sub from CSS, images (data URIs embedded, else
-# linked). Not covered (Markdown-paste-only for now): footnotes.
+# linked), footnotes (marked as DPUB-ARIA, EPUB or Markdown tools do,
+# see note_area).
 
 import re
 from html.parser import HTMLParser
@@ -79,6 +80,47 @@ _BLOCK_TAGS = ({'p', 'blockquote', 'pre', 'li', 'table',
                 'tr', 'th', 'td'} | set(_HEADINGS))
 
 
+_INLINE_TAGS = _BOLD_TAGS | _ITALIC_TAGS | _STRIKE_TAGS | {
+    'code', 'sup', 'sub', 'span', 'a', 'br', 'img', 'input'}
+_AREA_TYPES = {'footnote', 'footnotes', 'endnote', 'endnotes',
+               'rearnote', 'rearnotes'}   # epub:type
+_NOTE_TYPES = {'footnote', 'endnote', 'rearnote'}
+
+
+def note_area(attrs):
+    """Whether an element's attrs mark footnotes: DPUB-ARIA roles, EPUB
+    types, pandoc and markdown-it (class footnotes), GitHub
+    (data-footnotes)."""
+    return attrs.get('role') in ('doc-endnotes', 'doc-footnote',
+                                 'doc-endnote') \
+        or bool(_AREA_TYPES & set((attrs.get('epub:type') or '').split())) \
+        or 'footnotes' in (attrs.get('class') or '').split() \
+        or 'data-footnotes' in attrs
+
+
+def single_note(attrs):
+    """Whether a note area (see note_area) is one footnote, not a list."""
+    return attrs.get('role') in ('doc-footnote', 'doc-endnote') \
+        or bool(_NOTE_TYPES & set((attrs.get('epub:type') or '').split()))
+
+
+def special(props):
+    """Whether a run is an image, a <br>, ... (see mdfilter._special)."""
+    return any(k.startswith('_') for k in props)
+
+
+def strip_runs(runs):
+    """Drop the whitespace (and a <br>) at the ends of runs."""
+    drop_last_br(runs)
+    while runs and not runs[0][0].strip() and not special(runs[0][1]):
+        del runs[0]
+    while runs and not runs[-1][0].strip() and not special(runs[-1][1]):
+        del runs[-1]
+    if runs:
+        runs[0] = (runs[0][0].lstrip(), runs[0][1])
+        runs[-1] = (runs[-1][0].rstrip(), runs[-1][1])
+
+
 def drop_last_br(runs):
     """Drop a <br> at the end of a block (as a browser does): it gives an
     empty block its height, e.g. <p><br></p>, and breaks no line."""
@@ -87,7 +129,7 @@ def drop_last_br(runs):
         if props.get('_br'):
             del runs[i]
             return
-        if text.strip() or any(k.startswith('_') for k in props):
+        if text.strip() or special(props):
             return  # text, an image, ... after it
 
 
@@ -114,6 +156,10 @@ class _HTMLBlockBuilder(HTMLParser):
         self._rowspans_before_row = set()
         self._cell_text = None       # current cell's runs, or None
         self._cell_span = (1, 1)     # (colspan, rowspan) of the cell being read
+        self._anchors = []   # [runs, start, end, target, id] of <a href="#x">
+        self._area = None    # [tag, depth] of the open footnote area
+        self._note = None    # [tag, depth, id, runs] of the footnote read
+        self._notes = {}     # id: runs of the footnotes
 
     # --- helpers ---
 
@@ -209,13 +255,77 @@ class _HTMLBlockBuilder(HTMLParser):
         self._runs_here().append((text, dict(props or self._props)))
 
     def _runs_here(self):
-        """Where runs go: the current table cell, else the block."""
+        """Where runs go: the footnote being read, the current table cell,
+        else the block; in a footnote area outside a footnote: nowhere."""
+        if self._note is not None:
+            return self._note[3]
+        if self._area is not None:
+            return []
         return self._runs if self._cell_text is None else self._cell_text
+
+    def _area_start(self, tag, attrs):
+        """A start tag in a footnote area: footnotes (elements with an id)
+        are collected, the rest is dropped. False: handle tag as usual (an
+        inline tag in a footnote)."""
+        first = self._area is None
+        if first:
+            self._area = [tag, 0]
+        if self._note is None and attrs.get('id') and \
+                (single_note(attrs) or not first):
+            self._note = [tag, 0, attrs['id'], []]
+        if tag == self._area[0]:
+            self._area[1] += 1
+        note = self._note
+        if note is None:
+            return True
+        if tag == note[0]:
+            note[1] += 1
+        if tag == 'p' and any(t.strip() for t, _ in note[3]):
+            note[3].append(('', {'_br': True}))  # a second paragraph
+        return tag not in _INLINE_TAGS
+
+    def _area_end(self, tag):
+        """An end tag in a footnote area (see _area_start)."""
+        note = self._note
+        inline = note is not None and tag in _INLINE_TAGS
+        if note is not None and tag == note[0]:
+            note[1] -= 1
+            if not note[1]:
+                self._notes[note[2]] = note[3]
+                self._note = None
+        if tag == self._area[0]:
+            self._area[1] -= 1
+            if not self._area[1]:
+                self._area = None
+        return not inline
+
+    def _resolve_notes(self):
+        """Links to footnotes become footnotes; the links back from them
+        are dropped. Back to front, so the indices before stay valid."""
+        notes = self._notes
+        refs = {a[4] for a in self._anchors if a[3] in notes and a[4]}
+        anchors = sorted(self._anchors, key=lambda a: -a[1])
+        numbered = set()  # notes that start with a link back (pandoc: "1.")
+        for runs, start, end, target, _ in anchors:
+            if target in refs:  # a link back, e.g. "↩"
+                del runs[start:end]
+                if not ''.join(t for t, _ in runs[:start]).strip():
+                    numbered.add(id(runs))
+        for note in notes.values():  # after deleting by index
+            strip_runs(note)
+            if id(note) in numbered and note and note[0][0]:
+                note[0] = (note[0][0].lstrip('.): '), note[0][1])
+        for runs, start, end, target, _ in anchors:
+            if notes.get(target):
+                runs[start:end] = [('', {'_footnote': notes[target]})]
 
     # --- HTMLParser callbacks ---
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if self._area is not None or note_area(attrs):
+            if self._area_start(tag, attrs):
+                return
         if tag in _HEADINGS:
             self._start_block(_HEADINGS[tag], 0)
         elif tag == 'blockquote':
@@ -236,6 +346,9 @@ class _HTMLBlockBuilder(HTMLParser):
             self._items.append([ptype, indent, True])
         elif tag == 'p':
             self._start_block('normal', 0)
+        elif tag == 'hr' and \
+                'footnotes-sep' in (attrs.get('class') or '').split():
+            pass  # markdown-it's, before the footnotes
         elif tag == 'hr':
             self._flush_block()
             self._add(_RULE)
@@ -265,6 +378,10 @@ class _HTMLBlockBuilder(HTMLParser):
             self._props_stack.append(props)
         elif tag == 'a' and attrs.get('href'):
             self._props_stack.append(dict(self._props, href=attrs['href']))
+            if attrs['href'].startswith('#'):  # maybe to a footnote
+                runs = self._runs_here()
+                self._anchors.append([runs, len(runs), None,
+                                      attrs['href'][1:], attrs.get('id')])
         elif tag == 'br' and self._in_pre:
             self._append('\n')
         elif tag == 'br':  # a line break in the paragraph
@@ -278,6 +395,10 @@ class _HTMLBlockBuilder(HTMLParser):
             self._runs_here().append((text, dict(self._props, **image)))
 
     def handle_endtag(self, tag):
+        if self._area is not None and self._area_end(tag):
+            return
+        if tag == 'a' and self._anchors and self._anchors[-1][2] is None:
+            self._anchors[-1][2] = len(self._anchors[-1][0])
         if tag in _HEADINGS or tag == 'blockquote' or tag == 'li' or tag == 'p':
             self._end_block()
             if tag == 'li' and self._items:
@@ -342,6 +463,10 @@ class _HTMLBlockBuilder(HTMLParser):
         if self._table is not None:
             self._flush_table()
         self._flush_block()
+        for anchor in self._anchors:  # left open
+            if anchor[2] is None:
+                anchor[2] = len(anchor[0])
+        self._resolve_notes()
 
 
 def html_text_to_fragment(html, target_doc, load=False):
@@ -675,3 +800,58 @@ def test_20():
     assert cell == [('a', {}), ('', {'_br': True}), ('b', {})], cell
     assert code_texts(html_text_to_fragment('<pre>x<br>y</pre>',
                                             Document())) == [('', 'x\ny')]
+
+
+def test_21():
+    "footnotes as pandoc, markdown-it, EPUB and GitHub write them"
+    from miniword.core.document import Document
+    from miniword.footnotes.footnotes import Footnote
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.textmodel.utils import iter_leafes
+    from miniword.textmodel.texeltree import get_text
+    html = (
+        # pandoc
+        '<p>A<a href="#fn1" class="footnote-ref" id="fnref1" role='
+        '"doc-noteref"><sup>1</sup></a> and <a href="#sec">a link</a>.</p>'
+        '<section id="footnotes" class="footnotes" role="doc-endnotes"><hr/>'
+        '<ol>\n<li id="fn1">\n<p>The <em>first</em> note.<a href="#fnref1" '
+        'class="footnote-back" role="doc-backlink">\u21a9\ufe0e</a></p></li>'
+        '</ol></section>'
+        # markdown-it
+        '<p>B<sup class="footnote-ref"><a href="#mfn1" id="mfnref1">[1]</a>'
+        '</sup></p><hr class="footnotes-sep"><section class="footnotes"><ol>'
+        '<li id="mfn1"><p>Second <a href="#mfnref1">\u21a9</a></p></li></ol>'
+        '</section>'
+        # pandoc's EPUB: the number is the link back
+        '<p>P<a href="#pfn1" id="pfnref1" epub:type="noteref">1</a></p>'
+        '<section epub:type="footnotes"><aside epub:type="footnote" id="pfn1">'
+        '\n<p><a href="#pfnref1" role="doc-backlink">1</a>. Pandoc.</p>'
+        '</aside></section>'
+        # EPUB, a note of two paragraphs
+        '<p>C<a epub:type="noteref" href="#n1">1</a></p><aside id="n1" '
+        'epub:type="footnote"><p>Third,</p><p>two paragraphs.</p></aside>'
+        # GitHub
+        '<p>D<sup><a href="#gfn-1" id="gfnref-1" data-footnote-ref>1</a>'
+        '</sup></p><section data-footnotes class="footnotes"><h2 id="label">'
+        'Footnotes</h2><ol><li id="gfn-1"><p>Fourth <a href="#gfnref-1" '
+        'data-footnote-backref>\u21a9</a></p></li></ol></section>')
+    model = TextModel()
+    model.texel = html_text_to_fragment(html, Document())
+    notes = [t for *_, t in iter_leafes(model.texel, 0)
+             if isinstance(t, Footnote)]
+
+    def text(note):
+        m = TextModel()
+        m.set_xtexel(note.content)
+        return m
+
+    assert [text(n).get_text() for n in notes] == [
+        'The first note.', 'Second', 'Pandoc.', 'Third,\x0btwo paragraphs.',
+        'Fourth'], [text(n).get_text() for n in notes]
+    assert text(notes[0]).get_style(4).get('italic') is True
+    t = model.get_text()
+    mark = get_text(notes[0])  # a footnote's character in the text
+    assert t == 'A%s and a link.\nB%s\nP%s\nC%s\nD%s\n' % ((mark,) * 5), \
+        repr(t)
+    link = model.get_style(t.index('a link'))
+    assert link.get('href') == '#sec', link  # not to a footnote: kept
