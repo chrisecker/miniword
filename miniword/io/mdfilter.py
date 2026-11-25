@@ -39,7 +39,7 @@ def _save(doc, path):
 
 def _doc_to_md(doc):
     from miniword.textmodel.utils import iter_paragraphs
-    from miniword.textmodel.texeltree import get_text, NewLine
+    from miniword.textmodel.texeltree import NewLine
     from miniword.tables import Table as TableTexel
     from miniword.core.styles import style_default, updated
     from miniword.mdelements.rule import Rule
@@ -177,10 +177,18 @@ def _doc_to_md(doc):
     if footnotes:
         parts.append('')
         for n, fn in enumerate(footnotes, 1):
-            # content ends with an ENDMARK ('\n'); strip it for the inline definition
-            parts.append('[^%d]: %s'
-                         % (n, _escape(get_text(fn.content)[:-1])))
+            parts.append('[^%d]: %s' % (n, _footnote_md(fn)))
     return '\n'.join(parts) + '\n'
+
+
+def _footnote_md(footnote):
+    """A footnote's content as Markdown inline, for its definition; more
+    paragraphs joined by forced line breaks, continued lines indented."""
+    from miniword.textmodel.utils import iter_paragraphs
+    lines = [_elems_to_inline(elems[:-1]) for _, _, elems
+             in iter_paragraphs(footnote.content, 0)]
+    text = '\\\n'.join(line for line in lines if line)
+    return text.replace('\n', '\n    ')
 
 
 def _table_to_md(table):
@@ -467,7 +475,7 @@ def _scale(size, pixels):
 #                               'right' or None
 #
 # runs: (text, props); special runs carry '_image' (see image_run),
-# '_footnote' (its text), '_br' (forced line break), '_rule' (in a
+# '_footnote' (its runs, or text), '_br' (forced line break), '_rule' (in a
 # paragraph of ptype 'rule'), '_checkbox' (checked or not) or '_html'
 # (the source of an HTML block or inline tag: Raw HTML) instead of text -
 # see _special.
@@ -533,7 +541,7 @@ def _build_blocks(doc, blocks):
 
 def _special(props):
     """The texel of a special run (see _build_blocks), or None."""
-    from miniword.textmodel.texeltree import T, ENDMARK, grouped, Style
+    from miniword.textmodel.texeltree import ENDMARK, grouped, Style
     from miniword.footnotes.footnotes import Footnote
     from miniword.core.texels import BR
     from miniword.mdelements.rule import Rule
@@ -543,7 +551,7 @@ def _special(props):
         style = {k: v for k, v in props.items() if not k.startswith('_')}
         return _image(*props['_image']).set_style(Style(**style))
     if props.get('_footnote'):
-        return Footnote(grouped([T(props['_footnote']), ENDMARK]))
+        return Footnote(grouped([_cell_texel(props['_footnote']), ENDMARK]))
     if props.get('_br'):
         return BR()
     if props.get('_rule'):
@@ -925,7 +933,7 @@ def math_as_text(md):
 
 def _md_blocks(nodes):
     """The blocks (see _build_blocks) of a mistune AST."""
-    notes = {item['attrs']['key']: _plain_text(item.get('children', []))
+    notes = {item['attrs']['key']: _note_runs(item.get('children', []))
              for node in nodes if node.get('type') == 'footnotes'
              for item in node.get('children', [])}
     blocks = []
@@ -1016,6 +1024,22 @@ def _alert(children):
         return 'quote', children
     head = [dict(children[0], children=after[1:])] if after[1:] else []
     return kind, head + children[1:]
+
+
+def _note_runs(nodes):
+    """The runs of a footnote's mistune nodes: its paragraphs, separated
+    by a forced line break (a footnote has one paragraph)."""
+    runs = []
+    for node in nodes:
+        if node.get('type') == 'blank_line':
+            continue
+        if runs:
+            runs.append(('', {'_br': True}))
+        if node.get('type') == 'paragraph':
+            runs += _inline_runs(node.get('children', []))
+        else:  # e.g. a code block
+            runs.append((_plain_text([node]), {}))
+    return runs
 
 
 def _plain_text(nodes):
@@ -2206,3 +2230,25 @@ def test_61():
             assert _doc_to_md(doc) == source, path
         finally:
             _folder = ''
+
+
+def test_62():
+    "a footnote keeps its formatting: import and export"
+    from miniword.footnotes.footnotes import Footnote
+    from miniword.textmodel.textmodel import TextModel
+    from miniword.textmodel.utils import iter_leafes
+    md = ('Hello[^1] world.\n\n[^1]: Some *italic* and **bold** text.\\\n'
+          '    Second line.\n')
+    doc = _load_mistune(md)
+    fns = [t for *_, t in iter_leafes(doc.textmodel.texel, 0)
+           if isinstance(t, Footnote)]
+    assert len(fns) == 1, fns
+    note = TextModel()
+    note.set_xtexel(fns[0].content)
+    # (the forced line break is \x0b)
+    assert note.get_text() == 'Some italic and bold text.\x0bSecond line.', \
+        repr(note.get_text())
+    assert note.get_style(6).get('italic') is True
+    assert note.get_style(17).get('bold') is True
+    assert not note.get_style(0).get('italic')
+    assert _doc_to_md(doc).endswith(md), _doc_to_md(doc)
