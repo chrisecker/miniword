@@ -6,9 +6,9 @@
 #
 # Not a general-purpose HTML importer: covers the tag subset such sources
 # actually produce -- paragraphs, headings, bold/italic, lists (incl.
-# nesting), blockquote, pre/code, tables, links, strike, bold/italic/
-# strike from CSS, images (data URIs embedded, else linked). Not
-# covered (Markdown-paste-only for now): footnotes, sup/sub.
+# nesting), blockquote, pre/code, tables, links, strike, sup/sub,
+# bold/italic/strike/sup/sub from CSS, images (data URIs embedded, else
+# linked). Not covered (Markdown-paste-only for now): footnotes.
 
 import re
 from html.parser import HTMLParser
@@ -34,6 +34,8 @@ _HEADINGS = {'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'h5': 'h5', 'h6': '
 _BOLD_TAGS = {'strong', 'b'}
 _ITALIC_TAGS = {'em', 'i'}
 _STRIKE_TAGS = {'s', 'del', 'strike'}
+_POSITIONS = {'sup': 'superscript', 'sub': 'subscript',
+              'super': 'superscript'}  # tags and CSS vertical-align
 
 
 def clipboard_html(data):
@@ -57,7 +59,8 @@ def _length(value):
 
 
 def _css_props(style):
-    """Char props from a CSS style attribute: bold, italic, strike."""
+    """Char props from a CSS style attribute: bold, italic, strike,
+    superscript/subscript."""
     props = {}
     for item in style.split(';'):
         key, _, value = (s.strip().lower() for s in item.partition(':'))
@@ -69,6 +72,8 @@ def _css_props(style):
         elif key in ('text-decoration', 'text-decoration-line') \
                 and 'line-through' in value:
             props['strike'] = True
+        elif key == 'vertical-align' and value in _POSITIONS:
+            props['vertical_position'] = _POSITIONS[value]
     return props
 _BLOCK_TAGS = ({'p', 'blockquote', 'pre', 'li', 'table',
                 'tr', 'th', 'td'} | set(_HEADINGS))
@@ -237,6 +242,9 @@ class _HTMLBlockBuilder(HTMLParser):
             self._props_stack.append(dict(self._props, italic=True))
         elif tag == 'code':
             self._props_stack.append(dict(self._props, font_family='Courier New'))
+        elif tag in ('sup', 'sub'):
+            self._props_stack.append(dict(
+                self._props, vertical_position=_POSITIONS[tag]))
         elif tag == 'span' or tag in _STRIKE_TAGS:
             props = dict(self._props, **_css_props(attrs.get('style', '')))
             if tag in _STRIKE_TAGS:
@@ -289,7 +297,8 @@ class _HTMLBlockBuilder(HTMLParser):
         elif tag == 'table':
             self._flush_table()
         elif tag in _BOLD_TAGS or tag in _ITALIC_TAGS or tag == 'code' \
-                or tag == 'a' or tag == 'span' or tag in _STRIKE_TAGS:
+                or tag == 'a' or tag == 'span' or tag in _STRIKE_TAGS \
+                or tag in ('sup', 'sub'):
             if len(self._props_stack) > 1:
                 self._props_stack.pop()
 
@@ -616,3 +625,16 @@ def test_18():
         Document())
     images = [t for *_, t in iter_leafes(texel, 0) if isinstance(t, Image)]
     assert [image.style.get('href') for image in images] == ['http://x/ci']
+
+
+def test_19():
+    "sup and sub, as tags and as CSS vertical-align (as htmlexport writes)"
+    pars = _parse('<p>x<sup>2</sup> H<sub>3</sub>O'
+                  ' a<span style="vertical-align:super">b</span>'
+                  ' c<span style="vertical-align:sub">d</span></p>')
+    styles = {t: s for t, s in pars[0][3]}
+    assert styles['2'].get('vertical_position') == 'superscript', pars
+    assert styles['3'].get('vertical_position') == 'subscript', pars
+    assert styles['b'].get('vertical_position') == 'superscript', pars
+    assert styles['d'].get('vertical_position') == 'subscript', pars
+    assert 'vertical_position' not in styles['O a'], pars
