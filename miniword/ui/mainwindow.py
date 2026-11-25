@@ -24,7 +24,7 @@ from .charpanel import CharPanel, BUILTIN, DISPLAY, ENTRIES, \
     user_shortcuts, keys_of
 from ..mdelements import rule, checkbox, code, raw
 from ..images import ImageInspector
-from ..core.config import get_config
+from ..core.config import get_config, config_dir
 from ..core.document import Document
 from ..hyphenation import system_language
 
@@ -170,18 +170,8 @@ def moved_index(old, new, index):
     return start + min(offset, len(new_pars[k]))
 
 
-def _miniword_dir():
-    if sys.platform == 'win32':
-        base = os.environ.get('APPDATA', os.path.expanduser('~'))
-    elif sys.platform == 'darwin':
-        base = os.path.expanduser('~/Library/Application Support')
-    else:
-        base = os.environ.get('XDG_CONFIG_HOME', os.path.expanduser('~/.config'))
-    return os.path.join(base, 'miniword')
-
-
 def _config_path():
-    d = _miniword_dir()
+    d = config_dir()
     os.makedirs(d, exist_ok=True)
     os.makedirs(os.path.join(d, "plugins"), exist_ok=True)
     return os.path.join(d, "config.ini")
@@ -222,7 +212,7 @@ def load_plugins():
 
     from ..core.respath import package_dir
     _builtin = str(package_dir() / 'plugins')
-    plugin_dirs = [os.path.join(_miniword_dir(), "plugins"), _builtin]
+    plugin_dirs = [os.path.join(config_dir(), "plugins"), _builtin]
 
     seen = set()
     paths = []

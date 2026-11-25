@@ -12,6 +12,12 @@ import sys
 import os
 sys.path.insert(0, "./test")
 
+# settings and recent files of the tests go to an empty folder, not to
+# the user's (and the user's settings and plugins don't affect them)
+import tempfile, shutil, atexit
+os.environ['MINIWORD_CONFIG_DIR'] = tempfile.mkdtemp(prefix='miniword-test-')
+atexit.register(shutil.rmtree, os.environ['MINIWORD_CONFIG_DIR'], True)
+
 
 def _to_module_name(name):
     """Turn a filename argument into a dotted module name.
