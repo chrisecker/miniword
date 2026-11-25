@@ -263,7 +263,7 @@ def frames_of(ps, nl, stack):
 
 def blocks_html(pars, basestyles, notes):
     """HTML of the paragraphs pars (see paragraphs)."""
-    from miniword.plugins.mdfilter import beside_blocks
+    from miniword.io.mdfilter import beside_blocks
     normal = basestyles.mk_parstyle(EMPTYSTYLE)
     html = []
     stack = []  # the open frames (see frames_of)

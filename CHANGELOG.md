@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Linux packages are built per architecture and include uharfbuzz and mistune; uharfbuzz is now required.
 - `--markdown` removed: `.md` and `.txt` are offered under "Open with", as with the installers.
 - Installation instructions moved to `INSTALL.md`.
+- Markdown and HTML import/export moved from `miniword/plugins/` to `miniword/io/` (plugins that import them: `miniword.io.mdfilter` etc.). The plugins folder holds only user plugins; a user plugin no longer replaces a built-in module of the same name.
 
 ### Fixed
 - Formatting marks skip pages outside the view (much faster repaint of large documents).

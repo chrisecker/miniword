@@ -370,7 +370,9 @@ def main():
     log = None if args.no_log else args.log
 
     app = wx.App(False)
+    from miniword.io.importexport import load_formats
     from miniword.ui.mainwindow import load_plugins
+    load_formats()
     load_plugins()
     context = Context(args.file, settings, args.page)
     results = {}

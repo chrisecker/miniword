@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 
 """
-Tests for the Markdown styles (plugins/mdstyles.py), following
+Tests for the Markdown styles (io/mdstyles.py), following
 develnotes/markdown_menu_concept.md: presets, features (the Add/Remove
 actions of the Markdown menu) and reading their state. IDs MDS-n.
 
 Run with: python runtests.py miniword/tests/test_mdstyles.py
 """
 
-from ..plugins.mdstyles import STYLE_NAMES, HEADINGS, FEATURES, PRESETS, \
+from ..io.mdstyles import STYLE_NAMES, HEADINGS, FEATURES, PRESETS, \
     preset, set_feature, feature_state, set_font, font_state, set_size, \
     size_state
 
@@ -118,7 +118,7 @@ def test_MDS_9():
 from ..core.document import Document
 from ..textmodel.texeltree import Style
 from ..texteditor.editor import Editor
-from ..plugins.mdstyles import apply_preset, apply_feature, \
+from ..io.mdstyles import apply_preset, apply_feature, \
     document_state, read
 
 
@@ -201,7 +201,7 @@ def test_MDS_15():
 
 def test_MDS_16():
     "MDS-16: Markdown import gets the GitHub styles; paste no page styles"
-    from ..plugins.mdfilter import _register_styles
+    from ..io.mdfilter import _register_styles
     document = Document()
     _register_styles(document)
     assert read(document)[0] == preset('github')[0]
@@ -216,7 +216,7 @@ def test_MDS_16():
 # ---------------------------------------------------------------------
 
 from types import SimpleNamespace
-from ..plugins.mdstyles import menu_items
+from ..io.mdstyles import menu_items
 
 
 def find(items, *path):

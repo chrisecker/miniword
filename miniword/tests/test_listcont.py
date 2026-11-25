@@ -41,7 +41,7 @@ MD = '1. First\n\n   More of it.\n\n   ```python\n   x = 1\n   ```\n' \
 def test_LC_3():
     "LC-3: Markdown import: an item's further paragraph and code block "
     "are continued, on its level"
-    from ..plugins.mdfilter import _load_mistune
+    from ..io.mdfilter import _load_mistune
     from ..textmodel.utils import iter_paragraphs
     document = _load_mistune(MD)
 
@@ -58,7 +58,7 @@ def test_LC_3():
 def test_LC_4():
     "LC-4: Markdown export: the item comes back unchanged, also nested; "
     "no loss reported"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md, _check_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md, _check_md
     for md in (MD, '- a\n  1. b\n\n     more b\n- c\n'):
         document = _load_mistune(md)
         assert _doc_to_md(document) == md
@@ -68,7 +68,7 @@ def test_LC_4():
 def test_LC_5():
     "LC-5: a continued paragraph without an item before it is written as "
     "a normal paragraph"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md
     from ..textmodel.texeltree import Text, NL, grouped
     document = _load_mistune('')
     document.textmodel.texel = grouped([
@@ -117,7 +117,7 @@ def test_LC_6():
 def test_LC_7():
     "LC-7: HTML import: an <li>'s first block is the item, further ones "
     "(paragraphs, code) are continued, on its level"
-    from ..plugins.htmlfilter import _parse
+    from ..io.htmlfilter import _parse
     html = '<ol><li><p>a</p><p>b</p><pre><code>x</code></pre>' \
         '<ul><li>c</li></ul><p>d</p></li><li>e</li></ol>'
     found = [(ptype, indent, ''.join(t for t, _ in runs).strip())

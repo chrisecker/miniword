@@ -1,7 +1,5 @@
-# Markdown import/export plugin for Miniword
-#
-# Install: copy to ~/.miniword/plugins/ or import at app startup:
-#   from examples.mdfilter import *  (registers the filters)
+# Markdown import/export for Miniword; registers its filters when
+# imported (see importexport.load_formats).
 #
 # Parses with mistune (a dependency of Miniword).
 
@@ -765,7 +763,7 @@ def _register_styles(doc, preset='github', overwrite=True, skip=()):
     second, disconnected style under the parser's canonical name doesn't
     also get added.
     """
-    from miniword.plugins.mdstyles import preset as md_preset
+    from miniword.io.mdstyles import preset as md_preset
     styles, _ = md_preset(preset)
     if overwrite and doc.basestyles.contains('normal'):
         doc.basestyles.delete('normal')  # body is the normal style
@@ -797,7 +795,7 @@ def _adopt_existing_styles(textmodel, doc):
     """
     from miniword.textmodel.utils import iter_paragraphs
     from miniword.textmodel.texeltree import NewLine
-    from miniword.plugins.mdstyles import role_keys, ROLES
+    from miniword.io.mdstyles import role_keys, ROLES
 
     role_to_key = role_keys(doc)
     keys = {name: role_to_key.get(ROLES.get(name, name))
@@ -870,7 +868,7 @@ def fragment_to_md(textmodel, doc, mode='link'):
 
 def get_menus(doc):
     """Return plugin menus for doc. Only adds a Markdown menu for MD documents."""
-    from miniword.plugins.mdstyles import menu_items
+    from miniword.io.mdstyles import menu_items
     if getattr(doc, 'home_format', None) not in ('md', 'markdown'):
         return []
     return [("&Markdown", menu_items())]
@@ -2119,7 +2117,7 @@ def test_54():
 
 def test_55():
     "a YAML header becomes Raw Markdown; saved unchanged"
-    from miniword.plugins.htmlexport import html_of
+    from miniword.io.htmlexport import html_of
     header = '---\ntitle: Test\nauthor: CE\n---'
     md = header + '\n\n# Heading\n\ntext\n'
     doc = _load_mistune(md)

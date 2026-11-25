@@ -1,6 +1,6 @@
 # All Markdown constructs
 
-Every construct Miniword supports, written as Miniword saves it: loading and saving this file gives the same text (test in plugins/mdfilter.py).
+Every construct Miniword supports, written as Miniword saves it: loading and saving this file gives the same text (test in io/mdfilter.py).
 
 ## Text
 

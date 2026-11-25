@@ -25,6 +25,7 @@ from .charpanel import CharPanel, BUILTIN, DISPLAY, ENTRIES, \
 from ..mdelements import rule, checkbox, code, raw
 from ..images import ImageInspector
 from ..core.config import get_config, config_dir
+from ..io.importexport import load_formats
 from ..core.document import Document
 from ..hyphenation import system_language
 
@@ -199,53 +200,28 @@ def plugin_menu(frame, items):
 
 
 def load_plugins():
-    """Load plugins from an ordered list of directories; first file wins per name.
-
-    Search order: user config dir, then built-in miniword/plugins/.
+    """Load the user's plugins from the plugins folder in config_dir().
     Returns (tools_items, all_mods):
       tools_items: [(name, mod), ...] for modules with a run() function
       all_mods:    all successfully loaded modules
     """
     import glob
-    import importlib
     import importlib.util
-
-    from ..core.respath import package_dir
-    _builtin = str(package_dir() / 'plugins')
-    plugin_dirs = [os.path.join(config_dir(), "plugins"), _builtin]
-
-    seen = set()
-    paths = []
-    for d in plugin_dirs:
-        for path in sorted(glob.glob(os.path.join(d, "*.py"))):
-            name = os.path.basename(path)
-            if name not in seen:
-                seen.add(name)
-                paths.append(path)
 
     tools_items = []
     all_mods = []
-    for path in paths:
+    folder = os.path.join(config_dir(), "plugins")
+    for path in sorted(glob.glob(os.path.join(folder, "*.py"))):
         try:
             stem = os.path.splitext(os.path.basename(path))[0]
-            if os.path.dirname(os.path.abspath(path)) == os.path.abspath(_builtin):
-                # Built-in plugins are regular package modules. Import them
-                # by package name, not by file path, so they share module
-                # identity with any `from miniword.plugins.X import ...`
-                # done elsewhere in the codebase (e.g. htmlfilter.py imports
-                # from mdfilter.py) -- otherwise the module, including its
-                # side-effecting register_import/register_export calls,
-                # would run a second time under a different sys.modules key.
-                mod = importlib.import_module(f"miniword.plugins.{stem}")
+            mod_name = f"_mw_plugin_{stem}"
+            if mod_name in sys.modules:
+                mod = sys.modules[mod_name]
             else:
-                mod_name = f"_mw_plugin_{stem}"
-                if mod_name in sys.modules:
-                    mod = sys.modules[mod_name]
-                else:
-                    spec = importlib.util.spec_from_file_location(mod_name, path)
-                    mod  = importlib.util.module_from_spec(spec)
-                    sys.modules[mod_name] = mod
-                    spec.loader.exec_module(mod)
+                spec = importlib.util.spec_from_file_location(mod_name, path)
+                mod  = importlib.util.module_from_spec(spec)
+                sys.modules[mod_name] = mod
+                spec.loader.exec_module(mod)
         except Exception as e:
             print(f"Plugin error ({os.path.basename(path)}): {e}")
             continue
@@ -439,7 +415,9 @@ class MainFrame(wx.Frame, ViewBase):
         self.SetDropTarget(_FileDropTarget(self))
 
     def _load_plugins(self):
-        self._plugin_tools, self._plugin_mods = load_plugins()
+        formats = load_formats()
+        self._plugin_tools, mods = load_plugins()
+        self._plugin_mods = formats + mods
         self._register_plugin_menus()
 
     def _register_plugin_menus(self):

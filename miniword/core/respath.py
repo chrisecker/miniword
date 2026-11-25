@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def package_dir():
-    """Root of the miniword package's bundled data (icons, plugins, ...).
+    """Root of the miniword package's bundled data (icons, hyphenation, ...).
 
     On a normal install this is just the package directory. PyInstaller's
     macOS .app bundles split things up: --add-data files land under

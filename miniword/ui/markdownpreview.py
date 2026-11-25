@@ -49,7 +49,7 @@ class MarkdownPreviewFrame(wx.Frame):
 
 def document_to_markdown(document):
     """document as Markdown, embedded images shortened."""
-    from ..plugins.mdfilter import fragment_to_md
+    from ..io.mdfilter import fragment_to_md
     return fragment_to_md(document.textmodel, document, 'short')
 
 
@@ -66,7 +66,7 @@ def _tesla_txl_path():
 def demo_00():
     "Markdown preview of test/tesla.txl"
     from ..core.document import Document
-    from ..plugins import mdfilter  # noqa: F401 -- registers md export
+    from ..io import mdfilter  # noqa: F401 -- registers md export
 
     doc = Document.load(_tesla_txl_path())
 
@@ -83,7 +83,7 @@ def demo_00():
 def test_00():
     "document_to_markdown renders tesla.txl"
     from ..core.document import Document
-    from ..plugins import mdfilter  # noqa: F401 -- registers md export
+    from ..io import mdfilter  # noqa: F401 -- registers md export
 
     doc = Document.load(_tesla_txl_path())
 
@@ -95,7 +95,7 @@ def test_00():
 def test_01():
     "Update button re-renders after an edit"
     from ..core.document import Document
-    from ..plugins import mdfilter  # noqa: F401 -- registers md export
+    from ..io import mdfilter  # noqa: F401 -- registers md export
 
     doc = Document.load(_tesla_txl_path())
 

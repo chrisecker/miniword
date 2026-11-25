@@ -57,7 +57,7 @@ def test_QL_2():
 def test_QL_3():
     "QL-3: the Markdown style 'Quote' gives quote_level 1 (its base "
     "style); without it there is no quote"
-    from ..plugins.mdfilter import _load_mistune
+    from ..io.mdfilter import _load_mistune
     document = _load_mistune('> a\n\nb\n')
     sheet = document.basestyles
     assert sheet.get('quote')['quote_level'] == 1
@@ -100,7 +100,7 @@ def levels(document):
 def test_QL_4():
     "QL-4: Markdown import: each block in a quote gets its depth - "
     "paragraphs, nested quotes, list items, code"
-    from ..plugins.mdfilter import _load_mistune
+    from ..io.mdfilter import _load_mistune
     found = [entry for entry in levels(_load_mistune(MD)) if entry[0]]
     assert found == [('Outer quote', 1, 'normal'),
                      ('Inner quote', 2, 'normal'),
@@ -112,7 +112,7 @@ def test_QL_4():
 def test_QL_5():
     "QL-5: Markdown export: it comes back unchanged (> per level, before "
     "markers and fences); no loss reported; alerts as before"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md, _check_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md, _check_md
     alert = '> [!NOTE]\n> Useful.\n>\n> More.\n'
     for md in (MD, alert):
         document = _load_mistune(md)
@@ -191,7 +191,7 @@ def test_QL_10():
     "QL-10: HTML import: blocks in <blockquote> get its depth (also "
     "with <p>), nested ones deeper; lists and code too"
     from ..core.document import Document
-    from ..plugins.htmlfilter import html_text_to_fragment
+    from ..io.htmlfilter import html_text_to_fragment
     document = Document()
     html = '<blockquote><p>outer</p><blockquote><p>inner</p></blockquote>' \
         '<ul><li>item</li></ul><pre>x = 1</pre></blockquote><p>after</p>'
@@ -205,7 +205,7 @@ def test_QL_10():
 def test_QL_11():
     "QL-11: alerts come back unchanged - with a list or a nested quote "
     "in them; an alert and a quote after it stay two"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md
     for md in ('> [!WARNING]\n> Careful:\n>\n> - one\n> - two\n',
                '> [!TIP]\n> Text\n>\n> > nested\n',
                '> [!NOTE]\n> a\n\n> b\n',

@@ -27,7 +27,7 @@ jobs:
           --icon miniword/icons/miniword.ico
           --add-data "miniword/icons;miniword/icons"
           --add-data "miniword/hyphenation/patterns;miniword/hyphenation/patterns"
-          --add-data "miniword/plugins;miniword/plugins"
+          --collect-submodules miniword.io
           --hidden-import mistune
           --manifest installer/miniword.manifest
       - name: Bundle cairo (wxPython ships none or one with a broken PDF backend)
@@ -67,7 +67,7 @@ jobs:
             --icon miniword/icons/miniword.icns \
             --add-data "miniword/icons:miniword/icons" \
             --add-data "miniword/hyphenation/patterns:miniword/hyphenation/patterns" \
-            --add-data "miniword/plugins:miniword/plugins" \
+            --collect-submodules miniword.io \
             --hidden-import mistune
       - name: File types .txl and .md
         run: python installer/macos_file_types.py dist/MiniWord.app

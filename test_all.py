@@ -98,10 +98,10 @@ modules = [
     "miniword.ui.searchtool",
     "miniword.ui.markdownpreview",
 
-    # plugins
-    "miniword.plugins.mdfilter",
-    "miniword.plugins.htmlfilter",
-    "miniword.plugins.htmlexport",
+    # io: formats
+    "miniword.io.mdfilter",
+    "miniword.io.htmlfilter",
+    "miniword.io.htmlexport",
 ]
 
 total_n = 0

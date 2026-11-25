@@ -31,7 +31,7 @@ def test_HTML_1():
 
 def test_HTML_3():
     "HTML-3: Markdown: an HTML block comes back unchanged"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md, _check_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md, _check_md
     md = 'Text\n\n' + BLOCK + '\n\nmore\n'
     document = _load_mistune(md)
     assert sources(document.textmodel.texel) == [BLOCK]
@@ -42,7 +42,7 @@ def test_HTML_3():
 def test_HTML_4():
     "HTML-4: Markdown: inline HTML becomes Raw HTML in the text and comes "
     "back unchanged, also in a table cell"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md
     for md in ('press <kbd>Ctrl</kbd> now\n',
                '| a            |\n| ------------ |\n| <kbd>b</kbd> |\n'):
         document = _load_mistune(md)
@@ -67,8 +67,8 @@ def test_HTML_6():
     "HTML-6: in the text, collapsed or expanded, Raw is written where it "
     "is: Markdown inline, HTML in the paragraph; alone in its paragraph "
     "a block (HTML: without <p>)"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md
-    from ..plugins.htmlexport import html_of
+    from ..io.mdfilter import _load_mistune, _doc_to_md
+    from ..io.htmlexport import html_of
 
     def html(model):  # without the paragraphs' style
         return re.sub(' style="[^"]*"', '', html_of(model))
@@ -87,7 +87,7 @@ def test_HTML_6():
 def test_HTML_7():
     "HTML-7: Markdown: a blank line in Raw in the text is a reduction "
     "(it would end the paragraph); alone in its paragraph it is none"
-    from ..plugins.mdfilter import _load_mistune, _check_md
+    from ..io.mdfilter import _load_mistune, _check_md
     document = _load_mistune('')
     model = document.textmodel
     raw = RawIcon('<div>\n\n</div>')

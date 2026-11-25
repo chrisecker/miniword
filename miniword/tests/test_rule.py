@@ -39,7 +39,7 @@ def test_RULE_2():
 
 def test_RULE_3():
     "RULE-3: Markdown --- becomes a rule in its own paragraph and back"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md, _check_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md, _check_md
     md = 'a\n\n---\n\nb\n'
     document = _load_mistune(md)
     assert len(rules(document.textmodel.texel)) == 1
@@ -53,7 +53,7 @@ def test_RULE_3():
 
 def test_RULE_4():
     "RULE-4: a rule within text can't be written as Markdown: reported"
-    from ..plugins.mdfilter import _md_doc, _check_md
+    from ..io.mdfilter import _md_doc, _check_md
     document = _md_doc('')
     document.textmodel.texel = Group([Text('a'), Rule(), Text('b'), NL])
     assert any('rule' in w for w in _check_md(document))
@@ -62,7 +62,7 @@ def test_RULE_4():
 def test_RULE_5():
     "RULE-5: HTML <hr> becomes a rule"
     from ..core.document import Document
-    from ..plugins.htmlfilter import html_text_to_fragment
+    from ..io.htmlfilter import html_text_to_fragment
     texel = html_text_to_fragment('<p>a</p><hr><p>b</p>', Document())
     assert len(rules(texel)) == 1
 

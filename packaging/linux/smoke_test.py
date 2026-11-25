@@ -12,7 +12,7 @@ import cairocffi, mistune, uharfbuzz, wx  # noqa: E401
 
 for module in (mistune, uharfbuzz):
     assert module.__file__.startswith('/usr/share/miniword/'), module
-from miniword.plugins import mdfilter
+from miniword.io import mdfilter
 doc = mdfilter._load_mistune('# Test\n\nSome **bold** text.\n')
 assert doc.textmodel.get_text().startswith('Test\n')
 print(subprocess.run(['miniword', '--version'], check=True,

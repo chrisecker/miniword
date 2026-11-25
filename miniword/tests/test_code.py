@@ -47,7 +47,7 @@ def frame_with(texel):
     from ..core.document import Document
     from ..ui.mainwindow import MainFrame
     from .guitest import app
-    from ..plugins.mdfilter import _register_styles
+    from ..io.mdfilter import _register_styles
     app()
     document = Document()
     _register_styles(document)  # 'pre': the role of code lines
@@ -113,7 +113,7 @@ def test_CODE_5():
 
 def test_CODE_6():
     "CODE-6: Markdown code blocks (with a language or not) and back"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md, _check_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md, _check_md
     md = 'Text\n\n```python\nx = 1\n\ny = 2\n```\n\n```\nplain\n```\n'
     document = _load_mistune(md)
     assert codes(document.textmodel.texel) == [
@@ -124,7 +124,7 @@ def test_CODE_6():
 
 def test_CODE_7():
     "CODE-7: a fence longer than the backticks in the code"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md
     md = '````\n```\nnot the end\n```\n````\n'
     document = _load_mistune(md)
     assert codes(document.textmodel.texel) == [
@@ -135,7 +135,7 @@ def test_CODE_7():
 def test_CODE_8():
     "CODE-8: HTML <pre><code class=language-x> becomes a code block"
     from ..core.document import Document
-    from ..plugins.htmlfilter import html_text_to_fragment
+    from ..io.htmlfilter import html_text_to_fragment
     texel = html_text_to_fragment(
         '<p>a</p><pre><code class="language-python">x = 1\n'
         'y</code></pre>', Document())
@@ -418,7 +418,7 @@ def test_CODE_20():
 def test_CODE_21():
     "CODE-21: Markdown: text beside a block in one paragraph is written "
     "as paragraphs of their own, the block intact (Raw: see HTML-6)"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md
     from ..tables.tables import from_strings
     for block, md in (
             (Code.from_text('x = 1', lang='python'),
@@ -470,7 +470,7 @@ def test_CODE_23():
     "CODE-23: a code block's paragraph is one row - the block, its end "
     "beside it -, with the code style's block_margin above and below; a "
     "table's with the table's margin"
-    from ..plugins.mdfilter import _load_mistune
+    from ..io.mdfilter import _load_mistune
     from ..layout.rowfactory import RowFactory, State
     from ..layout.testdevice import TESTDEVICE
     from ..tables.table_boxes import TableBox
@@ -492,7 +492,7 @@ def test_CODE_23():
 def test_CODE_24():
     "CODE-24: Markdown import: no empty paragraphs around code blocks, "
     "tables and quotes (two quotes in a row: one between them)"
-    from ..plugins.mdfilter import _load_mistune
+    from ..io.mdfilter import _load_mistune
     from ..textmodel.utils import iter_paragraphs
     from ..textmodel.texeltree import get_text
     md = 'a\n\n```\nx\n```\n\nb\n\n| t |\n| - |\n| 1 |\n\nc\n\n> q\n\n' \

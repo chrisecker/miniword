@@ -74,7 +74,7 @@ def test_CLI_6():
     import tempfile
     import wx
     from ..__main__ import convert
-    from ..plugins import mdfilter  # registers Markdown
+    from ..io import mdfilter  # registers Markdown
     if wx.App.Get() is None:
         wx.App(False)
     with tempfile.TemporaryDirectory() as folder:
@@ -135,7 +135,7 @@ def test_CLI_12():
     import tempfile
     import wx
     from ..__main__ import convert
-    from ..plugins import mdfilter  # registers Markdown
+    from ..io import mdfilter  # registers Markdown
     if wx.App.Get() is None:
         wx.App(False)
     with tempfile.TemporaryDirectory() as folder:
@@ -172,7 +172,7 @@ def test_CLI_9():
     from ..__main__ import convert
     from ..core.document import Document
     from ..io.importexport import open_file
-    from ..plugins import mdfilter  # registers Markdown
+    from ..io import mdfilter  # registers Markdown
     if wx.App.Get() is None:
         wx.App(False)
     template = Document()

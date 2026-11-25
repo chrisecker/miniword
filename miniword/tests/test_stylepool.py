@@ -97,14 +97,14 @@ def test_POOL_1():
 
 def test_POOL_2():
     "POOL-2: Markdown import (headings, lists, alerts, tables, code)"
-    from ..plugins.mdfilter import _load_mistune
+    from ..io.mdfilter import _load_mistune
     assert unpooled(_load_mistune(MARKDOWN).textmodel.texel) == []
 
 
 def test_POOL_3():
     "POOL-3: Markdown pasted into a document with its own styles"
     from ..core.document import Document
-    from ..plugins.mdfilter import md_text_to_fragment
+    from ..io.mdfilter import md_text_to_fragment
     doc = Document()
     doc.basestyles.set('Kapitel', dict(role='h1'))
     doc.basestyles.set('Liste', dict(role='list'))

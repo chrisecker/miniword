@@ -1,8 +1,9 @@
 """
 Import/export filter registry.
 
-Built-in filters (Plain Text) are registered at module load time.
-Plugins can register additional filters via register_import / register_export.
+Plain Text is registered here. Markdown and HTML (mdfilter, htmlfilter,
+htmlexport) register themselves when imported, see load_formats().
+User plugins can register more filters via register_import / register_export.
 
 Filter tuples:
   _import_filters: (name, [ext, ...], load_fn, lossless)
@@ -255,6 +256,23 @@ register_import("Plain Text", ["txt"], _load_txt, lossless=False)
 register_export("Plain Text", ["txt"], _save_txt, lossless=False, check_fn=_check_txt)
 
 
+FORMATS = ['htmlexport', 'htmlfilter', 'mdfilter']
+
+
+def load_formats():
+    """Import the formats in FORMATS, which register themselves; their
+    modules (for hooks such as get_menus). A format that fails to load
+    is left out: MiniWord works without it, unlike without TXL."""
+    import importlib
+    mods = []
+    for name in FORMATS:
+        try:
+            mods.append(importlib.import_module('miniword.io.' + name))
+        except Exception as e:
+            print(f"Format error ({name}): {e}")
+    return mods
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -332,7 +350,7 @@ def test_05():
 
 def test_06():
     "Save As: TXL and Markdown first; no extension - the document's format"
-    from ..plugins import mdfilter  # registers Markdown
+    from . import mdfilter  # registers Markdown
     first = saveas_wildcard().split('|')[1]
     assert first == '*.txl;*.md;*.markdown'
     assert saveas_default_ext(0) == 'txl'

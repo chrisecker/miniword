@@ -19,8 +19,8 @@ import wx
 
 from ..core.document import Document
 from ..images.images import fetch_image, iter_images
-from ..plugins.htmlfilter import clipboard_html, html_text_to_fragment
-from ..plugins.mdfilter import md_text_to_fragment
+from ..io.htmlfilter import clipboard_html, html_text_to_fragment
+from ..io.mdfilter import md_text_to_fragment
 from ..textmodel.textmodel import TextModel
 from .guitest import app, close
 
@@ -138,7 +138,7 @@ def test_PASTE_6():
 
 def test_PASTE_7():
     "PASTE-7: Markdown images: linked, pasted and imported; saved as paths"
-    from ..plugins import mdfilter
+    from ..io import mdfilter
     from ..images import imageio
     data = png()
     with tempfile.TemporaryDirectory() as folder:
@@ -324,7 +324,7 @@ def test_PASTE_13():
 
 def test_PASTE_14():
     "PASTE-14: pasting loads web images at once, so their size is known"
-    from ..plugins.htmlfilter import html_clipboard_fragment
+    from ..io.htmlfilter import html_clipboard_fragment
     from ..images import imageio
     data = png(40)
     with tempfile.TemporaryDirectory() as folder:
@@ -428,7 +428,7 @@ def test_PASTE_17():
 
 def test_PASTE_18():
     "PASTE-18: saved as Markdown, table cells keep formatting; '|' escaped"
-    from ..plugins import mdfilter
+    from ..io import mdfilter
     from ..tables.tables import Table
     from ..textmodel.texeltree import Text, NL, grouped
     md = ('| Name | Bild |\n|---|---|\n'

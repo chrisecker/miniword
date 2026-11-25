@@ -302,7 +302,9 @@ def main():
         app.GTKSuppressDiagnostics()  # GTK warnings: only with --debug
     app.SetAppName("miniword")
     set_appearance(config.get("appearance"))  # before the first window
+    from .io.importexport import load_formats
     from .ui.mainwindow import load_plugins
+    load_formats()
     load_plugins()
 
     from .core.fontfinder import _scan_needed, run_preload_sync

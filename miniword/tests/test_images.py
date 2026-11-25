@@ -281,12 +281,12 @@ def data_uri(data):
 
 
 def md_images(md):
-    from ..plugins.mdfilter import md_text_to_fragment
+    from ..io.mdfilter import md_text_to_fragment
     return images_in(md_text_to_fragment(md, Document()))
 
 
 def html_images(html, doc=None):
-    from ..plugins.htmlfilter import html_text_to_fragment
+    from ..io.htmlfilter import html_text_to_fragment
     return images_in(html_text_to_fragment(html, doc or Document()))
 
 
@@ -880,7 +880,7 @@ def test_FIT_4():
     import base64
     from ..io.importexport import open_file, check_export
     from ..images.images import iter_images
-    from ..plugins import mdfilter  # noqa: F401 -- registers the filter
+    from ..io import mdfilter  # noqa: F401 -- registers the filter
     app()
     with tempfile.TemporaryDirectory() as tmp:
         md = os.path.join(tmp, 'a.md')

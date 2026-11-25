@@ -17,7 +17,7 @@ import codecs
 from miniword.io.importexport import register_paste
 
 
-from miniword.plugins.mdfilter import (
+from miniword.io.mdfilter import (
     _register_styles, _build_blocks, _adopt_existing_styles, image_run, _RULE,
     quoted)
 
@@ -459,7 +459,7 @@ def test_07():
 def test_08():
     "a pre block becomes a code block (Code) of its lines"
     from miniword.core.document import Document
-    from miniword.plugins.mdfilter import code_texts
+    from miniword.io.mdfilter import code_texts
     texel = html_text_to_fragment("<pre>line one\nline two</pre>",
                                   Document())
     assert code_texts(texel) == [('', 'line one\nline two')]

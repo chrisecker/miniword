@@ -40,7 +40,7 @@ def test_CB_2():
 
 def test_CB_3():
     "CB-3: Markdown task lists: checkboxes and back"
-    from ..plugins.mdfilter import _load_mistune, _doc_to_md, _check_md
+    from ..io.mdfilter import _load_mistune, _doc_to_md, _check_md
     md = '- [ ] todo\n- [x] done\n'
     document = _load_mistune(md)
     assert checkboxes(document.textmodel.texel) == [False, True]
@@ -51,7 +51,7 @@ def test_CB_3():
 
 def test_CB_4():
     "CB-4: a checkbox outside a list item's start is reported"
-    from ..plugins.mdfilter import _md_doc, _check_md
+    from ..io.mdfilter import _md_doc, _check_md
     document = _md_doc('')
     document.textmodel.texel = Group([Text('a '), Checkbox(), NL])
     assert any('checkbox' in w for w in _check_md(document))
@@ -60,7 +60,7 @@ def test_CB_4():
 def test_CB_5():
     "CB-5: HTML <input type=checkbox> becomes a checkbox"
     from ..core.document import Document
-    from ..plugins.htmlfilter import html_text_to_fragment
+    from ..io.htmlfilter import html_text_to_fragment
     texel = html_text_to_fragment(
         '<ul><li><input type="checkbox" checked> a</li>'
         '<li><input type="checkbox"> b</li></ul>', Document())
