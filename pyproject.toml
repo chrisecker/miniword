@@ -23,7 +23,8 @@ full = [
 ]
 
 [project.urls]
-Homepage = "https://codeberg.org/chrisecker/miniword"
+Homepage = "https://github.com/chrisecker/miniword"
+Issues = "https://github.com/chrisecker/miniword/issues"
 
 [tool.setuptools.packages.find]
 include = ["miniword*"]

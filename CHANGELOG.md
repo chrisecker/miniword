@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Linux packages are built per architecture and include uharfbuzz and mistune; uharfbuzz is now required.
 - `--markdown` removed: `.md` and `.txt` are offered under "Open with", as with the installers.
 - Installation instructions moved to `INSTALL.md`.
+- The repository moved from Codeberg to GitHub: https://github.com/chrisecker/miniword. On macOS the type of `.txl` files is now `io.github.chrisecker.miniword.txl`.
 - Markdown and HTML import/export moved from `miniword/plugins/` to `miniword/io/` (plugins that import them: `miniword.io.mdfilter` etc.). The plugins folder holds only user plugins; a user plugin no longer replaces a built-in module of the same name.
 
 ### Fixed
@@ -177,18 +178,18 @@ First public release.
 - Python plugins.
 - Installers for Windows and macOS, package on PyPI.
 
-[Unreleased]: https://codeberg.org/chrisecker/miniword/compare/v0.2.2...HEAD
-[0.2.2]: https://codeberg.org/chrisecker/miniword/compare/v0.2.1...v0.2.2
-[0.2.1]: https://codeberg.org/chrisecker/miniword/compare/v0.2.0...v0.2.1
-[0.2.0]: https://codeberg.org/chrisecker/miniword/compare/v0.1.10...v0.2.0
-[0.1.10]: https://codeberg.org/chrisecker/miniword/compare/v0.1.9...v0.1.10
-[0.1.9]: https://codeberg.org/chrisecker/miniword/compare/v0.1.8...v0.1.9
-[0.1.8]: https://codeberg.org/chrisecker/miniword/compare/v0.1.7...v0.1.8
-[0.1.7]: https://codeberg.org/chrisecker/miniword/compare/v0.1.6...v0.1.7
-[0.1.6]: https://codeberg.org/chrisecker/miniword/compare/v0.1.5...v0.1.6
-[0.1.5]: https://codeberg.org/chrisecker/miniword/compare/v0.1.4...v0.1.5
-[0.1.4]: https://codeberg.org/chrisecker/miniword/compare/v0.1.3...v0.1.4
-[0.1.3]: https://codeberg.org/chrisecker/miniword/compare/v0.1.2...v0.1.3
-[0.1.2]: https://codeberg.org/chrisecker/miniword/compare/v0.1.1...v0.1.2
-[0.1.1]: https://codeberg.org/chrisecker/miniword/compare/v0.1.0...v0.1.1
-[0.1.0]: https://codeberg.org/chrisecker/miniword/releases/tag/v0.1.0
+[Unreleased]: https://github.com/chrisecker/miniword/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/chrisecker/miniword/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/chrisecker/miniword/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/chrisecker/miniword/compare/v0.1.10...v0.2.0
+[0.1.10]: https://github.com/chrisecker/miniword/compare/v0.1.9...v0.1.10
+[0.1.9]: https://github.com/chrisecker/miniword/compare/v0.1.8...v0.1.9
+[0.1.8]: https://github.com/chrisecker/miniword/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/chrisecker/miniword/compare/v0.1.6...v0.1.7
+[0.1.6]: https://github.com/chrisecker/miniword/compare/v0.1.5...v0.1.6
+[0.1.5]: https://github.com/chrisecker/miniword/compare/v0.1.4...v0.1.5
+[0.1.4]: https://github.com/chrisecker/miniword/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/chrisecker/miniword/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/chrisecker/miniword/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/chrisecker/miniword/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/chrisecker/miniword/releases/tag/v0.1.0

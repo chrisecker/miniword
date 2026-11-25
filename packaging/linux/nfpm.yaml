@@ -13,7 +13,7 @@ description: |
   WYSIWYG word processor for Markdown files.
   MiniWord edits Markdown and its own text format (.txl) with page
   layout, footnotes, tables, images and PDF export.
-homepage: https://codeberg.org/chrisecker/miniword
+homepage: https://github.com/chrisecker/miniword
 license: LGPL-3.0-or-later
 
 contents:

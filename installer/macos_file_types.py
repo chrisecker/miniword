@@ -8,7 +8,7 @@ PyInstaller: .txl (MiniWord's own), .md and plain text.
 import plistlib
 import sys
 
-TXL = 'org.codeberg.chrisecker.miniword.txl'
+TXL = 'io.github.chrisecker.miniword.txl'
 MD = 'net.daringfireball.markdown'  # the usual type of Markdown
 
 
