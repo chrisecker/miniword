@@ -25,7 +25,8 @@ from miniword.io.importexport import register_import
 from miniword.io.htmlfilter import note_area
 
 PROPERTIES = ('font-weight', 'font-style', 'text-decoration',
-              'text-decoration-line', 'vertical-align')
+              'text-decoration-line', 'vertical-align', 'display')
+HIDDEN = re.compile(r'display\s*:\s*none')
 IMAGE_TYPES = ('image/jpeg', 'image/png', 'image/gif')  # MiniWord draws
 VOID = {'img', 'br', 'hr', 'input', 'meta', 'link', 'col', 'wbr'}
 
@@ -75,7 +76,8 @@ def encrypted(z):
 def css_rules(text):
     """{(tag, class): declarations} of the simple rules of a style sheet
     (".x" has tag ''), only with the PROPERTIES MiniWord's HTML import
-    reads. Rules in @media blocks count as well."""
+    reads, and display (none: hidden). Rules in @media blocks count as
+    well."""
     rules = {}
     text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
     for selectors, body in re.findall(r'([^{}]+)\{([^{}]*)\}', text):
@@ -109,7 +111,8 @@ class Chapter(HTMLParser):
         self.stack = []        # (tag, with an added span, id, start, in a
                                # footnote area)
         self.in_body = False
-        self.skip = 0          # in script, style or svg (except image)
+        self.skip = 0          # in script, style, svg (except image) or an
+                               # element hidden by display: none
         self.sheet = None      # text of a <style> in the head
         self.notes = {}        # id: HTML of the footnotes found
         self.refs = set()      # ids of links into the book
@@ -181,6 +184,10 @@ class Chapter(HTMLParser):
                 self.skip += 1
             return
         css = self.style_of(tag, attrs)
+        if HIDDEN.search(css + (attrs.get('style') or '')):
+            if tag not in VOID:
+                self.skip += 1  # with its content, e.g. a page number
+            return
         in_area = note_area(attrs) or any(e[4] for e in self.stack)
         if tag == 'img':
             src = self.image_src(attrs.get('src', ''))
@@ -238,6 +245,22 @@ class Chapter(HTMLParser):
             self.out.append(escape(data, quote=False))
 
 
+def layout_tables(html):
+    """html with its tables of one row as paragraphs: in books they are
+    layout, e.g. a table of contents indented by an empty cell."""
+    def unwrap(m):
+        if m.group(1).count('<tr') != 1:
+            return m.group(0)
+        cells = re.sub(r'</?(?:tbody|thead|tfoot|tr)\b[^>]*>', '', m.group(1))
+        return re.sub(r'<(/?)t[dh]\b[^>]*>', r'<\1p>', cells)
+    return re.sub(r'<table\b[^>]*>((?:(?!<table\b).)*?)</table>', unwrap,
+                  html, flags=re.S)
+
+
+# rules and empty paragraphs at the end of a chapter: a new page follows
+TRAILING = re.compile(r'(?:\s|<p>\s*</p>|<hr\b[^>]*>)+$')
+
+
 def parse(z, path, rules, types, links=None):
     """The chapter at path, parsed (see Chapter)."""
     parser = Chapter(z, path, rules, types, links)
@@ -270,7 +293,8 @@ def load(path):
             refs.update((name, k) for k in parser.refs)
         for name in chapters:
             parser = parse(z, name, rules, types, (notes, refs))
-            html = ''.join(parser.out) + ''.join(  # footnotes from elsewhere
+            html = TRAILING.sub('', layout_tables(''.join(parser.out)))
+            html += ''.join(  # footnotes from elsewhere
                 '<section role="doc-endnotes">%s</section>' % notes[key]
                 for key in dict.fromkeys(parser.wanted))
             chapter = TextModel()
@@ -459,3 +483,29 @@ def test_05():
     text = doc.textmodel.get_text()  # without the endnotes chapter
     assert text == 'Chapter\nA%s and B%s.' % (mark, mark), repr(text)
     assert doc.textmodel.get_style(0).get('href') is None  # the contents
+
+
+def test_06():
+    "a table of one row becomes paragraphs; no rule at a chapter's end"
+    doc = load(make_epub([('a.xhtml',
+        '<table><tr><td></td><td>One<br/> Two</td></tr></table>'
+        '<table><tr><td>a</td></tr><tr><td>b</td></tr></table>'
+        '<p>End</p><p></p><hr class="short"/><p></p>')]))
+    from miniword.tables.tables import Table
+    from miniword.textmodel.utils import iter_leafes
+    text = doc.textmodel.get_text()
+    assert text.startswith('One\x0bTwo\n'), repr(text)  # not a table
+    assert text.endswith('\nEnd'), repr(text)  # no rule after it
+    tables = [t for *_, t in iter_leafes(doc.textmodel.texel, 0)
+              if isinstance(t, Table)]
+    assert len(tables) == 1, tables  # the one of two rows
+
+
+def test_07():
+    "elements hidden by the style sheet are left out"
+    css = 'a.pageref { display: none } .gone { display:none; color: red }'
+    doc = load(make_epub([('a.xhtml',
+        '<p>One <a id="p6"></a><a class="pageref">6</a>two'
+        '<span class="gone"> <b>x</b></span> three</p>')], css))
+    assert doc.textmodel.get_text() == 'One two three', \
+        repr(doc.textmodel.get_text())
