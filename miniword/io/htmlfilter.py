@@ -447,6 +447,9 @@ class _HTMLBlockBuilder(HTMLParser):
             # <span class="Apple-converted-space"> </span>, and dropping
             # it would fuse two words together
             data = _WHITESPACE_RE.sub(' ', data)
+            runs = self._runs_here()
+            if runs and runs[-1][1].get('_br'):  # a line starts: no space
+                data = data.lstrip()
         if data:
             self._append(data)
 
@@ -855,3 +858,12 @@ def test_21():
         repr(t)
     link = model.get_style(t.index('a link'))
     assert link.get('href') == '#sec', link  # not to a footnote: kept
+
+
+def test_22():
+    "no space at the start of a line after <br>, as in a browser"
+    builder = _HTMLBlockBuilder()
+    builder.feed('<p>Berlin<br/> 1947<br/>\n <a href="x">A</a> b</p>')
+    builder.close()
+    texts = [t for t, _ in builder.blocks[0][2]]
+    assert texts == ['Berlin', '', '1947', '', 'A', ' b'], texts
