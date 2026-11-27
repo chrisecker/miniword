@@ -3,23 +3,30 @@
 All notable changes to MiniWord are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-27
 
 ### Added
-- Command line option `-o OUTFILE`: write PDF, TXL, Markdown or plain text without opening a window.
+- Spell check with the checker of the operating system (View → Check spelling), with suggestions, a user dictionary and words saved in the document.
+- Characters panel for special characters.
+- Copy as Markdown and Copy as HTML; HTML paste keeps footnotes, superscript and subscript.
+- Appearance setting: system, light or dark (wxPython 4.3 or later).
+- Command line: `-o OUTFILE` (convert without a window), `--template`, `--set KEY=VALUE`.
 - Python syntax colouring in code blocks.
+- Example plugins: word count, EPUB import (experimental).
 
 ### Changed
-- The "Normal" style is now an ordinary style, found by its role: it can be edited, deleted and is saved with the document. Roles are shown and set in the paragraph style dropdown.
-- Images larger than the text area are limited in the layout.
-- Linux packages are built per architecture and include uharfbuzz and mistune; uharfbuzz is now required.
-- `--markdown` removed: `.md` and `.txt` are offered under "Open with", as with the installers.
-- Installation instructions moved to `INSTALL.md`.
-- The repository moved from Codeberg to GitHub: https://github.com/chrisecker/miniword. On macOS the type of `.txl` files is now `io.github.chrisecker.miniword.txl`.
-- Markdown and HTML import/export moved from `miniword/plugins/` to `miniword/io/` (plugins that import them: `miniword.io.mdfilter` etc.). The plugins folder holds only user plugins; a user plugin no longer replaces a built-in module of the same name.
+- The "Normal" style is an ordinary style, found by its role.
+- "HTML block" is now "Raw" and can also hold other content (e.g. YAML).
+- Markdown import and export keep more (footnote formatting, linked images, YAML headers, citations) and escape less.
+- Much faster typing in long documents.
+- Settings, recent files and plugins in one configuration folder per platform.
+- The repository moved from Codeberg to GitHub: https://github.com/chrisecker/miniword.
+- Linux packages per architecture; uharfbuzz and wxPython 4.2 or later are required.
 
 ### Fixed
-- Formatting marks skip pages outside the view (much faster repaint of large documents).
+- Windows: PDF export failed (cairo 1.18.4 is now bundled).
+- TXL: some style values made files unreadable or changed on save.
+- Several bugs in tables, footnotes, styles and desktop integration.
 
 ## [0.2.2] - 2026-11-07
 
@@ -178,7 +185,8 @@ First public release.
 - Python plugins.
 - Installers for Windows and macOS, package on PyPI.
 
-[Unreleased]: https://github.com/chrisecker/miniword/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/chrisecker/miniword/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/chrisecker/miniword/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/chrisecker/miniword/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/chrisecker/miniword/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/chrisecker/miniword/compare/v0.1.10...v0.2.0
