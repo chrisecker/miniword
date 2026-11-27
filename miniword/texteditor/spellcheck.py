@@ -16,8 +16,8 @@ Dictionary: the system's checker (miniword.spelling). Without one
 nothing is marked.
 
 Words not marked: those of the document (setting 'words', with undo)
-and of the user dictionary (USER_WORDS, one word per line, for all
-languages). Context menu (right click on a marked word): suggestions,
+and of the user dictionary (words.txt in config_dir(), one word per
+line, for all languages). Context menu (right click on a marked word): suggestions,
 "Add to dictionary", "Add to document". Both lists are edited in a
 window (ui/spellwords.py).
 
@@ -32,6 +32,7 @@ import time
 import wx
 from pathlib import Path
 from .. import spelling
+from ..core.config import config_dir
 from ..core.document import settings_default, undo_setting
 from ..textmodel.texeltree import EMPTYSTYLE, length
 from ..textmodel.utils import iter_leafes
@@ -41,7 +42,6 @@ MARGIN = 50     # chars read beyond the page, for words across its edges
 DEBUG = False   # print the times of the idle steps
 MONO = {'courier', 'courier new', 'monospace', 'consolas', 'menlo',
         'dejavu sans mono'}  # fonts of inline code
-USER_WORDS = Path.home() / '.config' / 'miniword' / 'words.txt'
 SUGGESTIONS = 6  # at most in the context menu
 
 
@@ -160,7 +160,7 @@ class SpellChecker:
         self.words = {}         # (language, word) -> correct?
         self.dictionaries = {}  # language -> dictionary or None
         self.footnotes = None, None  # (texel, its footnote_flow)
-        self.user_words = None  # read from USER_WORDS when first needed
+        self.user_words = None  # read from words.txt when first needed
         self.document_words = self.read_document_words()
         self.stats = dict(pages=0, words=0, lookups=0, check=0.0)
         if canvas is not None:
@@ -180,7 +180,7 @@ class SpellChecker:
     def users(self):
         """The words of the user dictionary."""
         if self.user_words is None:
-            self.user_words = load_words(USER_WORDS)
+            self.user_words = load_words(Path(config_dir(), 'words.txt'))
         return self.user_words
 
     def correct(self, language, word):
@@ -206,7 +206,7 @@ class SpellChecker:
         calls reset)."""
         if user_words != self.users():
             self.user_words = set(user_words)
-            save_words(USER_WORDS, user_words)
+            save_words(Path(config_dir(), 'words.txt'), user_words)
             self.words.clear()
             self.reset()
         if document_words != self.document_words:
