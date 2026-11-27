@@ -12,9 +12,8 @@ being typed; a rebuilt page has none until the next idle check. Code
 is not checked: code blocks (Code containers) and text in a monospace
 font (inline code).
 
-Dictionary: enchant if installed, for now (to come: the system's
-checkers, see develnotes/spellcheck_concept.md). Without one nothing is
-marked.
+Dictionary: the system's checker (miniword.spelling). Without one
+nothing is marked.
 
 Words not marked: those of the document (setting 'words', with undo)
 and of the user dictionary (USER_WORDS, one word per line, for all
@@ -32,6 +31,7 @@ import re
 import time
 import wx
 from pathlib import Path
+from .. import spelling
 from ..core.document import settings_default, undo_setting
 from ..textmodel.texeltree import EMPTYSTYLE, length
 from ..textmodel.utils import iter_leafes
@@ -43,22 +43,6 @@ MONO = {'courier', 'courier new', 'monospace', 'consolas', 'menlo',
         'dejavu sans mono'}  # fonts of inline code
 USER_WORDS = Path.home() / '.config' / 'miniword' / 'words.txt'
 SUGGESTIONS = 6  # at most in the context menu
-
-
-def find_dictionary(language):
-    """An enchant dictionary for a language setting ('en-us',
-    'de-1996'), None if there is none."""
-    try:
-        import enchant
-    except ImportError:
-        return None
-    lang, _, region = language.partition('-')
-    tags = enchant.list_languages()
-    wanted = '%s_%s' % (lang, region.upper())
-    if wanted not in tags:
-        wanted = next((tag for tag in tags
-                       if tag == lang or tag.startswith(lang + '_')), None)
-    return enchant.Dict(wanted) if wanted else None
 
 
 def iter_code(texel, a, b, offset=0):
@@ -185,7 +169,7 @@ class SpellChecker:
 
     def dictionary(self, language):
         if language not in self.dictionaries:
-            self.dictionaries[language] = find_dictionary(language)
+            self.dictionaries[language] = spelling.dictionary(language)
         return self.dictionaries[language]
 
     def read_document_words(self):

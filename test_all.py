@@ -19,6 +19,7 @@ modules = [
     "miniword.texteditor.textcanvas",
     "miniword.texteditor.undoredo",
     "miniword.texteditor.spellcheck",
+    "miniword.spelling",
 
     # core
     "miniword.core.stylesheet",

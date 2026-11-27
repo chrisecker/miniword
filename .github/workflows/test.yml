@@ -19,3 +19,13 @@ jobs:
           $sitePackages = python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
           powershell -File installer/bundle_cairo_windows.ps1 $sitePackages
       - run: python test_all.py
+
+  spelling-macos:
+    # the system's spell checker; the module needs only Python
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python runtests.py miniword/spelling
